@@ -1,0 +1,69 @@
+{
+  "folders": [
+    {
+      "name": "Backend (Spring Boot)",
+      "path": "backend"
+    },
+    {
+      "name": "Frontend (Flutter)",
+      "path": "Motoshift"
+    }
+  ],
+  "settings": {
+    // Java: recarrega o build ao detectar mudança no pom.xml
+    "java.configuration.updateBuildConfiguration": "automatic",
+    // Esconde pastas geradas do explorador
+    "files.exclude": {
+      "**/target": true,
+      "**/.dart_tool": true,
+      "**/build": true,
+      "**/.gradle": true
+    },
+    // Associação de extensões para melhor IntelliSense
+    "files.associations": {
+      "*.properties": "properties",
+      "*.dart": "dart"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "vscjava.vscode-java-pack",
+      "vmware.vscode-spring-boot",
+      "vscjava.vscode-spring-boot-dashboard",
+      "dart-code.flutter",
+      "dart-code.dart-code"
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Backend (Spring Boot)",
+        "type": "java",
+        "request": "launch",
+        "mainClass": "com.motoshift.MotoshiftApplication",
+        "projectName": "motoshift-backend",
+        "cwd": "${workspaceFolder:Backend (Spring Boot)}"
+      },
+      {
+        "name": "Frontend (Flutter Web - Chrome)",
+        "type": "dart",
+        "request": "launch",
+        "program": "${workspaceFolder:Frontend (Flutter)}/lib/main.dart",
+        "cwd": "${workspaceFolder:Frontend (Flutter)}",
+        "args": ["-d", "chrome", "--web-port", "5000"],
+        "flutterMode": "debug"
+      }
+    ],
+    "compounds": [
+      {
+        "name": "MotoShift Full Stack",
+        "configurations": [
+          "Backend (Spring Boot)",
+          "Frontend (Flutter Web - Chrome)"
+        ],
+        "stopAll": true
+      }
+    ]
+  }
+}

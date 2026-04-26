@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Urban Kinetic - Meus Turnos</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary": "#ffffff",
+                    "on-background": "#1b1c1c",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-container": "#e1e3e4",
+                    "on-primary-fixed": "#001a40",
+                    "on-error": "#ffffff",
+                    "primary": "#003f87",
+                    "on-secondary-fixed-variant": "#454748",
+                    "surface-bright": "#fbf9f8",
+                    "on-secondary-fixed": "#191c1d",
+                    "surface-container-low": "#f6f3f2",
+                    "tertiary-fixed-dim": "#ffb694",
+                    "tertiary": "#722b00",
+                    "surface-container-high": "#eae8e7",
+                    "tertiary-fixed": "#ffdbcc",
+                    "surface": "#fbf9f8",
+                    "primary-fixed": "#d7e2ff",
+                    "surface-tint": "#115cb9",
+                    "background": "#fbf9f8",
+                    "surface-dim": "#dcd9d9",
+                    "outline-variant": "#c2c6d4",
+                    "error-container": "#ffdad6",
+                    "error": "#ba1a1a",
+                    "on-primary-fixed-variant": "#004491",
+                    "on-tertiary-fixed-variant": "#7b2f00",
+                    "surface-container-highest": "#e4e2e1",
+                    "inverse-on-surface": "#f3f0f0",
+                    "secondary-fixed-dim": "#c5c7c8",
+                    "on-tertiary-container": "#ffc2a7",
+                    "inverse-primary": "#acc7ff",
+                    "surface-variant": "#e4e2e1",
+                    "surface-container": "#f0eded",
+                    "on-tertiary-fixed": "#351000",
+                    "on-surface-variant": "#424752",
+                    "on-primary-container": "#bbd0ff",
+                    "primary-container": "#0056b3",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary-container": "#626566",
+                    "on-primary": "#ffffff",
+                    "on-surface": "#1b1c1c",
+                    "primary-fixed-dim": "#acc7ff",
+                    "inverse-surface": "#303030",
+                    "tertiary-container": "#983c00",
+                    "secondary": "#5c5f60",
+                    "on-error-container": "#93000a",
+                    "outline": "#727784",
+                    "secondary-fixed": "#e1e3e4"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Manrope"],
+                    "body": ["Manrope"],
+                    "label": ["Manrope"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .tonal-gradient {
+            background: linear-gradient(135deg, #003f87 0%, #0056b3 100%);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface min-h-screen pb-24">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#fbf9f8]/70 backdrop-blur-md flex justify-between items-center px-6 h-16 w-full">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-container-highest">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="Professional headshot of a courier driver with a friendly expression in soft studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBMmMJfbUo7b3qSuA4fwavbX7oodZ70sp5zyc1RM9JUzqCqWDrutKU5wZF0-cKf6EGCfyi4qPqCE32TvG4tFaQwv2IWpfiXn2emQPSLSgKzk-C9wsSfcDfplgp8sj4ALD652ZfDHTQQ3uArqRVMLCEOJRtO6HedCLiyizBfugIs32hTIzSBEmo4dQh3Sb1wT_y4JCh69PdTBW3tvflmhaGk1MgUuYM0ebHLCFUPHWr2TyLVQtMI4z37DsSegf1ubRUqiPKAaoGKDZQl"/>
+</div>
+<span class="text-xl font-extrabold tracking-tighter text-[#003f87]">Urban Kinetic</span>
+</div>
+<button class="text-[#424752] hover:bg-[#f6f3f2]/50 p-2 rounded-lg transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</header>
+<main class="pt-24 px-6 max-w-4xl mx-auto">
+<!-- Hero Section -->
+<section class="mb-10">
+<h1 class="text-3xl font-extrabold tracking-tight text-on-surface mb-2">Meus Turnos</h1>
+<p class="text-on-surface-variant font-medium">Você tem 3 turnos ativos para hoje.</p>
+</section>
+<!-- Bento Grid for Shifts -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6">
+<!-- Active Shift Large Card -->
+<div class="lg:col-span-8 bg-surface-container-lowest rounded-xl p-6 shadow-[0_-8px_24px_rgba(0,63,135,0.02)] transition-all hover:shadow-[0_8px_32px_rgba(0,63,135,0.06)] relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4">
+<span class="bg-primary-fixed text-on-primary-fixed text-xs font-bold px-3 py-1 rounded-full tracking-wider uppercase">Em Andamento</span>
+</div>
+<div class="flex flex-col h-full">
+<div class="flex items-center gap-4 mb-6">
+<div class="w-12 h-12 tonal-gradient rounded-xl flex items-center justify-center text-white">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">delivery_dining</span>
+</div>
+<div>
+<h3 class="text-xl font-bold tracking-tight">Expresso Noturno Centro</h3>
+<p class="text-on-surface-variant text-sm font-medium">Início: 18:30 • 4h totais</p>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-lg p-4 mb-6 flex flex-wrap gap-8 items-center">
+<div class="flex flex-col">
+<span class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Ganhos Est.</span>
+<span class="text-lg font-extrabold text-primary">R$ 145,00</span>
+</div>
+<div class="flex flex-col border-l border-outline-variant/30 pl-8">
+<span class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Entregas</span>
+<span class="text-lg font-extrabold">12 / 15</span>
+</div>
+<div class="flex flex-col border-l border-outline-variant/30 pl-8">
+<span class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Km Percorrido</span>
+<span class="text-lg font-extrabold">18.4 km</span>
+</div>
+</div>
+<div class="mt-auto flex gap-3">
+<button class="flex-1 tonal-gradient text-white font-bold py-4 rounded-xl text-sm transition-transform active:scale-95 shadow-lg shadow-primary/20">
+                            Confirmar Conclusão
+                        </button>
+<button class="bg-surface-container-highest text-on-surface font-bold px-6 py-4 rounded-xl text-sm transition-colors hover:bg-error-container hover:text-error">
+                            Cancelar
+                        </button>
+</div>
+</div>
+</div>
+<!-- Side Stats/Info (Bento Pattern) -->
+<div class="lg:col-span-4 flex flex-col gap-6">
+<!-- Map Thumbnail Card -->
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden h-48 relative shadow-[0_8px_24px_rgba(0,0,0,0.04)]">
+<img alt="Route Map" class="w-full h-full object-cover" data-alt="Abstract minimalist digital map representation of a city grid in monochromatic blue and grey tones" data-location="São Paulo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIxPQ-R8z7xfWypTWeVfGRhSe6r-MkVSpWDM_FkHb38RQ2eWCSRNG8jbUgK0wfML_hS4S-W12Mv1j94YvZnwAs89hmD7FYG-NVTegdWrqL1rlfJcV40VZjnSIrmHXQgMpxq8j5nQ9-0Xhdti9FShHgcz5I9gt8w3xtJSj0j7yHkqmlLisrm-bW6q0cpIE08fM-wJeU9peXuomudau0C2ap584XGl7ZzNE_pLahPWFMs9bIzvatX8u3SVv8RgkZDu0rnyqR8I19P4aj"/>
+<div class="absolute inset-0 bg-primary/10 backdrop-blur-[2px]"></div>
+<div class="absolute bottom-4 left-4 bg-white/90 backdrop-blur-md px-3 py-1 rounded-lg">
+<span class="text-[11px] font-bold text-primary flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">near_me</span>
+                            ZONA SUL ATIVA
+                        </span>
+</div>
+</div>
+<!-- Wallet Snapshot -->
+<div class="bg-surface-container-lowest rounded-xl p-5 shadow-[0_8px_24px_rgba(0,0,0,0.04)]">
+<div class="flex justify-between items-center mb-2">
+<span class="text-on-surface-variant text-sm font-semibold">Ganhos do Dia</span>
+<span class="material-symbols-outlined text-primary">account_balance_wallet</span>
+</div>
+<div class="text-2xl font-black tracking-tight text-on-surface">R$ 382,50</div>
+<div class="mt-3 h-1 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-3/4 rounded-full"></div>
+</div>
+<p class="text-[10px] text-on-surface-variant mt-2 font-medium">75% DA META DIÁRIA ALCANÇADA</p>
+</div>
+</div>
+<!-- Future Shifts (Horizontal List) -->
+<div class="lg:col-span-12 mt-4">
+<h2 class="text-xl font-bold tracking-tight mb-4">Próximos Turnos</h2>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<!-- Shift Item 1 -->
+<div class="bg-surface-container-low rounded-xl p-5 border border-transparent hover:border-primary/20 transition-all cursor-pointer">
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-surface-container-highest rounded-lg">
+<span class="material-symbols-outlined text-secondary">schedule</span>
+</div>
+<span class="bg-secondary-container text-on-secondary-container text-[10px] font-bold px-2 py-0.5 rounded uppercase">Confirmado</span>
+</div>
+<h4 class="font-bold text-on-surface mb-1">Logística Reversa</h4>
+<p class="text-sm text-on-surface-variant font-medium">Amanhã, 08:00 - 12:00</p>
+<div class="mt-4 pt-4 border-t border-outline-variant/10 flex justify-between items-center">
+<span class="text-primary font-bold text-sm">R$ 90,00</span>
+<span class="text-on-surface-variant text-xs">Jardins / Pinheiros</span>
+</div>
+</div>
+<!-- Shift Item 2 -->
+<div class="bg-surface-container-low rounded-xl p-5 border border-transparent hover:border-primary/20 transition-all cursor-pointer">
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-surface-container-highest rounded-lg">
+<span class="material-symbols-outlined text-secondary">wb_sunny</span>
+</div>
+<span class="bg-secondary-container text-on-secondary-container text-[10px] font-bold px-2 py-0.5 rounded uppercase">Confirmado</span>
+</div>
+<h4 class="font-bold text-on-surface mb-1">Almoço Corporativo</h4>
+<p class="text-sm text-on-surface-variant font-medium">Amanhã, 11:30 - 14:30</p>
+<div class="mt-4 pt-4 border-t border-outline-variant/10 flex justify-between items-center">
+<span class="text-primary font-bold text-sm">R$ 120,00</span>
+<span class="text-on-surface-variant text-xs">Itaim Bibi</span>
+</div>
+</div>
+<!-- Shift Item 3 -->
+<div class="bg-surface-container-low rounded-xl p-5 border border-transparent hover:border-primary/20 transition-all cursor-pointer">
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-surface-container-highest rounded-lg">
+<span class="material-symbols-outlined text-secondary">event_repeat</span>
+</div>
+<span class="bg-secondary-container text-on-secondary-container text-[10px] font-bold px-2 py-0.5 rounded uppercase">Pendente</span>
+</div>
+<h4 class="font-bold text-on-surface mb-1">Plantão Fim de Semana</h4>
+<p class="text-sm text-on-surface-variant font-medium">Sáb, 18:00 - 00:00</p>
+<div class="mt-4 pt-4 border-t border-outline-variant/10 flex justify-between items-center">
+<span class="text-primary font-bold text-sm">R$ 250,00</span>
+<span class="text-on-surface-variant text-xs">Lapa / Vila Leopoldina</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 bg-white/70 backdrop-blur-md flex justify-around items-center px-4 pb-4 pt-2 shadow-[0_-8px_24px_rgba(0,63,135,0.08)] rounded-t-2xl">
+<a class="flex flex-col items-center justify-center text-[#424752] px-5 py-2 hover:text-[#003f87] transition-colors" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-['Manrope'] text-[11px] font-semibold uppercase tracking-wider mt-1">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-[#003f87] text-white rounded-xl px-5 py-2 scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">calendar_today</span>
+<span class="font-['Manrope'] text-[11px] font-semibold uppercase tracking-wider mt-1">Shifts</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#424752] px-5 py-2 hover:text-[#003f87] transition-colors" href="#">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-['Manrope'] text-[11px] font-semibold uppercase tracking-wider mt-1">Wallet</span>
+</a>
+</nav>
+</body></html>

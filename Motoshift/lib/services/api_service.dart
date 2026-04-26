@@ -1,0 +1,216 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
+import 'package:http/http.dart' as http;
+import '../models/usuario.dart';
+import '../models/turno.dart';
+import '../models/transacao.dart';
+import '../models/carteira.dart';
+
+// ============================================================
+// ApiService — Comunicação com o backend Java Spring Boot
+// Base URL deve apontar para o servidor REST (localhost em dev)
+// Troque para a URL de produção no ambiente adequado.
+// ============================================================
+
+class ApiException implements Exception {
+  final int statusCode;
+  final String message;
+  const ApiException(this.statusCode, this.message);
+
+  @override
+  String toString() => 'ApiException($statusCode): $message';
+}
+
+class ApiService {
+  // No emulador Android, o host da máquina é acessível via 10.0.2.2, não localhost.
+  // No simulador iOS, web e desktop, 127.0.0.1 funciona normalmente.
+  static String get _baseUrl {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8080/api';
+    }
+    return 'http://127.0.0.1:8080/api';
+  }
+
+  String? _authToken;
+
+  void setAuthToken(String token) => _authToken = token;
+  void clearAuthToken() => _authToken = null;
+
+  Map<String, String> get _headers => {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (_authToken != null) 'Authorization': 'Bearer $_authToken',
+      };
+
+  // --------------------------------------------------------
+  // Métodos internos de request
+  // --------------------------------------------------------
+
+  Future<dynamic> _get(String path) async {
+    final uri = Uri.parse('$_baseUrl$path');
+    final response = await http.get(uri, headers: _headers);
+    return _handleResponse(response);
+  }
+
+  Future<dynamic> _post(String path, Map<String, dynamic> body) async {
+    final uri = Uri.parse('$_baseUrl$path');
+    final response = await http.post(
+      uri,
+      headers: _headers,
+      body: jsonEncode(body),
+    );
+    return _handleResponse(response);
+  }
+
+  Future<dynamic> _put(String path, Map<String, dynamic> body) async {
+    final uri = Uri.parse('$_baseUrl$path');
+    final response = await http.put(
+      uri,
+      headers: _headers,
+      body: jsonEncode(body),
+    );
+    return _handleResponse(response);
+  }
+
+  dynamic _handleResponse(http.Response response) {
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (response.body.isEmpty) return null;
+      return jsonDecode(utf8.decode(response.bodyBytes));
+    }
+    final body = response.body.isNotEmpty
+        ? jsonDecode(utf8.decode(response.bodyBytes))
+        : {};
+    final message = body['message'] ?? body['error'] ?? 'Erro desconhecido';
+    throw ApiException(response.statusCode, message.toString());
+  }
+
+  // --------------------------------------------------------
+  // Acesso HTTP público para repositórios (Clean Architecture)
+  // --------------------------------------------------------
+
+  Future<dynamic> rawGet(String path) => _get(path);
+  Future<dynamic> rawPost(String path, Map<String, dynamic> body) => _post(path, body);
+  Future<dynamic> rawPut(String path, Map<String, dynamic> body) => _put(path, body);
+
+  // --------------------------------------------------------
+  // AUTH — POST /api/auth/login | /api/auth/registro
+  // --------------------------------------------------------
+
+  Future<Map<String, dynamic>> login({
+    required String email,
+    required String senha,
+    required TipoUsuario tipo,
+  }) async {
+    final data = await _post('/auth/login', {
+      'email': email,
+      'senha': senha,
+      'tipo': tipo.name.toUpperCase(),
+    });
+    _authToken = data['token'] as String;
+    return data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> registrar(Usuario usuario, String senha) async {
+    final body = usuario.toJson()..['senha'] = senha;
+    final data = await _post('/auth/registro', body);
+    _authToken = data['token'] as String;
+    return data as Map<String, dynamic>;
+  }
+
+  // --------------------------------------------------------
+  // USUARIOS — GET /api/usuarios/{id}
+  // --------------------------------------------------------
+
+  Future<Usuario> buscarUsuario(int id) async {
+    final data = await _get('/usuarios/$id');
+    return Usuario.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<Usuario> atualizarUsuario(Usuario usuario) async {
+    final data = await _put('/usuarios/${usuario.id}', usuario.toJson());
+    return Usuario.fromJson(data as Map<String, dynamic>);
+  }
+
+  // --------------------------------------------------------
+  // TURNOS — /api/turnos
+  // --------------------------------------------------------
+
+  Future<List<Turno>> listarTurnosDisponiveis({DateTime? data}) async {
+    final query = data != null
+        ? '?data=${data.toIso8601String().substring(0, 10)}'
+        : '';
+    final list = await _get('/turnos/disponiveis$query') as List<dynamic>;
+    return list.map((e) => Turno.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<Turno>> listarTurnosLojista(int lojistId) async {
+    final list = await _get('/turnos?lojistId=$lojistId') as List<dynamic>;
+    return list.map((e) => Turno.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<Turno>> listarMeusTurnos(int motoboyId) async {
+    final list = await _get('/turnos?motoboyId=$motoboyId') as List<dynamic>;
+    return list.map((e) => Turno.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<Turno> criarTurno(Turno turno) async {
+    final data = await _post('/turnos', turno.toJson());
+    return Turno.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<Turno> aceitarTurno(int turnoId, int motoboyId) async {
+    final data = await _put('/turnos/$turnoId/aceitar', {'motoboyId': motoboyId});
+    return Turno.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<Turno> finalizarTurno(int turnoId) async {
+    final data = await _put('/turnos/$turnoId/finalizar', {});
+    return Turno.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<Turno> cancelarTurno(int turnoId) async {
+    final data = await _put('/turnos/$turnoId/cancelar', {});
+    return Turno.fromJson(data as Map<String, dynamic>);
+  }
+
+  // --------------------------------------------------------
+  // CARTEIRA — /api/carteira/{motoboyId}
+  // --------------------------------------------------------
+
+  Future<Carteira> buscarCarteira(int motoboyId) async {
+    final data = await _get('/carteira/$motoboyId');
+    return Carteira.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<void> solicitarSaque(int motoboyId, double valor) async {
+    await _post('/carteira/$motoboyId/saque', {'valor': valor});
+  }
+
+  // --------------------------------------------------------
+  // TRANSAÇÕES — /api/transacoes
+  // --------------------------------------------------------
+
+  Future<List<Transacao>> listarTransacoes(int motoboyId, {int limit = 20}) async {
+    final list =
+        await _get('/transacoes?motoboyId=$motoboyId&limit=$limit') as List<dynamic>;
+    return list.map((e) => Transacao.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  // --------------------------------------------------------
+  // DASHBOARD LOJISTA — /api/dashboard/lojista/{id}
+  // --------------------------------------------------------
+
+  Future<Map<String, dynamic>> dashboardLojista(int lojistId) async {
+    final data = await _get('/dashboard/lojista/$lojistId');
+    return data as Map<String, dynamic>;
+  }
+
+  // --------------------------------------------------------
+  // DASHBOARD MOTOBOY — /api/dashboard/motoboy/{id}
+  // --------------------------------------------------------
+
+  Future<Map<String, dynamic>> dashboardMotoboy(int motoboyId) async {
+    final data = await _get('/dashboard/motoboy/$motoboyId');
+    return data as Map<String, dynamic>;
+  }
+}

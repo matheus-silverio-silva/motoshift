@@ -1,0 +1,71 @@
+# ============================================================
+#  MotoShift — .gitignore (Flutter + Spring Boot)
+# ============================================================
+
+# ─── Flutter / Dart ──────────────────────────────────────────
+Motoshift/.dart_tool/
+Motoshift/.flutter-plugins
+Motoshift/.flutter-plugins-dependencies
+Motoshift/.packages
+Motoshift/build/
+Motoshift/.fvm/
+
+# Android gerado localmente (SDK path, gradle cache)
+Motoshift/android/local.properties
+Motoshift/android/.gradle/
+Motoshift/android/app/debug/
+Motoshift/android/app/profile/
+Motoshift/android/app/release/
+
+# iOS gerado localmente
+Motoshift/ios/Pods/
+Motoshift/ios/.symlinks/
+Motoshift/ios/Flutter/ephemeral/
+Motoshift/ios/Runner.xcworkspace/xcshareddata/
+
+# Outras plataformas geradas
+Motoshift/macos/Flutter/ephemeral/
+Motoshift/windows/flutter/ephemeral/
+Motoshift/linux/flutter/ephemeral/
+
+# Código gerado
+*.g.dart
+*.freezed.dart
+
+# ─── Spring Boot / Maven ─────────────────────────────────────
+backend/target/
+*.class
+*.jar
+!backend/mvnw
+!**/gradle-wrapper.jar
+*.war
+*.ear
+HELP.md
+
+# ─── Segredos e configuracoes de producao (Spring Boot) ──────
+# O application.properties atual e seguro (H2 em memoria, sem senha real).
+# Profiles de producao devem ser criados localmente e nunca commitados.
+backend/src/main/resources/application-prod.properties
+backend/src/main/resources/application-local.properties
+backend/src/main/resources/application-secret.properties
+backend/src/main/resources/application-*.properties
+
+# ─── IDEs ────────────────────────────────────────────────────
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+
+# ─── Sistema operacional ─────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini

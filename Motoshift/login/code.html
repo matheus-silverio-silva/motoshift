@@ -1,0 +1,187 @@
+<!DOCTYPE html><html lang="pt-br"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary": "#ffffff",
+                    "on-background": "#1b1c1c",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-container": "#e1e3e4",
+                    "on-primary-fixed": "#001a40",
+                    "on-error": "#ffffff",
+                    "primary": "#003f87",
+                    "on-secondary-fixed-variant": "#454748",
+                    "surface-bright": "#fbf9f8",
+                    "on-secondary-fixed": "#191c1d",
+                    "surface-container-low": "#f6f3f2",
+                    "tertiary-fixed-dim": "#ffb694",
+                    "tertiary": "#722b00",
+                    "surface-container-high": "#eae8e7",
+                    "tertiary-fixed": "#ffdbcc",
+                    "surface": "#fbf9f8",
+                    "primary-fixed": "#d7e2ff",
+                    "surface-tint": "#115cb9",
+                    "background": "#fbf9f8",
+                    "surface-dim": "#dcd9d9",
+                    "outline-variant": "#c2c6d4",
+                    "error-container": "#ffdad6",
+                    "error": "#ba1a1a",
+                    "on-primary-fixed-variant": "#004491",
+                    "on-tertiary-fixed-variant": "#7b2f00",
+                    "surface-container-highest": "#e4e2e1",
+                    "inverse-on-surface": "#f3f0f0",
+                    "secondary-fixed-dim": "#c5c7c8",
+                    "on-tertiary-container": "#ffc2a7",
+                    "inverse-primary": "#acc7ff",
+                    "surface-variant": "#e4e2e1",
+                    "surface-container": "#f0eded",
+                    "on-tertiary-fixed": "#351000",
+                    "on-surface-variant": "#424752",
+                    "on-primary-container": "#bbd0ff",
+                    "primary-container": "#0056b3",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary-container": "#626566",
+                    "on-primary": "#ffffff",
+                    "on-surface": "#1b1c1c",
+                    "primary-fixed-dim": "#acc7ff",
+                    "inverse-surface": "#303030",
+                    "tertiary-container": "#983c00",
+                    "secondary": "#5c5f60",
+                    "on-error-container": "#93000a",
+                    "outline": "#727784",
+                    "secondary-fixed": "#e1e3e4"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Manrope"],
+                    "body": ["Manrope"],
+                    "label": ["Manrope"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .kinetic-gradient {
+            background: linear-gradient(135deg, #003f87 0%, #0056b3 100%);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background font-body text-on-background min-h-screen flex items-center justify-center p-4">
+<!-- The Kinetic Monolith: Login Canvas -->
+<main class="relative w-full max-w-[1200px] grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden bg-surface-container-lowest rounded-3xl shadow-[0_32px_64px_-12px_rgba(0,63,135,0.12)]">
+<!-- Left Side: Editorial Brand Impact (Hidden on Mobile) -->
+<section class="hidden lg:flex lg:col-span-7 relative overflow-hidden bg-primary min-h-[700px]">
+<div class="absolute inset-0 z-0">
+<img alt="Urban logistics concept" class="w-full h-full object-cover opacity-40 mix-blend-overlay" data-alt="Wide shot of a modern city at dusk with light trails from delivery vehicles and glowing logistics hubs in the distance" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBDDjuw8DLrb5NR1E24OF7ThSa0a7Eywh-jDJHnjMXqz6UT7huXWB9RxoJd_T4qebKhoinL1YK-kcBRQjVOPub2-GIG372qyoJffUizlSOc9Spv6AYn63Yh2hGqt2DjY7eEPa0Lw0LPB3PkPcWF95H7wcvKU7Ymf_KSG8SlOPRxI0ddq5XIgmUAMOFBiUygBWA2HDOysveVUafHv0gdwFfL5I7nmFdWDu-HEmn5X3HeyESC-GS2_Y2Z2ABgcfBSYYq8eGplGPB3EwFq" style="">
+</div>
+<!-- Branding Overlay -->
+<div class="relative z-10 p-16 flex flex-col justify-between h-full w-full">
+<div>
+<h1 class="text-4xl font-extrabold tracking-tighter text-white mb-2" style="">Urban Kinetic</h1>
+<div class="h-1 w-12 bg-white rounded-full"></div>
+</div>
+<div class="max-w-md">
+<h2 class="text-5xl font-extrabold text-white leading-tight tracking-tight mb-6" style="">
+                        O futuro da logística urbana.
+                    </h2>
+<p class="text-lg text-primary-fixed leading-relaxed opacity-90" style="">
+                        Conectando lojistas e motoboys com inteligência em tempo real para entregas mais rápidas e eficientes.
+                    </p>
+</div>
+<div class="flex gap-4">
+<div class="px-4 py-2 bg-white/10 backdrop-blur-md rounded-lg border border-white/10">
+<span class="text-xs font-bold uppercase tracking-widest text-white/60 block mb-1" style="">Status</span>
+<span class="text-sm font-semibold text-white" style="">Rede Operacional</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Side: Interaction Shell -->
+<section class="col-span-1 lg:col-span-5 flex flex-col justify-center p-8 lg:p-16 bg-white">
+<!-- Mobile Brand Identity -->
+<div class="lg:hidden mb-12">
+<h1 class="text-2xl font-extrabold tracking-tighter text-primary" style=""><span style="font-family: Manrope, sans-serif; font-size: 30px; letter-spacing: -1.5px; text-align: center; background-color: rgb(251, 249, 248);">Moto Shift</span></h1>
+</div>
+<div class="mb-10">
+<h3 class="text-3xl font-extrabold text-on-surface mb-2 tracking-tight" style="">Bem-vindo</h3>
+<p class="text-on-surface-variant" style="">Acesse sua conta para continuar.</p>
+</div>
+<!-- Profile Selector (Lojista / Motoboy) -->
+<div class="mb-8 p-1.5 bg-surface-container-low rounded-xl flex">
+<button class="flex-1 py-3 px-4 rounded-lg bg-surface-container-lowest shadow-sm text-primary font-bold text-sm transition-all duration-200" style="">
+                    Lojista
+                </button>
+<button class="flex-1 py-3 px-4 rounded-lg text-on-surface-variant font-semibold text-sm hover:bg-surface-container-high transition-all duration-200" style="">
+                    Motoboy
+                </button>
+</div>
+<!-- Login Form -->
+<form class="space-y-6">
+<div>
+<label class="block text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2 ml-1" for="email" style="">Email</label>
+<div class="relative group">
+<div class="absolute inset-y-0 left-4 flex items-center pointer-events-none text-outline">
+<span class="material-symbols-outlined text-[20px]" style="">mail</span>
+</div>
+<input class="w-full pl-12 pr-4 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary focus:bg-white transition-all text-on-surface placeholder:text-outline" id="email" placeholder="seu@email.com" type="email">
+</div>
+</div>
+<div>
+<div class="flex justify-between items-center mb-2 ml-1">
+<label class="block text-xs font-bold uppercase tracking-widest text-on-surface-variant" for="password" style="">Senha</label>
+<a class="text-xs font-bold text-primary hover:underline" href="#" style="">Esqueci a senha</a>
+</div>
+<div class="relative group">
+<div class="absolute inset-y-0 left-4 flex items-center pointer-events-none text-outline">
+<span class="material-symbols-outlined text-[20px]" style="">lock</span>
+</div>
+<input class="w-full pl-12 pr-12 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary focus:bg-white transition-all text-on-surface placeholder:text-outline" id="password" placeholder="••••••••" type="password">
+<button class="absolute inset-y-0 right-4 flex items-center text-outline hover:text-primary" type="button" style="">
+<span class="material-symbols-outlined text-[20px]" style="">visibility</span>
+</button>
+</div>
+</div>
+<div class="flex items-center space-x-3 mb-2">
+<input class="w-5 h-5 rounded-md border-outline-variant text-primary focus:ring-primary bg-surface-container-low" id="remember" type="checkbox">
+<label class="text-sm font-medium text-on-surface-variant" for="remember" style="">Lembrar de mim</label>
+</div>
+<button class="kinetic-gradient w-full py-4 rounded-xl text-white font-extrabold text-lg shadow-[0_8px_24px_rgba(0,63,135,0.15)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200" type="submit" style="">
+                    Entrar
+                </button>
+</form>
+<!-- Footer Action -->
+<div class="mt-12 text-center">
+<p class="text-on-surface-variant font-medium" style="">
+                    Não tem uma conta? 
+                    <a class="text-primary font-extrabold hover:underline ml-1" href="#" style="">Cadastrar</a>
+</p>
+</div>
+</section>
+</main>
+<!-- Support Help FAB -->
+<button class="fixed bottom-8 right-8 w-14 h-14 kinetic-gradient text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all duration-200 z-50" style="">
+<span class="material-symbols-outlined" style="">support_agent</span>
+</button>
+</body></html>

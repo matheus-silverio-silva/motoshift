@@ -1,0 +1,222 @@
+<!DOCTYPE html><html lang="pt-br"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary": "#ffffff",
+                    "on-background": "#1b1c1c",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-container": "#e1e3e4",
+                    "on-primary-fixed": "#001a40",
+                    "on-error": "#ffffff",
+                    "primary": "#003f87",
+                    "on-secondary-fixed-variant": "#454748",
+                    "surface-bright": "#fbf9f8",
+                    "on-secondary-fixed": "#191c1d",
+                    "surface-container-low": "#f6f3f2",
+                    "tertiary-fixed-dim": "#ffb694",
+                    "tertiary": "#722b00",
+                    "surface-container-high": "#eae8e7",
+                    "tertiary-fixed": "#ffdbcc",
+                    "surface": "#fbf9f8",
+                    "primary-fixed": "#d7e2ff",
+                    "surface-tint": "#115cb9",
+                    "background": "#fbf9f8",
+                    "surface-dim": "#dcd9d9",
+                    "outline-variant": "#c2c6d4",
+                    "error-container": "#ffdad6",
+                    "error": "#ba1a1a",
+                    "on-primary-fixed-variant": "#004491",
+                    "on-tertiary-fixed-variant": "#7b2f00",
+                    "surface-container-highest": "#e4e2e1",
+                    "inverse-on-surface": "#f3f0f0",
+                    "secondary-fixed-dim": "#c5c7c8",
+                    "on-tertiary-container": "#ffc2a7",
+                    "inverse-primary": "#acc7ff",
+                    "surface-variant": "#e4e2e1",
+                    "surface-container": "#f0eded",
+                    "on-tertiary-fixed": "#351000",
+                    "on-surface-variant": "#424752",
+                    "on-primary-container": "#bbd0ff",
+                    "primary-container": "#0056b3",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary-container": "#626566",
+                    "on-primary": "#ffffff",
+                    "on-surface": "#1b1c1c",
+                    "primary-fixed-dim": "#acc7ff",
+                    "inverse-surface": "#303030",
+                    "tertiary-container": "#983c00",
+                    "secondary": "#5c5f60",
+                    "on-error-container": "#93000a",
+                    "outline": "#727784",
+                    "secondary-fixed": "#e1e3e4"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Manrope"],
+                    "body": ["Manrope"],
+                    "label": ["Manrope"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom scrollbar for clean aesthetics */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #e4e2e1; border-radius: 10px; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen flex flex-col md:flex-row overflow-x-hidden">
+<!-- Left Side: Brand & Visual Anchor (Kinetic Monolith) -->
+<section class="hidden md:flex md:w-5/12 bg-primary relative items-center justify-center overflow-hidden">
+<div class="absolute inset-0 z-0">
+<img class="w-full h-full object-cover opacity-30 mix-blend-multiply filter grayscale" data-alt="Modern high-angle view of a busy urban intersection with blurred blue light trails from delivery vehicles at night" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLWkNJf48zv6T4VXI8cBrfmFIkqKIX8Ec0OTiUnNbTiEwJULQMlLPvB7f6J1dZHTIwsqAt7HfpC9a9QRQ59QD8XkEK7cthtpNhFYSqjb1YeMPsEmCdBPl87LKqM5_SitWjjXF_VBEZ2f4_VqKkjo_ejbizjMs3IPlUgwlQ_mmYXK922eiIvv1_OZM4bew66NXv1Hz11MPuJEb2WSfDq0ASJi1d9Q49UNwuhkqJTr6INThF6vzG4I3iMTGehlZ7HgQRQ-6arC_8yEI0" style="">
+<div class="absolute inset-0 bg-gradient-to-br from-primary/80 to-primary-container/90"></div>
+</div>
+<div class="relative z-10 p-12 max-w-lg">
+<div class="mb-8">
+<span class="text-white text-4xl font-extrabold tracking-tighter" style="">Urban Kinetic</span>
+<div class="h-1 w-12 bg-white mt-2 rounded-full"></div>
+</div>
+<h1 class="text-white text-5xl font-extrabold leading-[1.1] tracking-tight mb-6" style="">
+                Move with the speed of the city.
+            </h1>
+<p class="text-primary-fixed/80 text-lg leading-relaxed font-medium" style="">
+                Join the most efficient urban logistics network. Whether you're sending or delivering, we optimize the path forward.
+            </p>
+<div class="mt-12 grid grid-cols-2 gap-6">
+<div class="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/10">
+<span class="material-symbols-outlined text-white mb-2" data-icon="local_shipping" style="">local_shipping</span>
+<p class="text-white font-bold text-xl" style="">50k+</p>
+<p class="text-white/60 text-xs uppercase tracking-widest font-bold" style="">Deliveries Daily</p>
+</div>
+<div class="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/10">
+<span class="material-symbols-outlined text-white mb-2" data-icon="timer" style="">timer</span>
+<p class="text-white font-bold text-xl" style="">18min</p>
+<p class="text-white/60 text-xs uppercase tracking-widest font-bold" style="">Avg. ETA</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Side: Signup Form Canvas -->
+<main class="flex-1 flex flex-col justify-center items-center px-6 py-12 md:px-20 bg-surface">
+<div class="w-full max-w-md">
+<!-- Mobile Brand Identity -->
+<div class="md:hidden mb-10 text-center">
+<span class="text-primary text-3xl font-extrabold tracking-tighter" style="">Moto Shift</span>
+</div>
+<header class="mb-10">
+<h2 class="text-on-surface text-3xl font-extrabold tracking-tight mb-2" style="">Crie sua conta</h2>
+<p class="text-on-surface-variant font-medium" style="">Preencha os dados para começar sua jornada.</p>
+</header>
+<form class="space-y-6">
+<!-- User Type Toggle (The Kinetic Segmented Control) -->
+<div class="bg-surface-container-low p-1.5 rounded-xl flex gap-1 items-center">
+<label class="flex-1 cursor-pointer" style="">
+<input checked="" class="hidden peer" name="user_type" type="radio" value="lojista">
+<div class="text-center py-2.5 rounded-lg text-sm font-bold tracking-tight transition-all peer-checked:bg-white peer-checked:text-primary peer-checked:shadow-sm text-on-surface-variant hover:text-on-surface" style="">
+                            Lojista
+                        </div>
+</label>
+<label class="flex-1 cursor-pointer" style="">
+<input class="hidden peer" name="user_type" type="radio" value="motoboy">
+<div class="text-center py-2.5 rounded-lg text-sm font-bold tracking-tight transition-all peer-checked:bg-white peer-checked:text-primary peer-checked:shadow-sm text-on-surface-variant hover:text-on-surface" style="">
+                            Motoboy
+                        </div>
+</label>
+</div>
+<!-- Main Form Grid -->
+<div class="space-y-4">
+<div class="group">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5 ml-1" style="">Nome completo</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-lg" style="">person</span>
+<input class="w-full pl-11 pr-4 py-3.5 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary focus:bg-white transition-all outline-none font-medium text-on-surface placeholder:text-outline-variant" placeholder="Seu nome" type="text">
+</div>
+</div>
+<div class="group">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5 ml-1" style="">Email corporativo</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-lg" style="">mail</span>
+<input class="w-full pl-11 pr-4 py-3.5 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary focus:bg-white transition-all outline-none font-medium text-on-surface placeholder:text-outline-variant" placeholder="email@exemplo.com" type="email">
+</div>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<div class="group">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5 ml-1" style="">Telefone</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-lg" style="">call</span>
+<input class="w-full pl-11 pr-4 py-3.5 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary focus:bg-white transition-all outline-none font-medium text-on-surface placeholder:text-outline-variant" placeholder="(11) 99999-9999" type="tel">
+</div>
+</div>
+<div class="group">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5 ml-1" style="">Senha</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-lg" style="">lock</span>
+<input class="w-full pl-11 pr-4 py-3.5 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary focus:bg-white transition-all outline-none font-medium text-on-surface placeholder:text-outline-variant" placeholder="••••••••" type="password">
+</div>
+</div>
+</div>
+<!-- Dynamic Field (CNPJ/CNH Toggle Simulation) -->
+<div class="animate-in fade-in slide-in-from-top-2 duration-300" id="conditional-fields">
+<div class="group">
+<label class="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5 ml-1" style="">CNPJ / CNH</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-lg" style="">badge</span>
+<input class="w-full pl-11 pr-4 py-3.5 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-primary focus:bg-white transition-all outline-none font-medium text-on-surface placeholder:text-outline-variant" placeholder="00.000.000/0000-00" type="text">
+</div>
+<p class="mt-2 text-[11px] text-on-surface-variant font-medium flex items-center gap-1" style="">
+<span class="material-symbols-outlined text-[14px]" style="">info</span>
+                                Documento obrigatório para validação da conta.
+                            </p>
+</div>
+</div>
+</div>
+<div class="pt-4">
+<button class="w-full py-4 bg-gradient-to-br from-primary to-primary-container text-white rounded-xl font-bold text-lg tracking-tight shadow-[0_8px_24px_rgba(0,63,135,0.2)] hover:shadow-[0_12px_32px_rgba(0,63,135,0.3)] active:scale-[0.98] transition-all flex items-center justify-center gap-2 group" type="submit" style="">
+                        Cadastrar
+                        <span class="material-symbols-outlined group-hover:translate-x-1 transition-transform" style="">arrow_forward</span>
+</button>
+</div>
+</form>
+<footer class="mt-12 text-center">
+<p class="text-on-surface-variant text-sm font-medium" style="">
+                    Já possui uma conta? 
+                    <a class="text-primary font-bold hover:underline underline-offset-4 decoration-2" href="#" style="">Fazer Login</a>
+</p>
+<div class="mt-8 flex justify-center items-center gap-6 opacity-40 grayscale hover:grayscale-0 transition-all duration-500">
+<img class="h-6" data-alt="Minimalist abstract circular logo representating global logistics partner" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB9nQnN9gLEAUU-X66au-p7WD7qab7ER9QM8HoQqMyaRPY2Dcyw6CCg8nU0dRenGWjCACqHuRuFrLBgAi1SJcSIB5_bReks9HQ4EJVBbXsg5ROKNqx3NG2FxroayNHS_ZO5f59gR3evnhTqv0G2ckKLtH57zCs9zDeijGKe2SGy8COfD00K6LiwZIGdwQSP9syZ56RmXk607r-9sMrULhafprchDI99_u4NlKHtsdsYnHHDqTydfnKvLpqKeJ1mHQbGxbd8yQMmEH1E" style="">
+<img class="h-6" data-alt="Sleek tech company logo placeholder with geometric lines" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBpOsiGFYUXDNX-A4jJbG73eUAk2l0_7A_A8s_NYPt7gToQgRYCAbZLrW0qm3Oa4JY3f_T0J5BaK3nvfLg2481OEGwQLvU2T1c6dLL3uqraIKFZKJDvJlIX-16bX0t924Ii2nyLf38S5eA789O9J5BZ7dAFMNaDJ8_9ye76lfkz-tS86cxdwdnQbyipRqpUSZ5LQ3gv5U2ZE_KIjDPX9UpNfhG3XsEp7uNaqDP_ZWyNUlZMGSaus9MK50R_eS_mukxbzeaGCaAx9kYE" style="">
+</div>
+</footer>
+</div>
+</main>
+<!-- Background Decorative Elements -->
+<div class="fixed top-0 right-0 -z-10 p-12 opacity-5 pointer-events-none hidden md:block">
+<span class="material-symbols-outlined text-[300px] text-primary" style="font-variation-settings: &quot;FILL&quot; 1;">package_2</span>
+</div>
+</body></html>
