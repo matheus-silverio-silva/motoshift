@@ -73,6 +73,20 @@ class TurnoProvider extends ChangeNotifier {
   }
 
   Future<bool> aceitarTurno(int turnoId, int motoboyId) async {
+    // RF05: verificacao local de conflito antes de chamar a API
+    final candidato = _turnosDisponiveis.where((t) => t.id == turnoId).firstOrNull;
+    if (candidato != null) {
+      final conflito = _meusTurnos.any((t) =>
+          (t.status == StatusTurno.aceito || t.status == StatusTurno.emAndamento) &&
+          t.dataInicio.isBefore(candidato.dataFim) &&
+          t.dataFim.isAfter(candidato.dataInicio));
+      if (conflito) {
+        _erro = 'Voce ja possui um turno agendado neste horario.';
+        notifyListeners();
+        return false;
+      }
+    }
+
     try {
       final turnoAtualizado = await _api.aceitarTurno(turnoId, motoboyId);
       _turnosDisponiveis.removeWhere((t) => t.id == turnoId);
@@ -84,7 +98,7 @@ class TurnoProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (_) {
-      _erro = 'Erro ao aceitar turno.';
+      _erro = 'Sem conexao com o servidor';
       notifyListeners();
       return false;
     }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 
 /// AppBar glassmorphism fiel ao protótipo Urban Kinetic.
@@ -15,6 +17,53 @@ class KineticAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Size get preferredSize => const Size.fromHeight(64);
+
+  void _confirmarLogout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(
+          'Sair da conta',
+          style: TextStyle(fontFamily: 'Manrope', fontWeight: FontWeight.w800),
+        ),
+        content: const Text(
+          'Tem certeza que deseja desconectar?',
+          style: TextStyle(fontFamily: 'Manrope', fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(
+                fontFamily: 'Manrope',
+                fontWeight: FontWeight.w600,
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await context.read<AuthService>().logout();
+              if (context.mounted) {
+                Navigator.of(context)
+                    .pushNamedAndRemoveUntil('/login', (_) => false);
+              }
+            },
+            child: const Text(
+              'Sair',
+              style: TextStyle(
+                fontFamily: 'Manrope',
+                fontWeight: FontWeight.w700,
+                color: AppColors.error,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,6 +121,23 @@ class KineticAppBar extends StatelessWidget implements PreferredSizeWidget {
                   Icons.notifications_outlined,
                   color: AppColors.onSurfaceVariant,
                   size: 24,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            // Logout
+            GestureDetector(
+              onTap: () => _confirmarLogout(context),
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(
+                  Icons.logout_rounded,
+                  color: AppColors.onSurfaceVariant,
+                  size: 22,
                 ),
               ),
             ),

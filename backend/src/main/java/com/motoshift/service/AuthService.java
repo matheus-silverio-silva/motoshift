@@ -10,12 +10,29 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AuthService {
 
+    private static final int MAX_TENTATIVAS = 5;
+    private static final int BLOQUEIO_MINUTOS = 15;
+
     private final UsuarioRepository repo;
+
+    // RF01: rastreamento de tentativas em memória (suficiente para H2 dev)
+    private final ConcurrentHashMap<String, AttemptInfo> tentativas = new ConcurrentHashMap<>();
+
+    // Mapa token → userId (sessão em memória — resets com reinício do servidor)
+    private final ConcurrentHashMap<String, Long> tokens = new ConcurrentHashMap<>();
+
+    private static class AttemptInfo {
+        int contador = 0;
+        LocalDateTime bloqueadoAte = null;
+    }
 
     public AuthService(UsuarioRepository repo) {
         this.repo = repo;
@@ -53,18 +70,45 @@ public class AuthService {
 
         Usuario salvo = repo.save(u);
         String token = UUID.randomUUID().toString();
+        tokens.put(token, salvo.getId());
         return new AuthResponse(token, UsuarioResponse.from(salvo));
     }
 
     public AuthResponse login(LoginRequest req) {
-        Usuario u = repo.findByEmail(req.getEmail())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais inválidas"));
+        String email = req.getEmail() != null ? req.getEmail().trim() : "";
+        AttemptInfo info = tentativas.computeIfAbsent(email, k -> new AttemptInfo());
 
-        if (!u.getSenha().equals(req.getSenha())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais inválidas");
+        // RF01: verifica bloqueio ativo
+        if (info.bloqueadoAte != null && LocalDateTime.now().isBefore(info.bloqueadoAte)) {
+            long minutos = ChronoUnit.MINUTES.between(LocalDateTime.now(), info.bloqueadoAte) + 1;
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "Conta bloqueada. Tente novamente em " + minutos + " minuto(s).");
         }
 
+        boolean credenciaisOk = repo.findByEmail(req.getEmail())
+                .map(u -> u.getSenha().equals(req.getSenha()))
+                .orElse(false);
+
+        if (!credenciaisOk) {
+            info.contador++;
+            if (info.contador >= MAX_TENTATIVAS) {
+                info.bloqueadoAte = LocalDateTime.now().plusMinutes(BLOQUEIO_MINUTOS);
+                info.contador = 0;
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                        "Muitas tentativas incorretas. Tente novamente em " + BLOQUEIO_MINUTOS + " minuto(s).");
+            }
+            int restantes = MAX_TENTATIVAS - info.contador;
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
+                    "Credenciais inválidas. " + restantes + " tentativa(s) restante(s).");
+        }
+
+        // Sucesso: reset do contador
+        info.contador = 0;
+        info.bloqueadoAte = null;
+
+        Usuario u = repo.findByEmail(req.getEmail()).orElseThrow();
         String token = UUID.randomUUID().toString();
+        tokens.put(token, u.getId());
         return new AuthResponse(token, UsuarioResponse.from(u));
     }
 
@@ -72,5 +116,17 @@ public class AuthService {
         Usuario u = repo.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuário não encontrado"));
         return UsuarioResponse.from(u);
+    }
+
+    /**
+     * Valida o token Bearer e retorna o userId associado.
+     * Lança 401 se o token for inválido ou não existir.
+     */
+    public Long validarToken(String token) {
+        Long userId = tokens.get(token);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token inválido ou sessão expirada. Faça login novamente.");
+        }
+        return userId;
     }
 }

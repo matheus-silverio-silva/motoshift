@@ -92,6 +92,10 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
                 ),
                 const SizedBox(height: 24),
 
+                // Botão de Sugestão Inteligente via IA
+                _buildSugestoesButton(),
+                const SizedBox(height: 16),
+
                 if (provider.carregando)
                   const Center(
                     child: Padding(
@@ -131,6 +135,67 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
           if (item == NavItem.carteira) Navigator.pushNamed(context, '/carteira');
         },
       ),
+    );
+  }
+
+  Widget _buildSugestoesButton() {
+    return GestureDetector(
+      onTap: _mostrarSugestoes,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: AppColors.kineticGradient,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: AppColors.kineticShadow,
+        ),
+        child: const Row(
+          children: [
+            Text('✨', style: TextStyle(fontSize: 22)),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Ver sugestões para mim',
+                    style: TextStyle(
+                      fontFamily: 'Manrope',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'IA analisa seu perfil e recomenda os melhores turnos',
+                    style: TextStyle(
+                      fontFamily: 'Manrope',
+                      fontSize: 11,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 14),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _mostrarSugestoes() {
+    final auth = context.read<AuthService>();
+    final api = context.read<ApiService>();
+    final motoboyId = auth.usuario?.id;
+    if (motoboyId == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SugestoesSheet(motoboyId: motoboyId, api: api),
     );
   }
 
@@ -605,5 +670,202 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
       dia = semana[inicio.weekday % 7];
     }
     return '$dia, ${inicio.hour.toString().padLeft(2, '0')}:${inicio.minute.toString().padLeft(2, '0')} - ${fim.hour.toString().padLeft(2, '0')}:${fim.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// BottomSheet de Sugestão Inteligente (IA)
+// ---------------------------------------------------------------------------
+
+class _SugestoesSheet extends StatefulWidget {
+  final int motoboyId;
+  final ApiService api;
+
+  const _SugestoesSheet({required this.motoboyId, required this.api});
+
+  @override
+  State<_SugestoesSheet> createState() => _SugestoesSheetState();
+}
+
+class _SugestoesSheetState extends State<_SugestoesSheet> {
+  String? _sugestoes;
+  String? _erro;
+  bool _carregando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregar();
+  }
+
+  Future<void> _carregar() async {
+    if (!mounted) return;
+    setState(() {
+      _carregando = true;
+      _erro = null;
+      _sugestoes = null;
+    });
+    try {
+      final texto = await widget.api.buscarSugestoesTurnos(widget.motoboyId);
+      if (mounted) setState(() { _sugestoes = texto; _carregando = false; });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _erro = 'Não foi possível carregar sugestões. Tente novamente.';
+          _carregando = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.72,
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(top: 12, bottom: 20),
+              decoration: BoxDecoration(
+                color: AppColors.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          // Cabeçalho
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: const [
+                Text('✨', style: TextStyle(fontSize: 22)),
+                SizedBox(width: 8),
+                Text(
+                  'Sugestões para você',
+                  style: TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.onSurface,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              'Com base no seu histórico dos últimos 30 dias',
+              style: TextStyle(
+                fontFamily: 'Manrope',
+                fontSize: 13,
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          // Conteúdo
+          Expanded(child: _buildContent()),
+          // Botão Fechar
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+                24, 8, 24, MediaQuery.of(context).padding.bottom + 16),
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Fechar',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.onSurface,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    if (_carregando) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: AppColors.primary),
+            SizedBox(height: 16),
+            Text(
+              'Consultando a IA...',
+              style: TextStyle(
+                fontFamily: 'Manrope',
+                fontSize: 14,
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_erro != null) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded,
+                color: AppColors.onSurfaceVariant, size: 48),
+            const SizedBox(height: 12),
+            Text(
+              _erro!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: 'Manrope',
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: _carregar,
+              child: const Text('Tentar novamente'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Text(
+        _sugestoes ?? '',
+        style: const TextStyle(
+          fontFamily: 'Manrope',
+          fontSize: 14,
+          height: 1.65,
+          color: AppColors.onSurface,
+        ),
+      ),
+    );
   }
 }

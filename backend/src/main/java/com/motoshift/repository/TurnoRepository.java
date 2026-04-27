@@ -26,4 +26,8 @@ public interface TurnoRepository extends JpaRepository<Turno, Long> {
             @Param("fim") LocalDateTime fim);
 
     long countByLojistIdAndStatusIn(Long lojistId, List<String> statuses);
+
+    // Histórico de turnos finalizados pelo motoboy a partir de uma data
+    List<Turno> findByMotoboyIdAndStatusAndDataInicioAfter(
+            Long motoboyId, String status, LocalDateTime inicio);
 }

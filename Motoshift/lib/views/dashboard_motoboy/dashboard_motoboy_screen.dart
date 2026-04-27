@@ -9,6 +9,8 @@ import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/kinetic_app_bar.dart';
 import '../../widgets/kinetic_bottom_nav.dart';
+import '../relatorio/relatorio_screen.dart';
+import '../score/score_analise_screen.dart';
 
 class DashboardMotoboyScreen extends StatefulWidget {
   const DashboardMotoboyScreen({super.key});
@@ -75,6 +77,10 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
         children: [
           const SizedBox(height: 16),
           _buildScoreSection(auth),
+          const SizedBox(height: 16),
+          _buildMotoboyStats(),
+          const SizedBox(height: 16),
+          _buildRelatorioCard(),
           const SizedBox(height: 32),
           _buildDateFilters(),
           const SizedBox(height: 24),
@@ -105,12 +111,256 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
     );
   }
 
+  Widget _buildRelatorioCard() {
+    final meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    final now = DateTime.now();
+    final mesAtual = '${meses[now.month - 1]} ${now.year}';
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withOpacity(0.12)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              gradient: AppColors.kineticGradient,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Text('📊', style: TextStyle(fontSize: 20)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Análise do seu mês',
+                  style: TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    const Icon(Icons.auto_awesome_rounded,
+                        size: 11, color: AppColors.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Gerado por IA · $mesAtual',
+                      style: const TextStyle(
+                        fontFamily: 'Manrope',
+                        fontSize: 11,
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: _abrirRelatorio,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                gradient: AppColors.kineticGradient,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'Ver relatório',
+                style: TextStyle(
+                  fontFamily: 'Manrope',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _abrirRelatorio() async {
+    final turnosFinalizadosMes =
+        (_dashData?['turnosFinalizadosMes'] as num?)?.toInt() ?? 0;
+
+    if (turnosFinalizadosMes < 3) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Conclua pelo menos 3 turnos para gerar sua análise.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    final auth = context.read<AuthService>();
+    final api = context.read<ApiService>();
+    final id = auth.usuario?.id;
+    if (id == null) return;
+
+    // Exibe loading
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: AppColors.primary),
+                SizedBox(height: 16),
+                Text(
+                  'Analisando seus dados...',
+                  style: TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final data = await api.buscarRelatorioMotoboy(id);
+      if (!mounted) return;
+      Navigator.of(context).pop(); // fecha loading
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => RelatorioScreen(
+            periodo: data['periodo'] as String,
+            perfil: data['perfil'] as String,
+            relatorio: data['relatorio'] as String,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // fecha loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível gerar o relatório. Tente novamente.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Color _scoreColor(double score) {
+    if (score >= 4.0) return const Color(0xFF00875A);
+    if (score >= 2.5) return const Color(0xFFF59E0B);
+    return const Color(0xFFBA1A1A);
+  }
+
+  Future<void> _abrirAnaliseScore() async {
+    final turnosFinalizados =
+        (_dashData?['turnosFinalizadosMes'] as num?)?.toInt() ?? 0;
+
+    if (turnosFinalizados == 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Conclua seu primeiro turno para começar a construir seu score!'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    final auth = context.read<AuthService>();
+    final api = context.read<ApiService>();
+    final id = auth.usuario?.id;
+    if (id == null) return;
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: AppColors.primary),
+                SizedBox(height: 16),
+                Text(
+                  'Analisando seu score...',
+                  style: TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final data = await api.buscarAnaliseScore(id);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ScoreAnaliseScreen(
+            scoreAtual: (data['scoreAtual'] as num).toDouble(),
+            scoreAnterior: (data['scoreAnterior'] as num).toDouble(),
+            variacao: (data['variacao'] as num).toDouble(),
+            tendencia: data['tendencia'] as String,
+            classificacao: data['classificacao'] as String,
+            analise: data['analise'] as String,
+            ultimaAtualizacao: data['ultimaAtualizacao'] as String,
+            eventos: (data['eventos'] as List<dynamic>)
+                .map((e) => Map<String, dynamic>.from(e as Map))
+                .toList(),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível gerar a análise. Tente novamente.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   // Score e saldo reais via dashboardMotoboy
   Widget _buildScoreSection(AuthService auth) {
     final score = (_dashData?['score'] as num?)?.toDouble() ?? auth.usuario?.score ?? 5.0;
     final saldo = (_dashData?['saldoAtual'] as num?)?.toDouble() ?? 0.0;
     final scoreStr = score.toStringAsFixed(2);
     final estrelasCheias = score.floor();
+    final scoreC = _scoreColor(score);
 
     return Row(
       children: [
@@ -121,6 +371,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
             decoration: BoxDecoration(
               color: AppColors.surfaceContainerLow,
               borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: scoreC.withOpacity(0.2), width: 1),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,12 +389,12 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
                 const SizedBox(height: 8),
                 Text(
                   scoreStr,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Manrope',
                     fontSize: 40,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -2,
-                    color: AppColors.onSurface,
+                    color: scoreC,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -155,10 +406,29 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
                           : (i == estrelasCheias && score - estrelasCheias >= 0.5
                               ? Icons.star_half_rounded
                               : Icons.star_outline_rounded),
-                      color: AppColors.primary,
+                      color: scoreC,
                       size: 16,
                     )),
                   ],
+                ),
+                const SizedBox(height: 10),
+                GestureDetector(
+                  onTap: _abrirAnaliseScore,
+                  child: Row(
+                    children: [
+                      Text(
+                        'Ver análise',
+                        style: TextStyle(
+                          fontFamily: 'Manrope',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: scoreC,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(Icons.arrow_forward_rounded, size: 13, color: scoreC),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -220,6 +490,94 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
                         ),
                       ],
                     ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMotoboyStats() {
+    final ganhosMensais     = (_dashData?['ganhosMensais']     as num?)?.toDouble() ?? 0.0;
+    final turnosFinalizados = (_dashData?['turnosFinalizadosMes'] as num?)?.toInt()  ?? 0;
+
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'GANHOS DO MÊS',
+                  style: TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'R\$ ${ganhosMensais.toStringAsFixed(2).replaceAll('.', ',')}',
+                  style: const TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF00875A),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'TURNOS NO MÊS',
+                  style: TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '$turnosFinalizados',
+                  style: const TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -1,
+                    color: AppColors.onSurface,
+                  ),
+                ),
+                const Text(
+                  'concluídos',
+                  style: TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 11,
+                    color: AppColors.onSurfaceVariant,
                   ),
                 ),
               ],

@@ -1,0 +1,33 @@
+# Copie este arquivo para application.properties e preencha os valores
+
+# Servidor
+server.port=8080
+
+# H2 Database
+spring.datasource.url=jdbc:h2:mem:motoshiftdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+spring.datasource.driver-class-name=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=
+
+# JPA
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+spring.jpa.hibernate.ddl-auto=create-drop
+spring.jpa.show-sql=true
+
+# H2 Console
+spring.h2.console.enabled=true
+spring.h2.console.path=/h2-console
+
+# JWT
+jwt.secret=SUA_CHAVE_SECRETA_AQUI
+jwt.expiration=86400000
+
+# Anthropic API
+anthropic.api.key=SUA_CHAVE_ANTHROPIC_AQUI
+anthropic.api.url=https://api.anthropic.com/v1/messages
+anthropic.model=claude-sonnet-4-20250514
+
+# Configuracoes do App
+spring.application.name=motoshift-backend
+spring.main.web-application-type=servlet
+spring.jackson.serialization.write-dates-as-timestamps=false

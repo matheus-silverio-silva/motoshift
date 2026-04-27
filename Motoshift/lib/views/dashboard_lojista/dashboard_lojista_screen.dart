@@ -7,6 +7,7 @@ import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/kinetic_app_bar.dart';
 import '../../widgets/kinetic_bottom_nav.dart';
+import '../relatorio/relatorio_screen.dart';
 
 class DashboardLojistScreen extends StatefulWidget {
   const DashboardLojistScreen({super.key});
@@ -76,6 +77,8 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
           _buildHeroSection(nome),
           const SizedBox(height: 32),
           _buildStatsBento(),
+          const SizedBox(height: 16),
+          _buildRelatorioCard(),
           const SizedBox(height: 32),
           Row(
             children: [
@@ -114,6 +117,159 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
         onItemSelected: _onNavChanged,
       ),
     );
+  }
+
+  Widget _buildRelatorioCard() {
+    final meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    final now = DateTime.now();
+    final mesAtual = '${meses[now.month - 1]} ${now.year}';
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withOpacity(0.12)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              gradient: AppColors.kineticGradient,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Text('📊', style: TextStyle(fontSize: 20)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Análise do seu mês',
+                  style: TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    const Icon(Icons.auto_awesome_rounded,
+                        size: 11, color: AppColors.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Gerado por IA · $mesAtual',
+                      style: const TextStyle(
+                        fontFamily: 'Manrope',
+                        fontSize: 11,
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: _abrirRelatorio,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                gradient: AppColors.kineticGradient,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'Ver relatório',
+                style: TextStyle(
+                  fontFamily: 'Manrope',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _abrirRelatorio() async {
+    final turnosMes = (_dashData?['turnosMes'] as num?)?.toInt() ?? 0;
+
+    if (turnosMes < 3) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Publique pelo menos 3 turnos para gerar sua análise.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    final auth = context.read<AuthService>();
+    final api = context.read<ApiService>();
+    final id = auth.usuario?.id;
+    if (id == null) return;
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: AppColors.primary),
+                SizedBox(height: 16),
+                Text(
+                  'Analisando seus dados...',
+                  style: TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final data = await api.buscarRelatorioLojista(id);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => RelatorioScreen(
+            periodo: data['periodo'] as String,
+            perfil: data['perfil'] as String,
+            relatorio: data['relatorio'] as String,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível gerar o relatório. Tente novamente.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _buildHeroSection(String nome) {
@@ -204,32 +360,88 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
       );
     }
 
-    final turnosAtivos = _dashData?['turnosAtivos'] ?? 0;
+    final turnosMes        = _dashData?['turnosMes'] ?? 0;
+    final turnosAtivos     = _dashData?['turnosAtivos'] ?? 0;
     final turnosFinalizados = _dashData?['turnosFinalizados'] ?? 0;
-    final totalGasto = (_dashData?['totalGasto'] as num?)?.toDouble() ?? 0.0;
+    final totalGasto       = (_dashData?['totalGasto'] as num?)?.toDouble() ?? 0.0;
+    final avaliacaoMedia   = (_dashData?['avaliacaoMedia'] as num?)?.toDouble() ?? 0.0;
 
-    final stats = [
-      _StatItem('Turnos Ativos', '$turnosAtivos', AppColors.primary),
-      _StatItem('Finalizados', '$turnosFinalizados', const Color(0xFF00875A)),
-      _StatItem('Total Gasto', 'R\$ ${totalGasto.toStringAsFixed(0)}', null),
-    ];
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: _statCard('Publicados no Mês', '$turnosMes', AppColors.primary)),
+            const SizedBox(width: 12),
+            Expanded(child: _statCard('Ativos Agora', '$turnosAtivos', null)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: _statCard('Finalizados', '$turnosFinalizados', const Color(0xFF00875A))),
+            const SizedBox(width: 12),
+            Expanded(child: _statCard('Total Gasto', 'R\$ ${totalGasto.toStringAsFixed(0)}', null)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _avaliacaoCard(avaliacaoMedia),
+      ],
+    );
+  }
 
-    return Row(
-      children: stats.map((s) {
-        return Expanded(
-          child: Container(
-            margin: EdgeInsets.only(right: s == stats.last ? 0 : 12),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceContainerLowest,
-              borderRadius: BorderRadius.circular(16),
+  Widget _statCard(String label, String value, Color? valueColor) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              fontFamily: 'Manrope',
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+              color: AppColors.onSurfaceVariant,
             ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontFamily: 'Manrope',
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -1,
+              color: valueColor ?? AppColors.onSurface,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _avaliacaoCard(double media) {
+    final estrelasCheias = media.floor();
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  s.label.toUpperCase(),
-                  style: const TextStyle(
+                const Text(
+                  'AVALIAÇÃO MÉDIA DOS MOTOBOYS',
+                  style: TextStyle(
                     fontFamily: 'Manrope',
                     fontSize: 9,
                     fontWeight: FontWeight.w700,
@@ -239,20 +451,32 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  s.value,
-                  style: TextStyle(
+                  media > 0 ? media.toStringAsFixed(1) : 'N/D',
+                  style: const TextStyle(
                     fontFamily: 'Manrope',
-                    fontSize: 22,
+                    fontSize: 28,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -1,
-                    color: s.color ?? AppColors.onSurface,
+                    color: AppColors.onSurface,
                   ),
                 ),
               ],
             ),
           ),
-        );
-      }).toList(),
+          if (media > 0)
+            Row(
+              children: List.generate(5, (i) => Icon(
+                i < estrelasCheias
+                    ? Icons.star_rounded
+                    : (i == estrelasCheias && media - estrelasCheias >= 0.5
+                        ? Icons.star_half_rounded
+                        : Icons.star_outline_rounded),
+                color: AppColors.primary,
+                size: 22,
+              )),
+            ),
+        ],
+      ),
     );
   }
 
@@ -452,9 +676,3 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
   };
 }
 
-class _StatItem {
-  final String label;
-  final String value;
-  final Color? color;
-  const _StatItem(this.label, this.value, this.color);
-}

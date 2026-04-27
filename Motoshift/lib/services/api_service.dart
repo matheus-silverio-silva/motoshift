@@ -48,27 +48,42 @@ class ApiService {
 
   Future<dynamic> _get(String path) async {
     final uri = Uri.parse('$_baseUrl$path');
-    final response = await http.get(uri, headers: _headers);
+    final http.Response response;
+    try {
+      response = await http.get(uri, headers: _headers);
+    } catch (_) {
+      throw const ApiException(0, 'Sem conexao com o servidor');
+    }
     return _handleResponse(response);
   }
 
   Future<dynamic> _post(String path, Map<String, dynamic> body) async {
     final uri = Uri.parse('$_baseUrl$path');
-    final response = await http.post(
-      uri,
-      headers: _headers,
-      body: jsonEncode(body),
-    );
+    final http.Response response;
+    try {
+      response = await http.post(
+        uri,
+        headers: _headers,
+        body: jsonEncode(body),
+      );
+    } catch (_) {
+      throw const ApiException(0, 'Sem conexao com o servidor');
+    }
     return _handleResponse(response);
   }
 
   Future<dynamic> _put(String path, Map<String, dynamic> body) async {
     final uri = Uri.parse('$_baseUrl$path');
-    final response = await http.put(
-      uri,
-      headers: _headers,
-      body: jsonEncode(body),
-    );
+    final http.Response response;
+    try {
+      response = await http.put(
+        uri,
+        headers: _headers,
+        body: jsonEncode(body),
+      );
+    } catch (_) {
+      throw const ApiException(0, 'Sem conexao com o servidor');
+    }
     return _handleResponse(response);
   }
 
@@ -77,9 +92,12 @@ class ApiService {
       if (response.body.isEmpty) return null;
       return jsonDecode(utf8.decode(response.bodyBytes));
     }
+    if (response.statusCode >= 500) {
+      throw ApiException(response.statusCode, 'Erro interno, tente novamente');
+    }
     final body = response.body.isNotEmpty
         ? jsonDecode(utf8.decode(response.bodyBytes))
-        : {};
+        : <String, dynamic>{};
     final message = body['message'] ?? body['error'] ?? 'Erro desconhecido';
     throw ApiException(response.statusCode, message.toString());
   }
@@ -211,6 +229,38 @@ class ApiService {
 
   Future<Map<String, dynamic>> dashboardMotoboy(int motoboyId) async {
     final data = await _get('/dashboard/motoboy/$motoboyId');
+    return data as Map<String, dynamic>;
+  }
+
+  // --------------------------------------------------------
+  // SUGESTÕES IA — GET /api/sugestoes/turnos/{motoboyId}
+  // --------------------------------------------------------
+
+  Future<String> buscarSugestoesTurnos(int motoboyId) async {
+    final data = await _get('/sugestoes/turnos/$motoboyId');
+    return (data as Map<String, dynamic>)['sugestoes'] as String;
+  }
+
+  // --------------------------------------------------------
+  // RELATÓRIO IA — /api/relatorio
+  // --------------------------------------------------------
+
+  Future<Map<String, dynamic>> buscarRelatorioMotoboy(int motoboyId) async {
+    final data = await _get('/relatorio/motoboy/$motoboyId');
+    return data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> buscarRelatorioLojista(int lojistaId) async {
+    final data = await _get('/relatorio/lojista/$lojistaId');
+    return data as Map<String, dynamic>;
+  }
+
+  // --------------------------------------------------------
+  // SCORE ANALISE IA — /api/score/{motoboyId}/analise
+  // --------------------------------------------------------
+
+  Future<Map<String, dynamic>> buscarAnaliseScore(int motoboyId) async {
+    final data = await _get('/score/$motoboyId/analise');
     return data as Map<String, dynamic>;
   }
 }

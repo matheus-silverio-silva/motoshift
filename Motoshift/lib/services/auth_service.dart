@@ -47,7 +47,11 @@ class AuthService extends ChangeNotifier {
       await prefs.setInt('user_id', _usuario!.id!);
       return true;
     } on ApiException catch (e) {
-      _erro = e.message;
+      _erro = switch (e.statusCode) {
+        0   => 'Sem conexao com o servidor',
+        500 => 'Erro interno, tente novamente',
+        _   => e.message, // 401 inclui tentativas restantes; 429 inclui tempo de bloqueio
+      };
       return false;
     } finally {
       _carregando = false;
