@@ -8,4 +8,6 @@ import java.util.List;
 public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
 
     List<Transacao> findByMotoboyIdOrderByCriadoEmDesc(Long motoboyId);
+
+    List<Transacao> findByMotoboyIdAndTipoOrderByCriadoEmDesc(Long motoboyId, String tipo);
 }

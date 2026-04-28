@@ -15,9 +15,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class TurnoService {
@@ -151,6 +156,48 @@ public class TurnoService {
 
     public List<TurnoResponse> listarDisponiveis() {
         return turnoRepo.findByStatus("aberto").stream()
+                .map(TurnoResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    public List<TurnoResponse> listarDisponiveisComFiltros(
+            String horarioInicio, String horarioFim, Integer diaSemana,
+            Double raioMaxKm, String dataInicio, String dataFim, String ordenarPor) {
+
+        DateTimeFormatter hmFmt = DateTimeFormatter.ofPattern("HH:mm");
+        Stream<Turno> stream = turnoRepo.findByStatus("aberto").stream();
+
+        if (horarioInicio != null && !horarioInicio.isBlank()) {
+            LocalTime hiTime = LocalTime.parse(horarioInicio, hmFmt);
+            stream = stream.filter(t -> !t.getDataInicio().toLocalTime().isBefore(hiTime));
+        }
+        if (horarioFim != null && !horarioFim.isBlank()) {
+            LocalTime hfTime = LocalTime.parse(horarioFim, hmFmt);
+            stream = stream.filter(t -> !t.getDataFim().toLocalTime().isAfter(hfTime));
+        }
+        if (diaSemana != null) {
+            stream = stream.filter(t -> t.getDataInicio().getDayOfWeek().getValue() == diaSemana);
+        }
+        if (raioMaxKm != null) {
+            stream = stream.filter(t -> t.getRaioEntregaKm() <= raioMaxKm);
+        }
+        if (dataInicio != null && !dataInicio.isBlank()) {
+            LocalDate di = LocalDate.parse(dataInicio);
+            stream = stream.filter(t -> !t.getDataInicio().toLocalDate().isBefore(di));
+        }
+        if (dataFim != null && !dataFim.isBlank()) {
+            LocalDate df = LocalDate.parse(dataFim);
+            stream = stream.filter(t -> !t.getDataInicio().toLocalDate().isAfter(df));
+        }
+
+        Comparator<Turno> comparator = switch (ordenarPor != null ? ordenarPor : "") {
+            case "valorDesc"  -> Comparator.comparingDouble(Turno::getValorEstimado).reversed();
+            case "raioAsc"    -> Comparator.comparingDouble(Turno::getRaioEntregaKm);
+            case "dataInicio" -> Comparator.comparing(Turno::getDataInicio);
+            default           -> Comparator.comparingDouble(Turno::getValorEstimado);
+        };
+
+        return stream.sorted(comparator)
                 .map(TurnoResponse::from)
                 .collect(Collectors.toList());
     }

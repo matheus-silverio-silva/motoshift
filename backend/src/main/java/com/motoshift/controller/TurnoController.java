@@ -48,10 +48,25 @@ public class TurnoController {
         return service.listarDisponiveis();
     }
 
-    @Operation(summary = "Listar turnos disponíveis", description = "Retorna todos os turnos com status 'aberto'.")
+    @Operation(summary = "Listar turnos disponíveis", description = "Retorna turnos abertos com filtros opcionais de horário, dia da semana, raio e datas.")
     @ApiResponse(responseCode = "200", description = "Turnos disponíveis")
     @GetMapping("/disponiveis")
-    public List<TurnoResponse> disponiveis() {
+    public List<TurnoResponse> disponiveis(
+            @RequestParam(required = false) String horarioInicio,
+            @RequestParam(required = false) String horarioFim,
+            @RequestParam(required = false) Integer diaSemana,
+            @RequestParam(required = false) Double raioMaxKm,
+            @RequestParam(required = false) String dataInicio,
+            @RequestParam(required = false) String dataFim,
+            @RequestParam(required = false) String ordenarPor) {
+
+        boolean hasFilter = horarioInicio != null || horarioFim != null || diaSemana != null
+                || raioMaxKm != null || dataInicio != null || dataFim != null || ordenarPor != null;
+
+        if (hasFilter) {
+            return service.listarDisponiveisComFiltros(horarioInicio, horarioFim,
+                    diaSemana, raioMaxKm, dataInicio, dataFim, ordenarPor);
+        }
         return service.listarDisponiveis();
     }
 

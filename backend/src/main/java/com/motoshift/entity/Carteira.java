@@ -20,6 +20,8 @@ public class Carteira {
     @Column(nullable = false)
     private Double ganhosMensais = 0.0;
 
+    private String chavePix;
+
     private LocalDateTime atualizadoEm;
 
     @PrePersist
@@ -40,6 +42,9 @@ public class Carteira {
 
     public Double getGanhosMensais() { return ganhosMensais; }
     public void setGanhosMensais(Double ganhosMensais) { this.ganhosMensais = ganhosMensais; }
+
+    public String getChavePix() { return chavePix; }
+    public void setChavePix(String chavePix) { this.chavePix = chavePix; }
 
     public LocalDateTime getAtualizadoEm() { return atualizadoEm; }
 }

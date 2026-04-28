@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
-enum NavItem { dashboard, turnos, carteira }
+enum NavItem { dashboard, turnos, carteira, agenda }
 
 class KineticBottomNav extends StatelessWidget {
   final NavItem currentItem;
@@ -30,7 +30,7 @@ class KineticBottomNav extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
@@ -51,6 +51,12 @@ class KineticBottomNav extends StatelessWidget {
                 label: 'Wallet',
                 selected: currentItem == NavItem.carteira,
                 onTap: () => onItemSelected(NavItem.carteira),
+              ),
+              _NavChip(
+                icon: Icons.calendar_month_rounded,
+                label: 'Agenda',
+                selected: currentItem == NavItem.agenda,
+                onTap: () => onItemSelected(NavItem.agenda),
               ),
             ],
           ),
@@ -80,7 +86,7 @@ class _NavChip extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: selected ? AppColors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(12),

@@ -30,4 +30,14 @@ public interface TurnoRepository extends JpaRepository<Turno, Long> {
     // Histórico de turnos finalizados pelo motoboy a partir de uma data
     List<Turno> findByMotoboyIdAndStatusAndDataInicioAfter(
             Long motoboyId, String status, LocalDateTime inicio);
+
+    // Agenda: turnos do usuário (como lojista ou motoboy) em um período
+    @Query("SELECT t FROM Turno t WHERE " +
+           "(t.lojistId = :usuarioId OR t.motoboyId = :usuarioId) " +
+           "AND t.dataInicio >= :inicio AND t.dataInicio < :fim " +
+           "ORDER BY t.dataInicio ASC")
+    List<Turno> findByUsuarioAndPeriodo(
+            @Param("usuarioId") Long usuarioId,
+            @Param("inicio") LocalDateTime inicio,
+            @Param("fim") LocalDateTime fim);
 }

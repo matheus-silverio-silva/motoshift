@@ -58,6 +58,9 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
       case NavItem.carteira:
         Navigator.pushNamed(context, '/carteira');
         break;
+      case NavItem.agenda:
+        Navigator.pushNamed(context, '/agenda');
+        break;
     }
   }
 

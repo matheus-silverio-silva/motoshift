@@ -18,6 +18,7 @@ import 'views/meus_turnos/meus_turnos_screen.dart';
 import 'views/carteira/carteira_screen.dart';
 import 'views/solicitar_servico/solicitar_servico_screen.dart';
 import 'views/historico/historico_screen.dart';
+import 'views/agenda/agenda_screen.dart';
 
 class MotoShiftApp extends StatelessWidget {
   const MotoShiftApp({super.key});
@@ -75,6 +76,7 @@ class MotoShiftApp extends StatelessWidget {
           '/carteira': (_) => const CarteiraScreen(),
           '/solicitar-servico': (_) => const SolicitarServicoScreen(),
           '/historico': (_) => const HistoricoScreen(),
+          '/agenda': (_) => const AgendaScreen(),
         },
       ),
     );

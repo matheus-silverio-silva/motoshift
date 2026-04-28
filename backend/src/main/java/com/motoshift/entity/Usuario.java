@@ -36,6 +36,8 @@ public class Usuario {
     @Column(nullable = false)
     private Double score = 5.0;
 
+    private Double mediaAvaliacao;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime criadoEm;
 
@@ -72,6 +74,9 @@ public class Usuario {
 
     public Double getScore() { return score; }
     public void setScore(Double score) { this.score = score; }
+
+    public Double getMediaAvaliacao() { return mediaAvaliacao; }
+    public void setMediaAvaliacao(Double mediaAvaliacao) { this.mediaAvaliacao = mediaAvaliacao; }
 
     public LocalDateTime getCriadoEm() { return criadoEm; }
 }

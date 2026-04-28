@@ -24,6 +24,13 @@ class TurnoProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setDisponiveisExterno(List<Turno> lista) {
+    _turnosDisponiveis = lista;
+    _carregando = false;
+    _erro = null;
+    notifyListeners();
+  }
+
   Future<void> carregarDisponiveis() async {
     _carregando = true;
     _erro = null;

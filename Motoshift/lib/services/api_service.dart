@@ -263,4 +263,97 @@ class ApiService {
     final data = await _get('/score/$motoboyId/analise');
     return data as Map<String, dynamic>;
   }
+
+  // --------------------------------------------------------
+  // AGENDA — /api/agenda/{usuarioId}
+  // --------------------------------------------------------
+
+  Future<Map<String, dynamic>> buscarAgendaMensal(
+      int usuarioId, int mes, int ano) async {
+    final data = await _get('/agenda/$usuarioId?mes=$mes&ano=$ano');
+    return data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> buscarAgendaSemanal(
+      int usuarioId, String data) async {
+    final d = await _get('/agenda/$usuarioId/semana?data=$data');
+    return d as Map<String, dynamic>;
+  }
+
+  // --------------------------------------------------------
+  // AVALIAÇÕES — /api/avaliacoes
+  // --------------------------------------------------------
+
+  Future<Map<String, dynamic>> buscarAvaliacoes(int usuarioId) async {
+    final data = await _get('/avaliacoes/usuario/$usuarioId');
+    return data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> registrarAvaliacao(
+      Map<String, dynamic> body) async {
+    final data = await _post('/avaliacoes', body);
+    return data as Map<String, dynamic>;
+  }
+
+  Future<bool> verificarPendente(int turnoId, int usuarioId) async {
+    final data =
+        await _get('/avaliacoes/turno/$turnoId/pendentes/$usuarioId');
+    return (data as Map<String, dynamic>)['precisaAvaliar'] as bool;
+  }
+
+  // --------------------------------------------------------
+  // CARTEIRA — novos endpoints
+  // --------------------------------------------------------
+
+  Future<List<Map<String, dynamic>>> buscarGrafico(int motoboyId,
+      {int meses = 6}) async {
+    final list =
+        await _get('/carteira/$motoboyId/grafico?meses=$meses') as List<dynamic>;
+    return list.cast<Map<String, dynamic>>();
+  }
+
+  Future<void> atualizarPix(int motoboyId, String chavePix) async {
+    await _put('/carteira/$motoboyId/pix', {'chavePix': chavePix});
+  }
+
+  // --------------------------------------------------------
+  // TURNOS DISPONÍVEIS COM FILTROS
+  // --------------------------------------------------------
+
+  Future<List<Turno>> listarTurnosDisponiveisComFiltros({
+    String? horarioInicio,
+    String? horarioFim,
+    int? diaSemana,
+    double? raioMaxKm,
+    String? dataInicio,
+    String? dataFim,
+    String? ordenarPor,
+  }) async {
+    final params = <String, String>{};
+    if (horarioInicio != null) params['horarioInicio'] = horarioInicio;
+    if (horarioFim != null) params['horarioFim'] = horarioFim;
+    if (diaSemana != null) params['diaSemana'] = diaSemana.toString();
+    if (raioMaxKm != null) params['raioMaxKm'] = raioMaxKm.toString();
+    if (dataInicio != null) params['dataInicio'] = dataInicio;
+    if (dataFim != null) params['dataFim'] = dataFim;
+    if (ordenarPor != null) params['ordenarPor'] = ordenarPor;
+
+    final query = params.isEmpty
+        ? ''
+        : '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    final list =
+        await _get('/turnos/disponiveis$query') as List<dynamic>;
+    return list
+        .map((e) => Turno.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  // --------------------------------------------------------
+  // PERFIL PÚBLICO — /api/avaliacoes/usuario/{id}
+  // --------------------------------------------------------
+
+  Future<Map<String, dynamic>> buscarPerfilPublico(int usuarioId) async {
+    final data = await _get('/avaliacoes/usuario/$usuarioId');
+    return data as Map<String, dynamic>;
+  }
 }
