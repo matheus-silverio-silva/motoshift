@@ -1,13 +1,11 @@
 [phases.setup]
-nixPkgs = ["flutter", "dart", "python3"]
+nixPkgs = ["flutter"]
 
 [phases.install]
 cmds = ["flutter pub get"]
 
 [phases.build]
-cmds = [
-  "flutter build web --dart-define=API_URL=$API_URL --release"
-]
+cmds = ["flutter build web --release --dart-define=API_URL=$API_URL"]
 
 [start]
 cmd = "python3 -m http.server $PORT --directory build/web"
