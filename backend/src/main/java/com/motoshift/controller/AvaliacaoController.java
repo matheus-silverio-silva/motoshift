@@ -168,8 +168,8 @@ public class AvaliacaoController {
 
     private void atualizarMedia(Long usuarioId) {
         List<Avaliacao> todas = avaliacaoRepo.findByAvaliadoIdOrderByCriadoEmDesc(usuarioId);
-        double media = todas.stream().mapToInt(Avaliacao::getNota).average().orElse(0.0);
-        media = Math.round(media * 10.0) / 10.0;
+        double media = Math.round(
+                todas.stream().mapToInt(Avaliacao::getNota).average().orElse(0.0) * 10.0) / 10.0;
 
         usuarioRepo.findById(usuarioId).ifPresent(u -> {
             u.setMediaAvaliacao(media);
