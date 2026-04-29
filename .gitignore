@@ -34,16 +34,19 @@
 **/mvnw
 **/gradlew
 
-# NUNCA commitar arquivos com credenciais
-**/application.properties
-**/application.yml
-**/application-prod.properties
-**/application-prod.yml
+# Arquivos de ambiente com credenciais reais
 **/*.env
 **/.env
 **/*.env.local
+**/secrets.properties
 
-# Manter apenas o template sem credenciais
+# application.properties e application-prod.properties são seguros para commitar:
+# não contêm credenciais hardcoded (usam ${ENV_VAR}) e precisam estar no JAR para o Railway.
+# Apenas arquivos com sufixo .local ou .secret devem ser ignorados:
+**/application-*.local.properties
+**/application-*.secret.properties
+
+# Manter templates
 !**/application.properties.example
 !**/application.yml.example
 

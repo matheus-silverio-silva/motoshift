@@ -22,9 +22,12 @@ class ApiException implements Exception {
 }
 
 class ApiService {
-  // No emulador Android, o host da máquina é acessível via 10.0.2.2, não localhost.
-  // No simulador iOS, web e desktop, 127.0.0.1 funciona normalmente.
+  // API_URL é injetada em build de produção via --dart-define=API_URL=https://...
+  // Em dev: usa 10.0.2.2:8080 no emulador Android ou 127.0.0.1:8080 nas demais plataformas.
+  static const String _apiUrl = String.fromEnvironment('API_URL', defaultValue: '');
+
   static String get _baseUrl {
+    if (_apiUrl.isNotEmpty) return '$_apiUrl/api';
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:8080/api';
     }
