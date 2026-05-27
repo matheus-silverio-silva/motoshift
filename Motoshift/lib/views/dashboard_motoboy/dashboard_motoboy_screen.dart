@@ -14,8 +14,7 @@ import '../../widgets/section_title.dart';
 import '../../widgets/shift_card.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/status_pill.dart';
-import '../relatorio/relatorio_screen.dart';
-import '../score/score_analise_screen.dart';
+
 
 class DashboardMotoboyScreen extends StatefulWidget {
   const DashboardMotoboyScreen({super.key});
@@ -127,7 +126,6 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
               ],
             ),
           ),
-          _buildRelatorioCard(),
           SectionTitle(
             title: 'Turnos aceitos',
             action: 'Ver todos',
@@ -241,88 +239,6 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
     );
   }
 
-  Widget _buildRelatorioCard() {
-    final meses = [
-      'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
-      'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
-    ];
-    final now = DateTime.now();
-    return Container(
-      margin: const EdgeInsets.only(top: 10, bottom: 2),
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.line, width: 1.5),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: const Icon(Icons.auto_awesome_rounded,
-                color: Colors.white, size: 16),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Análise IA · ${meses[now.month - 1]} ${now.year}',
-                  style: tsJakarta(11, FontWeight.w700,
-                      color: AppColors.ink),
-                ),
-                Text(
-                  'Relatório + análise de score',
-                  style: tsJakarta(9.5, FontWeight.w400,
-                      color: AppColors.muted),
-                ),
-              ],
-            ),
-          ),
-          Row(
-            children: [
-              GestureDetector(
-                onTap: _abrirAnaliseScore,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 9, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.tealSoft,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text('Score',
-                      style: tsJakarta(10, FontWeight.w700,
-                          color: AppColors.tealDeep)),
-                ),
-              ),
-              const SizedBox(width: 6),
-              GestureDetector(
-                onTap: _abrirRelatorio,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 9, vertical: 6),
-                  decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text('Ver',
-                      style: tsJakarta(10, FontWeight.w700,
-                          color: Colors.white)),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildTurnosAceitosSection() {
     return Consumer<TurnoProvider>(
       builder: (context, provider, _) {
@@ -380,127 +296,6 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
         );
       },
     );
-  }
-
-  Future<void> _abrirRelatorio() async {
-    final turnosFinalizadosMes =
-        (_dashData?['turnosFinalizadosMes'] as num?)?.toInt() ?? 0;
-    if (turnosFinalizadosMes < 3) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text(
-            'Conclua pelo menos 3 turnos para gerar sua análise.'),
-      ));
-      return;
-    }
-    final auth = context.read<AuthService>();
-    final api = context.read<ApiService>();
-    final id = auth.usuario?.id;
-    if (id == null) return;
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(
-        child: Card(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              CircularProgressIndicator(color: AppColors.teal),
-              SizedBox(height: 16),
-              Text('Analisando seus dados...'),
-            ]),
-          ),
-        ),
-      ),
-    );
-    try {
-      final data = await api.buscarRelatorioMotoboy(id);
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => RelatorioScreen(
-            periodo: data['periodo'] as String,
-            perfil: data['perfil'] as String,
-            relatorio: data['relatorio'] as String,
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content:
-            Text('Não foi possível gerar o relatório. Tente novamente.'),
-        backgroundColor: Colors.red,
-      ));
-    }
-  }
-
-  Future<void> _abrirAnaliseScore() async {
-    final turnosFinalizados =
-        (_dashData?['turnosFinalizadosMes'] as num?)?.toInt() ?? 0;
-    if (turnosFinalizados == 0) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text(
-            'Conclua seu primeiro turno para começar a construir seu score!'),
-      ));
-      return;
-    }
-    final auth = context.read<AuthService>();
-    final api = context.read<ApiService>();
-    final id = auth.usuario?.id;
-    if (id == null) return;
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(
-        child: Card(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              CircularProgressIndicator(color: AppColors.teal),
-              SizedBox(height: 16),
-              Text('Analisando seu score...'),
-            ]),
-          ),
-        ),
-      ),
-    );
-    try {
-      final data = await api.buscarAnaliseScore(id);
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ScoreAnaliseScreen(
-            scoreAtual: (data['scoreAtual'] as num).toDouble(),
-            scoreAnterior: (data['scoreAnterior'] as num).toDouble(),
-            variacao: (data['variacao'] as num).toDouble(),
-            tendencia: data['tendencia'] as String,
-            classificacao: data['classificacao'] as String,
-            analise: data['analise'] as String,
-            ultimaAtualizacao: data['ultimaAtualizacao'] as String,
-            eventos: (data['eventos'] as List<dynamic>)
-                .map((e) => Map<String, dynamic>.from(e as Map))
-                .toList(),
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text(
-            'Não foi possível gerar a análise. Tente novamente.'),
-        backgroundColor: Colors.red,
-      ));
-    }
   }
 
   String _scoreLabel(double score) {
