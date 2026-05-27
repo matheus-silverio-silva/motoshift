@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/carteira.dart';
 import '../../models/turno.dart';
 import '../../presentation/providers/turno_provider.dart';
+import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import '../avaliacao/avaliacao_screen.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/kinetic_app_bar.dart';
-import '../../widgets/kinetic_bottom_nav.dart';
+import '../../widgets/app_bottom_nav.dart';
+import '../../widgets/app_header.dart';
+import '../../widgets/app_scaffold.dart';
+import '../../widgets/section_title.dart';
+import '../../widgets/shift_card.dart';
+import '../../widgets/status_pill.dart';
 
 class MeusTurnosScreen extends StatefulWidget {
   const MeusTurnosScreen({super.key});
@@ -17,9 +22,6 @@ class MeusTurnosScreen extends StatefulWidget {
 }
 
 class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
-  Carteira? _carteira;
-
-  // Filtros para turnos disponíveis
   String? _fHorarioInicio;
   String? _fHorarioFim;
   int? _fDiaSemana;
@@ -42,17 +44,11 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
   Future<void> _carregar() async {
     final auth = context.read<AuthService>();
     final provider = context.read<TurnoProvider>();
-    final api = context.read<ApiService>();
     final id = auth.usuario?.id;
     if (id == null) return;
 
     provider.carregarMeusTurnos(id);
     _carregarDisponiveis();
-
-    try {
-      final c = await api.buscarCarteira(id);
-      if (mounted) setState(() => _carteira = c);
-    } catch (_) {}
   }
 
   Future<void> _carregarDisponiveis() async {
@@ -88,170 +84,152 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     _carregarDisponiveis();
   }
 
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Bom dia,';
+    if (h < 18) return 'Boa tarde,';
+    return 'Boa noite,';
+  }
+
+  void _onNav(int i) {
+    switch (i) {
+      case 0:
+        Navigator.pushReplacementNamed(context, AppRoutes.dashboardMotoboy);
+      case 1:
+        break;
+      case 2:
+        Navigator.pushReplacementNamed(context, AppRoutes.carteira);
+      case 3:
+        Navigator.pushReplacementNamed(context, AppRoutes.perfil);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
+    final nome = auth.usuario?.nome.split(' ').first ?? 'Motoboy';
+    final initials = nome.length >= 2
+        ? nome.substring(0, 2).toUpperCase()
+        : nome.toUpperCase();
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      extendBodyBehindAppBar: true,
-      appBar: KineticAppBar(
-        avatarUrl: auth.usuario?.fotoPerfil,
-        onNotificationTap: () {},
+    return AppScaffold(
+      header: AppHeader.greeting(
+        greeting: _greeting(),
+        name: nome,
+        avatarInitials: initials,
+      ),
+      bottomNav: AppBottomNav(
+        userType: UserType.motoboy,
+        currentIndex: 1,
+        onTap: _onNav,
       ),
       body: Consumer<TurnoProvider>(
         builder: (context, provider, _) {
-          final ativo = provider.meusTurnos
-              .where((t) => t.status == StatusTurno.emAndamento)
-              .firstOrNull;
-          final proximos = provider.meusTurnos
-              .where((t) =>
-                  t.status == StatusTurno.aceito ||
-                  t.status == StatusTurno.aberto)
-              .toList();
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 96, 24, 120),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 16),
-                const Text(
-                  'Meus Turnos',
-                  style: TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 30,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -1.5,
-                    color: AppColors.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  provider.carregando
-                      ? 'Carregando...'
-                      : '${proximos.length} turno(s) agendado(s)',
-                  style: const TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Botão de Sugestão Inteligente via IA
-                _buildSugestoesButton(),
-                const SizedBox(height: 24),
-
-                // ── Turnos Disponíveis ───────────────────────────────
-                _buildDisponiveisSection(provider, auth),
-                const SizedBox(height: 32),
-
-                // ── Turno Ativo + Bento ──────────────────────────────
-                if (provider.carregando)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 48),
-                      child:
-                          CircularProgressIndicator(color: AppColors.primary),
-                    ),
-                  )
-                else if (provider.erro != null)
-                  _erroCard(provider.erro!, onRetry: _carregar)
-                else ...[
-                  _buildBentoGrid(ativo, provider),
-                  const SizedBox(height: 32),
-                  if (proximos.isNotEmpty) ...[
-                    const Text(
-                      'Próximos Turnos',
-                      style: TextStyle(
-                        fontFamily: 'Manrope',
-                        fontSize: 19,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                        color: AppColors.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ...proximos.map((t) => _buildProximoCard(t, provider)),
-                  ],
-                ],
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+            children: [
+              // Sugestão IA banner
+              _buildSugestoesBtn(),
+              const SizedBox(height: 12),
+              // Seção disponíveis com filtros
+              _buildDisponiveisSection(provider, auth),
+              // Turnos em andamento
+              if (!provider.carregando) ...[
+                const SizedBox(height: 8),
+                _buildMeusTurnosSection(provider),
               ],
-            ),
+            ],
           );
-        },
-      ),
-      bottomNavigationBar: KineticBottomNav(
-        currentItem: NavItem.turnos,
-        onItemSelected: (item) {
-          switch (item) {
-            case NavItem.dashboard:
-              Navigator.pop(context);
-            case NavItem.turnos:
-              break;
-            case NavItem.carteira:
-              Navigator.pushNamed(context, '/carteira');
-            case NavItem.agenda:
-              Navigator.pushNamed(context, '/agenda');
-          }
         },
       ),
     );
   }
 
-  // ── Disponíveis ──────────────────────────────────────────
+  Widget _buildSugestoesBtn() {
+    return GestureDetector(
+      onTap: _mostrarSugestoes,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: AppColors.primaryGradient,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: const Row(
+          children: [
+            Text('✨', style: TextStyle(fontSize: 20)),
+            SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Ver sugestões para mim',
+                    style: TextStyle(
+                      fontFamily: 'Plus Jakarta Sans',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(height: 1),
+                  Text(
+                    'IA analisa seu perfil e recomenda os melhores turnos',
+                    style: TextStyle(
+                      fontFamily: 'Plus Jakarta Sans',
+                      fontSize: 10,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded,
+                color: Colors.white70, size: 13),
+          ],
+        ),
+      ),
+    );
+  }
 
-  Widget _buildDisponiveisSection(TurnoProvider provider, AuthService auth) {
+  Widget _buildDisponiveisSection(
+      TurnoProvider provider, AuthService auth) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Expanded(
-              child: Text(
-                'Disponíveis',
-                style: TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 19,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                  color: AppColors.onSurface,
-                ),
+            Expanded(
+              child: SectionTitle(
+                title: 'Turnos disponíveis',
+                action: _hasFilters ? null : null,
               ),
             ),
             GestureDetector(
               onTap: _abrirFiltros,
               child: Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
                 decoration: BoxDecoration(
                   color: _hasFilters
-                      ? AppColors.primary
-                      : AppColors.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(8),
+                      ? AppColors.teal
+                      : AppColors.surface3,
+                  borderRadius: BorderRadius.circular(9),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.tune_rounded,
-                      size: 16,
-                      color: _hasFilters
-                          ? Colors.white
-                          : AppColors.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _hasFilters ? 'Filtros ativos' : 'Filtrar',
-                      style: TextStyle(
-                        fontFamily: 'Manrope',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                    Icon(Icons.tune_rounded,
+                        size: 14,
                         color: _hasFilters
                             ? Colors.white
-                            : AppColors.onSurfaceVariant,
-                      ),
+                            : AppColors.muted),
+                    const SizedBox(width: 4),
+                    Text(
+                      _hasFilters ? 'Ativos' : 'Filtrar',
+                      style: tsJakarta(11, FontWeight.w700,
+                          color: _hasFilters
+                              ? Colors.white
+                              : AppColors.muted),
                     ),
                   ],
                 ),
@@ -259,77 +237,52 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
             ),
           ],
         ),
-        if (_hasFilters) ...[
-          const SizedBox(height: 8),
+        if (_hasFilters)
           GestureDetector(
             onTap: _limparFiltros,
             child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: AppColors.primary.withOpacity(0.2)),
+                color: AppColors.tealSoft,
+                borderRadius: BorderRadius.circular(9),
               ),
               child: Row(
                 children: [
                   const Icon(Icons.filter_alt_rounded,
-                      size: 14, color: AppColors.primary),
-                  const SizedBox(width: 8),
-                  const Expanded(
+                      size: 13, color: AppColors.tealDeep),
+                  const SizedBox(width: 7),
+                  Expanded(
                     child: Text(
                       'Filtros ativos — toque para limpar',
-                      style: TextStyle(
-                        fontFamily: 'Manrope',
-                        fontSize: 12,
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: tsJakarta(11, FontWeight.w600,
+                          color: AppColors.tealDeep),
                     ),
                   ),
                   const Icon(Icons.close_rounded,
-                      size: 14, color: AppColors.primary),
+                      size: 13, color: AppColors.tealDeep),
                 ],
               ),
             ),
           ),
-        ],
-        const SizedBox(height: 12),
         if (provider.turnosDisponiveis.isEmpty)
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            alignment: Alignment.center,
-            child: Column(
-              children: [
-                Icon(Icons.search_off_rounded,
-                    size: 40,
-                    color: AppColors.onSurfaceVariant.withOpacity(0.5)),
-                const SizedBox(height: 8),
-                Text(
-                  _hasFilters
-                      ? 'Nenhum turno encontrado com esses filtros.'
-                      : 'Nenhum turno disponível no momento.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 13,
-                    color: AppColors.onSurfaceVariant,
-                  ),
-                ),
-                if (_hasFilters) ...[
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: _limparFiltros,
-                    child: const Text('Limpar filtros'),
-                  ),
-                ],
-              ],
+            padding: const EdgeInsets.symmetric(vertical: 28),
+            child: Center(
+              child: Text(
+                _hasFilters
+                    ? 'Nenhum turno encontrado com esses filtros.'
+                    : 'Nenhum turno disponível no momento.',
+                textAlign: TextAlign.center,
+                style: tsJakarta(12, FontWeight.w400,
+                    color: AppColors.muted),
+              ),
             ),
           )
         else
           ...provider.turnosDisponiveis
-              .take(5)
+              .take(8)
               .map((t) => _buildDisponivelCard(t, provider, auth)),
       ],
     );
@@ -337,120 +290,229 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
 
   Widget _buildDisponivelCard(
       Turno turno, TurnoProvider provider, AuthService auth) {
+    return ShiftCard(
+      name: turno.titulo,
+      meta: [
+        turno.horarioFormatado,
+        turno.regiao,
+        '${turno.raioEntregaKm.toStringAsFixed(0)} km',
+      ],
+      value: 'R\$ ${turno.valorEstimado.toStringAsFixed(0)}',
+      iconData: Icons.two_wheeler_outlined,
+      trailing: GestureDetector(
+        onTap: () => Navigator.pushNamed(
+          context,
+          AppRoutes.detalheTurno,
+          arguments: turno,
+        ),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Text(
+            'Ver',
+            style: tsJakarta(10, FontWeight.w700,
+                color: Colors.white),
+          ),
+        ),
+      ),
+      onTap: () => Navigator.pushNamed(
+        context,
+        AppRoutes.detalheTurno,
+        arguments: turno,
+      ),
+    );
+  }
+
+  Widget _buildMeusTurnosSection(TurnoProvider provider) {
+    final ativo = provider.meusTurnos
+        .where((t) => t.status == StatusTurno.emAndamento)
+        .firstOrNull;
+    final proximos = provider.meusTurnos
+        .where((t) =>
+            t.status == StatusTurno.aceito ||
+            t.status == StatusTurno.aberto)
+        .toList();
+
+    if (ativo == null && proximos.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (ativo != null) ...[
+          SectionTitle(title: 'Turno em andamento'),
+          _buildAtivoCard(ativo, provider),
+        ],
+        if (proximos.isNotEmpty) ...[
+          SectionTitle(
+            title: 'Próximos turnos',
+            action: '${proximos.length} agendado(s)',
+          ),
+          ...proximos
+              .take(3)
+              .map((t) => ShiftCard(
+                    name: t.titulo,
+                    meta: [
+                      _formatProximoData(t.dataInicio, t.dataFim),
+                      t.regiao,
+                    ],
+                    value:
+                        'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
+                    iconData: Icons.schedule_outlined,
+                    pillLabel: t.status.label,
+                    pillVariant: t.status == StatusTurno.aceito
+                        ? PillVariant.teal
+                        : PillVariant.ghost,
+                    onTap: () => Navigator.pushNamed(
+                      context,
+                      AppRoutes.detalheTurno,
+                      arguments: t,
+                    ),
+                  )),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildAtivoCard(Turno turno, TurnoProvider provider) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.outlineVariant.withOpacity(0.3)),
+        border: Border.all(color: AppColors.tealSoft, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.two_wheeler_rounded,
+                    color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  turno.titulo,
-                  style: const TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.onSurface,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(turno.titulo,
+                        style: tsJakarta(13, FontWeight.w700,
+                            color: AppColors.ink)),
+                    Text(turno.horarioFormatado,
+                        style: tsJakarta(10.5, FontWeight.w400,
+                            color: AppColors.muted)),
+                  ],
                 ),
               ),
-              Text(
-                'R\$ ${turno.valorEstimado.toStringAsFixed(2).replaceAll('.', ',')}',
-                style: const TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(Icons.schedule_rounded,
-                  size: 13, color: AppColors.onSurfaceVariant),
-              const SizedBox(width: 4),
-              Text(
-                turno.horarioFormatado,
-                style: const TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 12,
-                  color: AppColors.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Icon(Icons.location_on_rounded,
-                  size: 13, color: AppColors.onSurfaceVariant),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  turno.regiao,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 12,
-                    color: AppColors.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              Text(
-                '${turno.raioEntregaKm.toStringAsFixed(0)} km',
-                style: const TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 12,
-                  color: AppColors.onSurfaceVariant,
-                ),
-              ),
+              const StatusPill(
+                  label: 'Em andamento',
+                  variant: PillVariant.amber,
+                  leadingDot: true),
             ],
           ),
           const SizedBox(height: 12),
-          GestureDetector(
-            onTap: () async {
-              final motoboyId = auth.usuario?.id;
-              if (motoboyId == null) return;
-              final ok = await provider.aceitarTurno(turno.id!, motoboyId);
-              if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(ok
-                    ? 'Turno aceito com sucesso!'
-                    : (provider.erro ?? 'Erro ao aceitar')),
-                backgroundColor: ok ? const Color(0xFF00875A) : Colors.red,
-              ));
-              if (ok) _carregar();
-            },
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                gradient: AppColors.kineticGradient,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Text(
-                'Aceitar turno',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    final ok =
+                        await provider.finalizarTurno(turno.id!);
+                    if (!mounted) return;
+                    if (ok) {
+                      await _mostrarDialogAvaliacao(turno);
+                      _carregar();
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                              provider.erro ?? 'Erro ao finalizar'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 11),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Confirmar conclusão',
+                        style: tsJakarta(12, FontWeight.w700,
+                            color: Colors.white),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () async {
+                  final ok =
+                      await provider.cancelarTurno(turno.id!);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(ok
+                        ? 'Turno cancelado.'
+                        : (provider.erro ?? 'Erro')),
+                    backgroundColor:
+                        ok ? Colors.orange : Colors.red,
+                  ));
+                  if (ok) _carregar();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface2,
+                    borderRadius: BorderRadius.circular(10),
+                    border:
+                        Border.all(color: AppColors.line, width: 1.5),
+                  ),
+                  child: Text(
+                    'Cancelar',
+                    style: tsJakarta(12, FontWeight.w700,
+                        color: AppColors.muted),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // ── Filtros BottomSheet ──────────────────────────────────
+  Future<void> _mostrarDialogAvaliacao(Turno turno) async {
+    final auth = context.read<AuthService>();
+    final motoboyId = auth.usuario?.id;
+    if (motoboyId == null) return;
+
+    await Navigator.pushNamed(
+      context,
+      AppRoutes.avaliacao,
+      arguments: AvaliacaoArgs(
+        turnoId: turno.id!,
+        avaliadorId: motoboyId,
+        avaliadoId: turno.lojistId,
+        nomeAvaliado: turno.titulo,
+      ),
+    );
+  }
 
   void _abrirFiltros() {
     showModalBottomSheet(
@@ -478,56 +540,6 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     );
   }
 
-  // ── Sugestões ────────────────────────────────────────────
-
-  Widget _buildSugestoesButton() {
-    return GestureDetector(
-      onTap: _mostrarSugestoes,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: AppColors.kineticGradient,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: AppColors.kineticShadow,
-        ),
-        child: const Row(
-          children: [
-            Text('✨', style: TextStyle(fontSize: 22)),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Ver sugestões para mim',
-                    style: TextStyle(
-                      fontFamily: 'Manrope',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'IA analisa seu perfil e recomenda os melhores turnos',
-                    style: TextStyle(
-                      fontFamily: 'Manrope',
-                      fontSize: 11,
-                      color: Colors.white70,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.arrow_forward_ios_rounded,
-                color: Colors.white70, size: 14),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _mostrarSugestoes() {
     final auth = context.read<AuthService>();
     final api = context.read<ApiService>();
@@ -538,519 +550,29 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _SugestoesSheet(motoboyId: motoboyId, api: api),
-    );
-  }
-
-  // ── Bento Grid ───────────────────────────────────────────
-
-  Widget _buildBentoGrid(Turno? ativo, TurnoProvider provider) {
-    return Column(
-      children: [
-        if (ativo != null) ...[
-          _buildAtivoCard(ativo, provider),
-          const SizedBox(height: 16),
-        ],
-        Row(
-          children: [
-            Expanded(child: _buildMapCard(ativo)),
-            const SizedBox(width: 16),
-            Expanded(child: _buildCarteiraSnapshot()),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAtivoCard(Turno turno, TurnoProvider provider) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        gradient: AppColors.kineticGradient,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.delivery_dining_rounded,
-                          color: Colors.white, size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            turno.titulo,
-                            style: const TextStyle(
-                              fontFamily: 'Manrope',
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.5,
-                              color: AppColors.onSurface,
-                            ),
-                          ),
-                          Text(
-                            'Início: ${turno.horarioFormatado.split(' - ').first} • ${turno.duracao.inHours}h totais',
-                            style: const TextStyle(
-                              fontFamily: 'Manrope',
-                              fontSize: 12,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryFixed,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Text(
-                  'EM ANDAMENTO',
-                  style: TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1,
-                    color: AppColors.onPrimaryFixed,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                _statCol('Ganhos Est.',
-                    'R\$ ${turno.valorEstimado.toStringAsFixed(2).replaceAll('.', ',')}'),
-                _divider(),
-                _statCol('Entregas', '${turno.totalEntregas ?? 0}'),
-                _divider(),
-                _statCol('Km Percorrido',
-                    '${turno.distanciaPercorridaKm?.toStringAsFixed(1) ?? '-'} km'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () async {
-                    final ok = await provider.finalizarTurno(turno.id!);
-                    if (!mounted) return;
-                    if (ok) {
-                      await _mostrarDialogAvaliacao(turno);
-                      _carregar();
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(provider.erro ?? 'Erro ao finalizar'),
-                        backgroundColor: Colors.red,
-                      ));
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      gradient: AppColors.kineticGradient,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: AppColors.kineticShadow,
-                    ),
-                    child: const Text(
-                      'Confirmar Conclusão',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: 'Manrope',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: () async {
-                  final ok = await provider.cancelarTurno(turno.id!);
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(
-                        ok ? 'Turno cancelado.' : (provider.erro ?? 'Erro')),
-                    backgroundColor: ok ? Colors.orange : Colors.red,
-                  ));
-                  if (ok) _carregar();
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 16),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    'Cancelar',
-                    style: TextStyle(
-                      fontFamily: 'Manrope',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.onSurface,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Avaliação Dialog ─────────────────────────────────────
-
-  Future<void> _mostrarDialogAvaliacao(Turno turno) async {
-    final auth = context.read<AuthService>();
-    final api = context.read<ApiService>();
-    final motoboyId = auth.usuario?.id;
-    if (motoboyId == null) return;
-
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => _AvaliacaoDialog(
-        turnoId: turno.id!,
-        avaliadorId: motoboyId,
-        avaliadoId: turno.lojistId,
-        api: api,
-      ),
-    );
-  }
-
-  // ── Stat helpers ─────────────────────────────────────────
-
-  Widget _statCol(String label, String value) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: const TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
-              color: AppColors.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: AppColors.primary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _divider() {
-    return Container(
-      width: 1,
-      height: 36,
-      color: AppColors.outlineVariant.withOpacity(0.30),
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-    );
-  }
-
-  Widget _buildMapCard(Turno? ativo) {
-    return Container(
-      height: 160,
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Container(
-            color: AppColors.surfaceContainerHighest,
-            child: const Icon(Icons.map_outlined,
-                size: 48, color: AppColors.outlineVariant),
-          ),
-          Container(color: AppColors.primary.withOpacity(0.08)),
-          if (ativo != null)
-            Positioned(
-              bottom: 12,
-              left: 12,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.90),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.near_me_rounded,
-                        size: 12, color: AppColors.primary),
-                    const SizedBox(width: 4),
-                    Text(
-                      ativo.regiao.toUpperCase(),
-                      style: const TextStyle(
-                        fontFamily: 'Manrope',
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCarteiraSnapshot() {
-    final saldo = _carteira?.saldoAtual ?? 0.0;
-    final meta = 500.0;
-    final progresso = (saldo / meta).clamp(0.0, 1.0);
-
-    return Container(
-      height: 160,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: const [
-              Expanded(
-                child: Text(
-                  'Saldo Atual',
-                  style: TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              Icon(Icons.account_balance_wallet_outlined,
-                  color: AppColors.primary, size: 18),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'R\$ ${saldo.toStringAsFixed(2).replaceAll('.', ',')}',
-            style: const TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.5,
-              color: AppColors.onSurface,
-            ),
-          ),
-          const Spacer(),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progresso,
-              backgroundColor: AppColors.surfaceContainerHighest,
-              color: AppColors.primary,
-              minHeight: 4,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '${(progresso * 100).toStringAsFixed(0)}% DA META DIÁRIA',
-            style: const TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-              color: AppColors.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProximoCard(Turno turno, TurnoProvider provider) {
-    final isConfirmado = turno.status == StatusTurno.aceito;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.primary.withOpacity(0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  isConfirmado
-                      ? Icons.schedule_outlined
-                      : Icons.event_repeat_outlined,
-                  color: AppColors.secondary,
-                  size: 20,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.secondaryContainer,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  isConfirmado ? 'CONFIRMADO' : 'PENDENTE',
-                  style: const TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                    color: AppColors.onSecondaryContainer,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            turno.titulo,
-            style: const TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: AppColors.onSurface,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _formatProximoData(turno.dataInicio, turno.dataFim),
-            style: const TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: AppColors.onSurfaceVariant,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: Row(
-              children: [
-                Text(
-                  'R\$ ${turno.valorEstimado.toStringAsFixed(2).replaceAll('.', ',')}',
-                  style: const TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primary,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  turno.regiao,
-                  style: const TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 11,
-                    color: AppColors.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _erroCard(String msg, {required VoidCallback onRetry}) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: [
-          const Icon(Icons.wifi_off_rounded,
-              color: AppColors.onSurfaceVariant, size: 40),
-          const SizedBox(height: 8),
-          Text(msg,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontFamily: 'Manrope', color: AppColors.onSurfaceVariant)),
-          TextButton(onPressed: onRetry, child: const Text('Tentar novamente')),
-        ],
-      ),
+      builder: (_) =>
+          _SugestoesSheet(motoboyId: motoboyId, api: api),
     );
   }
 
   String _formatProximoData(DateTime inicio, DateTime fim) {
     final agora = DateTime.now();
-    final diff =
-        inicio.difference(DateTime(agora.year, agora.month, agora.day));
+    final diff = inicio
+        .difference(DateTime(agora.year, agora.month, agora.day));
     String dia;
-    if (diff.inDays == 1) {
-      dia = 'Amanhã';
-    } else if (diff.inDays == 0) {
-      dia = 'Hoje';
-    } else {
-      const semana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+    if (diff.inDays == 1) dia = 'Amanhã';
+    else if (diff.inDays == 0) dia = 'Hoje';
+    else {
+      const semana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
       dia = semana[inicio.weekday % 7];
     }
-    return '$dia, ${inicio.hour.toString().padLeft(2, '0')}:${inicio.minute.toString().padLeft(2, '0')} - ${fim.hour.toString().padLeft(2, '0')}:${fim.minute.toString().padLeft(2, '0')}';
+    return '$dia, ${inicio.hour.toString().padLeft(2, '0')}:${inicio.minute.toString().padLeft(2, '0')} – ${fim.hour.toString().padLeft(2, '0')}:${fim.minute.toString().padLeft(2, '0')}';
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Dialog de Avaliação
+// TODO: remover após migração completa para AvaliacaoScreen
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _AvaliacaoDialog extends StatefulWidget {
@@ -1108,31 +630,22 @@ class _AvaliacaoDialogState extends State<_AvaliacaoDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: AppColors.background,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text(
+      backgroundColor: AppColors.surface,
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(
         'Avalie este turno',
-        style: TextStyle(
-          fontFamily: 'Manrope',
-          fontSize: 18,
-          fontWeight: FontWeight.w800,
-          color: AppColors.onSurface,
-        ),
+        style: tsBricolage(17, FontWeight.w800, color: AppColors.ink),
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Como foi sua experiência com o lojista?',
-            style: TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 13,
-              color: AppColors.onSurfaceVariant,
-            ),
+            style: tsJakarta(12.5, FontWeight.w400,
+                color: AppColors.muted),
           ),
-          const SizedBox(height: 16),
-          // Estrelas
+          const SizedBox(height: 14),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(5, (i) {
@@ -1140,43 +653,36 @@ class _AvaliacaoDialogState extends State<_AvaliacaoDialog> {
               return GestureDetector(
                 onTap: () => setState(() => _nota = i + 1),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4),
                   child: Icon(
-                    filled ? Icons.star_rounded : Icons.star_outline_rounded,
+                    filled
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
                     color: filled
-                        ? const Color(0xFFF59E0B)
-                        : AppColors.outlineVariant,
-                    size: 36,
+                        ? AppColors.amber
+                        : AppColors.line,
+                    size: 34,
                   ),
                 ),
               );
             }),
           ),
-          const SizedBox(height: 16),
-          // Campo de comentário
+          const SizedBox(height: 14),
           TextField(
             controller: _comentarioCtrl,
             maxLength: 100,
             maxLines: 2,
+            style: tsJakarta(13, FontWeight.w400),
             decoration: InputDecoration(
               hintText: 'Comentário opcional...',
-              hintStyle: const TextStyle(
-                fontFamily: 'Manrope',
-                fontSize: 13,
-                color: AppColors.onSurfaceVariant,
-              ),
               filled: true,
-              fillColor: AppColors.surfaceContainerLow,
+              fillColor: AppColors.surface2,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide.none,
               ),
               contentPadding: const EdgeInsets.all(12),
-              counterStyle: const TextStyle(
-                fontFamily: 'Manrope',
-                fontSize: 10,
-                color: AppColors.onSurfaceVariant,
-              ),
             ),
           ),
         ],
@@ -1184,23 +690,19 @@ class _AvaliacaoDialogState extends State<_AvaliacaoDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text(
-            'Agora não',
-            style: TextStyle(
-              fontFamily: 'Manrope',
-              color: AppColors.onSurfaceVariant,
-            ),
-          ),
+          child: Text('Agora não',
+              style: tsJakarta(13, FontWeight.w600,
+                  color: AppColors.muted)),
         ),
         GestureDetector(
           onTap: _nota > 0 && !_enviando ? _enviar : null,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
             decoration: BoxDecoration(
-              gradient: _nota > 0
-                  ? AppColors.kineticGradient
-                  : null,
-              color: _nota == 0 ? AppColors.surfaceContainerHigh : null,
+              gradient: _nota > 0 ? AppColors.primaryGradient : null,
+              color:
+                  _nota == 0 ? AppColors.surface3 : null,
               borderRadius: BorderRadius.circular(10),
             ),
             child: _enviando
@@ -1212,14 +714,10 @@ class _AvaliacaoDialogState extends State<_AvaliacaoDialog> {
                   )
                 : Text(
                     'Enviar',
-                    style: TextStyle(
-                      fontFamily: 'Manrope',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: _nota > 0
-                          ? Colors.white
-                          : AppColors.onSurfaceVariant,
-                    ),
+                    style: tsJakarta(13, FontWeight.w700,
+                        color: _nota > 0
+                            ? Colors.white
+                            : AppColors.muted),
                   ),
           ),
         ),
@@ -1306,44 +804,38 @@ class _FiltrosSheetState extends State<_FiltrosSheet> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
       decoration: const BoxDecoration(
-        color: AppColors.background,
+        color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         children: [
-          // Handle
           Center(
             child: Container(
               width: 40,
               height: 4,
-              margin: const EdgeInsets.only(top: 12, bottom: 16),
+              margin: const EdgeInsets.only(top: 12, bottom: 14),
               decoration: BoxDecoration(
-                color: AppColors.outlineVariant,
+                color: AppColors.line,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
-          // Header
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                const Text(
-                  'Filtrar Turnos',
-                  style: TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.onSurface,
-                  ),
-                ),
+                Text('Filtrar Turnos',
+                    style: tsBricolage(16, FontWeight.w800,
+                        color: AppColors.ink)),
                 const Spacer(),
                 TextButton(
                   onPressed: () {
                     widget.onLimpar();
                     Navigator.pop(context);
                   },
-                  child: const Text('Limpar'),
+                  child: Text('Limpar',
+                      style: tsJakarta(12, FontWeight.w600,
+                          color: AppColors.teal)),
                 ),
               ],
             ),
@@ -1351,11 +843,10 @@ class _FiltrosSheetState extends State<_FiltrosSheet> {
           const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Horário
                   _label('Horário'),
                   const SizedBox(height: 8),
                   Row(
@@ -1367,7 +858,7 @@ class _FiltrosSheetState extends State<_FiltrosSheet> {
                           active: _horarioInicio != null,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: _timeChip(
                           label: _horarioFim ?? 'Fim',
@@ -1377,101 +868,87 @@ class _FiltrosSheetState extends State<_FiltrosSheet> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-
-                  // Dia da semana
+                  const SizedBox(height: 20),
                   _label('Dia da semana'),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: _dias.map((d) {
-                      final selected = _diaSemana == d.$1;
+                      final sel = _diaSemana == d.$1;
                       return GestureDetector(
-                        onTap: () => setState(() =>
-                            _diaSemana = selected ? null : d.$1),
+                        onTap: () => setState(
+                            () => _diaSemana = sel ? null : d.$1),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 150),
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
-                            color: selected
-                                ? AppColors.primary
-                                : AppColors.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(8),
+                            color: sel
+                                ? AppColors.teal
+                                : AppColors.surface2,
+                            borderRadius: BorderRadius.circular(9),
                           ),
-                          child: Text(
-                            d.$2,
-                            style: TextStyle(
-                              fontFamily: 'Manrope',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: selected
-                                  ? Colors.white
-                                  : AppColors.onSurface,
-                            ),
-                          ),
+                          child: Text(d.$2,
+                              style: tsJakarta(12, FontWeight.w700,
+                                  color: sel
+                                      ? Colors.white
+                                      : AppColors.ink)),
                         ),
                       );
                     }).toList(),
                   ),
-                  const SizedBox(height: 24),
-
-                  // Raio máximo
+                  const SizedBox(height: 20),
                   Row(
                     children: [
-                      Expanded(child: _label('Raio máximo de entrega')),
+                      Expanded(
+                          child: _label('Raio máximo de entrega')),
                       Switch(
                         value: _raioAtivo,
-                        activeColor: AppColors.primary,
-                        onChanged: (v) => setState(() => _raioAtivo = v),
+                        activeColor: AppColors.teal,
+                        onChanged: (v) =>
+                            setState(() => _raioAtivo = v),
                       ),
                     ],
                   ),
                   if (_raioAtivo) ...[
-                    const SizedBox(height: 4),
                     Row(
                       children: [
                         Expanded(
-                          child: Slider(
-                            value: _raioMax,
-                            min: 2,
-                            max: 30,
-                            divisions: 14,
-                            activeColor: AppColors.primary,
-                            onChanged: (v) =>
-                                setState(() => _raioMax = v),
+                          child: SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              activeTrackColor: AppColors.teal,
+                              inactiveTrackColor: AppColors.surface3,
+                              thumbColor: AppColors.teal,
+                              trackHeight: 3,
+                            ),
+                            child: Slider(
+                              value: _raioMax,
+                              min: 2,
+                              max: 30,
+                              divisions: 14,
+                              onChanged: (v) =>
+                                  setState(() => _raioMax = v),
+                            ),
                           ),
                         ),
                         Text(
                           '${_raioMax.toStringAsFixed(0)} km',
-                          style: const TextStyle(
-                            fontFamily: 'Manrope',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
-                          ),
+                          style: tsJakarta(12, FontWeight.w700,
+                              color: AppColors.teal),
                         ),
                       ],
                     ),
                   ],
-                  const SizedBox(height: 24),
-
-                  // Ordenar por
+                  const SizedBox(height: 20),
                   _label('Ordenar por'),
                   const SizedBox(height: 8),
                   ..._ordens.map((o) => RadioListTile<String>(
-                        title: Text(
-                          o.$2,
-                          style: const TextStyle(
-                            fontFamily: 'Manrope',
-                            fontSize: 14,
-                            color: AppColors.onSurface,
-                          ),
-                        ),
+                        title: Text(o.$2,
+                            style: tsJakarta(13, FontWeight.w500)),
                         value: o.$1,
                         groupValue: _ordenarPor,
-                        activeColor: AppColors.primary,
+                        activeColor: AppColors.teal,
                         contentPadding: EdgeInsets.zero,
                         onChanged: (v) =>
                             setState(() => _ordenarPor = v!),
@@ -1480,10 +957,9 @@ class _FiltrosSheetState extends State<_FiltrosSheet> {
               ),
             ),
           ),
-          // Botão Aplicar
           Padding(
             padding: EdgeInsets.fromLTRB(
-                24, 8, 24, MediaQuery.of(context).padding.bottom + 16),
+                20, 8, 20, MediaQuery.of(context).padding.bottom + 16),
             child: GestureDetector(
               onTap: () {
                 widget.onAplicar(
@@ -1497,21 +973,15 @@ class _FiltrosSheetState extends State<_FiltrosSheet> {
               },
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
-                  gradient: AppColors.kineticGradient,
+                  gradient: AppColors.primaryGradient,
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: AppColors.kineticShadow,
                 ),
-                child: const Text(
-                  'Aplicar filtros',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
+                child: Center(
+                  child: Text('Aplicar filtros',
+                      style: tsJakarta(14, FontWeight.w700,
+                          color: Colors.white)),
                 ),
               ),
             ),
@@ -1521,17 +991,8 @@ class _FiltrosSheetState extends State<_FiltrosSheet> {
     );
   }
 
-  Widget _label(String text) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontFamily: 'Manrope',
-        fontSize: 13,
-        fontWeight: FontWeight.w700,
-        color: AppColors.onSurface,
-      ),
-    );
-  }
+  Widget _label(String text) =>
+      Text(text, style: tsJakarta(12.5, FontWeight.w700, color: AppColors.ink));
 
   Widget _timeChip({
     required String label,
@@ -1541,37 +1002,26 @@ class _FiltrosSheetState extends State<_FiltrosSheet> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 11),
         decoration: BoxDecoration(
           color: active
-              ? AppColors.primary.withOpacity(0.1)
-              : AppColors.surfaceContainerLow,
+              ? AppColors.tealSoft
+              : AppColors.surface2,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: active
-                ? AppColors.primary.withOpacity(0.4)
-                : Colors.transparent,
+            color: active ? AppColors.teal.withOpacity(0.4) : Colors.transparent,
           ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.access_time_rounded,
-              size: 14,
-              color:
-                  active ? AppColors.primary : AppColors.onSurfaceVariant,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontFamily: 'Manrope',
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: active ? AppColors.primary : AppColors.onSurface,
-              ),
-            ),
+            Icon(Icons.access_time_rounded,
+                size: 13,
+                color: active ? AppColors.teal : AppColors.muted),
+            const SizedBox(width: 5),
+            Text(label,
+                style: tsJakarta(12, FontWeight.w700,
+                    color: active ? AppColors.teal : AppColors.ink)),
           ],
         ),
       ),
@@ -1580,7 +1030,7 @@ class _FiltrosSheetState extends State<_FiltrosSheet> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BottomSheet de Sugestão Inteligente (IA)
+// BottomSheet de Sugestões IA
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SugestoesSheet extends StatefulWidget {
@@ -1614,14 +1064,15 @@ class _SugestoesSheetState extends State<_SugestoesSheet> {
     try {
       final texto =
           await widget.api.buscarSugestoesTurnos(widget.motoboyId);
-      if (mounted) setState(() { _sugestoes = texto; _carregando = false; });
+      if (mounted) setState(() {
+        _sugestoes = texto;
+        _carregando = false;
+      });
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _erro = 'Não foi possível carregar sugestões. Tente novamente.';
-          _carregando = false;
-        });
-      }
+      if (mounted) setState(() {
+        _erro = 'Não foi possível carregar sugestões. Tente novamente.';
+        _carregando = false;
+      });
     }
   }
 
@@ -1630,7 +1081,7 @@ class _SugestoesSheetState extends State<_SugestoesSheet> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.72,
       decoration: const BoxDecoration(
-        color: AppColors.background,
+        color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
@@ -1640,67 +1091,53 @@ class _SugestoesSheetState extends State<_SugestoesSheet> {
             child: Container(
               width: 40,
               height: 4,
-              margin: const EdgeInsets.only(top: 12, bottom: 20),
+              margin: const EdgeInsets.only(top: 12, bottom: 18),
               decoration: BoxDecoration(
-                color: AppColors.outlineVariant,
+                color: AppColors.line,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              children: const [
-                Text('✨', style: TextStyle(fontSize: 22)),
-                SizedBox(width: 8),
-                Text(
-                  'Sugestões para você',
-                  style: TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.onSurface,
-                  ),
-                ),
-              ],
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(children: [
+              const Text('✨', style: TextStyle(fontSize: 20)),
+              const SizedBox(width: 8),
+              Text('Sugestões para você',
+                  style: tsBricolage(16, FontWeight.w800,
+                      color: AppColors.ink)),
+            ]),
           ),
-          const SizedBox(height: 4),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24),
+          const SizedBox(height: 3),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Text(
               'Com base no seu histórico dos últimos 30 dias',
-              style: TextStyle(
-                fontFamily: 'Manrope',
-                fontSize: 13,
-                color: AppColors.onSurfaceVariant,
-              ),
+              style: tsJakarta(11.5, FontWeight.w400,
+                  color: AppColors.muted),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           const Divider(height: 1),
           Expanded(child: _buildContent()),
           Padding(
             padding: EdgeInsets.fromLTRB(
-                24, 8, 24, MediaQuery.of(context).padding.bottom + 16),
+                20, 8, 20,
+                MediaQuery.of(context).padding.bottom + 16),
             child: GestureDetector(
               onTap: () => Navigator.pop(context),
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 13),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerHigh,
+                  color: AppColors.surface2,
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.line, width: 1.5),
                 ),
-                child: const Text(
-                  'Fechar',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.onSurface,
-                  ),
+                child: Center(
+                  child: Text('Fechar',
+                      style: tsJakarta(13, FontWeight.w700,
+                          color: AppColors.ink)),
                 ),
               ),
             ),
@@ -1716,21 +1153,13 @@ class _SugestoesSheetState extends State<_SugestoesSheet> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(color: AppColors.primary),
-            SizedBox(height: 16),
-            Text(
-              'Consultando a IA...',
-              style: TextStyle(
-                fontFamily: 'Manrope',
-                fontSize: 14,
-                color: AppColors.onSurfaceVariant,
-              ),
-            ),
+            CircularProgressIndicator(color: AppColors.teal),
+            SizedBox(height: 14),
+            Text('Consultando a IA...'),
           ],
         ),
       );
     }
-
     if (_erro != null) {
       return Padding(
         padding: const EdgeInsets.all(24),
@@ -1738,31 +1167,26 @@ class _SugestoesSheetState extends State<_SugestoesSheet> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.error_outline_rounded,
-                color: AppColors.onSurfaceVariant, size: 48),
-            const SizedBox(height: 12),
-            Text(
-              _erro!,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontFamily: 'Manrope', color: AppColors.onSurfaceVariant),
-            ),
-            const SizedBox(height: 16),
-            TextButton(onPressed: _carregar, child: const Text('Tentar novamente')),
+                color: AppColors.muted, size: 44),
+            const SizedBox(height: 10),
+            Text(_erro!,
+                textAlign: TextAlign.center,
+                style: tsJakarta(13, FontWeight.w400,
+                    color: AppColors.muted)),
+            const SizedBox(height: 14),
+            TextButton(
+                onPressed: _carregar,
+                child: const Text('Tentar novamente')),
           ],
         ),
       );
     }
-
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
       child: Text(
         _sugestoes ?? '',
-        style: const TextStyle(
-          fontFamily: 'Manrope',
-          fontSize: 14,
-          height: 1.65,
-          color: AppColors.onSurface,
-        ),
+        style: tsJakarta(13.5, FontWeight.w400,
+            color: AppColors.text, height: 1.65),
       ),
     );
   }
