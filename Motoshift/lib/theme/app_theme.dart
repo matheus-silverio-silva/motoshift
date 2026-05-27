@@ -1,249 +1,217 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-// ============================================================
-// Urban Kinetic Design System — "The Kinetic Monolith"
-// Cores extraídas diretamente dos protótipos HTML
-// ============================================================
+// ══════════════════════════════════════════════════════════════════════════════
+//  MotoShift Design System — paleta teal aprovada em protótipo de alta fidelidade
+// ══════════════════════════════════════════════════════════════════════════════
 
 class AppColors {
-  // --- Primary ---
-  static const Color primary = Color(0xFF003F87);
-  static const Color primaryContainer = Color(0xFF0056B3);
-  static const Color onPrimary = Color(0xFFFFFFFF);
-  static const Color onPrimaryContainer = Color(0xFFBBD0FF);
-  static const Color primaryFixed = Color(0xFFD7E2FF);
-  static const Color primaryFixedDim = Color(0xFFACC7FF);
-  static const Color onPrimaryFixed = Color(0xFF001A40);
-  static const Color onPrimaryFixedVariant = Color(0xFF004491);
+  AppColors._();
 
-  // --- Secondary ---
-  static const Color secondary = Color(0xFF5C5F60);
-  static const Color secondaryContainer = Color(0xFFE1E3E4);
-  static const Color onSecondary = Color(0xFFFFFFFF);
-  static const Color onSecondaryContainer = Color(0xFF626566);
-  static const Color secondaryFixed = Color(0xFFE1E3E4);
-  static const Color secondaryFixedDim = Color(0xFFC5C7C8);
-  static const Color onSecondaryFixed = Color(0xFF191C1D);
-  static const Color onSecondaryFixedVariant = Color(0xFF454748);
+  // ── Paleta principal ─────────────────────────────────────────────────────
+  static const Color teal       = Color(0xFF0E8B8C);
+  static const Color tealBright = Color(0xFF16B5B0);
+  static const Color tealDeep   = Color(0xFF0A4D52);
+  static const Color ink        = Color(0xFF062E33);
 
-  // --- Tertiary ---
-  static const Color tertiary = Color(0xFF722B00);
-  static const Color tertiaryContainer = Color(0xFF983C00);
-  static const Color onTertiary = Color(0xFFFFFFFF);
-  static const Color onTertiaryContainer = Color(0xFFFFC2A7);
-  static const Color tertiaryFixed = Color(0xFFFFDBCC);
-  static const Color tertiaryFixedDim = Color(0xFFFFB694);
-  static const Color onTertiaryFixed = Color(0xFF351000);
-  static const Color onTertiaryFixedVariant = Color(0xFF7B2F00);
+  static const Color surface  = Color(0xFFFFFFFF);
+  static const Color surface2 = Color(0xFFF2F6F5);
+  static const Color surface3 = Color(0xFFE7EFEE);
+  static const Color line     = Color(0xFFE2EAE9);
 
-  // --- Surface Hierarchy ---
-  static const Color background = Color(0xFFFBF9F8);
-  static const Color surface = Color(0xFFFBF9F8);
-  static const Color surfaceBright = Color(0xFFFBF9F8);
-  static const Color surfaceDim = Color(0xFFDCD9D9);
-  static const Color surfaceContainerLowest = Color(0xFFFFFFFF);
-  static const Color surfaceContainerLow = Color(0xFFF6F3F2);
-  static const Color surfaceContainer = Color(0xFFF0EDED);
-  static const Color surfaceContainerHigh = Color(0xFFEAE8E7);
-  static const Color surfaceContainerHighest = Color(0xFFE4E2E1);
-  static const Color surfaceVariant = Color(0xFFE4E2E1);
-  static const Color surfaceTint = Color(0xFF115CB9);
+  static const Color text  = Color(0xFF0F2C30);
+  static const Color muted = Color(0xFF6B8487);
 
-  // --- On Surface ---
-  static const Color onBackground = Color(0xFF1B1C1C);
-  static const Color onSurface = Color(0xFF1B1C1C);
-  static const Color onSurfaceVariant = Color(0xFF424752);
+  static const Color amber     = Color(0xFFF6A623);
+  static const Color amberSoft = Color(0xFFFFF1D6);
+  static const Color tealSoft  = Color(0xFFDEF1F0);
+  static const Color good      = Color(0xFF1B9E73);
+  static const Color goodSoft  = Color(0xFFDDF3EA);
 
-  // --- Outline ---
-  static const Color outline = Color(0xFF727784);
-  static const Color outlineVariant = Color(0xFFC2C6D4);
-
-  // --- Error ---
-  static const Color error = Color(0xFFBA1A1A);
+  static const Color error          = Color(0xFFBA1A1A);
   static const Color errorContainer = Color(0xFFFFDAD6);
-  static const Color onError = Color(0xFFFFFFFF);
-  static const Color onErrorContainer = Color(0xFF93000A);
 
-  // --- Inverse ---
-  static const Color inverseSurface = Color(0xFF303030);
-  static const Color inverseOnSurface = Color(0xFFF3F0F0);
-  static const Color inversePrimary = Color(0xFFACC7FF);
-
-  // --- Gradients ---
-  static const LinearGradient kineticGradient = LinearGradient(
+  // ── Gradientes ───────────────────────────────────────────────────────────
+  static const LinearGradient headerGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [primary, primaryContainer],
-    stops: [0.0, 1.0],
+    colors: [teal, tealDeep],
   );
 
-  // --- Shadows ---
-  static List<BoxShadow> kineticShadow = [
-    BoxShadow(
-      color: primary.withOpacity(0.08),
-      blurRadius: 24,
-      offset: const Offset(0, 8),
-    ),
-  ];
+  static const LinearGradient primaryGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [tealBright, teal],
+  );
 
-  static List<BoxShadow> bottomNavShadow = [
-    BoxShadow(
-      color: primary.withOpacity(0.08),
-      blurRadius: 24,
-      offset: const Offset(0, -8),
-    ),
+  static const LinearGradient loginBgGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [tealDeep, Color(0xFF062E33), Color(0xFF04181b)],
+    stops: [0.0, 0.62, 1.0],
+  );
+
+  static const LinearGradient walletGradient = LinearGradient(
+    begin: Alignment(-0.7, -0.7),
+    end: Alignment(0.7, 0.7),
+    colors: [teal, tealDeep],
+  );
+
+  // ── Aliases legados — usados pelos kinetic_* widgets; remover após migração ─
+  static const Color primary                 = teal;
+  static const Color primaryContainer        = tealBright;
+  static const Color onPrimary               = Color(0xFFFFFFFF);
+  static const Color onPrimaryContainer      = tealSoft;
+  static const Color secondary               = muted;
+  static const Color onSecondary             = Color(0xFFFFFFFF);
+  static const Color secondaryContainer      = surface3;
+  static const Color onSecondaryContainer    = text;
+  static const Color tertiary                = amber;
+  static const Color onTertiary              = Color(0xFF3A2603);
+  static const Color tertiaryContainer       = amberSoft;
+  static const Color onTertiaryContainer     = Color(0xFF9A6206);
+  static const Color background              = surface2;
+  static const Color surfaceBright           = surface;
+  static const Color surfaceDim              = surface3;
+  static const Color onBackground            = text;
+  static const Color onSurface              = text;
+  static const Color onSurfaceVariant        = muted;
+  static const Color surfaceContainerLowest  = surface;
+  static const Color surfaceContainerLow     = surface2;
+  static const Color surfaceContainer        = surface3;
+  static const Color surfaceContainerHigh    = line;
+  static const Color surfaceContainerHighest = line;
+  static const Color surfaceVariant          = surface3;
+  static const Color surfaceTint             = teal;
+  static const Color outline                 = muted;
+  static const Color outlineVariant          = line;
+  static const Color onError                 = Color(0xFFFFFFFF);
+  static const Color onErrorContainer        = Color(0xFF93000A);
+  static const Color inverseSurface          = ink;
+  static const Color inverseOnSurface        = surface2;
+  static const Color inversePrimary          = tealSoft;
+  static const Color primaryFixed            = tealSoft;
+  static const Color primaryFixedDim         = Color(0xFFBCE0DF);
+  static const Color onPrimaryFixed          = tealDeep;
+  static const Color onPrimaryFixedVariant   = teal;
+  static const LinearGradient kineticGradient = primaryGradient;
+
+  static List<BoxShadow> kineticShadow = const [
+    BoxShadow(color: Color(0x140E8B8C), blurRadius: 24, offset: Offset(0, 8)),
+  ];
+  static List<BoxShadow> bottomNavShadow = const [
+    BoxShadow(color: Color(0x140E8B8C), blurRadius: 24, offset: Offset(0, -8)),
   ];
 }
 
-class AppTheme {
-  static ThemeData get light {
-    final textTheme = GoogleFonts.manropeTextTheme();
+// ── Helpers de estilo de texto ───────────────────────────────────────────────
+TextStyle tsBricolage(double size, FontWeight w, {Color? color}) =>
+    GoogleFonts.bricolageGrotesque(
+      fontSize: size,
+      fontWeight: w,
+      color: color ?? AppColors.text,
+      height: 1.2,
+    );
 
+TextStyle tsJakarta(double size, FontWeight w, {Color? color, double? height}) =>
+    GoogleFonts.plusJakartaSans(
+      fontSize: size,
+      fontWeight: w,
+      color: color ?? AppColors.text,
+      height: height,
+    );
+
+// ── Tema central ─────────────────────────────────────────────────────────────
+class AppTheme {
+  AppTheme._();
+
+  static ThemeData get light {
     return ThemeData(
       useMaterial3: true,
-      colorScheme: const ColorScheme(
-        brightness: Brightness.light,
-        primary: AppColors.primary,
-        onPrimary: AppColors.onPrimary,
-        primaryContainer: AppColors.primaryContainer,
-        onPrimaryContainer: AppColors.onPrimaryContainer,
-        secondary: AppColors.secondary,
-        onSecondary: AppColors.onSecondary,
-        secondaryContainer: AppColors.secondaryContainer,
-        onSecondaryContainer: AppColors.onSecondaryContainer,
-        tertiary: AppColors.tertiary,
-        onTertiary: AppColors.onTertiary,
-        tertiaryContainer: AppColors.tertiaryContainer,
-        onTertiaryContainer: AppColors.onTertiaryContainer,
-        error: AppColors.error,
-        onError: AppColors.onError,
-        errorContainer: AppColors.errorContainer,
-        onErrorContainer: AppColors.onErrorContainer,
+      scaffoldBackgroundColor: AppColors.surface2,
+      colorScheme: const ColorScheme.light(
+        primary: AppColors.teal,
+        onPrimary: Color(0xFFFFFFFF),
+        primaryContainer: AppColors.tealSoft,
+        onPrimaryContainer: AppColors.tealDeep,
+        secondary: AppColors.amber,
+        onSecondary: Color(0xFF3A2603),
         surface: AppColors.surface,
-        onSurface: AppColors.onSurface,
-        onSurfaceVariant: AppColors.onSurfaceVariant,
-        outline: AppColors.outline,
-        outlineVariant: AppColors.outlineVariant,
-        inverseSurface: AppColors.inverseSurface,
-        onInverseSurface: AppColors.inverseOnSurface,
-        inversePrimary: AppColors.inversePrimary,
-        surfaceTint: AppColors.surfaceTint,
+        onSurface: AppColors.text,
+        error: AppColors.error,
+        onError: Color(0xFFFFFFFF),
+        outline: AppColors.line,
+        outlineVariant: AppColors.surface3,
       ),
-      scaffoldBackgroundColor: AppColors.background,
-      textTheme: textTheme.copyWith(
-        displayLarge: textTheme.displayLarge?.copyWith(
-          fontWeight: FontWeight.w800,
-          letterSpacing: -1.5,
-          color: AppColors.onSurface,
-        ),
-        displayMedium: textTheme.displayMedium?.copyWith(
-          fontWeight: FontWeight.w800,
-          letterSpacing: -1.0,
-          color: AppColors.onSurface,
-        ),
-        headlineLarge: textTheme.headlineLarge?.copyWith(
-          fontWeight: FontWeight.w800,
-          letterSpacing: -0.5,
-          color: AppColors.onSurface,
-        ),
-        headlineMedium: textTheme.headlineMedium?.copyWith(
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.5,
-          color: AppColors.onSurface,
-        ),
-        titleLarge: textTheme.titleLarge?.copyWith(
-          fontWeight: FontWeight.w700,
-          color: AppColors.onSurface,
-        ),
-        titleMedium: textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w600,
-          color: AppColors.onSurface,
-        ),
-        bodyLarge: textTheme.bodyLarge?.copyWith(
-          color: AppColors.onSurfaceVariant,
-        ),
-        bodyMedium: textTheme.bodyMedium?.copyWith(
-          color: AppColors.onSurfaceVariant,
-        ),
-        labelSmall: textTheme.labelSmall?.copyWith(
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.5,
-          color: AppColors.onSurfaceVariant,
-        ),
+      textTheme: TextTheme(
+        displayLarge:   tsBricolage(32,   FontWeight.w800),
+        displayMedium:  tsBricolage(26,   FontWeight.w800),
+        displaySmall:   tsBricolage(22,   FontWeight.w800),
+        headlineLarge:  tsBricolage(20,   FontWeight.w800),
+        headlineMedium: tsBricolage(18,   FontWeight.w800),
+        headlineSmall:  tsBricolage(16,   FontWeight.w800),
+        titleLarge:     tsBricolage(15,   FontWeight.w700),
+        titleMedium:    tsJakarta(14,     FontWeight.w700),
+        titleSmall:     tsJakarta(13,     FontWeight.w700),
+        bodyLarge:      tsJakarta(14,     FontWeight.w400),
+        bodyMedium:     tsJakarta(13,     FontWeight.w400, color: AppColors.muted),
+        bodySmall:      tsJakarta(11,     FontWeight.w400, color: AppColors.muted),
+        labelLarge:     tsJakarta(13.5,   FontWeight.w700),
+        labelMedium:    tsJakarta(11,     FontWeight.w700),
+        labelSmall:     tsJakarta(9.5,    FontWeight.w700, color: AppColors.muted),
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        centerTitle: false,
-        titleTextStyle: TextStyle(
-          fontFamily: 'Manrope',
-          fontSize: 24,
-          fontWeight: FontWeight.w800,
-          letterSpacing: -1.5,
-          color: AppColors.primary,
-        ),
-        iconTheme: IconThemeData(color: AppColors.onSurfaceVariant),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.onPrimary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          textStyle: const TextStyle(
-            fontFamily: 'Manrope',
-            fontWeight: FontWeight.w800,
-            fontSize: 16,
-          ),
+          backgroundColor: AppColors.teal,
+          foregroundColor: const Color(0xFFFFFFFF),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           elevation: 0,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.surfaceContainerLow,
+        fillColor: AppColors.surface2,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: AppColors.line, width: 1.5),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: AppColors.line, width: 1.5),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          borderSide: const BorderSide(color: AppColors.teal, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.error, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 16,
-        ),
-        hintStyle: const TextStyle(color: AppColors.outline),
-        labelStyle: const TextStyle(
-          color: AppColors.onSurfaceVariant,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.5,
-          fontSize: 11,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+        hintStyle: GoogleFonts.plusJakartaSans(
+          color: AppColors.muted,
+          fontSize: 12.5,
         ),
       ),
-      cardTheme: CardThemeData(
-        color: AppColors.surfaceContainerLowest,
+      cardTheme: const CardThemeData(
+        color: AppColors.surface,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          side: BorderSide(color: AppColors.line, width: 1.5),
+        ),
         margin: EdgeInsets.zero,
       ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.onSurfaceVariant,
+      dividerTheme: const DividerThemeData(
+        color: AppColors.line,
+        thickness: 1,
       ),
     );
   }
