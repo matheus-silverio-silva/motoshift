@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/kinetic_button.dart';
+import '../../widgets/app_buttons.dart';
 
 class CadastroScreen extends StatefulWidget {
   const CadastroScreen({super.key});
@@ -18,9 +19,12 @@ class _CadastroScreenState extends State<CadastroScreen> {
   final _emailCtrl = TextEditingController();
   final _telefoneCtrl = TextEditingController();
   final _senhaCtrl = TextEditingController();
+  final _confirmarSenhaCtrl = TextEditingController();
   final _documentoCtrl = TextEditingController();
 
   TipoUsuario _tipo = TipoUsuario.lojista;
+  bool _senhaVisivel = false;
+  bool _confirmarSenhaVisivel = false;
 
   @override
   void dispose() {
@@ -28,10 +32,12 @@ class _CadastroScreenState extends State<CadastroScreen> {
     _emailCtrl.dispose();
     _telefoneCtrl.dispose();
     _senhaCtrl.dispose();
+    _confirmarSenhaCtrl.dispose();
     _documentoCtrl.dispose();
     super.dispose();
   }
 
+  // ── Lógica preservada do original ────────────────────────────────────────────
   Future<void> _cadastrar() async {
     if (!_formKey.currentState!.validate()) return;
     final auth = context.read<AuthService>();
@@ -65,335 +71,202 @@ class _CadastroScreenState extends State<CadastroScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
-    final isWide = MediaQuery.of(context).size.width > 800;
-
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: isWide ? _buildWide(auth) : _buildMobile(auth),
-    );
-  }
-
-  Widget _buildWide(AuthService auth) {
-    return Row(
-      children: [
-        // Lado esquerdo — branding
-        Expanded(
-          flex: 5,
-          child: _buildBrandPanel(),
-        ),
-        // Lado direito — formulário
-        Expanded(
-          flex: 5,
+      body: Container(
+        decoration:
+            const BoxDecoration(gradient: AppColors.loginBgGradient),
+        child: SafeArea(
           child: SingleChildScrollView(
-            child: _buildForm(auth),
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            child: Column(
+              children: [
+                _buildTop(),
+                _buildCard(auth),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildMobile(AuthService auth) {
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 8),
-            const Text(
-              'Moto Shift',
-              style: TextStyle(
-                fontFamily: 'Manrope',
-                fontSize: 28,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -1.5,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(height: 24),
-            _buildForm(auth),
-          ],
-        ),
       ),
     );
   }
 
-  Widget _buildBrandPanel() {
-    return Container(
-      height: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primary, AppColors.primaryContainer],
-        ),
-      ),
-      padding: const EdgeInsets.all(48),
+  Widget _buildTop() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 30, bottom: 4),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Urban Kinetic',
-            style: TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -2,
-              color: Colors.white,
-            ),
-          ),
           Container(
-            width: 48,
-            height: 4,
-            margin: const EdgeInsets.only(top: 8),
+            width: 62,
+            height: 62,
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(2),
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0xB316B5B0),
+                  blurRadius: 30,
+                  offset: Offset(0, 16),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 48),
-          const Text(
-            'Move with the\nspeed of the city.',
-            style: TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 40,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -2,
-              height: 1.1,
-              color: Colors.white,
-            ),
+            child: const Icon(Icons.two_wheeler_rounded,
+                color: Color(0xFFFFFFFF), size: 32),
           ),
           const SizedBox(height: 16),
+          RichText(
+            text: TextSpan(
+              style: GoogleFonts.bricolageGrotesque(
+                  fontSize: 26, fontWeight: FontWeight.w800),
+              children: const [
+                TextSpan(
+                    text: 'Moto',
+                    style: TextStyle(color: Color(0xFFFFFFFF))),
+                TextSpan(
+                    text: 'Shift',
+                    style: TextStyle(color: AppColors.tealBright)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 5),
           Text(
-            'Junte-se à rede de logística urbana mais eficiente. Seja enviando ou entregando, otimizamos o caminho.',
-            style: TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 15,
-              color: Colors.white.withOpacity(0.80),
-              height: 1.6,
-            ),
+            'Crie sua conta e comece a trabalhar.',
+            style: tsJakarta(12, FontWeight.w500,
+                color: const Color(0xFF8FB6B6)),
           ),
-          const Spacer(),
-          // Stats grid
-          Row(
-            children: [
-              _statChip('local_shipping', '50k+', 'Deliveries Daily'),
-              const SizedBox(width: 16),
-              _statChip('timer', '18min', 'Avg. ETA'),
-            ],
-          ),
+          const SizedBox(height: 26),
         ],
       ),
     );
   }
 
-  Widget _statChip(String icon, String value, String label) {
+  Widget _buildCard(AuthService auth) {
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.10)),
+        color: const Color(0xF7FFFFFF),
+        borderRadius: BorderRadius.circular(22),
       ),
+      padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon == 'local_shipping'
-              ? Icons.local_shipping_outlined
-              : Icons.timer_outlined,
-              color: Colors.white, size: 22),
-          const SizedBox(height: 8),
-          Text(value,
-              style: const TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white)),
-          Text(label.toUpperCase(),
-              style: TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.5,
-                  color: Colors.white.withOpacity(0.60))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildForm(AuthService auth) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 56),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Crie sua conta',
-            style: TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -1,
-              color: AppColors.onSurface,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Preencha os dados para começar sua jornada.',
-            style: TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: AppColors.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 28),
-
-          // Segmented — Lojista / Motoboy
-          KineticSegmentedControl<TipoUsuario>(
-            items: TipoUsuario.values,
-            selected: _tipo,
-            labelBuilder: (t) =>
-                t == TipoUsuario.lojista ? 'Lojista' : 'Motoboy',
+          Text('Criar conta',
+              style:
+                  tsBricolage(16, FontWeight.w800, color: AppColors.ink)),
+          const SizedBox(height: 3),
+          Text('Preencha os dados para começar.',
+              style:
+                  tsJakarta(11, FontWeight.w400, color: AppColors.muted)),
+          const SizedBox(height: 15),
+          _SegmentControl(
+            value: _tipo,
             onChanged: (t) => setState(() => _tipo = t),
           ),
-          const SizedBox(height: 28),
-
+          const SizedBox(height: 12),
           Form(
             key: _formKey,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Nome
-                _label('Nome completo'),
-                const SizedBox(height: 8),
-                _field(
+                _InputRow(
+                  icon: Icons.person_outline_rounded,
+                  hint: 'Nome completo',
                   controller: _nomeCtrl,
-                  hint: 'Seu nome',
-                  icon: Icons.person_outline,
                   validator: (v) =>
                       v == null || v.isEmpty ? 'Informe seu nome' : null,
                 ),
-                const SizedBox(height: 16),
-
-                // Email
-                _label('Email corporativo'),
-                const SizedBox(height: 8),
-                _field(
+                const SizedBox(height: 9),
+                _InputRow(
+                  icon: Icons.mail_outline_rounded,
+                  hint: 'E-mail',
                   controller: _emailCtrl,
-                  hint: 'email@exemplo.com',
-                  icon: Icons.mail_outline,
                   keyboardType: TextInputType.emailAddress,
                   validator: (v) =>
                       v == null || v.isEmpty ? 'Informe o e-mail' : null,
                 ),
-                const SizedBox(height: 16),
-
-                // Telefone + Senha lado a lado
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _label('Telefone'),
-                          const SizedBox(height: 8),
-                          _field(
-                            controller: _telefoneCtrl,
-                            hint: '(11) 99999-9999',
-                            icon: Icons.call_outlined,
-                            keyboardType: TextInputType.phone,
-                            validator: (v) => v == null || v.isEmpty
-                                ? 'Informe o telefone'
-                                : null,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _label('Senha'),
-                          const SizedBox(height: 8),
-                          _field(
-                            controller: _senhaCtrl,
-                            hint: '••••••••',
-                            icon: Icons.lock_outline,
-                            obscure: true,
-                            validator: (v) =>
-                                v == null || v.length < 6
-                                    ? 'Mínimo 6 caracteres'
-                                    : null,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 9),
+                _InputRow(
+                  icon: Icons.phone_outlined,
+                  hint: '(11) 99999-9999',
+                  controller: _telefoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  validator: (v) => v == null || v.isEmpty
+                      ? 'Informe o telefone'
+                      : null,
                 ),
-                const SizedBox(height: 16),
-
-                // CNPJ / CNH
-                _label(_tipo == TipoUsuario.lojista ? 'CNPJ' : 'CNH'),
-                const SizedBox(height: 8),
-                _field(
-                  controller: _documentoCtrl,
-                  hint: _tipo == TipoUsuario.lojista
-                      ? '00.000.000/0000-00'
-                      : '00000000000',
+                const SizedBox(height: 9),
+                _InputRow(
+                  icon: Icons.lock_outline_rounded,
+                  hint: 'Senha',
+                  controller: _senhaCtrl,
+                  obscure: !_senhaVisivel,
+                  suffixIcon: GestureDetector(
+                    onTap: () =>
+                        setState(() => _senhaVisivel = !_senhaVisivel),
+                    child: Icon(
+                      _senhaVisivel
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      size: 16,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                  validator: (v) => v == null || v.length < 6
+                      ? 'Mínimo 6 caracteres'
+                      : null,
+                ),
+                const SizedBox(height: 9),
+                _InputRow(
+                  icon: Icons.lock_outline_rounded,
+                  hint: 'Confirmar senha',
+                  controller: _confirmarSenhaCtrl,
+                  obscure: !_confirmarSenhaVisivel,
+                  suffixIcon: GestureDetector(
+                    onTap: () => setState(() =>
+                        _confirmarSenhaVisivel = !_confirmarSenhaVisivel),
+                    child: Icon(
+                      _confirmarSenhaVisivel
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      size: 16,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                  validator: (v) => v != _senhaCtrl.text
+                      ? 'As senhas não coincidem'
+                      : null,
+                ),
+                const SizedBox(height: 9),
+                _InputRow(
                   icon: Icons.badge_outlined,
-                  validator: (v) =>
-                      v == null || v.isEmpty ? 'Documento obrigatório' : null,
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Icon(Icons.info_outline,
-                        size: 13, color: AppColors.onSurfaceVariant),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Documento obrigatório para validação da conta.',
-                      style: const TextStyle(
-                        fontFamily: 'Manrope',
-                        fontSize: 11,
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 28),
-
-                KineticButton(
-                  label: 'Cadastrar',
-                  loading: auth.carregando,
-                  onPressed: _cadastrar,
-                  icon: const Icon(Icons.arrow_forward,
-                      color: Colors.white, size: 20),
+                  hint: _tipo == TipoUsuario.lojista ? 'CNPJ' : 'CNH',
+                  controller: _documentoCtrl,
+                  validator: (v) => v == null || v.isEmpty
+                      ? 'Documento obrigatório'
+                      : null,
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 16),
+          PrimaryButton(
+            label: 'Criar conta',
+            loading: auth.carregando,
+            onPressed: auth.carregando ? null : _cadastrar,
+          ),
+          const SizedBox(height: 16),
           Center(
             child: GestureDetector(
               onTap: () => Navigator.pop(context),
               child: RichText(
-                text: const TextSpan(
-                  style: TextStyle(
-                      fontFamily: 'Manrope',
-                      fontSize: 14,
-                      color: AppColors.onSurfaceVariant),
+                text: TextSpan(
+                  style: tsJakarta(11, FontWeight.w400,
+                      color: const Color(0xFF7FA1A1)),
                   children: [
-                    TextSpan(text: 'Já possui uma conta? '),
+                    const TextSpan(text: 'Já tem conta? '),
                     TextSpan(
-                      text: 'Fazer Login',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.primary,
-                        decoration: TextDecoration.underline,
-                        decorationColor: AppColors.primary,
-                      ),
+                      text: 'Entrar',
+                      style: tsJakarta(11, FontWeight.w700,
+                          color: AppColors.tealBright),
                     ),
                   ],
                 ),
@@ -404,56 +277,143 @@ class _CadastroScreenState extends State<CadastroScreen> {
       ),
     );
   }
+}
 
-  Widget _label(String text) => Text(
-        text.toUpperCase(),
-        style: const TextStyle(
-          fontFamily: 'Manrope',
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.5,
-          color: AppColors.onSurfaceVariant,
-        ),
-      );
+// ── Segmented control ─────────────────────────────────────────────────────────
+class _SegmentControl extends StatelessWidget {
+  const _SegmentControl(
+      {required this.value, required this.onChanged});
+  final TipoUsuario value;
+  final ValueChanged<TipoUsuario> onChanged;
 
-  Widget _field({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    bool obscure = false,
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      obscureText: obscure,
-      keyboardType: keyboardType,
-      validator: validator,
-      style: const TextStyle(
-        fontFamily: 'Manrope',
-        fontWeight: FontWeight.w500,
-        color: AppColors.onSurface,
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(12),
       ),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: AppColors.outlineVariant),
-        prefixIcon: Icon(icon, color: AppColors.outline, size: 20),
-        filled: true,
-        fillColor: AppColors.surfaceContainerLow,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+      child: Row(
+        children: [
+          _Seg(
+            label: 'Sou Lojista',
+            active: value == TipoUsuario.lojista,
+            onTap: () => onChanged(TipoUsuario.lojista),
+          ),
+          _Seg(
+            label: 'Sou Motoboy',
+            active: value == TipoUsuario.motoboy,
+            onTap: () => onChanged(TipoUsuario.motoboy),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Seg extends StatelessWidget {
+  const _Seg(
+      {required this.label, required this.active, required this.onTap});
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: active ? AppColors.teal : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            boxShadow: active
+                ? const [
+                    BoxShadow(
+                      color: Color(0xB30E8B8C),
+                      blurRadius: 14,
+                      offset: Offset(0, 6),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: tsJakarta(11, FontWeight.w700,
+                  color:
+                      active ? const Color(0xFFFFFFFF) : AppColors.muted),
+            ),
+          ),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.error, width: 2),
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+    );
+  }
+}
+
+// ── Input row ─────────────────────────────────────────────────────────────────
+class _InputRow extends StatelessWidget {
+  const _InputRow({
+    required this.icon,
+    required this.hint,
+    required this.controller,
+    this.keyboardType,
+    this.obscure = false,
+    this.suffixIcon,
+    this.validator,
+  });
+
+  final IconData icon;
+  final String hint;
+  final TextEditingController controller;
+  final TextInputType? keyboardType;
+  final bool obscure;
+  final Widget? suffixIcon;
+  final String? Function(String?)? validator;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.line, width: 1.5),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: AppColors.teal),
+          const SizedBox(width: 9),
+          Expanded(
+            child: TextFormField(
+              controller: controller,
+              keyboardType: keyboardType,
+              obscureText: obscure,
+              validator: validator,
+              style:
+                  tsJakarta(12.5, FontWeight.w500, color: AppColors.text),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: tsJakarta(12.5, FontWeight.w400,
+                    color: const Color(0xFF9AAEAE)),
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                filled: false,
+                suffixIcon: suffixIcon,
+                suffixIconConstraints:
+                    const BoxConstraints(maxWidth: 32, maxHeight: 32),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
