@@ -1,6 +1,7 @@
 package com.motoshift.entity;
 
 import jakarta.persistence.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -37,6 +38,25 @@ public class Usuario {
     private Double score = 5.0;
 
     private Double mediaAvaliacao;
+
+    // ── Dados pessoais ─────────────────────────────────────────
+    private LocalDate dataNascimento;
+    private String cidade;
+    private String estado;
+
+    // ── CNH e Veículo (motoboy) ────────────────────────────────
+    private String cnhNumero;
+    private String cnhCategoria;          // "A" | "AB"
+    private LocalDate cnhValidade;
+
+    private String veiculoModelo;         // ex: "Honda CG 160"
+    private String veiculoPlaca;          // ex: "ABC-1D23"
+    private Integer veiculoAno;
+    private String veiculoCor;
+
+    // ── Lojista ────────────────────────────────────────────────
+    private String nomeFantasia;
+    private String enderecoComercial;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime criadoEm;
@@ -77,6 +97,42 @@ public class Usuario {
 
     public Double getMediaAvaliacao() { return mediaAvaliacao; }
     public void setMediaAvaliacao(Double mediaAvaliacao) { this.mediaAvaliacao = mediaAvaliacao; }
+
+    public LocalDate getDataNascimento() { return dataNascimento; }
+    public void setDataNascimento(LocalDate dataNascimento) { this.dataNascimento = dataNascimento; }
+
+    public String getCidade() { return cidade; }
+    public void setCidade(String cidade) { this.cidade = cidade; }
+
+    public String getEstado() { return estado; }
+    public void setEstado(String estado) { this.estado = estado; }
+
+    public String getCnhNumero() { return cnhNumero; }
+    public void setCnhNumero(String cnhNumero) { this.cnhNumero = cnhNumero; }
+
+    public String getCnhCategoria() { return cnhCategoria; }
+    public void setCnhCategoria(String cnhCategoria) { this.cnhCategoria = cnhCategoria; }
+
+    public LocalDate getCnhValidade() { return cnhValidade; }
+    public void setCnhValidade(LocalDate cnhValidade) { this.cnhValidade = cnhValidade; }
+
+    public String getVeiculoModelo() { return veiculoModelo; }
+    public void setVeiculoModelo(String veiculoModelo) { this.veiculoModelo = veiculoModelo; }
+
+    public String getVeiculoPlaca() { return veiculoPlaca; }
+    public void setVeiculoPlaca(String veiculoPlaca) { this.veiculoPlaca = veiculoPlaca; }
+
+    public Integer getVeiculoAno() { return veiculoAno; }
+    public void setVeiculoAno(Integer veiculoAno) { this.veiculoAno = veiculoAno; }
+
+    public String getVeiculoCor() { return veiculoCor; }
+    public void setVeiculoCor(String veiculoCor) { this.veiculoCor = veiculoCor; }
+
+    public String getNomeFantasia() { return nomeFantasia; }
+    public void setNomeFantasia(String nomeFantasia) { this.nomeFantasia = nomeFantasia; }
+
+    public String getEnderecoComercial() { return enderecoComercial; }
+    public void setEnderecoComercial(String enderecoComercial) { this.enderecoComercial = enderecoComercial; }
 
     public LocalDateTime getCriadoEm() { return criadoEm; }
 }

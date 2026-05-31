@@ -13,6 +13,7 @@ import com.motoshift.repository.UsuarioRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
@@ -45,28 +46,52 @@ public class DataInitializer implements CommandLineRunner {
 
         Usuario claudia = criarUsuario("Cláudia Oliveira", "claudia@teste.com",
                 "senha123", "(41) 99111-2222", "lojista", "12.345.678/0001-90", 5.0, 4.8);
+        preencherLojista(claudia, LocalDate.of(1985, 3, 12), "Curitiba", "PR",
+                "Hamburgueria da Cláudia", "Av. Água Verde, 1200 — Água Verde, Curitiba/PR");
+
         Usuario fernando = criarUsuario("Fernando Costa", "fernando@teste.com",
                 "senha123", "(41) 99333-4444", "lojista", "98.765.432/0001-10", 5.0, 4.5);
+        preencherLojista(fernando, LocalDate.of(1978, 7, 22), "Curitiba", "PR",
+                "Pizzaria do Fernando", "R. Comendador Araújo, 450 — Batel, Curitiba/PR");
+
         Usuario ana = criarUsuario("Ana Souza", "ana@teste.com",
                 "senha123", "(41) 99555-6666", "lojista", "11.222.333/0001-44", 5.0, 4.9);
+        preencherLojista(ana, LocalDate.of(1990, 11, 5), "Curitiba", "PR",
+                "Farmácia Ana", "R. XV de Novembro, 980 — Centro Cívico, Curitiba/PR");
 
         // Lojistas originais de teste
-        criarUsuario("Maria Andrade", "lojista@teste.com",
+        Usuario maria = criarUsuario("Maria Andrade", "lojista@teste.com",
                 "senha123", "(11) 91234-5678", "lojista", "12.345.678/0001-99", 5.0, null);
+        preencherLojista(maria, LocalDate.of(1982, 5, 18), "São Paulo", "SP",
+                "Mercado Andrade", "Av. Paulista, 1500 — Bela Vista, São Paulo/SP");
 
         // ── Motoboys ─────────────────────────────────────────────────────────
 
         // Score adaptado para escala 0-5.0: 87→4.7, 95→4.9, 62→3.1
         Usuario ricardo = criarUsuario("Ricardo Souza", "ricardo@teste.com",
                 "senha123", "(41) 98111-2222", "motoboy", "12345678900", 4.7, 4.8);
+        preencherMotoboy(ricardo, LocalDate.of(1995, 2, 10), "Curitiba", "PR",
+                "12345678900", "A", LocalDate.of(2028, 6, 30),
+                "Honda CG 160 Titan", "ABC-1D23", 2022, "Vermelha");
+
         Usuario lucas = criarUsuario("Lucas Mendes", "lucas@teste.com",
                 "senha123", "(41) 98333-4444", "motoboy", "98765432100", 4.9, 4.6);
+        preencherMotoboy(lucas, LocalDate.of(1993, 9, 24), "Curitiba", "PR",
+                "98765432100", "AB", LocalDate.of(2027, 11, 15),
+                "Yamaha Factor 150", "DEF-2E34", 2023, "Preta");
+
         Usuario thiago = criarUsuario("Thiago Alves", "thiago@teste.com",
                 "senha123", "(41) 98555-6666", "motoboy", "55566677788", 3.1, 3.2);
+        preencherMotoboy(thiago, LocalDate.of(1998, 12, 3), "Curitiba", "PR",
+                "55566677788", "A", LocalDate.of(2026, 4, 20),
+                "Honda Biz 125", "GHI-3F45", 2020, "Branca");
 
         // Motoboy original de teste
         Usuario motoboyOriginal = criarUsuario("Carlos Mendes", "motoboy@teste.com",
                 "senha123", "(11) 99876-5432", "motoboy", "AB123456", 5.0, null);
+        preencherMotoboy(motoboyOriginal, LocalDate.of(1992, 8, 14), "São Paulo", "SP",
+                "AB123456", "A", LocalDate.of(2029, 1, 10),
+                "Honda PCX 150", "JKL-4G56", 2024, "Azul");
 
         // ── Carteiras ────────────────────────────────────────────────────────
 
@@ -193,6 +218,33 @@ public class DataInitializer implements CommandLineRunner {
         u.setScore(score);
         u.setMediaAvaliacao(mediaAvaliacao);
         return usuarioRepo.save(u);
+    }
+
+    private void preencherLojista(Usuario u, LocalDate nascimento, String cidade,
+                                   String estado, String fantasia, String endereco) {
+        u.setDataNascimento(nascimento);
+        u.setCidade(cidade);
+        u.setEstado(estado);
+        u.setNomeFantasia(fantasia);
+        u.setEnderecoComercial(endereco);
+        usuarioRepo.save(u);
+    }
+
+    private void preencherMotoboy(Usuario u, LocalDate nascimento, String cidade,
+                                   String estado, String cnhNum, String cnhCat,
+                                   LocalDate cnhVal, String modelo, String placa,
+                                   int ano, String cor) {
+        u.setDataNascimento(nascimento);
+        u.setCidade(cidade);
+        u.setEstado(estado);
+        u.setCnhNumero(cnhNum);
+        u.setCnhCategoria(cnhCat);
+        u.setCnhValidade(cnhVal);
+        u.setVeiculoModelo(modelo);
+        u.setVeiculoPlaca(placa);
+        u.setVeiculoAno(ano);
+        u.setVeiculoCor(cor);
+        usuarioRepo.save(u);
     }
 
     private void criarCarteira(Long motoboyId, double saldo, double ganhos, String pix) {

@@ -118,6 +118,37 @@ public class AuthService {
         return UsuarioResponse.from(u);
     }
 
+    public UsuarioResponse atualizar(Long id, java.util.Map<String, Object> body) {
+        Usuario u = repo.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuário não encontrado"));
+
+        if (body.get("nome") instanceof String s && !s.isBlank()) u.setNome(s);
+        if (body.get("telefone") instanceof String s) u.setTelefone(s);
+        if (body.get("fotoPerfil") instanceof String s) u.setFotoPerfil(s);
+
+        if (body.get("dataNascimento") instanceof String s && !s.isBlank()) {
+            u.setDataNascimento(java.time.LocalDate.parse(s));
+        }
+        if (body.get("cidade") instanceof String s) u.setCidade(s);
+        if (body.get("estado") instanceof String s) u.setEstado(s);
+
+        if (body.get("cnhNumero") instanceof String s) u.setCnhNumero(s);
+        if (body.get("cnhCategoria") instanceof String s) u.setCnhCategoria(s);
+        if (body.get("cnhValidade") instanceof String s && !s.isBlank()) {
+            u.setCnhValidade(java.time.LocalDate.parse(s));
+        }
+
+        if (body.get("veiculoModelo") instanceof String s) u.setVeiculoModelo(s);
+        if (body.get("veiculoPlaca") instanceof String s) u.setVeiculoPlaca(s);
+        if (body.get("veiculoAno") instanceof Number n) u.setVeiculoAno(n.intValue());
+        if (body.get("veiculoCor") instanceof String s) u.setVeiculoCor(s);
+
+        if (body.get("nomeFantasia") instanceof String s) u.setNomeFantasia(s);
+        if (body.get("enderecoComercial") instanceof String s) u.setEnderecoComercial(s);
+
+        return UsuarioResponse.from(repo.save(u));
+    }
+
     /**
      * Valida o token Bearer e retorna o userId associado.
      * Lança 401 se o token for inválido ou não existir.

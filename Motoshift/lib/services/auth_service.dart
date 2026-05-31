@@ -86,6 +86,11 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void atualizarUsuarioLocal(Usuario novo) {
+    _usuario = novo;
+    notifyListeners();
+  }
+
   Future<void> _logout() async {
     _usuario = null;
     _api.clearAuthToken();

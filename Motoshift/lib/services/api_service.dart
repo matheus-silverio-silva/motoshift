@@ -152,6 +152,11 @@ class ApiService {
     return Usuario.fromJson(data as Map<String, dynamic>);
   }
 
+  Future<Usuario> atualizarPerfil(int id, Map<String, dynamic> campos) async {
+    final data = await _put('/usuarios/$id', campos);
+    return Usuario.fromJson(data as Map<String, dynamic>);
+  }
+
   // --------------------------------------------------------
   // TURNOS — /api/turnos
   // --------------------------------------------------------

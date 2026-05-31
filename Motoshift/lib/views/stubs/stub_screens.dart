@@ -35,48 +35,12 @@ Widget _stubBody(String title) {
   );
 }
 
-class DadosPessoaisScreen extends StatelessWidget {
-  const DadosPessoaisScreen({super.key});
-  @override
-  Widget build(BuildContext context) => AppScaffold(
-        header: AppHeader.back(title: 'Dados pessoais'),
-        body: _stubBody('Dados pessoais'),
-      );
-}
-
-class CnhVeiculoScreen extends StatelessWidget {
-  const CnhVeiculoScreen({super.key});
-  @override
-  Widget build(BuildContext context) => AppScaffold(
-        header: AppHeader.back(title: 'CNH e Veículo'),
-        body: _stubBody('CNH e Veículo'),
-      );
-}
-
 class NotificacoesScreen extends StatelessWidget {
   const NotificacoesScreen({super.key});
   @override
   Widget build(BuildContext context) => AppScaffold(
         header: AppHeader.back(title: 'Notificações'),
         body: _stubBody('Notificações'),
-      );
-}
-
-class MinhasAvaliacoesScreen extends StatelessWidget {
-  const MinhasAvaliacoesScreen({super.key});
-  @override
-  Widget build(BuildContext context) => AppScaffold(
-        header: AppHeader.back(title: 'Minhas avaliações'),
-        body: _stubBody('Minhas avaliações'),
-      );
-}
-
-class HistoricoTurnosScreen extends StatelessWidget {
-  const HistoricoTurnosScreen({super.key});
-  @override
-  Widget build(BuildContext context) => AppScaffold(
-        header: AppHeader.back(title: 'Histórico de turnos'),
-        body: _stubBody('Histórico de turnos'),
       );
 }
 

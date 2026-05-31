@@ -26,6 +26,10 @@ import 'views/perfil/perfil_screen.dart';
 import 'views/detalhe_turno/detalhe_turno_screen.dart';
 import 'views/turno_lojista/turno_lojista_screen.dart';
 import 'views/turnos_lojista_lista/turnos_lojista_lista_screen.dart';
+import 'views/dados_pessoais/dados_pessoais_screen.dart';
+import 'views/cnh_veiculo/cnh_veiculo_screen.dart';
+import 'views/minhas_avaliacoes/minhas_avaliacoes_screen.dart';
+import 'views/historico_turnos/historico_turnos_screen.dart';
 import 'views/stubs/stub_screens.dart';
 
 class MotoShiftApp extends StatelessWidget {
