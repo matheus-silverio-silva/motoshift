@@ -5,9 +5,9 @@ import '../../models/turno.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/kinetic_app_bar.dart';
-import '../../widgets/kinetic_bottom_nav.dart';
-import '../../widgets/kinetic_button.dart';
+import '../../widgets/app_buttons.dart';
+import '../../widgets/app_header.dart';
+import '../../widgets/app_scaffold.dart';
 
 class AgendarTurnoScreen extends StatefulWidget {
   const AgendarTurnoScreen({super.key});
@@ -41,9 +41,9 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.light(
-            primary: AppColors.primary,
+            primary: AppColors.teal,
             onPrimary: Colors.white,
-            surface: AppColors.surfaceContainerLowest,
+            surface: AppColors.surface,
           ),
         ),
         child: child!,
@@ -58,19 +58,24 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       initialTime: isStart
           ? const TimeOfDay(hour: 8, minute: 0)
           : const TimeOfDay(hour: 12, minute: 0),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: AppColors.primary,
-            onPrimary: Colors.white,
+      builder: (ctx, child) => MediaQuery(
+        data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true),
+        child: Theme(
+          data: Theme.of(ctx).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.teal,
+              onPrimary: Colors.white,
+              surface: AppColors.surface,
+            ),
           ),
+          child: child!,
         ),
-        child: child!,
       ),
     );
     if (picked != null) {
       setState(() {
-        if (isStart) _horaInicio = picked; else _horaFim = picked;
+        if (isStart) _horaInicio = picked;
+        else _horaFim = picked;
       });
     }
   }
@@ -101,11 +106,11 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       _horaFim!.hour, _horaFim!.minute,
     );
 
-    // RF04: antecedencia minima de 2 horas
     if (inicio.isBefore(DateTime.now().add(const Duration(hours: 2)))) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Antecedencia Minima Insuficiente: agende com pelo menos 2 horas de antecedencia.'),
+          content: Text(
+              'Antecedência mínima insuficiente: agende com pelo menos 2 horas de antecedência.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -116,7 +121,8 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
     if (!fim.isAfter(inicio)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('O horario de fim deve ser posterior ao horario de inicio.'),
+          content: Text(
+              'O horário de fim deve ser posterior ao horário de início.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -141,7 +147,7 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Turno publicado com sucesso!'),
-          backgroundColor: AppColors.primary,
+          backgroundColor: AppColors.teal,
         ),
       );
       Navigator.pop(context);
@@ -160,92 +166,76 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthService>();
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      extendBodyBehindAppBar: true,
-      appBar: KineticAppBar(
-        avatarUrl: auth.usuario?.fotoPerfil,
-        onNotificationTap: () {},
+    return AppScaffold(
+      header: AppHeader.back(
+        title: 'Publicar Turno',
+        onBack: () => Navigator.pop(context),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 96, 24, 120),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Header editorial ──
-              const Text(
-                'Novo Turno',
-                style: TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -1.5,
-                  color: AppColors.onSurface,
-                ),
+              Text(
+                'Novo turno',
+                style: tsBricolage(20, FontWeight.w800,
+                    color: AppColors.ink),
               ),
-              const SizedBox(height: 6),
-              const Text(
-                'Defina a logística da sua operação para os próximos dias.',
-                style: TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 15,
-                  color: AppColors.onSurfaceVariant,
-                  height: 1.5,
-                ),
+              const SizedBox(height: 3),
+              Text(
+                'Defina data, horário e valor para sua operação.',
+                style: tsJakarta(12, FontWeight.w400,
+                    color: AppColors.muted),
               ),
-              const SizedBox(height: 32),
-
-              // ── Data + Horário ──
+              const SizedBox(height: 18),
+              // Data + Horário
               Row(
                 children: [
                   Expanded(child: _buildDataCard()),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Expanded(child: _buildHorarioCard()),
                 ],
               ),
-              const SizedBox(height: 20),
-
-              // ── Parâmetros logísticos ──
+              const SizedBox(height: 14),
+              // Raio + Valor
               Container(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(16),
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.line, width: 1.5),
                 ),
                 child: Column(
                   children: [
-                    // Raio
                     _buildRaioSection(),
-                    const SizedBox(height: 28),
-                    // Valor
+                    const SizedBox(height: 22),
                     _buildValorSection(),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
-
-              // ── Mapa decorativo ──
+              // Mapa decorativo
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
-                  height: 120,
-                  color: AppColors.surfaceContainerHigh,
+                  height: 100,
+                  color: AppColors.surface3,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      const Icon(Icons.map_outlined,
-                          size: 56, color: AppColors.outlineVariant),
+                      const Center(
+                        child: Icon(Icons.map_outlined,
+                            size: 48, color: AppColors.line),
+                      ),
                       Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             begin: Alignment.bottomCenter,
                             end: Alignment.topCenter,
                             colors: [
-                              AppColors.surfaceContainerLow,
+                              AppColors.surface2,
                               Colors.transparent,
                             ],
                           ),
@@ -255,89 +245,58 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
-
-              // ── Botão publicar ──
-              KineticButton(
+              const SizedBox(height: 24),
+              PrimaryButton(
                 label: 'Publicar Turno',
                 loading: _publicando,
                 onPressed: _publicar,
                 icon: const Icon(Icons.send_rounded,
-                    color: Colors.white, size: 20),
+                    color: Colors.white, size: 18),
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'Ao publicar, o turno ficará visível para todos os entregadores qualificados na região.',
+              const SizedBox(height: 10),
+              Text(
+                'Ao publicar, o turno ficará visível para entregadores na região.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 11,
-                  color: AppColors.outline,
-                  height: 1.4,
-                ),
+                style: tsJakarta(10.5, FontWeight.w400,
+                    color: AppColors.muted),
               ),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: KineticBottomNav(
-        currentItem: NavItem.turnos,
-        onItemSelected: (_) => Navigator.pop(context),
-      ),
     );
   }
 
-  // ── Data card ────────────────────────────────────────────
   Widget _buildDataCard() {
     return GestureDetector(
       onTap: _pickDate,
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(16),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.line, width: 1.5),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
-              children: [
-                Icon(Icons.calendar_today_outlined,
-                    color: AppColors.primary, size: 18),
-                SizedBox(width: 8),
-                Text(
-                  'DATA DO TURNO',
-                  style: TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.5,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                _data != null
-                    ? DateFormat('dd/MM/yyyy').format(_data!)
-                    : 'Selecionar',
-                style: TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+            Row(children: [
+              const Icon(Icons.calendar_today_outlined,
+                  color: AppColors.teal, size: 14),
+              const SizedBox(width: 5),
+              Text('DATA',
+                  style: tsJakarta(9, FontWeight.w700,
+                      color: AppColors.teal)),
+            ]),
+            const SizedBox(height: 10),
+            Text(
+              _data != null
+                  ? DateFormat('dd/MM/yyyy', 'pt_BR').format(_data!)
+                  : 'Selecionar',
+              style: tsJakarta(13, FontWeight.w600,
                   color: _data != null
-                      ? AppColors.onSurface
-                      : AppColors.outline,
-                ),
-              ),
+                      ? AppColors.ink
+                      : AppColors.muted),
             ),
           ],
         ),
@@ -345,35 +304,26 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
     );
   }
 
-  // ── Horário card ─────────────────────────────────────────
   Widget _buildHorarioCard() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.line, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
-            children: [
-              Icon(Icons.schedule_outlined,
-                  color: AppColors.primary, size: 18),
-              SizedBox(width: 8),
-              Text(
-                'JANELA HORÁRIA',
-                style: TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.5,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+          Row(children: [
+            const Icon(Icons.schedule_outlined,
+                color: AppColors.teal, size: 14),
+            const SizedBox(width: 5),
+            Text('HORÁRIO',
+                style: tsJakarta(9, FontWeight.w700,
+                    color: AppColors.teal)),
+          ]),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -382,10 +332,11 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
                   child: _timeChip(_horaInicio),
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                child: Text('às',
-                    style: TextStyle(color: AppColors.outline, fontSize: 13)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                child: Text('—',
+                    style: tsJakarta(12, FontWeight.w400,
+                        color: AppColors.muted)),
               ),
               Expanded(
                 child: GestureDetector(
@@ -402,9 +353,9 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
 
   Widget _timeChip(TimeOfDay? t) {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.symmetric(vertical: 7),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
+        color: AppColors.surface2,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
@@ -412,67 +363,49 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
             ? '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}'
             : '--:--',
         textAlign: TextAlign.center,
-        style: TextStyle(
-          fontFamily: 'Manrope',
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: t != null ? AppColors.onSurface : AppColors.outline,
-        ),
+        style: tsJakarta(13, FontWeight.w600,
+            color: t != null ? AppColors.ink : AppColors.muted),
       ),
     );
   }
 
-  // ── Raio slider ──────────────────────────────────────────
   Widget _buildRaioSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Row(
-              children: [
-                Icon(Icons.straighten_outlined,
-                    color: AppColors.primary, size: 18),
-                SizedBox(width: 8),
-                Text(
-                  'RAIO DE ENTREGA',
-                  style: TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.5,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ],
-            ),
+            Row(children: [
+              const Icon(Icons.straighten_outlined,
+                  color: AppColors.teal, size: 14),
+              const SizedBox(width: 5),
+              Text('RAIO DE ENTREGA',
+                  style: tsJakarta(9, FontWeight.w700,
+                      color: AppColors.teal)),
+            ]),
             const Spacer(),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
               decoration: BoxDecoration(
-                color: AppColors.primaryFixed,
+                color: AppColors.tealSoft,
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
                 'Até ${_raio.toStringAsFixed(0)} km',
-                style: const TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.onPrimaryFixed,
-                ),
+                style: tsJakarta(9.5, FontWeight.w700,
+                    color: AppColors.tealDeep),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 16),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
-            activeTrackColor: AppColors.primary,
-            inactiveTrackColor: AppColors.surfaceContainerHighest,
-            thumbColor: AppColors.primary,
-            overlayColor: AppColors.primary.withOpacity(0.15),
-            trackHeight: 4,
+            activeTrackColor: AppColors.teal,
+            inactiveTrackColor: AppColors.surface3,
+            thumbColor: AppColors.teal,
+            overlayColor: AppColors.teal.withOpacity(0.15),
+            trackHeight: 3,
           ),
           child: Slider(
             value: _raio,
@@ -486,102 +419,70 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text('1km', style: _rangeStyle),
-              Text('5km', style: _rangeStyle),
-              Text('10km', style: _rangeStyle),
-              Text('15km', style: _rangeStyle),
-              Text('20km+', style: _rangeStyle),
-            ],
+            children: ['1km', '5km', '10km', '15km', '20km+']
+                .map((s) => Text(s,
+                    style: tsJakarta(9, FontWeight.w700,
+                        color: AppColors.muted)))
+                .toList(),
           ),
         ),
       ],
     );
   }
 
-  static const _rangeStyle = TextStyle(
-    fontFamily: 'Manrope',
-    fontSize: 9,
-    fontWeight: FontWeight.w700,
-    letterSpacing: 1,
-    color: AppColors.outline,
-  );
-
-  // ── Valor do turno ───────────────────────────────────────
   Widget _buildValorSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
-          children: [
-            Icon(Icons.payments_outlined, color: AppColors.primary, size: 18),
-            SizedBox(width: 8),
-            Text(
-              'VALOR DO TURNO',
-              style: TextStyle(
-                fontFamily: 'Manrope',
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.5,
-                color: AppColors.primary,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
+        Row(children: [
+          const Icon(Icons.payments_outlined,
+              color: AppColors.teal, size: 14),
+          const SizedBox(width: 5),
+          Text('VALOR DO TURNO',
+              style: tsJakarta(9, FontWeight.w700,
+                  color: AppColors.teal)),
+        ]),
+        const SizedBox(height: 10),
         TextFormField(
           controller: _valorCtrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          style: const TextStyle(
-            fontFamily: 'Manrope',
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            color: AppColors.onSurface,
-          ),
+          keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
+          style: tsBricolage(24, FontWeight.w800, color: AppColors.ink),
           decoration: InputDecoration(
             prefixText: 'R\$ ',
-            prefixStyle: const TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: AppColors.onSurfaceVariant,
-            ),
+            prefixStyle: tsJakarta(16, FontWeight.w600,
+                color: AppColors.muted),
             hintText: '0,00',
-            hintStyle: const TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: AppColors.outlineVariant,
-            ),
+            hintStyle: tsBricolage(24, FontWeight.w800,
+                color: AppColors.line),
             filled: true,
-            fillColor: AppColors.surfaceContainerLowest,
+            fillColor: AppColors.surface2,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide.none,
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.primary, width: 2),
+              borderSide:
+                  const BorderSide(color: AppColors.teal, width: 2),
             ),
             contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 14),
+                horizontal: 14, vertical: 12),
           ),
           validator: (v) {
-            if (v == null || v.isEmpty) return 'Informe o valor do turno';
-            final valor = double.tryParse(v.replaceAll(',', '.'));
-            if (valor == null || valor <= 0) return 'O valor deve ser maior que zero';
+            if (v == null || v.isEmpty) return 'Informe o valor';
+            final valor =
+                double.tryParse(v.replaceAll(',', '.'));
+            if (valor == null || valor <= 0)
+              return 'Valor deve ser maior que zero';
             return null;
           },
         ),
-        const SizedBox(height: 10),
-        const Text(
-          'O valor será creditado na carteira do entregador logo após a conclusão do turno.',
-          style: TextStyle(
-            fontFamily: 'Manrope',
-            fontSize: 11,
-            color: AppColors.onSurfaceVariant,
-            height: 1.5,
-          ),
+        const SizedBox(height: 8),
+        Text(
+          'Creditado na carteira do entregador após a conclusão.',
+          style: tsJakarta(10.5, FontWeight.w400,
+              color: AppColors.muted),
         ),
       ],
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'data/repositories/historico_repository_impl.dart';
 import 'data/repositories/pedido_repository_impl.dart';
@@ -71,6 +72,13 @@ class MotoShiftApp extends StatelessWidget {
         title: 'Moto Shift',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
+        locale: const Locale('pt', 'BR'),
+        supportedLocales: const [Locale('pt', 'BR'), Locale('en')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
         initialRoute: AppRoutes.splash,
         routes: {
           // Core
