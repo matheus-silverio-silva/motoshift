@@ -131,12 +131,12 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
     final isLojista = tipo == TipoUsuario.lojista;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 40),
       children: [
         _buildResumo(isLojista),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         _buildFiltros(),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         if (_filtrados.isEmpty)
           Container(
             padding: const EdgeInsets.all(28),
@@ -173,14 +173,14 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
             value: '$concluidos',
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         Expanded(
           child: _statCell(
             label: 'CANCELADOS',
             value: '$cancelados',
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         Expanded(
           child: _statCell(
             label: isLojista ? 'GASTO TOTAL' : 'GANHO TOTAL',
@@ -198,7 +198,7 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
     bool highlight = false,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
       decoration: BoxDecoration(
         color: highlight ? AppColors.tealSoft : AppColors.surface,
         borderRadius: BorderRadius.circular(12),
@@ -210,16 +210,22 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: tsJakarta(8.5, FontWeight.w700,
                   color: highlight
                       ? AppColors.tealDeep
                       : AppColors.muted)),
-          const SizedBox(height: 3),
-          Text(value,
-              style: tsBricolage(15, FontWeight.w800,
-                  color: highlight
-                      ? AppColors.tealDeep
-                      : AppColors.ink)),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(value,
+                style: tsBricolage(16, FontWeight.w800,
+                    color: highlight
+                        ? AppColors.tealDeep
+                        : AppColors.ink)),
+          ),
         ],
       ),
     );
@@ -236,16 +242,20 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
       children: opcoes.map((op) {
         final sel = _filtro == op.$1;
         return Padding(
-          padding: const EdgeInsets.only(right: 8),
+          padding: const EdgeInsets.only(right: 10),
           child: GestureDetector(
             onTap: () => setState(() => _filtro = op.$1),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 8),
+                  horizontal: 16, vertical: 11),
               decoration: BoxDecoration(
                 color: sel ? AppColors.teal : AppColors.surface2,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(11),
+                border: Border.all(
+                  color: sel ? AppColors.teal : AppColors.line,
+                  width: 1.5,
+                ),
               ),
               child: Text(
                 op.$2,

@@ -29,44 +29,55 @@ class MenuRow extends StatelessWidget {
     final labelColor =
         danger ? const Color(0xFFC0392B) : AppColors.text;
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 11),
-        child: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: iconBg,
-                borderRadius: BorderRadius.circular(10),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, size: 18, color: iconColor),
               ),
-              child: Icon(icon, size: 15, color: iconColor),
-            ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(label,
-                      style: tsJakarta(12, FontWeight.w700,
-                          color: labelColor)),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 1),
-                    Text(subtitle!,
-                        style: tsJakarta(9, FontWeight.w400,
-                            color: AppColors.muted)),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      style: tsJakarta(13, FontWeight.w700,
+                          color: labelColor),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: tsJakarta(10.5, FontWeight.w400,
+                            color: AppColors.muted),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            if (!danger)
-              const Icon(Icons.chevron_right_rounded,
-                  size: 16, color: Color(0xFFBCCCCC)),
-          ],
+              if (!danger)
+                const Icon(Icons.chevron_right_rounded,
+                    size: 18, color: Color(0xFFBCCCCC)),
+            ],
+          ),
         ),
       ),
     );
@@ -83,10 +94,10 @@ class MenuGroup extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.line, width: 1.5),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 13),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Column(
         children: [
           for (int i = 0; i < children.length; i++) ...[

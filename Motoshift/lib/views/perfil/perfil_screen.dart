@@ -12,24 +12,40 @@ class PerfilScreen extends StatelessWidget {
   const PerfilScreen({super.key});
 
   Widget _buildStatsCard(Usuario? usuario) {
-    // TODO: integrar turnosConcluidos, pontualidade e mesesNaPlataforma com backend
+    // TODO: integrar turnosConcluidos e pontualidade com backend
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.line, width: 1.5),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 14,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+      padding:
+          const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
       child: Row(
-        children: [
+        children: const [
           _StatCell(value: '137', label: 'TURNOS'),
           _StatDivider(),
           _StatCell(value: '96%', label: 'PONTUALIDADE'),
           _StatDivider(),
-          _StatCell(value: '8 mês', label: 'NA PLATAFORMA'),
+          _StatCellDynamic(),
         ],
       ),
     );
+  }
+
+  static int _calcularMesesPlataforma(DateTime? criadoEm) {
+    if (criadoEm == null) return 0;
+    final agora = DateTime.now();
+    final meses = (agora.year - criadoEm.year) * 12 +
+        (agora.month - criadoEm.month);
+    return meses < 0 ? 0 : meses;
   }
 
   void _onNav(BuildContext context, int i, bool isLojista) {
@@ -86,12 +102,13 @@ class PerfilScreen extends StatelessWidget {
         onTap: (i) => _onNav(context, i, isLojista),
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 40),
         children: [
           Transform.translate(
-            offset: const Offset(0, -24),
+            offset: const Offset(0, -28),
             child: _buildStatsCard(usuario),
           ),
+          const SizedBox(height: 4),
           // CONTA
           MenuGroup(children: [
             MenuRow(
@@ -115,7 +132,7 @@ class PerfilScreen extends StatelessWidget {
                   context, AppRoutes.notificacoes),
             ),
           ]),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           // ATIVIDADE
           MenuGroup(children: [
             MenuRow(
@@ -131,7 +148,7 @@ class PerfilScreen extends StatelessWidget {
                   context, AppRoutes.historicoTurnos),
             ),
           ]),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           // SAIR
           MenuGroup(children: [
             MenuRow(
@@ -257,8 +274,10 @@ class _PerfilHeader extends StatelessWidget {
                       nome,
                       style: tsBricolage(17, FontWeight.w800,
                           color: Colors.white),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     Row(
                       children: [
                         Container(
@@ -308,14 +327,38 @@ class _StatCell extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(value,
-              style: tsBricolage(16, FontWeight.w800, color: AppColors.ink)),
-          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(value,
+                style: tsBricolage(17, FontWeight.w800,
+                    color: AppColors.ink)),
+          ),
+          const SizedBox(height: 3),
           Text(label,
-              style: tsJakarta(8.5, FontWeight.w700, color: AppColors.muted)),
+              style: tsJakarta(8.5, FontWeight.w700,
+                  color: AppColors.muted),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
         ],
       ),
     );
+  }
+}
+
+/// Stat cell que renderiza "X meses" baseado em criadoEm do AuthService.
+class _StatCellDynamic extends StatelessWidget {
+  const _StatCellDynamic();
+
+  @override
+  Widget build(BuildContext context) {
+    final usuario = context.watch<AuthService>().usuario;
+    final meses = PerfilScreen._calcularMesesPlataforma(usuario?.criadoEm);
+    final valor = meses == 0
+        ? '< 1 mês'
+        : meses == 1
+            ? '1 mês'
+            : '$meses meses';
+    return _StatCell(value: valor, label: 'NA PLATAFORMA');
   }
 }
 
@@ -326,7 +369,7 @@ class _StatDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 1,
-      height: 32,
+      height: 34,
       color: AppColors.line,
     );
   }

@@ -105,15 +105,15 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
         onTap: _onNav,
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 32),
         children: [
           _buildScoreRow(auth),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           _buildStats(),
-          const SizedBox(height: 10),
+          const SizedBox(height: 16),
           SectionTitle(title: 'Ganhos dos últimos dias'),
           Container(
-            padding: const EdgeInsets.fromLTRB(12, 14, 12, 22),
+            padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(14),

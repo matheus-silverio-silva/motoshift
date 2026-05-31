@@ -127,7 +127,7 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
       header: AppHeader.back(
           title: isLojista ? 'Estabelecimento' : 'CNH e Veículo'),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 40),
         child: Form(
           key: _formKey,
           child: isLojista
@@ -219,32 +219,37 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
               Text('CATEGORIA',
                   style: tsJakarta(9, FontWeight.w700,
                       color: AppColors.muted)),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Row(
                 children: ['A', 'AB', 'B'].map((cat) {
                   final sel = _cnhCategoria == cat;
                   return Padding(
-                    padding: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.only(right: 10),
                     child: GestureDetector(
                       onTap: () => setState(() => _cnhCategoria = cat),
-                      child: Container(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        constraints:
+                            const BoxConstraints(minWidth: 56),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 18, vertical: 9),
+                            horizontal: 18, vertical: 13),
                         decoration: BoxDecoration(
                           color:
                               sel ? AppColors.teal : AppColors.surface2,
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(11),
                           border: Border.all(
                               color: sel
                                   ? AppColors.teal
                                   : AppColors.line,
                               width: 1.5),
                         ),
-                        child: Text(cat,
-                            style: tsJakarta(13, FontWeight.w700,
-                                color: sel
-                                    ? Colors.white
-                                    : AppColors.ink)),
+                        child: Center(
+                          child: Text(cat,
+                              style: tsJakarta(13, FontWeight.w700,
+                                  color: sel
+                                      ? Colors.white
+                                      : AppColors.ink)),
+                        ),
                       ),
                     ),
                   );
@@ -292,13 +297,13 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
       int? maxLength,
       String? Function(String?)? validator}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label.toUpperCase(),
               style: tsJakarta(9, FontWeight.w700, color: AppColors.muted)),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           TextFormField(
             controller: ctrl,
             keyboardType: keyboard,
@@ -315,14 +320,14 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
               counterText: '',
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 12),
+                  horizontal: 14, vertical: 14),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(11),
                 borderSide:
                     const BorderSide(color: AppColors.line, width: 1.5),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(11),
                 borderSide:
                     const BorderSide(color: AppColors.teal, width: 1.5),
               ),
@@ -336,21 +341,22 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
   Widget _dateField(
       String label, DateTime? value, VoidCallback onTap) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label.toUpperCase(),
               style: tsJakarta(9, FontWeight.w700, color: AppColors.muted)),
-          const SizedBox(height: 6),
-          GestureDetector(
+          const SizedBox(height: 8),
+          InkWell(
             onTap: onTap,
+            borderRadius: BorderRadius.circular(11),
             child: Container(
               padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 12),
+                  horizontal: 14, vertical: 14),
               decoration: BoxDecoration(
                 color: AppColors.surface2,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(11),
                 border: Border.all(color: AppColors.line, width: 1.5),
               ),
               child: Row(
@@ -367,7 +373,7 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
                     ),
                   ),
                   const Icon(Icons.calendar_today_outlined,
-                      size: 14, color: AppColors.teal),
+                      size: 15, color: AppColors.teal),
                 ],
               ),
             ),

@@ -137,16 +137,16 @@ class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
     }
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 40),
       children: [
         _buildResumo(media, total),
-        const SizedBox(height: 14),
+        const SizedBox(height: 16),
         _buildDistribuicao(dist, total),
-        const SizedBox(height: 18),
+        const SizedBox(height: 22),
         Text('Comentários recentes',
             style:
                 tsBricolage(14, FontWeight.w800, color: AppColors.ink)),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         ...avaliacoes.map((a) => _buildAvaliacaoCard(
             Map<String, dynamic>.from(a as Map))),
       ],
@@ -155,45 +155,65 @@ class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
 
   Widget _buildResumo(double media, int total) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: AppColors.primaryGradient,
         borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 16,
+            offset: Offset(0, 6),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(media.toStringAsFixed(1),
-                  style: tsBricolage(34, FontWeight.w800,
-                      color: Colors.white)),
-              Row(
-                children: List.generate(5, (i) {
-                  final filled = (i + 1) <= media.round();
-                  return Icon(
-                    filled
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
-                    size: 14,
-                    color: Colors.white,
-                  );
-                }),
-              ),
-            ],
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(media.toStringAsFixed(1),
+                    style: tsBricolage(36, FontWeight.w800,
+                        color: Colors.white)),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(5, (i) {
+                    final filled = (i + 1) <= media.round();
+                    return Icon(
+                      filled
+                          ? Icons.star_rounded
+                          : Icons.star_outline_rounded,
+                      size: 15,
+                      color: Colors.white,
+                    );
+                  }),
+                ),
+              ],
+            ),
           ),
-          const Spacer(),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('Total de avaliações',
-                  style: tsJakarta(10, FontWeight.w600,
-                      color: Colors.white70)),
-              const SizedBox(height: 2),
-              Text('$total',
-                  style: tsBricolage(22, FontWeight.w800,
-                      color: Colors.white)),
-            ],
+          const SizedBox(width: 16),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Total de avaliações',
+                    style: tsJakarta(10, FontWeight.w600,
+                        color: Colors.white70),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 4),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text('$total',
+                      style: tsBricolage(24, FontWeight.w800,
+                          color: Colors.white)),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -310,17 +330,23 @@ class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(nome,
                         style: tsJakarta(12.5, FontWeight.w700,
-                            color: AppColors.ink)),
-                    if (dataFmt.isNotEmpty)
+                            color: AppColors.ink),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    if (dataFmt.isNotEmpty) ...[
+                      const SizedBox(height: 2),
                       Text(dataFmt,
                           style: tsJakarta(10, FontWeight.w400,
                               color: AppColors.muted)),
+                    ],
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               Row(
                 children: List.generate(5, (i) {
                   final filled = i < nota;

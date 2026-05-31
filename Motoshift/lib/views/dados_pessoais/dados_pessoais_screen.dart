@@ -108,7 +108,7 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
     return AppScaffold(
       header: AppHeader.back(title: 'Dados pessoais'),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 40),
         child: Form(
           key: _formKey,
           child: Column(
@@ -170,13 +170,13 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
       int? maxLength,
       String? Function(String?)? validator}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label.toUpperCase(),
               style: tsJakarta(9, FontWeight.w700, color: AppColors.muted)),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           TextFormField(
             controller: ctrl,
             keyboardType: keyboard,
@@ -190,14 +190,14 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
               counterText: '',
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 12),
+                  horizontal: 14, vertical: 14),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(11),
                 borderSide:
                     const BorderSide(color: AppColors.line, width: 1.5),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(11),
                 borderSide:
                     const BorderSide(color: AppColors.teal, width: 1.5),
               ),
@@ -210,19 +210,19 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
 
   Widget _readonlyField(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label.toUpperCase(),
               style: tsJakarta(9, FontWeight.w700, color: AppColors.muted)),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 12),
+                horizontal: 14, vertical: 14),
             decoration: BoxDecoration(
               color: AppColors.surface3,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(11),
               border: Border.all(color: AppColors.line, width: 1.5),
             ),
             child: Row(
@@ -230,8 +230,11 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
                 Expanded(
                   child: Text(value,
                       style: tsJakarta(13, FontWeight.w500,
-                          color: AppColors.muted)),
+                          color: AppColors.muted),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
                 ),
+                const SizedBox(width: 8),
                 const Icon(Icons.lock_outline_rounded,
                     size: 13, color: AppColors.muted),
               ],
@@ -245,21 +248,22 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
   Widget _dateField(
       String label, DateTime? value, VoidCallback onTap) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label.toUpperCase(),
               style: tsJakarta(9, FontWeight.w700, color: AppColors.muted)),
-          const SizedBox(height: 6),
-          GestureDetector(
+          const SizedBox(height: 8),
+          InkWell(
             onTap: onTap,
+            borderRadius: BorderRadius.circular(11),
             child: Container(
               padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 12),
+                  horizontal: 14, vertical: 14),
               decoration: BoxDecoration(
                 color: AppColors.surface2,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(11),
                 border: Border.all(color: AppColors.line, width: 1.5),
               ),
               child: Row(
@@ -276,7 +280,7 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
                     ),
                   ),
                   const Icon(Icons.calendar_today_outlined,
-                      size: 14, color: AppColors.teal),
+                      size: 15, color: AppColors.teal),
                 ],
               ),
             ),

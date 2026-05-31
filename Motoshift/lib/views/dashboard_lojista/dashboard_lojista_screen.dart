@@ -88,10 +88,10 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
         onTap: _onNav,
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 32),
         children: [
           _buildStats(),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           _buildPublicarBtn(),
           SectionTitle(
             title: 'Próximos turnos',
@@ -129,21 +129,21 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
             value: '$turnosAtivos',
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         Expanded(
           child: StatCard(
             label: 'Gasto mês',
             value: 'R\$ ${totalGasto.toStringAsFixed(0)}',
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         Expanded(
           child: StatCard(
             label: 'Avaliação',
             value: avaliacaoMedia > 0
                 ? avaliacaoMedia.toStringAsFixed(1)
                 : 'N/D',
-            sub: avaliacaoMedia > 0 ? '★ média geral' : null,
+            sub: avaliacaoMedia > 0 ? '★ média' : null,
             subColor: AppColors.amber,
           ),
         ),
