@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' show DateFormat;
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../../models/turno.dart';
 import '../../services/api_service.dart';
@@ -8,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_scaffold.dart';
+import '../../widgets/mapa_raio.dart';
 
 class AgendarTurnoScreen extends StatefulWidget {
   const AgendarTurnoScreen({super.key});
@@ -18,6 +20,8 @@ class AgendarTurnoScreen extends StatefulWidget {
 
 class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
   final _formKey = GlobalKey<FormState>();
+
+  static const _centro = LatLng(-23.4273, -51.9375); // Maringá-PR
 
   DateTime? _data;
   TimeOfDay? _horaInicio;
@@ -216,34 +220,9 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              // Mapa decorativo
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  height: 100,
-                  color: AppColors.surface3,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      const Center(
-                        child: Icon(Icons.map_outlined,
-                            size: 48, color: AppColors.line),
-                      ),
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                            colors: [
-                              AppColors.surface2,
-                              Colors.transparent,
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              MapaRaio(
+                centro: _centro,
+                raioKm: _raio,
               ),
               const SizedBox(height: 24),
               PrimaryButton(
