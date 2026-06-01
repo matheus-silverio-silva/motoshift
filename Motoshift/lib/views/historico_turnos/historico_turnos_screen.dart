@@ -72,6 +72,14 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
       t.status == StatusTurno.finalizado &&
       t.pagamentoStatus == PagamentoStatus.pendente;
 
+  /// Lojista precisa confirmar que enviou o pagamento.
+  bool _lojistaPrecisaConfirmar(Turno t) =>
+      _aguardandoPagamento(t) && !t.lojistaJaConfirmou;
+
+  /// Motoboy precisa confirmar que recebeu o pagamento.
+  bool _motoboyPrecisaConfirmar(Turno t) =>
+      _aguardandoPagamento(t) && !t.motoboyJaConfirmou;
+
   List<Turno> get _filtrados {
     switch (_filtro) {
       case 'avaliar':
@@ -137,18 +145,32 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
     _carregar();
   }
 
-  Future<void> _confirmarPagamento(Turno t) async {
+  Future<void> _confirmarPagamento(Turno t, {required bool isLojista}) async {
     if (t.id == null) return;
+    final auth = context.read<AuthService>();
+    final id = auth.usuario?.id;
+    if (id == null) return;
+
+    final titulo = isLojista
+        ? 'Confirmar pagamento enviado'
+        : 'Confirmar recebimento';
+    final mensagem = isLojista
+        ? 'Você está declarando que enviou o pagamento ao motoboy.\n\n'
+            'O motoboy precisará confirmar o recebimento para que o valor '
+            'seja efetivamente creditado na carteira dele.'
+        : 'Você está declarando que recebeu o pagamento do lojista.\n\n'
+            'Quando o lojista também confirmar, o valor será creditado '
+            'na sua carteira.';
+
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Confirmar pagamento',
+        title: Text(titulo,
             style: tsBricolage(17, FontWeight.w800,
                 color: AppColors.ink)),
-        content: Text(
-          'Marcar este turno como pago? O valor será creditado na carteira do motoboy.',
-          style: tsJakarta(13, FontWeight.w400, color: AppColors.muted),
-        ),
+        content: Text(mensagem,
+            style: tsJakarta(13, FontWeight.w400,
+                color: AppColors.muted, height: 1.4)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -168,12 +190,23 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
     if (confirmar != true || !mounted) return;
 
     try {
-      await context.read<ApiService>().confirmarPagamento(t.id!);
+      final api = context.read<ApiService>();
+      final atualizado = isLojista
+          ? await api.confirmarPagamentoLojista(t.id!, id)
+          : await api.confirmarRecebimentoMotoboy(t.id!, id);
       if (!mounted) return;
+      final efetivado =
+          atualizado.pagamentoStatus == PagamentoStatus.pago;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Pagamento confirmado!'),
-            backgroundColor: AppColors.good),
+        SnackBar(
+          content: Text(efetivado
+              ? 'Pagamento efetivado — ambas as partes confirmaram!'
+              : isLojista
+                  ? 'Confirmação registrada. Aguardando o motoboy.'
+                  : 'Confirmação registrada. Aguardando o lojista.'),
+          backgroundColor:
+              efetivado ? AppColors.good : AppColors.teal,
+        ),
       );
       _carregar();
     } catch (e) {
@@ -441,6 +474,7 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
     final precisaAvaliar = _precisaAvaliar(t);
     final aguardaPagto = _aguardandoPagamento(t);
 
+    // Determina label/cor da pill conforme estado de confirmação
     PillVariant pill;
     String pillLabel;
     if (t.status == StatusTurno.cancelado) {
@@ -448,7 +482,17 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
       pillLabel = 'Cancelado';
     } else if (aguardaPagto) {
       pill = PillVariant.amber;
-      pillLabel = isLojista ? 'A pagar' : 'A receber';
+      if (isLojista) {
+        pillLabel = t.lojistaJaConfirmou
+            ? 'Aguardando motoboy'
+            : 'A confirmar';
+      } else {
+        pillLabel = t.motoboyJaConfirmou
+            ? 'Aguardando lojista'
+            : (t.lojistaJaConfirmou
+                ? 'Confirme recebimento'
+                : 'A receber');
+      }
     } else if (t.pagamentoStatus == PagamentoStatus.pago) {
       pill = PillVariant.good;
       pillLabel = 'Pago';
@@ -456,6 +500,11 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
       pill = PillVariant.ghost;
       pillLabel = 'Finalizado';
     }
+
+    final podeConfirmarPgto = aguardaPagto &&
+        (isLojista
+            ? _lojistaPrecisaConfirmar(t)
+            : _motoboyPrecisaConfirmar(t));
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -478,14 +527,55 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
               arguments: t,
             ),
           ),
-          if (precisaAvaliar || (aguardaPagto && isLojista))
-            _buildAcoes(t, precisaAvaliar, aguardaPagto && isLojista),
+          if (aguardaPagto && !podeConfirmarPgto)
+            _buildEsperandoOutraParte(t, isLojista),
+          if (precisaAvaliar || podeConfirmarPgto)
+            _buildAcoes(t, precisaAvaliar, podeConfirmarPgto, isLojista),
         ],
       ),
     );
   }
 
-  Widget _buildAcoes(Turno t, bool podeAvaliar, bool podePagar) {
+  Widget _buildEsperandoOutraParte(Turno t, bool isLojista) {
+    final texto = isLojista
+        ? 'Você confirmou. Aguardando o motoboy confirmar o recebimento.'
+        : 'Você confirmou. Aguardando o lojista confirmar o pagamento.';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.tealSoft,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: AppColors.teal.withOpacity(0.3), width: 1.5),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.hourglass_top_rounded,
+                size: 14, color: AppColors.tealDeep),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(texto,
+                  style: tsJakarta(11.5, FontWeight.w600,
+                      color: AppColors.tealDeep, height: 1.4)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAcoes(
+      Turno t, bool podeAvaliar, bool podePagar, bool isLojista) {
+    final labelPgto = isLojista
+        ? 'Confirmar pagamento'
+        : 'Confirmar recebimento';
+    final iconPgto = isLojista
+        ? Icons.payments_rounded
+        : Icons.check_circle_rounded;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
       child: Row(
@@ -495,7 +585,7 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
               child: GestureDetector(
                 onTap: () => _abrirAvaliacao(t),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.symmetric(vertical: 11),
                   decoration: BoxDecoration(
                     color: AppColors.amberSoft,
                     borderRadius: BorderRadius.circular(10),
@@ -522,9 +612,10 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
           if (podePagar)
             Expanded(
               child: GestureDetector(
-                onTap: () => _confirmarPagamento(t),
+                onTap: () =>
+                    _confirmarPagamento(t, isLojista: isLojista),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.symmetric(vertical: 11),
                   decoration: BoxDecoration(
                     gradient: AppColors.primaryGradient,
                     borderRadius: BorderRadius.circular(10),
@@ -532,12 +623,16 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.payments_rounded,
+                      Icon(iconPgto,
                           size: 14, color: Colors.white),
                       const SizedBox(width: 6),
-                      Text('Confirmar pagamento',
-                          style: tsJakarta(12, FontWeight.w700,
-                              color: Colors.white)),
+                      Flexible(
+                        child: Text(labelPgto,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tsJakarta(12, FontWeight.w700,
+                                color: Colors.white)),
+                      ),
                     ],
                   ),
                 ),

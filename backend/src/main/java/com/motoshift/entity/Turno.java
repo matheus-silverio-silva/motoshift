@@ -39,7 +39,12 @@ public class Turno {
     private String status = "aberto";
 
     // null (não finalizado) | pendente | pago
+    // "pago" só quando AMBOS confirmaram (lojista pagou + motoboy recebeu)
     private String pagamentoStatus;
+
+    // Dupla confirmação de pagamento
+    private LocalDateTime lojistaConfirmouEm;
+    private LocalDateTime motoboyConfirmouEm;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime criadoEm;
@@ -92,6 +97,12 @@ public class Turno {
 
     public String getPagamentoStatus() { return pagamentoStatus; }
     public void setPagamentoStatus(String pagamentoStatus) { this.pagamentoStatus = pagamentoStatus; }
+
+    public LocalDateTime getLojistaConfirmouEm() { return lojistaConfirmouEm; }
+    public void setLojistaConfirmouEm(LocalDateTime t) { this.lojistaConfirmouEm = t; }
+
+    public LocalDateTime getMotoboyConfirmouEm() { return motoboyConfirmouEm; }
+    public void setMotoboyConfirmouEm(LocalDateTime t) { this.motoboyConfirmouEm = t; }
 
     public LocalDateTime getCriadoEm() { return criadoEm; }
     public LocalDateTime getAtualizadoEm() { return atualizadoEm; }

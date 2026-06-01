@@ -113,14 +113,33 @@ public class TurnoController {
         return service.cancelar(id);
     }
 
-    @Operation(summary = "Confirmar pagamento", description = "Lojista marca turno finalizado como pago, credita carteira do motoboy.")
+    @Operation(summary = "Lojista confirma pagamento",
+            description = "Lojista declara que enviou o pagamento. Efetiva quando motoboy também confirmar.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Pagamento confirmado"),
+        @ApiResponse(responseCode = "200", description = "Confirmação registrada"),
+        @ApiResponse(responseCode = "403", description = "Usuário não é o lojista do turno"),
         @ApiResponse(responseCode = "404", description = "Turno não encontrado"),
-        @ApiResponse(responseCode = "409", description = "Turno não finalizado ou já pago")
+        @ApiResponse(responseCode = "409", description = "Turno não finalizado, já pago ou já confirmado")
     })
-    @PutMapping("/{id}/confirmar-pagamento")
-    public TurnoResponse confirmarPagamento(@PathVariable Long id) {
-        return service.confirmarPagamento(id);
+    @PutMapping("/{id}/confirmar-pagamento-lojista")
+    public TurnoResponse confirmarPagamentoLojista(
+            @PathVariable Long id,
+            @RequestBody Map<String, Long> body) {
+        return service.confirmarPagamentoLojista(id, body.get("lojistaId"));
+    }
+
+    @Operation(summary = "Motoboy confirma recebimento",
+            description = "Motoboy declara que recebeu. Efetiva quando lojista também confirmar.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Confirmação registrada"),
+        @ApiResponse(responseCode = "403", description = "Usuário não é o motoboy do turno"),
+        @ApiResponse(responseCode = "404", description = "Turno não encontrado"),
+        @ApiResponse(responseCode = "409", description = "Turno não finalizado, já pago ou já confirmado")
+    })
+    @PutMapping("/{id}/confirmar-recebimento-motoboy")
+    public TurnoResponse confirmarRecebimentoMotoboy(
+            @PathVariable Long id,
+            @RequestBody Map<String, Long> body) {
+        return service.confirmarRecebimentoMotoboy(id, body.get("motoboyId"));
     }
 }

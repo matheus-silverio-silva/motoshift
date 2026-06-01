@@ -188,21 +188,28 @@ public class DataInitializer implements CommandLineRunner {
                 "Turno Noite — Hamburgueria da Cláudia",
                 "Água Verde, Curitiba", agora.minusDays(1), 4, 130.00, 8.0, "pago");
 
-        // Finalizados PENDENTES de pagamento (lojista em "A pagar", motoboy em "A receber")
-        Turno t15 = criarTurnoHistorico(claudia.getId(), ricardo.getId(),
+        // Finalizados PENDENTES de pagamento — combinações de quem já confirmou
+        //   t15: ninguém confirmou (ambos veem "Confirmar")
+        //   t16: só lojista confirmou (motoboy precisa confirmar recebimento)
+        //   t17: só motoboy confirmou (lojista precisa confirmar pagamento)
+        //   t18: ninguém confirmou + sem avaliações (combo)
+        Turno t15 = criarTurnoHistoricoConfirm(claudia.getId(), ricardo.getId(),
                 "Turno Concluído — Hamburgueria da Cláudia",
-                "Água Verde, Curitiba", agora.minusDays(5), 4, 125.00, 8.0, "pendente");
-        Turno t16 = criarTurnoHistorico(fernando.getId(), thiago.getId(),
+                "Água Verde, Curitiba", agora.minusDays(5), 4, 125.00, 8.0,
+                false, false);
+        Turno t16 = criarTurnoHistoricoConfirm(fernando.getId(), thiago.getId(),
                 "Turno Tarde — Pizzaria do Fernando",
-                "Batel, Curitiba", agora.minusDays(4), 4, 95.00, 5.0, "pendente");
-        Turno t17 = criarTurnoHistorico(ana.getId(), lucas.getId(),
+                "Batel, Curitiba", agora.minusDays(4), 4, 95.00, 5.0,
+                true, false);   // lojista já marcou que pagou
+        Turno t17 = criarTurnoHistoricoConfirm(ana.getId(), lucas.getId(),
                 "Turno Concluído — Farmácia Ana",
-                "Centro Cívico, Curitiba", agora.minusDays(6), 4, 110.00, 6.0, "pendente");
+                "Centro Cívico, Curitiba", agora.minusDays(6), 4, 110.00, 6.0,
+                false, true);   // motoboy já marcou que recebeu
 
-        // Pendente + sem avaliações (motoboy precisa avaliar E aguardar receber)
-        Turno t18 = criarTurnoHistorico(claudia.getId(), thiago.getId(),
+        Turno t18 = criarTurnoHistoricoConfirm(claudia.getId(), thiago.getId(),
                 "Turno Madrugada — Hamburgueria da Cláudia",
-                "Água Verde, Curitiba", agora.minusDays(8), 4, 140.00, 8.0, "pendente");
+                "Água Verde, Curitiba", agora.minusDays(8), 4, 140.00, 8.0,
+                false, false);
 
         // Turnos cancelados
         Turno t19 = criarTurnoCancelado(fernando.getId(), ricardo.getId(),
@@ -352,6 +359,30 @@ public class DataInitializer implements CommandLineRunner {
                 inicio, inicio.plusHours(duracaoHoras),
                 valor, raio, "finalizado");
         t.setPagamentoStatus(pagamentoStatus);
+        // Se pago, marca ambas confirmações (já efetivado historicamente)
+        if ("pago".equals(pagamentoStatus)) {
+            LocalDateTime fim = inicio.plusHours(duracaoHoras);
+            t.setLojistaConfirmouEm(fim.plusHours(1));
+            t.setMotoboyConfirmouEm(fim.plusHours(2));
+        }
+        return turnoRepo.save(t);
+    }
+
+    // Variante que permite controlar quem já confirmou (cenários de teste)
+    private Turno criarTurnoHistoricoConfirm(Long lojistId, Long motoboyId,
+                                              String titulo, String regiao,
+                                              LocalDateTime inicio, int duracaoHoras,
+                                              double valor, double raio,
+                                              boolean lojistaConfirmou,
+                                              boolean motoboyConfirmou) {
+        Turno t = criarTurno(lojistId, motoboyId, titulo,
+                "Turno concluído", regiao,
+                inicio, inicio.plusHours(duracaoHoras),
+                valor, raio, "finalizado");
+        t.setPagamentoStatus("pendente");
+        LocalDateTime fim = inicio.plusHours(duracaoHoras);
+        if (lojistaConfirmou) t.setLojistaConfirmouEm(fim.plusHours(1));
+        if (motoboyConfirmou) t.setMotoboyConfirmouEm(fim.plusHours(2));
         return turnoRepo.save(t);
     }
 

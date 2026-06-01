@@ -23,6 +23,8 @@ class Turno {
   final double raioEntregaKm;
   final StatusTurno status;
   final PagamentoStatus pagamentoStatus;
+  final DateTime? lojistaConfirmouEm;
+  final DateTime? motoboyConfirmouEm;
   final double? distanciaPercorridaKm;
   final int? totalEntregas;
   final DateTime? criadoEm;
@@ -41,11 +43,16 @@ class Turno {
     required this.raioEntregaKm,
     this.status = StatusTurno.aberto,
     this.pagamentoStatus = PagamentoStatus.naoAplicavel,
+    this.lojistaConfirmouEm,
+    this.motoboyConfirmouEm,
     this.distanciaPercorridaKm,
     this.totalEntregas,
     this.criadoEm,
     this.atualizadoEm,
   });
+
+  bool get lojistaJaConfirmou => lojistaConfirmouEm != null;
+  bool get motoboyJaConfirmou => motoboyConfirmouEm != null;
 
   factory Turno.fromJson(Map<String, dynamic> json) {
     return Turno(
@@ -61,6 +68,12 @@ class Turno {
       raioEntregaKm: (json['raioEntregaKm'] as num).toDouble(),
       status: _parseStatus(json['status'] as String),
       pagamentoStatus: _parsePagamento(json['pagamentoStatus'] as String?),
+      lojistaConfirmouEm: json['lojistaConfirmouEm'] != null
+          ? DateTime.parse(json['lojistaConfirmouEm'] as String)
+          : null,
+      motoboyConfirmouEm: json['motoboyConfirmouEm'] != null
+          ? DateTime.parse(json['motoboyConfirmouEm'] as String)
+          : null,
       distanciaPercorridaKm: json['distanciaPercorridaKm'] != null
           ? (json['distanciaPercorridaKm'] as num).toDouble()
           : null,

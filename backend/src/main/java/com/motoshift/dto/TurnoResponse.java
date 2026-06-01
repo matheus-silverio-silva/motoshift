@@ -18,6 +18,8 @@ public class TurnoResponse {
     private Double raioEntregaKm;
     private String status;
     private String pagamentoStatus;
+    private LocalDateTime lojistaConfirmouEm;
+    private LocalDateTime motoboyConfirmouEm;
     private LocalDateTime criadoEm;
     private LocalDateTime atualizadoEm;
 
@@ -35,6 +37,8 @@ public class TurnoResponse {
         r.raioEntregaKm = t.getRaioEntregaKm();
         r.status = t.getStatus();
         r.pagamentoStatus = t.getPagamentoStatus();
+        r.lojistaConfirmouEm = t.getLojistaConfirmouEm();
+        r.motoboyConfirmouEm = t.getMotoboyConfirmouEm();
         r.criadoEm = t.getCriadoEm();
         r.atualizadoEm = t.getAtualizadoEm();
         return r;
@@ -52,6 +56,8 @@ public class TurnoResponse {
     public Double getRaioEntregaKm() { return raioEntregaKm; }
     public String getStatus() { return status; }
     public String getPagamentoStatus() { return pagamentoStatus; }
+    public LocalDateTime getLojistaConfirmouEm() { return lojistaConfirmouEm; }
+    public LocalDateTime getMotoboyConfirmouEm() { return motoboyConfirmouEm; }
     public LocalDateTime getCriadoEm() { return criadoEm; }
     public LocalDateTime getAtualizadoEm() { return atualizadoEm; }
 }

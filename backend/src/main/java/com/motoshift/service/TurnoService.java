@@ -119,12 +119,48 @@ public class TurnoService {
         return TurnoResponse.from(turno);
     }
 
-    // Confirma pagamento do turno: credita carteira do motoboy e marca tx como processada
+    // Lojista declara que enviou o pagamento ao motoboy.
+    // Pagamento só é efetivado quando AMBAS as partes confirmarem (anti-fraude).
     @Transactional
-    public TurnoResponse confirmarPagamento(Long turnoId) {
+    public TurnoResponse confirmarPagamentoLojista(Long turnoId, Long lojistaId) {
+        Turno turno = carregarParaConfirmacao(turnoId);
+
+        if (!turno.getLojistId().equals(lojistaId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Apenas o lojista do turno pode confirmar o pagamento.");
+        }
+        if (turno.getLojistaConfirmouEm() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Você já confirmou o pagamento. Aguardando confirmação do motoboy.");
+        }
+
+        turno.setLojistaConfirmouEm(LocalDateTime.now());
+        tentarEfetivarPagamento(turno);
+        return TurnoResponse.from(turnoRepo.save(turno));
+    }
+
+    // Motoboy declara que recebeu o pagamento.
+    @Transactional
+    public TurnoResponse confirmarRecebimentoMotoboy(Long turnoId, Long motoboyId) {
+        Turno turno = carregarParaConfirmacao(turnoId);
+
+        if (turno.getMotoboyId() == null || !turno.getMotoboyId().equals(motoboyId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Apenas o motoboy do turno pode confirmar o recebimento.");
+        }
+        if (turno.getMotoboyConfirmouEm() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Você já confirmou o recebimento. Aguardando confirmação do lojista.");
+        }
+
+        turno.setMotoboyConfirmouEm(LocalDateTime.now());
+        tentarEfetivarPagamento(turno);
+        return TurnoResponse.from(turnoRepo.save(turno));
+    }
+
+    private Turno carregarParaConfirmacao(Long turnoId) {
         Turno turno = turnoRepo.findById(turnoId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Turno não encontrado"));
-
         if (!"finalizado".equals(turno.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Só é possível confirmar pagamento de turnos finalizados.");
@@ -132,14 +168,18 @@ public class TurnoService {
         if ("pago".equals(turno.getPagamentoStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Turno já foi pago.");
         }
-        if (turno.getMotoboyId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Turno sem motoboy.");
+        return turno;
+    }
+
+    // Quando AMBAS as partes confirmaram: efetiva (credita carteira + atualiza tx)
+    private void tentarEfetivarPagamento(Turno turno) {
+        if (turno.getLojistaConfirmouEm() == null
+                || turno.getMotoboyConfirmouEm() == null) {
+            return; // ainda aguardando a outra parte
         }
-
         turno.setPagamentoStatus("pago");
-        turnoRepo.save(turno);
 
-        // Credita valor na carteira
+        // Credita carteira do motoboy
         Carteira carteira = carteiraRepo.findByMotoboyId(turno.getMotoboyId())
                 .orElseGet(() -> {
                     Carteira c = new Carteira();
@@ -159,8 +199,6 @@ public class TurnoService {
                     tx.setStatus("processado");
                     transacaoRepo.save(tx);
                 });
-
-        return TurnoResponse.from(turno);
     }
 
     // RF07 — Cancelar turno: penalidade no score se < 1h antes do início
