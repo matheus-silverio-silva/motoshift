@@ -112,4 +112,15 @@ public class TurnoController {
     public TurnoResponse cancelar(@PathVariable Long id) {
         return service.cancelar(id);
     }
+
+    @Operation(summary = "Confirmar pagamento", description = "Lojista marca turno finalizado como pago, credita carteira do motoboy.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Pagamento confirmado"),
+        @ApiResponse(responseCode = "404", description = "Turno não encontrado"),
+        @ApiResponse(responseCode = "409", description = "Turno não finalizado ou já pago")
+    })
+    @PutMapping("/{id}/confirmar-pagamento")
+    public TurnoResponse confirmarPagamento(@PathVariable Long id) {
+        return service.confirmarPagamento(id);
+    }
 }

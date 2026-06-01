@@ -17,6 +17,7 @@ public class TurnoResponse {
     private Double valorEstimado;
     private Double raioEntregaKm;
     private String status;
+    private String pagamentoStatus;
     private LocalDateTime criadoEm;
     private LocalDateTime atualizadoEm;
 
@@ -33,6 +34,7 @@ public class TurnoResponse {
         r.valorEstimado = t.getValorEstimado();
         r.raioEntregaKm = t.getRaioEntregaKm();
         r.status = t.getStatus();
+        r.pagamentoStatus = t.getPagamentoStatus();
         r.criadoEm = t.getCriadoEm();
         r.atualizadoEm = t.getAtualizadoEm();
         return r;
@@ -49,6 +51,7 @@ public class TurnoResponse {
     public Double getValorEstimado() { return valorEstimado; }
     public Double getRaioEntregaKm() { return raioEntregaKm; }
     public String getStatus() { return status; }
+    public String getPagamentoStatus() { return pagamentoStatus; }
     public LocalDateTime getCriadoEm() { return criadoEm; }
     public LocalDateTime getAtualizadoEm() { return atualizadoEm; }
 }

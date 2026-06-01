@@ -11,6 +11,7 @@ import '../../widgets/app_header.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/shift_card.dart';
 import '../../widgets/status_pill.dart';
+import '../avaliacao/avaliacao_screen.dart';
 
 class HistoricoTurnosScreen extends StatefulWidget {
   const HistoricoTurnosScreen({super.key});
@@ -22,8 +23,9 @@ class HistoricoTurnosScreen extends StatefulWidget {
 
 class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
   List<Turno> _turnos = const [];
+  Set<int> _turnosAvaliados = const {};
   bool _carregando = true;
-  String _filtro = 'todos'; // todos | finalizados | cancelados
+  String _filtro = 'todos';
 
   @override
   void initState() {
@@ -37,46 +39,155 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
     final id = auth.usuario?.id;
     if (id == null) return;
 
+    setState(() => _carregando = true);
     try {
-      final List<Turno> lista;
-      if (auth.usuario?.tipo == TipoUsuario.lojista) {
-        lista = await api.listarTurnosLojista(id);
-      } else {
-        lista = await api.listarMeusTurnos(id);
-      }
-      if (mounted) {
-        setState(() {
-          _turnos = lista
-              .where((t) =>
-                  t.status == StatusTurno.finalizado ||
-                  t.status == StatusTurno.cancelado)
-              .toList()
-            ..sort((a, b) => b.dataInicio.compareTo(a.dataInicio));
-          _carregando = false;
-        });
-      }
+      final isLojista = auth.usuario?.tipo == TipoUsuario.lojista;
+      final lista = isLojista
+          ? await api.listarTurnosLojista(id)
+          : await api.listarMeusTurnos(id);
+      final avaliados = await api.buscarTurnosAvaliados(id);
+      if (!mounted) return;
+      setState(() {
+        _turnos = lista
+            .where((t) =>
+                t.status == StatusTurno.finalizado ||
+                t.status == StatusTurno.cancelado)
+            .toList()
+          ..sort((a, b) => b.dataInicio.compareTo(a.dataInicio));
+        _turnosAvaliados = avaliados.toSet();
+        _carregando = false;
+      });
     } catch (_) {
       if (mounted) setState(() => _carregando = false);
     }
   }
 
+  // ── Filtros ──────────────────────────────────────────────────────────────
+
+  bool _precisaAvaliar(Turno t) =>
+      t.status == StatusTurno.finalizado &&
+      !_turnosAvaliados.contains(t.id);
+
+  bool _aguardandoPagamento(Turno t) =>
+      t.status == StatusTurno.finalizado &&
+      t.pagamentoStatus == PagamentoStatus.pendente;
+
   List<Turno> get _filtrados {
-    if (_filtro == 'finalizados') {
-      return _turnos
-          .where((t) => t.status == StatusTurno.finalizado)
-          .toList();
+    switch (_filtro) {
+      case 'avaliar':
+        return _turnos.where(_precisaAvaliar).toList();
+      case 'pagamento':
+        return _turnos.where(_aguardandoPagamento).toList();
+      case 'concluidos':
+        return _turnos
+            .where((t) =>
+                t.status == StatusTurno.finalizado &&
+                t.pagamentoStatus == PagamentoStatus.pago)
+            .toList();
+      case 'cancelados':
+        return _turnos
+            .where((t) => t.status == StatusTurno.cancelado)
+            .toList();
+      default:
+        return _turnos;
     }
-    if (_filtro == 'cancelados') {
-      return _turnos
-          .where((t) => t.status == StatusTurno.cancelado)
-          .toList();
-    }
-    return _turnos;
   }
 
-  double get _totalGanho => _turnos
-      .where((t) => t.status == StatusTurno.finalizado)
+  int get _qtdAvaliar => _turnos.where(_precisaAvaliar).length;
+  int get _qtdPagamento => _turnos.where(_aguardandoPagamento).length;
+  int get _qtdConcluidos => _turnos
+      .where((t) =>
+          t.status == StatusTurno.finalizado &&
+          t.pagamentoStatus == PagamentoStatus.pago)
+      .length;
+  int get _qtdCancelados =>
+      _turnos.where((t) => t.status == StatusTurno.cancelado).length;
+
+  double get _valorPendente => _turnos
+      .where(_aguardandoPagamento)
       .fold(0.0, (acc, t) => acc + t.valorEstimado);
+
+  double get _totalGanho => _turnos
+      .where((t) =>
+          t.status == StatusTurno.finalizado &&
+          t.pagamentoStatus == PagamentoStatus.pago)
+      .fold(0.0, (acc, t) => acc + t.valorEstimado);
+
+  // ── Ações ────────────────────────────────────────────────────────────────
+
+  Future<void> _abrirAvaliacao(Turno t) async {
+    final auth = context.read<AuthService>();
+    final isLojista = auth.usuario?.tipo == TipoUsuario.lojista;
+    final avaliadorId = auth.usuario?.id;
+    if (avaliadorId == null || t.id == null) return;
+
+    final avaliadoId = isLojista ? (t.motoboyId ?? -1) : t.lojistId;
+    if (avaliadoId < 0) return;
+
+    await Navigator.pushNamed(
+      context,
+      AppRoutes.avaliacao,
+      arguments: AvaliacaoArgs(
+        turnoId: t.id!,
+        avaliadorId: avaliadorId,
+        avaliadoId: avaliadoId,
+        nomeAvaliado: t.titulo,
+      ),
+    );
+    _carregar();
+  }
+
+  Future<void> _confirmarPagamento(Turno t) async {
+    if (t.id == null) return;
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Confirmar pagamento',
+            style: tsBricolage(17, FontWeight.w800,
+                color: AppColors.ink)),
+        content: Text(
+          'Marcar este turno como pago? O valor será creditado na carteira do motoboy.',
+          style: tsJakarta(13, FontWeight.w400, color: AppColors.muted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancelar',
+                style: tsJakarta(13, FontWeight.w600,
+                    color: AppColors.muted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Confirmar',
+                style: tsJakarta(13, FontWeight.w700,
+                    color: AppColors.teal)),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+
+    try {
+      await context.read<ApiService>().confirmarPagamento(t.id!);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Pagamento confirmado!'),
+            backgroundColor: AppColors.good),
+      );
+      _carregar();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  // ── UI ───────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -127,64 +238,73 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
   }
 
   Widget _buildLista() {
-    final tipo = context.read<AuthService>().usuario?.tipo;
-    final isLojista = tipo == TipoUsuario.lojista;
+    final isLojista =
+        context.read<AuthService>().usuario?.tipo == TipoUsuario.lojista;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 40),
-      children: [
-        _buildResumo(isLojista),
-        const SizedBox(height: 16),
-        _buildFiltros(),
-        const SizedBox(height: 14),
-        if (_filtrados.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.line, width: 1.5),
-            ),
-            child: Center(
-              child: Text(
-                'Nenhum turno nesse filtro.',
-                style: tsJakarta(12, FontWeight.w400,
-                    color: AppColors.muted),
+    return RefreshIndicator(
+      onRefresh: _carregar,
+      color: AppColors.teal,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 40),
+        children: [
+          _buildResumo(isLojista),
+          const SizedBox(height: 16),
+          _buildFiltros(isLojista),
+          const SizedBox(height: 14),
+          if (_filtrados.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.line, width: 1.5),
               ),
-            ),
-          )
-        else
-          ..._filtrados.map((t) => _buildTurnoCard(t, isLojista)),
-      ],
+              child: Center(
+                child: Text(
+                  'Nenhum turno nesse filtro.',
+                  style: tsJakarta(12, FontWeight.w400,
+                      color: AppColors.muted),
+                ),
+              ),
+            )
+          else
+            ..._filtrados.map((t) => _buildTurnoCard(t, isLojista)),
+        ],
+      ),
     );
   }
 
   Widget _buildResumo(bool isLojista) {
-    final concluidos =
-        _turnos.where((t) => t.status == StatusTurno.finalizado).length;
-    final cancelados =
-        _turnos.where((t) => t.status == StatusTurno.cancelado).length;
+    final labelPendente =
+        isLojista ? 'A PAGAR' : 'A RECEBER';
 
     return Row(
       children: [
         Expanded(
           child: _statCell(
-            label: 'CONCLUÍDOS',
-            value: '$concluidos',
+            label: 'A AVALIAR',
+            value: '$_qtdAvaliar',
+            iconData: Icons.star_outline_rounded,
+            highlight: _qtdAvaliar > 0,
+            color: _qtdAvaliar > 0 ? AppColors.amber : null,
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
           child: _statCell(
-            label: 'CANCELADOS',
-            value: '$cancelados',
+            label: labelPendente,
+            value: 'R\$ ${_valorPendente.toStringAsFixed(0)}',
+            iconData: Icons.schedule_rounded,
+            highlight: _qtdPagamento > 0,
+            color: _qtdPagamento > 0 ? AppColors.amber : null,
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
           child: _statCell(
-            label: isLojista ? 'GASTO TOTAL' : 'GANHO TOTAL',
+            label: isLojista ? 'GASTO PAGO' : 'RECEBIDO',
             value: 'R\$ ${_totalGanho.toStringAsFixed(0)}',
+            iconData: Icons.check_circle_outline_rounded,
             highlight: true,
           ),
         ),
@@ -195,99 +315,235 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
   Widget _statCell({
     required String label,
     required String value,
+    required IconData iconData,
     bool highlight = false,
+    Color? color,
   }) {
+    final accent = color ?? AppColors.tealDeep;
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 11),
       decoration: BoxDecoration(
-        color: highlight ? AppColors.tealSoft : AppColors.surface,
+        color: highlight
+            ? (color == AppColors.amber
+                ? AppColors.amberSoft
+                : AppColors.tealSoft)
+            : AppColors.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: highlight ? AppColors.tealDeep : AppColors.line,
+            color: highlight ? accent.withOpacity(0.4) : AppColors.line,
             width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: tsJakarta(8.5, FontWeight.w700,
-                  color: highlight
-                      ? AppColors.tealDeep
-                      : AppColors.muted)),
-          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(iconData,
+                  size: 13,
+                  color: highlight ? accent : AppColors.muted),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tsJakarta(8.5, FontWeight.w700,
+                        color:
+                            highlight ? accent : AppColors.muted)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
             child: Text(value,
                 style: tsBricolage(16, FontWeight.w800,
-                    color: highlight
-                        ? AppColors.tealDeep
-                        : AppColors.ink)),
+                    color: highlight ? accent : AppColors.ink)),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFiltros() {
-    const opcoes = [
-      ('todos', 'Todos'),
-      ('finalizados', 'Finalizados'),
-      ('cancelados', 'Cancelados'),
+  Widget _buildFiltros(bool isLojista) {
+    final pagamentoLabel = isLojista ? 'A pagar' : 'A receber';
+    final opcoes = [
+      ('todos', 'Todos', _turnos.length),
+      ('avaliar', 'A avaliar', _qtdAvaliar),
+      ('pagamento', pagamentoLabel, _qtdPagamento),
+      ('concluidos', 'Concluídos', _qtdConcluidos),
+      ('cancelados', 'Cancelados', _qtdCancelados),
     ];
 
-    return Row(
-      children: opcoes.map((op) {
-        final sel = _filtro == op.$1;
-        return Padding(
-          padding: const EdgeInsets.only(right: 10),
-          child: GestureDetector(
-            onTap: () => setState(() => _filtro = op.$1),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 11),
-              decoration: BoxDecoration(
-                color: sel ? AppColors.teal : AppColors.surface2,
-                borderRadius: BorderRadius.circular(11),
-                border: Border.all(
-                  color: sel ? AppColors.teal : AppColors.line,
-                  width: 1.5,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: opcoes.map((op) {
+          final sel = _filtro == op.$1;
+          final count = op.$3;
+          return Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: GestureDetector(
+              onTap: () => setState(() => _filtro = op.$1),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 11),
+                decoration: BoxDecoration(
+                  color: sel ? AppColors.teal : AppColors.surface2,
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(
+                    color: sel ? AppColors.teal : AppColors.line,
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      op.$2,
+                      style: tsJakarta(12, FontWeight.w700,
+                          color: sel ? Colors.white : AppColors.muted),
+                    ),
+                    if (count > 0) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: sel
+                              ? Colors.white24
+                              : AppColors.surface3,
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                        child: Text(
+                          '$count',
+                          style: tsJakarta(9.5, FontWeight.w800,
+                              color: sel
+                                  ? Colors.white
+                                  : AppColors.muted),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              child: Text(
-                op.$2,
-                style: tsJakarta(12, FontWeight.w700,
-                    color: sel ? Colors.white : AppColors.muted),
-              ),
             ),
-          ),
-        );
-      }).toList(),
+          );
+        }).toList(),
+      ),
     );
   }
 
   Widget _buildTurnoCard(Turno t, bool isLojista) {
     final dataFmt =
         DateFormat('dd/MM/yyyy', 'pt_BR').format(t.dataInicio);
+    final precisaAvaliar = _precisaAvaliar(t);
+    final aguardaPagto = _aguardandoPagamento(t);
 
-    return ShiftCard(
-      name: t.titulo,
-      meta: [dataFmt, t.regiao],
-      value: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
-      iconData: isLojista
-          ? Icons.store_outlined
-          : Icons.two_wheeler_outlined,
-      pillLabel: t.status.label,
-      pillVariant: t.status == StatusTurno.finalizado
-          ? PillVariant.good
-          : PillVariant.ghost,
-      onTap: () => Navigator.pushNamed(
-        context,
-        isLojista ? AppRoutes.turnoLojista : AppRoutes.detalheTurno,
-        arguments: t,
+    PillVariant pill;
+    String pillLabel;
+    if (t.status == StatusTurno.cancelado) {
+      pill = PillVariant.ghost;
+      pillLabel = 'Cancelado';
+    } else if (aguardaPagto) {
+      pill = PillVariant.amber;
+      pillLabel = isLojista ? 'A pagar' : 'A receber';
+    } else if (t.pagamentoStatus == PagamentoStatus.pago) {
+      pill = PillVariant.good;
+      pillLabel = 'Pago';
+    } else {
+      pill = PillVariant.ghost;
+      pillLabel = 'Finalizado';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        children: [
+          ShiftCard(
+            name: t.titulo,
+            meta: [dataFmt, t.regiao],
+            value: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
+            iconData: isLojista
+                ? Icons.store_outlined
+                : Icons.two_wheeler_outlined,
+            pillLabel: pillLabel,
+            pillVariant: pill,
+            onTap: () => Navigator.pushNamed(
+              context,
+              isLojista
+                  ? AppRoutes.turnoLojista
+                  : AppRoutes.detalheTurno,
+              arguments: t,
+            ),
+          ),
+          if (precisaAvaliar || (aguardaPagto && isLojista))
+            _buildAcoes(t, precisaAvaliar, aguardaPagto && isLojista),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAcoes(Turno t, bool podeAvaliar, bool podePagar) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+      child: Row(
+        children: [
+          if (podeAvaliar) ...[
+            Expanded(
+              child: GestureDetector(
+                onTap: () => _abrirAvaliacao(t),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.amberSoft,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: AppColors.amber.withOpacity(0.4),
+                        width: 1.5),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.star_outline_rounded,
+                          size: 14, color: Color(0xFF9A6206)),
+                      const SizedBox(width: 6),
+                      Text('Avaliar',
+                          style: tsJakarta(12, FontWeight.w700,
+                              color: const Color(0xFF9A6206))),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (podePagar) const SizedBox(width: 8),
+          ],
+          if (podePagar)
+            Expanded(
+              child: GestureDetector(
+                onTap: () => _confirmarPagamento(t),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.payments_rounded,
+                          size: 14, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Text('Confirmar pagamento',
+                          style: tsJakarta(12, FontWeight.w700,
+                              color: Colors.white)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -12,4 +12,6 @@ public interface AvaliacaoRepository extends JpaRepository<Avaliacao, Long> {
     boolean existsByTurnoIdAndAvaliadorId(Long turnoId, Long avaliadorId);
 
     List<Avaliacao> findByTurnoId(Long turnoId);
+
+    List<Avaliacao> findByAvaliadorId(Long avaliadorId);
 }

@@ -103,6 +103,40 @@ public class TurnoService {
         }
 
         turno.setStatus("finalizado");
+        turno.setPagamentoStatus("pendente");
+        turnoRepo.save(turno);
+
+        // Registra transação pendente (motoboy aguarda recebimento, lojista deve pagar)
+        Transacao tx = new Transacao();
+        tx.setMotoboyId(turno.getMotoboyId());
+        tx.setTurnoId(turno.getId());
+        tx.setTipo("turno");
+        tx.setValor(turno.getValorEstimado());
+        tx.setDescricao("Turno finalizado: " + turno.getTitulo());
+        tx.setStatus("pendente");
+        transacaoRepo.save(tx);
+
+        return TurnoResponse.from(turno);
+    }
+
+    // Confirma pagamento do turno: credita carteira do motoboy e marca tx como processada
+    @Transactional
+    public TurnoResponse confirmarPagamento(Long turnoId) {
+        Turno turno = turnoRepo.findById(turnoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Turno não encontrado"));
+
+        if (!"finalizado".equals(turno.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Só é possível confirmar pagamento de turnos finalizados.");
+        }
+        if ("pago".equals(turno.getPagamentoStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Turno já foi pago.");
+        }
+        if (turno.getMotoboyId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Turno sem motoboy.");
+        }
+
+        turno.setPagamentoStatus("pago");
         turnoRepo.save(turno);
 
         // Credita valor na carteira
@@ -116,15 +150,15 @@ public class TurnoService {
         carteira.setGanhosMensais(carteira.getGanhosMensais() + turno.getValorEstimado());
         carteiraRepo.save(carteira);
 
-        // Registra transação
-        Transacao tx = new Transacao();
-        tx.setMotoboyId(turno.getMotoboyId());
-        tx.setTurnoId(turno.getId());
-        tx.setTipo("turno");
-        tx.setValor(turno.getValorEstimado());
-        tx.setDescricao("Turno finalizado: " + turno.getTitulo());
-        tx.setStatus("processado");
-        transacaoRepo.save(tx);
+        // Atualiza a transação pendente correspondente
+        transacaoRepo.findByMotoboyIdOrderByCriadoEmDesc(turno.getMotoboyId())
+                .stream()
+                .filter(t -> turno.getId().equals(t.getTurnoId()) && "pendente".equals(t.getStatus()))
+                .findFirst()
+                .ifPresent(tx -> {
+                    tx.setStatus("processado");
+                    transacaoRepo.save(tx);
+                });
 
         return TurnoResponse.from(turno);
     }

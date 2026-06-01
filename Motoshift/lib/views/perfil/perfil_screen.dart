@@ -119,9 +119,13 @@ class PerfilScreen extends StatelessWidget {
                   context, AppRoutes.dadosPessoais),
             ),
             MenuRow(
-              icon: Icons.two_wheeler_outlined,
-              label: 'CNH e Veículo',
-              subtitle: isLojista ? null : 'Documentos do veículo',
+              icon: isLojista
+                  ? Icons.location_on_outlined
+                  : Icons.two_wheeler_outlined,
+              label: isLojista ? 'Endereço' : 'CNH e Veículo',
+              subtitle: isLojista
+                  ? 'Endereço comercial'
+                  : 'Documentos do veículo',
               onTap: () =>
                   Navigator.pushNamed(context, AppRoutes.cnhVeiculo),
             ),

@@ -199,6 +199,17 @@ class ApiService {
     return Turno.fromJson(data as Map<String, dynamic>);
   }
 
+  Future<Turno> confirmarPagamento(int turnoId) async {
+    final data = await _put('/turnos/$turnoId/confirmar-pagamento', {});
+    return Turno.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<List<int>> buscarTurnosAvaliados(int usuarioId) async {
+    final data = await _get('/avaliacoes/feitas/$usuarioId');
+    final ids = (data as Map<String, dynamic>)['turnoIds'] as List<dynamic>;
+    return ids.cast<int>();
+  }
+
   // --------------------------------------------------------
   // CARTEIRA — /api/carteira/{motoboyId}
   // --------------------------------------------------------

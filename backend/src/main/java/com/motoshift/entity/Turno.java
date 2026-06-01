@@ -38,6 +38,9 @@ public class Turno {
     @Column(nullable = false)
     private String status = "aberto";
 
+    // null (não finalizado) | pendente | pago
+    private String pagamentoStatus;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime criadoEm;
 
@@ -86,6 +89,9 @@ public class Turno {
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+
+    public String getPagamentoStatus() { return pagamentoStatus; }
+    public void setPagamentoStatus(String pagamentoStatus) { this.pagamentoStatus = pagamentoStatus; }
 
     public LocalDateTime getCriadoEm() { return criadoEm; }
     public LocalDateTime getAtualizadoEm() { return atualizadoEm; }

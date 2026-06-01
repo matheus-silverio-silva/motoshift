@@ -143,6 +143,23 @@ public class AvaliacaoController {
     }
 
     // ─────────────────────────────────────────────────────────
+    // GET /api/avaliacoes/feitas/{avaliadorId}
+    // ─────────────────────────────────────────────────────────
+
+    @Operation(summary = "IDs de turnos que o usuário já avaliou")
+    @GetMapping("/feitas/{avaliadorId}")
+    public Map<String, Object> turnosAvaliados(@PathVariable Long avaliadorId) {
+        List<Long> ids = avaliacaoRepo.findByAvaliadorId(avaliadorId)
+                .stream()
+                .map(Avaliacao::getTurnoId)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("turnoIds", ids);
+        return resp;
+    }
+
+    // ─────────────────────────────────────────────────────────
     // GET /api/avaliacoes/turno/{turnoId}/pendentes/{usuarioId}
     // ─────────────────────────────────────────────────────────
 

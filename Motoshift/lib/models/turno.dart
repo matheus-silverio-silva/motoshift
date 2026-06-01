@@ -22,6 +22,7 @@ class Turno {
   final double valorEstimado;
   final double raioEntregaKm;
   final StatusTurno status;
+  final PagamentoStatus pagamentoStatus;
   final double? distanciaPercorridaKm;
   final int? totalEntregas;
   final DateTime? criadoEm;
@@ -39,6 +40,7 @@ class Turno {
     required this.valorEstimado,
     required this.raioEntregaKm,
     this.status = StatusTurno.aberto,
+    this.pagamentoStatus = PagamentoStatus.naoAplicavel,
     this.distanciaPercorridaKm,
     this.totalEntregas,
     this.criadoEm,
@@ -58,6 +60,7 @@ class Turno {
       valorEstimado: (json['valorEstimado'] as num).toDouble(),
       raioEntregaKm: (json['raioEntregaKm'] as num).toDouble(),
       status: _parseStatus(json['status'] as String),
+      pagamentoStatus: _parsePagamento(json['pagamentoStatus'] as String?),
       distanciaPercorridaKm: json['distanciaPercorridaKm'] != null
           ? (json['distanciaPercorridaKm'] as num).toDouble()
           : null,
@@ -110,6 +113,28 @@ enum StatusTurno {
       StatusTurno.emAndamento => 'Em Andamento',
       StatusTurno.finalizado => 'Finalizado',
       StatusTurno.cancelado => 'Cancelado',
+    };
+  }
+}
+
+PagamentoStatus _parsePagamento(String? raw) {
+  return switch (raw?.toLowerCase()) {
+    'pendente' => PagamentoStatus.pendente,
+    'pago' => PagamentoStatus.pago,
+    _ => PagamentoStatus.naoAplicavel,
+  };
+}
+
+enum PagamentoStatus {
+  naoAplicavel,
+  pendente,
+  pago;
+
+  String get label {
+    return switch (this) {
+      PagamentoStatus.pendente => 'A receber',
+      PagamentoStatus.pago => 'Pago',
+      _ => '',
     };
   }
 }

@@ -153,54 +153,123 @@ public class DataInitializer implements CommandLineRunner {
                 amanha14, amanha18, 110.00, 6.0, "aceito");
 
         // ── Turnos CONCLUÍDOS (histórico) ─────────────────────────────────────
+        //
+        // Cenários cobertos:
+        //   PAGO + 2 AVALIAÇÕES  →  já fechado, aparece em "Concluídos"
+        //   PAGO + 1 AVALIAÇÃO   →  o que não avaliou vê em "A avaliar"
+        //   PAGO + 0 AVALIAÇÕES  →  ambos veem em "A avaliar"
+        //   PENDENTE + 2 AVAL.   →  lojista vê em "A pagar", motoboy em "A receber"
+        //   PENDENTE + 0 AVAL.   →  todos os pendentes
 
+        // Concluídos completos (pago + ambos avaliaram)
         Turno t8 = criarTurnoHistorico(claudia.getId(), ricardo.getId(),
                 "Turno Concluído — Hamburgueria da Cláudia",
-                "Água Verde, Curitiba", agora.minusDays(7), 4, 120.00, 8.0);
-
+                "Água Verde, Curitiba", agora.minusDays(7), 4, 120.00, 8.0, "pago");
         Turno t9 = criarTurnoHistorico(fernando.getId(), ricardo.getId(),
                 "Turno Concluído — Pizzaria do Fernando",
-                "Batel, Curitiba", agora.minusDays(15), 4, 100.00, 5.0);
-
+                "Batel, Curitiba", agora.minusDays(15), 4, 100.00, 5.0, "pago");
         Turno t10 = criarTurnoHistorico(ana.getId(), lucas.getId(),
                 "Turno Concluído — Farmácia Ana",
-                "Centro Cívico, Curitiba", agora.minusDays(3), 4, 110.00, 6.0);
+                "Centro Cívico, Curitiba", agora.minusDays(3), 4, 110.00, 6.0, "pago");
 
+        // Concluídos com avaliação só do lojista (motoboy ainda deve avaliar)
         Turno t11 = criarTurnoHistorico(claudia.getId(), thiago.getId(),
                 "Turno Concluído — Hamburgueria da Cláudia",
-                "Água Verde, Curitiba", agora.minusDays(20), 4, 120.00, 8.0);
-
+                "Água Verde, Curitiba", agora.minusDays(20), 4, 120.00, 8.0, "pago");
         Turno t12 = criarTurnoHistorico(fernando.getId(), lucas.getId(),
                 "Turno Concluído — Pizzaria do Fernando",
-                "Batel, Curitiba", agora.minusDays(10), 4, 100.00, 5.0);
+                "Batel, Curitiba", agora.minusDays(10), 4, 100.00, 5.0, "pago");
 
-        // ── Transações da wallet (Ricardo) ────────────────────────────────────
+        // Concluídos sem nenhuma avaliação ainda (ambos veem em "A avaliar")
+        Turno t13 = criarTurnoHistorico(ana.getId(), ricardo.getId(),
+                "Turno Manhã — Farmácia Ana",
+                "Centro Cívico, Curitiba", agora.minusDays(2), 4, 95.00, 5.0, "pago");
+        Turno t14 = criarTurnoHistorico(claudia.getId(), lucas.getId(),
+                "Turno Noite — Hamburgueria da Cláudia",
+                "Água Verde, Curitiba", agora.minusDays(1), 4, 130.00, 8.0, "pago");
 
-        criarTransacao(ricardo.getId(), t8.getId(), "turno",  120.00,
+        // Finalizados PENDENTES de pagamento (lojista em "A pagar", motoboy em "A receber")
+        Turno t15 = criarTurnoHistorico(claudia.getId(), ricardo.getId(),
+                "Turno Concluído — Hamburgueria da Cláudia",
+                "Água Verde, Curitiba", agora.minusDays(5), 4, 125.00, 8.0, "pendente");
+        Turno t16 = criarTurnoHistorico(fernando.getId(), thiago.getId(),
+                "Turno Tarde — Pizzaria do Fernando",
+                "Batel, Curitiba", agora.minusDays(4), 4, 95.00, 5.0, "pendente");
+        Turno t17 = criarTurnoHistorico(ana.getId(), lucas.getId(),
+                "Turno Concluído — Farmácia Ana",
+                "Centro Cívico, Curitiba", agora.minusDays(6), 4, 110.00, 6.0, "pendente");
+
+        // Pendente + sem avaliações (motoboy precisa avaliar E aguardar receber)
+        Turno t18 = criarTurnoHistorico(claudia.getId(), thiago.getId(),
+                "Turno Madrugada — Hamburgueria da Cláudia",
+                "Água Verde, Curitiba", agora.minusDays(8), 4, 140.00, 8.0, "pendente");
+
+        // Turnos cancelados
+        Turno t19 = criarTurnoCancelado(fernando.getId(), ricardo.getId(),
+                "Turno Cancelado — Pizzaria do Fernando",
+                "Batel, Curitiba", agora.minusDays(12), 4, 100.00, 5.0);
+        criarTurnoCancelado(claudia.getId(), lucas.getId(),
+                "Turno Cancelado — Hamburgueria da Cláudia",
+                "Água Verde, Curitiba", agora.minusDays(18), 4, 120.00, 8.0);
+
+        // ── Transações da wallet ──────────────────────────────────────────────
+        // Cada turno finalizado gera uma transação:
+        //   - pagamentoStatus "pago"      → tx "processado"
+        //   - pagamentoStatus "pendente"  → tx "pendente"
+
+        criarTransacao(ricardo.getId(), t8.getId(),  "turno", 120.00,
                 "Turno concluído - Hamburgueria da Cláudia", "processado");
-        criarTransacao(ricardo.getId(), t9.getId(), "turno",  100.00,
+        criarTransacao(ricardo.getId(), t9.getId(),  "turno", 100.00,
                 "Turno concluído - Pizzaria do Fernando", "processado");
-        criarTransacao(ricardo.getId(), null,       "saque",  200.00,
-                "Transferência Pix — ricardo@pix.com", "concluido");
-        criarTransacao(ricardo.getId(), null,       "turno",  300.00,
-                "Créditos de turnos anteriores", "processado");
-
-        // Transações dos demais motoboys
-        criarTransacao(lucas.getId(), t10.getId(), "turno", 110.00,
+        criarTransacao(ricardo.getId(), t13.getId(), "turno",  95.00,
                 "Turno concluído - Farmácia Ana", "processado");
-        criarTransacao(lucas.getId(), t12.getId(), "turno", 100.00,
+        criarTransacao(ricardo.getId(), t15.getId(), "turno", 125.00,
+                "Turno aguardando pagamento - Hamburgueria da Cláudia", "pendente");
+        criarTransacao(ricardo.getId(), null,        "saque", 200.00,
+                "Transferência Pix — ricardo@pix.com", "concluido");
+
+        criarTransacao(lucas.getId(),  t10.getId(), "turno", 110.00,
+                "Turno concluído - Farmácia Ana", "processado");
+        criarTransacao(lucas.getId(),  t12.getId(), "turno", 100.00,
                 "Turno concluído - Pizzaria do Fernando", "processado");
+        criarTransacao(lucas.getId(),  t14.getId(), "turno", 130.00,
+                "Turno concluído - Hamburgueria da Cláudia", "processado");
+        criarTransacao(lucas.getId(),  t17.getId(), "turno", 110.00,
+                "Turno aguardando pagamento - Farmácia Ana", "pendente");
+
         criarTransacao(thiago.getId(), t11.getId(), "turno", 120.00,
                 "Turno concluído - Hamburgueria da Cláudia", "processado");
+        criarTransacao(thiago.getId(), t16.getId(), "turno",  95.00,
+                "Turno aguardando pagamento - Pizzaria do Fernando", "pendente");
+        criarTransacao(thiago.getId(), t18.getId(), "turno", 140.00,
+                "Turno aguardando pagamento - Hamburgueria da Cláudia", "pendente");
 
         // ── Avaliações ────────────────────────────────────────────────────────
 
-        criarAvaliacao(t8.getId(), ricardo.getId(), claudia.getId(), 5, "Ótima organização");
-        criarAvaliacao(t8.getId(), claudia.getId(), ricardo.getId(), 5, "Pontual e educado");
-        criarAvaliacao(t10.getId(), lucas.getId(),  ana.getId(),     4, "Boa comunicação");
-        criarAvaliacao(t10.getId(), ana.getId(),    lucas.getId(),   5, "Excelente profissional");
-        criarAvaliacao(t11.getId(), thiago.getId(), claudia.getId(), 3, "Poderia ser mais claro");
+        // Pagos + ambos avaliaram (concluídos de verdade)
+        criarAvaliacao(t8.getId(),  ricardo.getId(), claudia.getId(), 5, "Ótima organização");
+        criarAvaliacao(t8.getId(),  claudia.getId(), ricardo.getId(), 5, "Pontual e educado");
+        criarAvaliacao(t9.getId(),  ricardo.getId(), fernando.getId(), 5, "Tudo certo, sem atrasos");
+        criarAvaliacao(t9.getId(),  fernando.getId(), ricardo.getId(), 5, "Profissional dedicado");
+        criarAvaliacao(t10.getId(), lucas.getId(),   ana.getId(),     4, "Boa comunicação");
+        criarAvaliacao(t10.getId(), ana.getId(),     lucas.getId(),   5, "Excelente profissional");
+
+        // Pagos + só lojista avaliou (motoboy precisa avaliar)
         criarAvaliacao(t11.getId(), claudia.getId(), thiago.getId(), 3, "Atrasou 15 minutos");
+        criarAvaliacao(t12.getId(), fernando.getId(), lucas.getId(), 5, "Trabalho impecável");
+
+        // t13, t14 → pagos, sem nenhuma avaliação (ambos em "A avaliar")
+        // t15, t16, t17 → pendentes pagamento, ambos avaliaram (apenas pgto pendente)
+        criarAvaliacao(t15.getId(), ricardo.getId(), claudia.getId(), 5, "Boa, como sempre");
+        criarAvaliacao(t15.getId(), claudia.getId(), ricardo.getId(), 5, "Sempre confiável");
+        criarAvaliacao(t16.getId(), thiago.getId(), fernando.getId(), 4, "Pedidos organizados");
+        criarAvaliacao(t16.getId(), fernando.getId(), thiago.getId(), 4, "Boa entrega");
+        criarAvaliacao(t17.getId(), lucas.getId(), ana.getId(), 5, "Excelente lojista");
+        criarAvaliacao(t17.getId(), ana.getId(), lucas.getId(), 5, "Sempre pontual e simpático");
+
+        // t18 → pendente pagamento + sem avaliações (combo)
+        // t19 → cancelado, sem avaliação (mas evitar warning de unused)
+        if (t19.getId() == null) throw new IllegalStateException("t19 não salvo");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -276,11 +345,23 @@ public class DataInitializer implements CommandLineRunner {
 
     private Turno criarTurnoHistorico(Long lojistId, Long motoboyId, String titulo,
                                        String regiao, LocalDateTime inicio,
-                                       int duracaoHoras, double valor, double raio) {
-        return criarTurno(lojistId, motoboyId, titulo,
+                                       int duracaoHoras, double valor, double raio,
+                                       String pagamentoStatus) {
+        Turno t = criarTurno(lojistId, motoboyId, titulo,
                 "Turno concluído", regiao,
                 inicio, inicio.plusHours(duracaoHoras),
                 valor, raio, "finalizado");
+        t.setPagamentoStatus(pagamentoStatus);
+        return turnoRepo.save(t);
+    }
+
+    private Turno criarTurnoCancelado(Long lojistId, Long motoboyId, String titulo,
+                                       String regiao, LocalDateTime inicio,
+                                       int duracaoHoras, double valor, double raio) {
+        return criarTurno(lojistId, motoboyId, titulo,
+                "Turno cancelado", regiao,
+                inicio, inicio.plusHours(duracaoHoras),
+                valor, raio, "cancelado");
     }
 
     private void criarTransacao(Long motoboyId, Long turnoId, String tipo,
