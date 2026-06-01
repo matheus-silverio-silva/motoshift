@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
+import '../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -30,11 +31,11 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (auth.usuario != null) {
       final route = auth.usuario!.tipo == TipoUsuario.motoboy
-          ? '/dashboard-motoboy'
-          : '/dashboard-lojista';
+          ? AppRoutes.dashboardMotoboy
+          : AppRoutes.dashboardLojista;
       Navigator.pushReplacementNamed(context, route);
     } else {
-      Navigator.pushReplacementNamed(context, '/login');
+      Navigator.pushReplacementNamed(context, AppRoutes.login);
     }
   }
 

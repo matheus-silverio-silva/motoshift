@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/carteira.dart';
 import '../../models/transacao.dart';
+import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/kinetic_app_bar.dart';
-import '../../widgets/kinetic_bottom_nav.dart';
+import '../../widgets/app_bottom_nav.dart';
+import '../../widgets/app_header.dart';
+import '../../widgets/app_scaffold.dart';
+import '../../widgets/section_title.dart';
+import '../../widgets/wallet_widgets.dart';
 
 class CarteiraScreen extends StatefulWidget {
   const CarteiraScreen({super.key});
@@ -53,22 +57,19 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceContainerLowest,
-        title: const Text(
-          'Transferir Saldo',
-          style: TextStyle(
-            fontFamily: 'Manrope',
-            fontWeight: FontWeight.w800,
-            color: AppColors.onSurface,
-          ),
-        ),
+        backgroundColor: AppColors.surface,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Transferir Saldo',
+            style: tsBricolage(17, FontWeight.w800, color: AppColors.ink)),
         content: TextField(
           controller: ctrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
           decoration: InputDecoration(
             labelText: 'Valor (R\$)',
             filled: true,
-            fillColor: AppColors.surfaceContainerLow,
+            fillColor: AppColors.surface2,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -78,24 +79,21 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
+            child: Text('Cancelar',
+                style: tsJakarta(13, FontWeight.w600,
+                    color: AppColors.muted)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'Confirmar',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: AppColors.primary,
-              ),
-            ),
+            child: Text('Confirmar',
+                style: tsJakarta(13, FontWeight.w700,
+                    color: AppColors.teal)),
           ),
         ],
       ),
     );
 
     if (ok != true || !mounted) return;
-
     final valor = double.tryParse(ctrl.text.replaceAll(',', '.'));
     if (valor == null || valor <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -112,12 +110,10 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     try {
       await api.solicitarSaque(id, valor);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Transferência solicitada com sucesso!'),
-            backgroundColor: Color(0xFF00875A),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Transferência solicitada com sucesso!'),
+          backgroundColor: AppColors.good,
+        ));
         _carregar();
       }
     } on ApiException catch (e) {
@@ -128,47 +124,50 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Erro ao solicitar transferência.'),
-              backgroundColor: Colors.red),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Erro ao solicitar transferência.'),
+          backgroundColor: Colors.red,
+        ));
       }
+    }
+  }
+
+  void _onNav(int i) {
+    switch (i) {
+      case 0:
+        Navigator.pushReplacementNamed(
+            context, AppRoutes.dashboardMotoboy);
+      case 1:
+        Navigator.pushReplacementNamed(
+            context, AppRoutes.turnosDisponiveis);
+      case 2:
+        break;
+      case 3:
+        Navigator.pushReplacementNamed(context, AppRoutes.perfil);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthService>();
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      extendBodyBehindAppBar: true,
-      appBar: KineticAppBar(
-        avatarUrl: auth.usuario?.fotoPerfil,
-        onNotificationTap: () {},
+    return AppScaffold(
+      header: AppHeader.back(
+        title: 'Carteira Digital',
+        onBack: () => Navigator.pushReplacementNamed(
+            context, AppRoutes.dashboardMotoboy),
+      ),
+      bottomNav: AppBottomNav(
+        userType: UserType.motoboy,
+        currentIndex: 2,
+        onTap: _onNav,
       ),
       body: _carregando
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: AppColors.teal),
+            )
           : _erro != null
               ? _erroView()
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(24, 96, 24, 120),
-                  children: [
-                    const SizedBox(height: 16),
-                    _buildSaldoHero(),
-                    const SizedBox(height: 24),
-                    _buildStatsGrid(),
-                    const SizedBox(height: 32),
-                    _buildHistoricoSection(),
-                  ],
-                ),
-      bottomNavigationBar: KineticBottomNav(
-        currentItem: NavItem.carteira,
-        onItemSelected: (item) {
-          if (item != NavItem.carteira) Navigator.pop(context);
-        },
-      ),
+              : _buildBody(),
     );
   }
 
@@ -180,13 +179,13 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.wifi_off_rounded,
-                size: 48, color: AppColors.onSurfaceVariant),
+                size: 44, color: AppColors.muted),
             const SizedBox(height: 12),
             Text(_erro!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontFamily: 'Manrope', color: AppColors.onSurfaceVariant)),
-            const SizedBox(height: 16),
+                style: tsJakarta(13, FontWeight.w400,
+                    color: AppColors.muted)),
+            const SizedBox(height: 14),
             TextButton(
                 onPressed: _carregar,
                 child: const Text('Tentar novamente')),
@@ -196,354 +195,102 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     );
   }
 
-  Widget _buildSaldoHero() {
+  Widget _buildBody() {
     final saldo = _carteira?.saldoAtual ?? 0.0;
-    final partes = saldo.toStringAsFixed(2).split('.');
-    final inteiro = _formatMilhar(int.parse(partes[0]));
-    final centavos = partes[1];
-
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        gradient: AppColors.kineticGradient,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppColors.kineticShadow,
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            top: -40,
-            right: -40,
-            child: Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'SALDO ATUAL',
-                style: TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 2,
-                  color: Colors.white70,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8, right: 4),
-                    child: Text(
-                      'R\$',
-                      style: TextStyle(
-                        fontFamily: 'Manrope',
-                        fontSize: 20,
-                        fontWeight: FontWeight.w300,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '$inteiro,$centavos',
-                    style: const TextStyle(
-                      fontFamily: 'Manrope',
-                      fontSize: 46,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -2,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: _heroAction(
-                      label: 'Transferir',
-                      icon: Icons.payments_rounded,
-                      filled: true,
-                      onTap: _solicitarSaque,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _heroAction(
-                      label: 'Atualizar',
-                      icon: Icons.refresh_rounded,
-                      filled: false,
-                      onTap: _carregar,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _heroAction({
-    required String label,
-    required IconData icon,
-    required bool filled,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: filled ? Colors.white : Colors.white.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(999),
-          border: filled
-              ? null
-              : Border.all(color: Colors.white.withOpacity(0.20)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon,
-                color: filled ? AppColors.primary : Colors.white, size: 16),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontFamily: 'Manrope',
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: filled ? AppColors.primary : Colors.white,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatsGrid() {
     final ganhos = _carteira?.ganhosMensais ?? 0.0;
     final media = _carteira?.mediaPorTurno ?? 0.0;
-
-    return Row(
-      children: [
-        Expanded(
-          child: _statCard(
-            icon: Icons.trending_up_rounded,
-            label: 'Ganhos Mensais',
-            value: 'R\$ ${ganhos.toStringAsFixed(0)}',
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _statCard(
-            icon: Icons.speed_rounded,
-            label: 'Média por Turno',
-            value: 'R\$ ${media.toStringAsFixed(0)}',
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _statCard({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: AppColors.primary, size: 24),
-          const SizedBox(height: 12),
-          Text(
-            label.toUpperCase(),
-            style: const TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
-              color: AppColors.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              fontFamily: 'Manrope',
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
-              color: AppColors.onSurface,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHistoricoSection() {
     final transacoes = _carteira?.transacoes ?? [];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final saldoStr =
+        'R\$ ${saldo.toStringAsFixed(2).replaceAll('.', ',')}';
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
       children: [
+        WalletHero(
+          balance: saldoStr,
+          onWithdraw: _solicitarSaque,
+          onExtract: _carregar,
+        ),
+        const SizedBox(height: 12),
+        // Stats
         Row(
           children: [
-            const Expanded(
-              child: Text(
-                'Histórico de Ganhos',
-                style: TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 19,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                  color: AppColors.onSurface,
-                ),
-              ),
+            Expanded(
+              child: _statTile(
+                  Icons.trending_up_rounded,
+                  'Ganhos mensais',
+                  'R\$ ${ganhos.toStringAsFixed(0)}'),
             ),
-            const Icon(Icons.calendar_month_outlined,
-                color: AppColors.onSurfaceVariant, size: 22),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _statTile(
+                  Icons.speed_rounded,
+                  'Média/turno',
+                  'R\$ ${media.toStringAsFixed(0)}'),
+            ),
           ],
         ),
-        const SizedBox(height: 16),
+        SectionTitle(
+          title: 'Histórico',
+          action: 'Atualizar',
+          onAction: _carregar,
+        ),
         if (transacoes.isEmpty)
           Container(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
-              color: AppColors.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(16),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.line, width: 1.5),
             ),
-            child: const Center(
+            child: Center(
               child: Text(
                 'Nenhuma transação registrada ainda.',
-                style: TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 14,
-                  color: AppColors.onSurfaceVariant,
-                ),
+                style: tsJakarta(12.5, FontWeight.w400,
+                    color: AppColors.muted),
               ),
             ),
           )
         else
-          ...transacoes.map(_buildTransacaoCard),
+          LedgerCard(
+            rows: transacoes
+                .map((t) => LedgerRow(
+                      title: t.descricao,
+                      date: _formatarData(t.criadoEm),
+                      amount:
+                          '${t.tipo == TipoTransacao.saque ? '-' : '+'} R\$ ${t.valor.toStringAsFixed(2).replaceAll('.', ',')}',
+                      isCredit: t.tipo != TipoTransacao.saque,
+                    ))
+                .toList(),
+          ),
       ],
     );
   }
 
-  Widget _buildTransacaoCard(Transacao t) {
-    final isDebit = t.tipo == TipoTransacao.saque;
-
+  Widget _statTile(IconData icon, String label, String value) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.line, width: 1.5),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isDebit
-                  ? AppColors.errorContainer.withOpacity(0.30)
-                  : AppColors.primary.withOpacity(0.10),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              _iconForTipo(t.tipo),
-              color: isDebit ? AppColors.error : AppColors.primary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  t.descricao,
-                  style: const TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  _formatarData(t.criadoEm),
-                  style: const TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 11,
-                    color: AppColors.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${isDebit ? '-' : '+'} R\$ ${t.valor.toStringAsFixed(2).replaceAll('.', ',')}',
-                style: TextStyle(
-                  fontFamily: 'Manrope',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: isDebit ? AppColors.error : AppColors.onSurface,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.secondaryContainer,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  t.status.label.toUpperCase(),
-                  style: const TextStyle(
-                    fontFamily: 'Manrope',
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
-                    color: AppColors.onSecondaryContainer,
-                  ),
-                ),
-              ),
-            ],
-          ),
+          Icon(icon, color: AppColors.teal, size: 20),
+          const SizedBox(height: 6),
+          Text(label.toUpperCase(),
+              style:
+                  tsJakarta(8.5, FontWeight.w700, color: AppColors.muted)),
+          const SizedBox(height: 2),
+          Text(value,
+              style:
+                  tsBricolage(17, FontWeight.w800, color: AppColors.ink)),
         ],
       ),
     );
-  }
-
-  IconData _iconForTipo(TipoTransacao t) {
-    return switch (t) {
-      TipoTransacao.turno => Icons.local_shipping_rounded,
-      TipoTransacao.entrega => Icons.local_shipping_rounded,
-      TipoTransacao.bonus => Icons.bolt_rounded,
-      TipoTransacao.saque => Icons.account_balance_wallet_rounded,
-    };
   }
 
   String _formatarData(DateTime d) {
@@ -553,18 +300,8 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     final hora =
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
     if (dia == hoje) return 'Hoje, $hora';
-    if (dia == hoje.subtract(const Duration(days: 1))) return 'Ontem, $hora';
+    if (dia == hoje.subtract(const Duration(days: 1)))
+      return 'Ontem, $hora';
     return '${d.day}/${d.month.toString().padLeft(2, '0')}, $hora';
-  }
-
-  String _formatMilhar(int n) {
-    final s = n.toString();
-    if (s.length <= 3) return s;
-    final buf = StringBuffer();
-    for (var i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
-      buf.write(s[i]);
-    }
-    return buf.toString();
   }
 }
