@@ -62,6 +62,7 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       initialTime: isStart
           ? const TimeOfDay(hour: 8, minute: 0)
           : const TimeOfDay(hour: 12, minute: 0),
+      initialEntryMode: TimePickerEntryMode.inputOnly,
       builder: (ctx, child) => MediaQuery(
         data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true),
         child: Theme(
