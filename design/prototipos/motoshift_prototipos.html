@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MotoShift — Protótipos de Telas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --teal:#0E8B8C;
+    --teal-bright:#16B5B0;
+    --teal-deep:#0A4D52;
+    --ink:#062E33;
+    --canvas-1:#0b262a;
+    --canvas-2:#06181b;
+    --surface:#FFFFFF;
+    --surface-2:#F2F6F5;
+    --surface-3:#E7EFEE;
+    --line:#E2EAE9;
+    --text:#0F2C30;
+    --muted:#6B8487;
+    --amber:#F6A623;
+    --amber-soft:#FFF1D6;
+    --teal-soft:#DEF1F0;
+    --good:#1B9E73;
+    --shadow:0 22px 50px -18px rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:'Plus Jakarta Sans',sans-serif;
+    background:
+      radial-gradient(900px 600px at 12% -5%, rgba(22,181,176,.18), transparent 60%),
+      radial-gradient(800px 600px at 95% 8%, rgba(246,166,35,.10), transparent 55%),
+      linear-gradient(160deg,var(--canvas-1),var(--canvas-2));
+    background-attachment:fixed;
+    color:#dbe8e7;
+    -webkit-font-smoothing:antialiased;
+    padding:54px 32px 80px;
+  }
+
+  /* ---------- page header ---------- */
+  .page-head{max-width:1320px;margin:0 auto 46px;}
+  .brand{display:flex;align-items:center;gap:14px;}
+  .brand .logomark{
+    width:52px;height:52px;border-radius:15px;
+    background:linear-gradient(150deg,var(--teal-bright),var(--teal-deep));
+    display:grid;place-items:center;
+    box-shadow:0 12px 30px -8px rgba(22,181,176,.6);
+  }
+  .brand h1{
+    font-family:'Bricolage Grotesque',sans-serif;
+    font-weight:800;font-size:30px;color:#fff;letter-spacing:-.02em;
+  }
+  .brand h1 span{color:var(--teal-bright);}
+  .page-head p{
+    margin-top:16px;max-width:620px;color:#9fb7b7;font-size:15px;line-height:1.6;
+  }
+  .tagrow{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;}
+  .tag{
+    font-size:12px;font-weight:600;letter-spacing:.02em;
+    padding:6px 13px;border-radius:999px;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);
+    color:#bcd2d1;
+  }
+
+  /* ---------- grid of phones ---------- */
+  .grid{
+    max-width:1320px;margin:0 auto;
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(286px,1fr));
+    gap:46px 34px;justify-items:center;
+  }
+  .device{display:flex;flex-direction:column;align-items:center;gap:16px;}
+  .screen-label{
+    text-align:center;
+  }
+  .screen-label .n{
+    font-family:'Bricolage Grotesque',sans-serif;
+    font-size:13px;font-weight:700;color:var(--teal-bright);
+  }
+  .screen-label .t{
+    display:block;font-size:15px;font-weight:700;color:#eef6f5;margin-top:2px;
+  }
+  .screen-label .d{
+    display:block;font-size:12px;color:#8aa3a3;margin-top:3px;
+  }
+
+  /* ---------- phone frame ---------- */
+  .phone{
+    width:286px;height:600px;
+    background:#0c1416;
+    border-radius:42px;
+    padding:11px;
+    box-shadow:var(--shadow), inset 0 0 0 1.5px rgba(255,255,255,.06);
+    position:relative;
+  }
+  .phone::before{ /* side button */
+    content:"";position:absolute;right:-3px;top:140px;width:3px;height:58px;
+    background:#1c2a2c;border-radius:0 3px 3px 0;
+  }
+  .phone::after{
+    content:"";position:absolute;left:-3px;top:120px;width:3px;height:34px;
+    background:#1c2a2c;border-radius:3px 0 0 3px;
+    box-shadow:0 48px 0 #1c2a2c;
+  }
+  .scr{
+    width:100%;height:100%;border-radius:32px;overflow:hidden;
+    background:var(--surface);position:relative;
+    display:flex;flex-direction:column;
+  }
+  /* status bar */
+  .status{
+    height:34px;flex:0 0 34px;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 20px 0 22px;font-size:11px;font-weight:700;color:var(--ink);
+    position:relative;z-index:3;
+  }
+  .status.onTeal{color:#eafffd;}
+  .notch{
+    position:absolute;top:9px;left:50%;transform:translateX(-50%);
+    width:74px;height:19px;background:#0c1416;border-radius:11px;z-index:4;
+  }
+  .status .sig{display:flex;gap:4px;align-items:center;}
+  .bat{width:21px;height:10px;border:1.4px solid currentColor;border-radius:3px;position:relative;opacity:.9;}
+  .bat::after{content:"";position:absolute;right:-3.5px;top:2.5px;width:2px;height:3px;background:currentColor;border-radius:0 1px 1px 0;}
+  .bat i{position:absolute;left:1.4px;top:1.4px;bottom:1.4px;width:62%;background:currentColor;border-radius:1px;}
+
+  .body{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+
+  /* generic UI atoms */
+  .icn{display:inline-block;vertical-align:middle;}
+  .h-sec{font-family:'Bricolage Grotesque',sans-serif;}
+  .pill{
+    font-size:9.5px;font-weight:700;padding:3px 9px;border-radius:999px;
+    letter-spacing:.02em;display:inline-flex;align-items:center;gap:4px;
+  }
+  .pill.teal{background:var(--teal-soft);color:var(--teal-deep);}
+  .pill.amber{background:var(--amber-soft);color:#9a6206;}
+  .pill.good{background:#DDF3EA;color:#0f6e4e;}
+  .pill.ghost{background:var(--surface-3);color:var(--muted);}
+
+  .btn{
+    width:100%;border:none;border-radius:14px;padding:14px;
+    font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;font-size:13.5px;
+    cursor:default;display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .btn-primary{background:linear-gradient(135deg,var(--teal-bright),var(--teal));color:#fff;
+    box-shadow:0 12px 22px -10px rgba(14,139,140,.8);}
+  .btn-amber{background:var(--amber);color:#3a2603;box-shadow:0 12px 22px -10px rgba(246,166,35,.7);}
+  .btn-ghost{background:var(--surface-2);color:var(--teal-deep);border:1.5px solid var(--line);}
+
+  .field{
+    background:var(--surface-2);border:1.5px solid var(--line);
+    border-radius:13px;padding:11px 13px;display:flex;align-items:center;gap:10px;
+  }
+  .field .lab{font-size:9px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;}
+  .field .val{font-size:13px;font-weight:600;color:var(--text);}
+  .field-stack{display:flex;flex-direction:column;gap:1px;}
+
+  .card{
+    background:var(--surface);border:1.5px solid var(--line);border-radius:16px;
+  }
+
+  /* ===================================================== */
+  /*  SCREEN 1 — LOGIN                                      */
+  /* ===================================================== */
+  .s-login .body{
+    background:linear-gradient(170deg,var(--teal-deep),#062E33 62%,#04181b);
+    padding:0 22px;
+  }
+  .login-top{padding-top:30px;text-align:center;}
+  .login-logo{
+    width:62px;height:62px;border-radius:18px;margin:0 auto;
+    background:linear-gradient(150deg,var(--teal-bright),var(--teal));
+    display:grid;place-items:center;box-shadow:0 16px 30px -10px rgba(22,181,176,.7);
+  }
+  .login-name{
+    font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:26px;
+    color:#fff;margin-top:16px;letter-spacing:-.02em;
+  }
+  .login-name b{color:var(--teal-bright);font-weight:800;}
+  .login-sub{font-size:12px;color:#8fb6b6;margin-top:5px;}
+  .login-card{
+    background:rgba(255,255,255,.97);border-radius:22px;margin-top:26px;padding:20px 18px;
+  }
+  .login-card h3{font-family:'Bricolage Grotesque',sans-serif;font-size:16px;color:var(--ink);margin-bottom:3px;}
+  .login-card .cap{font-size:11px;color:var(--muted);margin-bottom:15px;}
+  .seg{
+    display:flex;background:var(--surface-2);border-radius:12px;padding:4px;gap:4px;margin-bottom:15px;
+  }
+  .seg div{
+    flex:1;text-align:center;font-size:11px;font-weight:700;padding:8px 0;border-radius:9px;color:var(--muted);
+  }
+  .seg div.on{background:var(--teal);color:#fff;box-shadow:0 6px 14px -6px rgba(14,139,140,.7);}
+  .ipt{
+    background:var(--surface-2);border:1.5px solid var(--line);border-radius:12px;
+    padding:11px 12px;display:flex;align-items:center;gap:9px;margin-bottom:9px;
+  }
+  .ipt span{font-size:12.5px;color:var(--text);font-weight:500;}
+  .ipt span.ph{color:#9aaeae;font-weight:400;}
+  .forgot{text-align:right;font-size:10.5px;color:var(--teal);font-weight:700;margin:2px 2px 14px;}
+  .login-foot{text-align:center;font-size:11px;color:#7fa1a1;margin-top:16px;}
+  .login-foot b{color:var(--teal-bright);}
+
+  /* ===================================================== */
+  /*  SHARED — app header (teal)                            */
+  /* ===================================================== */
+  .apphead{
+    background:linear-gradient(135deg,var(--teal),var(--teal-deep));
+    padding:4px 18px 20px;color:#fff;
+  }
+  .apphead.tall{padding-bottom:30px;}
+  .ah-row{display:flex;align-items:center;justify-content:space-between;}
+  .ah-hi{font-size:11px;color:#bfe5e3;font-weight:600;}
+  .ah-name{font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:800;margin-top:1px;}
+  .avatar{
+    width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.16);
+    display:grid;place-items:center;font-weight:800;font-size:14px;color:#eafffd;
+    border:1.5px solid rgba(255,255,255,.22);
+  }
+  .ah-back{
+    width:34px;height:34px;border-radius:11px;background:rgba(255,255,255,.14);
+    display:grid;place-items:center;
+  }
+  .ah-title{font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:800;}
+
+  .content{flex:1;overflow:hidden;padding:16px 16px 0;background:var(--surface-2);}
+  .content.lift{margin-top:-16px;border-radius:18px 18px 0 0;background:var(--surface-2);}
+
+  /* stat cards */
+  .stats3{display:flex;gap:8px;}
+  .stat{
+    flex:1;background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:10px 9px;
+  }
+  .stat .k{font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.03em;}
+  .stat .v{font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:800;color:var(--ink);margin-top:3px;line-height:1;}
+  .stat .v small{font-size:10px;font-weight:700;}
+  .stat .sub{font-size:8.5px;color:var(--good);font-weight:700;margin-top:3px;}
+
+  .sec-title{
+    font-family:'Bricolage Grotesque',sans-serif;font-size:13px;font-weight:800;color:var(--ink);
+    display:flex;align-items:center;justify-content:space-between;margin:14px 2px 9px;
+  }
+  .sec-title .more{font-size:10px;color:var(--teal);font-weight:700;font-family:'Plus Jakarta Sans';}
+
+  /* shift list item */
+  .shift{
+    background:var(--surface);border:1.5px solid var(--line);border-radius:14px;
+    padding:11px;margin-bottom:9px;display:flex;gap:10px;align-items:center;
+  }
+  .shift .ic{
+    width:40px;height:40px;border-radius:11px;flex:0 0 40px;display:grid;place-items:center;
+    background:var(--teal-soft);
+  }
+  .shift .ic.amber{background:var(--amber-soft);}
+  .shift .mid{flex:1;min-width:0;}
+  .shift .nm{font-size:12.5px;font-weight:700;color:var(--text);}
+  .shift .meta{font-size:10px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap;}
+  .shift .meta b{color:var(--teal-deep);font-weight:700;}
+  .shift .rt{text-align:right;}
+  .shift .val{font-family:'Bricolage Grotesque',sans-serif;font-size:13px;font-weight:800;color:var(--ink);}
+
+  /* bottom nav */
+  .nav{
+    flex:0 0 56px;background:var(--surface);border-top:1.5px solid var(--line);
+    display:flex;align-items:center;justify-content:space-around;padding:0 6px;
+  }
+  .nav a{display:flex;flex-direction:column;align-items:center;gap:3px;color:#aebfbf;font-size:8px;font-weight:700;}
+  .nav a.on{color:var(--teal);}
+  .nav .dot{width:5px;height:5px;border-radius:50%;background:var(--teal);margin-top:1px;}
+
+  /* publish form */
+  .form-grp{margin-bottom:11px;}
+  .form-grp .gl{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px;display:block;}
+  .two{display:flex;gap:8px;}
+  .two .field{flex:1;}
+  .slider{
+    background:var(--surface);border:1.5px solid var(--line);border-radius:13px;padding:12px 13px;
+  }
+  .slider .track{height:5px;background:var(--surface-3);border-radius:3px;position:relative;margin:11px 0 5px;}
+  .slider .fill{position:absolute;left:0;top:0;bottom:0;width:58%;background:var(--teal);border-radius:3px;}
+  .slider .knob{position:absolute;left:58%;top:50%;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--teal);box-shadow:0 3px 8px rgba(0,0,0,.2);}
+  .slider .sc{display:flex;justify-content:space-between;font-size:8.5px;color:var(--muted);font-weight:600;}
+
+  /* filter chips */
+  .chips{display:flex;gap:7px;overflow:hidden;margin-bottom:12px;}
+  .chip{
+    font-size:10px;font-weight:700;padding:7px 11px;border-radius:999px;white-space:nowrap;
+    background:var(--surface);border:1.5px solid var(--line);color:var(--muted);
+    display:flex;align-items:center;gap:5px;
+  }
+  .chip.on{background:var(--teal);color:#fff;border-color:var(--teal);}
+
+  /* wallet */
+  .wallet-hero{
+    background:linear-gradient(140deg,var(--teal),var(--teal-deep));
+    border-radius:18px;padding:18px;color:#fff;margin-bottom:14px;position:relative;overflow:hidden;
+  }
+  .wallet-hero::after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.07);}
+  .wallet-hero .wl{font-size:10.5px;color:#bfe5e3;font-weight:600;}
+  .wallet-hero .wv{font-family:'Bricolage Grotesque',sans-serif;font-size:32px;font-weight:800;margin-top:3px;letter-spacing:-.02em;}
+  .wallet-hero .wv small{font-size:15px;}
+  .wallet-hero .wrow{display:flex;gap:8px;margin-top:14px;}
+  .wallet-hero .wbtn{flex:1;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.2);border-radius:11px;padding:9px;text-align:center;font-size:10.5px;font-weight:700;}
+  .wallet-hero .wbtn.solid{background:var(--amber);color:#3a2603;border-color:var(--amber);}
+
+  .ledger{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:5px 12px;}
+  .lrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);}
+  .lrow:last-child{border-bottom:none;}
+  .lrow .lic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:0 0 32px;}
+  .lrow .lic.in{background:#DDF3EA;}
+  .lrow .lic.out{background:var(--amber-soft);}
+  .lrow .lm{flex:1;}
+  .lrow .lt{font-size:11.5px;font-weight:700;color:var(--text);}
+  .lrow .ld{font-size:9px;color:var(--muted);margin-top:1px;}
+  .lrow .la{font-family:'Bricolage Grotesque',sans-serif;font-size:12.5px;font-weight:800;}
+  .la.pos{color:var(--good);}
+  .la.neg{color:#9a6206;}
+
+  /* mini bar chart */
+  .bars{display:flex;align-items:flex-end;gap:7px;height:62px;padding:0 4px;}
+  .bars .bar{flex:1;background:var(--teal-soft);border-radius:5px 5px 0 0;position:relative;}
+  .bars .bar.hot{background:linear-gradient(180deg,var(--teal-bright),var(--teal));}
+  .bars .bl{position:absolute;bottom:-15px;left:0;right:0;text-align:center;font-size:7.5px;color:var(--muted);font-weight:700;}
+
+  /* rating screen */
+  .s-rate .content{background:var(--surface-2);}
+  .rate-card{background:var(--surface);border:1.5px solid var(--line);border-radius:18px;padding:18px;text-align:center;}
+  .rate-ava{width:58px;height:58px;border-radius:16px;margin:0 auto 10px;background:linear-gradient(150deg,var(--teal-bright),var(--teal-deep));display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;}
+  .rate-card h3{font-family:'Bricolage Grotesque',sans-serif;font-size:16px;color:var(--ink);}
+  .rate-card .rc{font-size:10.5px;color:var(--muted);margin-top:3px;}
+  .stars{display:flex;justify-content:center;gap:6px;margin:15px 0 6px;}
+  .rate-q{font-size:11px;color:var(--muted);font-weight:600;}
+  .rt-area{
+    background:var(--surface-2);border:1.5px solid var(--line);border-radius:13px;
+    padding:11px 12px;font-size:10.5px;color:#9aaeae;margin-top:14px;text-align:left;min-height:62px;
+  }
+  .tag-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;}
+  .qtag{font-size:9.5px;font-weight:700;padding:6px 10px;border-radius:999px;background:var(--surface-2);border:1.5px solid var(--line);color:var(--muted);}
+  .qtag.on{background:var(--teal-soft);color:var(--teal-deep);border-color:var(--teal-soft);}
+
+  /* calendar / agenda */
+  .cal{background:var(--surface);border:1.5px solid var(--line);border-radius:16px;padding:14px;}
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .cal-head .mm{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:13px;color:var(--ink);}
+  .cal-head .ar{width:24px;height:24px;border-radius:8px;background:var(--surface-2);display:grid;place-items:center;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+  .cal-grid .dn{font-size:8px;font-weight:700;color:var(--muted);text-align:center;padding-bottom:4px;}
+  .cal-grid .cd{
+    aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-size:10px;font-weight:700;color:var(--text);border-radius:9px;position:relative;
+  }
+  .cal-grid .cd.mut{color:#c4d2d1;}
+  .cal-grid .cd.has::after{content:"";width:4px;height:4px;border-radius:50%;background:var(--amber);margin-top:2px;}
+  .cal-grid .cd.sel{background:var(--teal);color:#fff;}
+  .cal-grid .cd.sel.has::after{background:#fff;}
+  .cal-grid .cd.today{box-shadow:inset 0 0 0 1.5px var(--teal);}
+
+  /* ===================================================== */
+  /*  SCREEN 9 — PERFIL                                     */
+  /* ===================================================== */
+  .prof-hero{
+    background:linear-gradient(135deg,var(--teal),var(--teal-deep));
+    padding:6px 18px 46px;color:#fff;text-align:center;position:relative;
+  }
+  .prof-hero .ah-row{margin-bottom:10px;}
+  .prof-ava{
+    width:72px;height:72px;border-radius:22px;margin:0 auto;
+    background:rgba(255,255,255,.16);border:2px solid rgba(255,255,255,.3);
+    display:grid;place-items:center;font-family:'Bricolage Grotesque';font-weight:800;font-size:26px;color:#eafffd;
+    position:relative;
+  }
+  .prof-ava .vrf{
+    position:absolute;right:-5px;bottom:-5px;width:24px;height:24px;border-radius:50%;
+    background:var(--good);border:3px solid var(--teal-deep);display:grid;place-items:center;
+  }
+  .prof-name{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:18px;margin-top:11px;}
+  .prof-meta{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:5px;}
+  .prof-meta .pp{font-size:9.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22);}
+  .prof-meta .rt{font-size:11px;font-weight:700;color:#ffd98a;display:flex;align-items:center;gap:3px;}
+  .prof-stats{
+    display:flex;margin:0;background:var(--surface);border:1.5px solid var(--line);
+    border-radius:15px;padding:11px 4px;
+  }
+  .prof-stats .ps{flex:1;text-align:center;position:relative;}
+  .prof-stats .ps + .ps::before{content:"";position:absolute;left:0;top:14%;bottom:14%;width:1.5px;background:var(--line);}
+  .prof-stats .pv{font-family:'Bricolage Grotesque';font-weight:800;font-size:16px;color:var(--ink);}
+  .prof-stats .pk{font-size:8.5px;color:var(--muted);font-weight:700;margin-top:2px;letter-spacing:.02em;}
+  .menu{background:var(--surface);border:1.5px solid var(--line);border-radius:15px;padding:3px 13px;}
+  .mrow{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--line);}
+  .mrow:last-child{border-bottom:none;}
+  .mrow .mi{width:32px;height:32px;border-radius:10px;background:var(--teal-soft);display:grid;place-items:center;flex:0 0 32px;}
+  .mrow .mtxt{flex:1;}
+  .mrow .ml{font-size:12px;font-weight:700;color:var(--text);}
+  .mrow .ms{font-size:9px;color:var(--muted);margin-top:1px;}
+  .mrow .chev{color:#bcccccff;}
+  .mrow.danger .mi{background:#FBE4E2;}
+  .mrow.danger .ml{color:#C0392B;}
+  .menu-cap{font-size:9px;font-weight:800;color:var(--muted);letter-spacing:.08em;margin:14px 4px 7px;}
+
+  /* ===================================================== */
+  /*  SCREEN 10 — DETALHE DO TURNO                          */
+  /* ===================================================== */
+  .map{
+    height:118px;border-radius:14px;overflow:hidden;position:relative;
+    background:linear-gradient(160deg,#dceeed,#cfe6e4);border:1.5px solid var(--line);
+  }
+  .store-card{
+    background:var(--surface);border:1.5px solid var(--line);border-radius:15px;
+    padding:12px;display:flex;gap:11px;align-items:center;
+  }
+  .store-card .slogo{
+    width:46px;height:46px;border-radius:13px;flex:0 0 46px;display:grid;place-items:center;
+    background:linear-gradient(150deg,var(--amber),#e08e10);color:#fff;
+    font-family:'Bricolage Grotesque';font-weight:800;font-size:16px;
+  }
+  .store-card .snm{font-family:'Bricolage Grotesque';font-weight:800;font-size:14px;color:var(--ink);}
+  .store-card .sad{font-size:10px;color:var(--muted);margin-top:2px;}
+  .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .info-cell{
+    background:var(--surface);border:1.5px solid var(--line);border-radius:13px;padding:10px 11px;
+  }
+  .info-cell .ik{font-size:8.5px;font-weight:800;color:var(--muted);letter-spacing:.04em;display:flex;align-items:center;gap:5px;}
+  .info-cell .iv{font-family:'Bricolage Grotesque';font-weight:800;font-size:14px;color:var(--ink);margin-top:5px;}
+  .info-cell.pay{background:var(--teal);border-color:var(--teal);}
+  .info-cell.pay .ik{color:#bfe5e3;}
+  .info-cell.pay .iv{color:#fff;font-size:17px;}
+  .detail-foot{
+    flex:0 0 auto;background:var(--surface);border-top:1.5px solid var(--line);
+    padding:11px 16px 13px;
+  }
+  .req-list{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:6px 13px;}
+  .req-list .ri{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--line);font-size:11px;color:var(--text);font-weight:600;}
+  .req-list .ri:last-child{border-bottom:none;}
+  .req-list .rc{width:18px;height:18px;border-radius:50%;background:#DDF3EA;display:grid;place-items:center;flex:0 0 18px;}
+
+  /* ===================================================== */
+  /*  SCREEN 11 — DETALHE DO TURNO (LOJISTA)                */
+  /* ===================================================== */
+  .timeline{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:14px 13px;}
+  .tl-step{display:flex;gap:11px;position:relative;padding-bottom:15px;}
+  .tl-step:last-child{padding-bottom:0;}
+  .tl-step:not(:last-child)::before{content:"";position:absolute;left:8px;top:19px;bottom:0;width:2px;background:var(--line);}
+  .tl-step.done:not(:last-child)::before{background:var(--teal);}
+  .tl-dot{width:18px;height:18px;border-radius:50%;flex:0 0 18px;display:grid;place-items:center;z-index:1;background:var(--surface-3);}
+  .tl-dot.done{background:var(--teal);}
+  .tl-dot.now{background:#fff;border:3px solid var(--teal);box-shadow:0 0 0 4px var(--teal-soft);}
+  .tl-txt .tll{font-size:11.5px;font-weight:700;color:var(--text);}
+  .tl-txt .tld{font-size:9px;color:var(--muted);margin-top:1px;}
+  .tl-step.pending .tll{color:#aebfbf;}
+  .contact-btn{
+    width:34px;height:34px;border-radius:11px;background:var(--teal-soft);
+    display:grid;place-items:center;flex:0 0 34px;
+  }
+
+  /* responsive */
+  @media(max-width:680px){
+    body{padding:34px 16px 60px;}
+    .grid{gap:40px 20px;}
+  }
+  /* print */
+  @media print{
+    body{background:#fff;}
+    .phone{box-shadow:0 0 0 1px #ccc;}
+  }
+</style>
+</head>
+<body>
+
+<header class="page-head">
+  <div class="brand">
+    <div class="logomark">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+        <circle cx="6" cy="17" r="3.2" stroke="#fff" stroke-width="2"/>
+        <circle cx="18" cy="17" r="3.2" stroke="#fff" stroke-width="2"/>
+        <path d="M6 17h6l3-6h3l1.5 3" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M9 11l2-4h4" stroke="#16B5B0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h1>Moto<span>Shift</span></h1>
+  </div>
+  <p>Protótipo de alta fidelidade — telas principais do aplicativo de agendamento de turnos entre motoboys autônomos e pequenos lojistas. Construído a partir dos requisitos RF01–RF09 do projeto.</p>
+  <div class="tagrow">
+    <span class="tag">Projeto Integrador V — UNIFACEAR</span>
+    <span class="tag">Flutter · Spring Boot · H2/MySQL</span>
+    <span class="tag">11 telas · 2 perfis de usuário</span>
+  </div>
+</header>
+
+<main class="grid">
+
+  <!-- ================= 1. LOGIN ================= -->
+  <div class="device">
+    <div class="phone">
+      <div class="scr s-login">
+        <div class="notch"></div>
+        <div class="status onTeal">
+          <span>9:41</span>
+          <span class="sig">
+            <svg width="16" height="9" viewBox="0 0 16 9" fill="currentColor"><rect x="0" y="6" width="2.6" height="3" rx="1"/><rect x="3.8" y="4" width="2.6" height="5" rx="1"/><rect x="7.6" y="2" width="2.6" height="7" rx="1"/><rect x="11.4" y="0" width="2.6" height="9" rx="1"/></svg>
+            <span class="bat"><i></i></span>
+          </span>
+        </div>
+        <div class="body">
+          <div class="login-top">
+            <div class="login-logo">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                <circle cx="6" cy="17" r="3.2" stroke="#fff" stroke-width="2"/>
+                <circle cx="18" cy="17" r="3.2" stroke="#fff" stroke-width="2"/>
+                <path d="M6 17h6l3-6h3l1.5 3" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M9 11l2-4h4" stroke="#062E33" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="login-name">Moto<b>Shift</b></div>
+            <div class="login-sub">Turnos organizados. Renda previsível.</div>
+          </div>
+          <div class="login-card">
+            <h3>Bem-vindo de volta</h3>
+            <div class="cap">Entre para acessar seus turnos</div>
+            <div class="seg">
+              <div class="on">Sou Lojista</div>
+              <div>Sou Motoboy</div>
+            </div>
+            <div class="ipt">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0E8B8C" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M3 6l9 7 9-7"/></svg>
+              <span>claudia@lanche.com</span>
+            </div>
+            <div class="ipt">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0E8B8C" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+              <span class="ph">••••••••</span>
+            </div>
+            <div class="forgot">Esqueci minha senha</div>
+            <button class="btn btn-primary">
+              Entrar
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+            </button>
+            <div class="login-foot">Ainda não tem conta? <b>Criar agora</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label"><span class="n">Tela 01</span><span class="t">Login & Perfil</span><span class="d">RF01 — Autenticação JWT</span></div>
+  </div>
+
+  <!-- ================= 2. DASHBOARD LOJISTA ================= -->
+  <div class="device">
+    <div class="phone">
+      <div class="scr">
+        <div class="notch"></div>
+        <div class="status onTeal">
+          <span>9:41</span>
+          <span class="sig">
+            <svg width="16" height="9" viewBox="0 0 16 9" fill="currentColor"><rect x="0" y="6" width="2.6" height="3" rx="1"/><rect x="3.8" y="4" width="2.6" height="5" rx="1"/><rect x="7.6" y="2" width="2.6" height="7" rx="1"/><rect x="11.4" y="0" width="2.6" height="9" rx="1"/></svg>
+            <span class="bat"><i></i></span>
+          </span>
+        </div>
+        <div class="body">
+          <div class="apphead tall">
+            <div class="ah-row">
+              <div>
+                <div class="ah-hi">Bom dia,</div>
+                <div class="ah-name">Lanchonete da Cláudia</div>
+              </div>
+              <div class="avatar">CL</div>
+            </div>
+          </div>
+          <div class="content lift">
+            <div class="stats3">
+              <div class="stat"><div class="k">TURNOS ATIVOS</div><div class="v">3</div><div class="sub">2 preenchidos</div></div>
+              <div class="stat"><div class="k">GASTO / MÊS</div><div class="v"><small>R$</small>840</div><div class="sub">−12% vs abril</div></div>
+              <div class="stat"><div class="k">AVALIAÇÃO</div><div class="v">4.8<small>★</small></div><div class="sub">28 turnos</div></div>
+            </div>
+            <button class="btn btn-amber" style="margin-top:13px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3a2603" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              Publicar novo turno
+            </button>
+            <div class="sec-title">Próximos turnos <span class="more">Ver agenda</span></div>
+            <div class="shift">
+              <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A4D52" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg></div>
+              <div class="mid">
+                <div class="nm">Turno noturno · Sexta</div>
+                <div class="meta"><span>18:00–23:00</span><span>•</span><span>Raio <b>4 km</b></span></div>
+              </div>
+              <div class="rt"><div class="val">R$ 90</div><span class="pill good" style="margin-top:4px;">Aceito</span></div>
+            </div>
+            <div class="shift">
+              <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A4D52" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg></div>
+              <div class="mid">
+                <div class="nm">Turno almoço · Sábado</div>
+                <div class="meta"><span>11:00–15:00</span><span>•</span><span>Raio <b>3 km</b></span></div>
+              </div>
+              <div class="rt"><div class="val">R$ 70</div><span class="pill amber" style="margin-top:4px;">Aguardando</span></div>
+            </div>
+            <div class="shift">
+              <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A4D52" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg></div>
+              <div class="mid">
+                <div class="nm">Turno noturno · Sábado</div>
+                <div class="meta"><span>18:00–23:00</span><span>•</span><span>Raio <b>5 km</b></span></div>
+              </div>
+              <div class="rt"><div class="val">R$ 95</div><span class="pill good" style="margin-top:4px;">Aceito</span></div>
+            </div>
+          </div>
+          <div class="nav">
+            <a class="on"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8M5 9v11h14V9"/></svg>Início<span class="dot"></span></a>
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Agenda</a>
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h13l4 4v8H3z"/><circle cx="7" cy="18" r="2"/></svg>Turnos</a>
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>Perfil</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label"><span class="n">Tela 02</span><span class="t">Painel do Lojista</span><span class="d">RF02 — Indicadores & turnos</span></div>
+  </div>
+
+  <!-- ================= 3. PUBLICAR TURNO ================= -->
+  <div class="device">
+    <div class="phone">
+      <div class="scr">
+        <div class="notch"></div>
+        <div class="status onTeal">
+          <span>9:41</span>
+          <span class="sig">
+            <svg width="16" height="9" viewBox="0 0 16 9" fill="currentColor"><rect x="0" y="6" width="2.6" height="3" rx="1"/><rect x="3.8" y="4" width="2.6" height="5" rx="1"/><rect x="7.6" y="2" width="2.6" height="7" rx="1"/><rect x="11.4" y="0" width="2.6" height="9" rx="1"/></svg>
+            <span class="bat"><i></i></span>
+          </span>
+        </div>
+        <div class="body">
+          <div class="apphead">
+            <div class="ah-row">
+              <div class="ah-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+              <div class="ah-title">Publicar Turno</div>
+              <div style="width:34px;"></div>
+            </div>
+          </div>
+          <div class="content lift" style="overflow-y:auto;">
+            <div class="form-grp">
+              <span class="gl">Data do turno</span>
+              <div class="field">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0E8B8C" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+                <div class="field-stack"><span class="val">Sexta, 23 de maio</span></div>
+              </div>
+            </div>
+            <div class="form-grp">
+              <span class="gl">Horário</span>
+              <div class="two">
+                <div class="field"><div class="field-stack"><span class="lab">Início</span><span class="val">18:00</span></div></div>
+                <div class="field"><div class="field-stack"><span class="lab">Fim</span><span class="val">23:00</span></div></div>
+              </div>
+            </div>
+            <div class="form-grp">
+              <span class="gl">Raio de entrega</span>
+              <div class="slider">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span style="font-size:11px;font-weight:600;color:var(--muted);">Distância máxima</span>
+                  <span style="font-family:'Bricolage Grotesque';font-weight:800;font-size:14px;color:var(--teal-deep);">4 km</span>
+                </div>
+                <div class="track"><div class="fill"></div><div class="knob"></div></div>
+                <div class="sc"><span>1 km</span><span>10 km</span></div>
+              </div>
+            </div>
+            <div class="form-grp">
+              <span class="gl">Valor oferecido ao motoboy</span>
+              <div class="field">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0E8B8C" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h3.5a2 2 0 0 1 0 4H10a2 2 0 0 0 0 4h4" stroke-linecap="round"/></svg>
+                <div class="field-stack"><span class="val">R$ 90,00</span></div>
+              </div>
+            </div>
+            <div class="card" style="padding:11px;display:flex;gap:9px;background:var(--teal-soft);border-color:var(--teal-soft);margin-bottom:13px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A4D52" stroke-width="2" style="flex:0 0 16px;margin-top:1px;"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01" stroke-linecap="round"/></svg>
+              <span style="font-size:9.5px;color:var(--teal-deep);line-height:1.5;">Turnos publicados ficam visíveis para motoboys dentro do raio definido até serem aceitos.</span>
+            </div>
+            <button class="btn btn-primary" style="margin-bottom:14px;">Publicar turno</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label"><span class="n">Tela 03</span><span class="t">Publicar Turno</span><span class="d">RF04 — Criação de turno</span></div>
+  </div>
+
+  <!-- ================= 4. TURNOS DISPONÍVEIS ================= -->
+  <div class="device">
+    <div class="phone">
+      <div class="scr">
+        <div class="notch"></div>
+        <div class="status onTeal">
+          <span>9:41</span>
+          <span class="sig">
+            <svg width="16" height="9" viewBox="0 0 16 9" fill="currentColor"><rect x="0" y="6" width="2.6" height="3" rx="1"/><rect x="3.8" y="4" width="2.6" height="5" rx="1"/><rect x="7.6" y="2" width="2.6" height="7" rx="1"/><rect x="11.4" y="0" width="2.6" height="9" rx="1"/></svg>
+            <span class="bat"><i></i></span>
+          </span>
+        </div>
+        <div class="body">
+          <div class="apphead">
+            <div class="ah-row">
+              <div>
+                <div class="ah-hi">Turnos perto de você</div>
+                <div class="ah-name">Disponíveis hoje</div>
+              </div>
+              <div class="ah-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5" stroke-linecap="round"/></svg></div>
+            </div>
+          </div>
+          <div class="content lift">
+            <div class="chips">
+              <span class="chip on"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M4 7h16M7 12h10M10 17h4" stroke-linecap="round"/></svg>Filtros</span>
+              <span class="chip on">Hoje</span>
+              <span class="chip">Manhã</span>
+              <span class="chip">≤ 5 km</span>
+            </div>
+            <div class="shift">
+              <div class="ic amber"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9a6206" stroke-width="2"><path d="M4 9h13l3 4v5H4z"/><circle cx="8" cy="18" r="2"/><circle cx="16" cy="18" r="2"/></svg></div>
+              <div class="mid">
+                <div class="nm">Pizzaria Bella</div>
+                <div class="meta"><span>18:00–23:00</span><span>•</span><span><b>2,1 km</b></span><span>★ 4.9</span></div>
+              </div>
+              <div class="rt"><div class="val">R$ 95</div><button class="pill teal" style="margin-top:5px;border:none;padding:5px 10px;">Aceitar</button></div>
+            </div>
+            <div class="shift">
+              <div class="ic amber"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9a6206" stroke-width="2"><path d="M4 9h13l3 4v5H4z"/><circle cx="8" cy="18" r="2"/><circle cx="16" cy="18" r="2"/></svg></div>
+              <div class="mid">
+                <div class="nm">Lanchonete da Cláudia</div>
+                <div class="meta"><span>18:00–23:00</span><span>•</span><span><b>3,4 km</b></span><span>★ 4.8</span></div>
+              </div>
+              <div class="rt"><div class="val">R$ 90</div><button class="pill teal" style="margin-top:5px;border:none;padding:5px 10px;">Aceitar</button></div>
+            </div>
+            <div class="shift">
+              <div class="ic amber"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9a6206" stroke-width="2"><path d="M4 9h13l3 4v5H4z"/><circle cx="8" cy="18" r="2"/><circle cx="16" cy="18" r="2"/></svg></div>
+              <div class="mid">
+                <div class="nm">Açaí do Centro</div>
+                <div class="meta"><span>14:00–19:00</span><span>•</span><span><b>4,8 km</b></span><span>★ 4.6</span></div>
+              </div>
+              <div class="rt"><div class="val">R$ 80</div><button class="pill teal" style="margin-top:5px;border:none;padding:5px 10px;">Aceitar</button></div>
+            </div>
+            <div class="shift">
+              <div class="ic amber"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9a6206" stroke-width="2"><path d="M4 9h13l3 4v5H4z"/><circle cx="8" cy="18" r="2"/><circle cx="16" cy="18" r="2"/></svg></div>
+              <div class="mid">
+                <div class="nm">Mercado São Jorge</div>
+                <div class="meta"><span>09:00–13:00</span><span>•</span><span><b>1,9 km</b></span><span>★ 4.7</span></div>
+              </div>
+              <div class="rt"><div class="val">R$ 65</div><button class="pill teal" style="margin-top:5px;border:none;padding:5px 10px;">Aceitar</button></div>
+            </div>
+          </div>
+          <div class="nav">
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8M5 9v11h14V9"/></svg>Início</a>
+            <a class="on"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h13l4 4v8H3z"/><circle cx="7" cy="18" r="2"/></svg>Turnos<span class="dot"></span></a>
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Agenda</a>
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>Perfil</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label"><span class="n">Tela 04</span><span class="t">Turnos Disponíveis</span><span class="d">RF05 + RF09 — Busca & filtros</span></div>
+  </div>
+
+  <!-- ================= 5. DASHBOARD MOTOBOY ================= -->
+  <div class="device">
+    <div class="phone">
+      <div class="scr">
+        <div class="notch"></div>
+        <div class="status onTeal">
+          <span>9:41</span>
+          <span class="sig">
+            <svg width="16" height="9" viewBox="0 0 16 9" fill="currentColor"><rect x="0" y="6" width="2.6" height="3" rx="1"/><rect x="3.8" y="4" width="2.6" height="5" rx="1"/><rect x="7.6" y="2" width="2.6" height="7" rx="1"/><rect x="11.4" y="0" width="2.6" height="9" rx="1"/></svg>
+            <span class="bat"><i></i></span>
+          </span>
+        </div>
+        <div class="body">
+          <div class="apphead tall">
+            <div class="ah-row">
+              <div>
+                <div class="ah-hi">Olá,</div>
+                <div class="ah-name">Ricardo Alves</div>
+              </div>
+              <div class="avatar">RA</div>
+            </div>
+          </div>
+          <div class="content lift">
+            <div class="stats3">
+              <div class="stat"><div class="k">GANHOS / SEMANA</div><div class="v"><small>R$</small>520</div><div class="sub">+8% vs anterior</div></div>
+              <div class="stat"><div class="k">CONCLUÍDOS</div><div class="v">14</div><div class="sub">este mês</div></div>
+              <div class="stat"><div class="k">PONTUAÇÃO</div><div class="v">96<small>%</small></div><div class="sub">Confiável</div></div>
+            </div>
+            <div class="sec-title">Próximo turno</div>
+            <div class="card" style="padding:13px;background:linear-gradient(135deg,var(--teal),var(--teal-deep));border:none;color:#fff;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                  <div style="font-size:9px;font-weight:700;color:#bfe5e3;letter-spacing:.05em;">EM 3 HORAS</div>
+                  <div style="font-family:'Bricolage Grotesque';font-weight:800;font-size:15px;margin-top:3px;">Pizzaria Bella</div>
+                  <div style="font-size:10px;color:#bfe5e3;margin-top:3px;">Hoje · 18:00–23:00 · 2,1 km</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-family:'Bricolage Grotesque';font-weight:800;font-size:17px;">R$ 95</div>
+                </div>
+              </div>
+              <button class="btn" style="background:rgba(255,255,255,.16);color:#fff;margin-top:11px;padding:9px;font-size:11px;border:1px solid rgba(255,255,255,.22);">Ver detalhes & rota</button>
+            </div>
+            <div class="sec-title">Ganhos dos últimos dias</div>
+            <div class="card" style="padding:14px 12px 22px;">
+              <div class="bars">
+                <div class="bar" style="height:38%"><span class="bl">Seg</span></div>
+                <div class="bar" style="height:62%"><span class="bl">Ter</span></div>
+                <div class="bar" style="height:45%"><span class="bl">Qua</span></div>
+                <div class="bar" style="height:78%"><span class="bl">Qui</span></div>
+                <div class="bar hot" style="height:100%"><span class="bl">Sex</span></div>
+                <div class="bar" style="height:55%"><span class="bl">Sáb</span></div>
+                <div class="bar" style="height:30%"><span class="bl">Dom</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="nav">
+            <a class="on"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8M5 9v11h14V9"/></svg>Início<span class="dot"></span></a>
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h13l4 4v8H3z"/><circle cx="7" cy="18" r="2"/></svg>Turnos</a>
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18"/></svg>Carteira</a>
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>Perfil</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label"><span class="n">Tela 05</span><span class="t">Painel do Motoboy</span><span class="d">RF03 — Ganhos & pontuação</span></div>
+  </div>
+
+  <!-- ================= 6. CARTEIRA ================= -->
+  <div class="device">
+    <div class="phone">
+      <div class="scr">
+        <div class="notch"></div>
+        <div class="status onTeal">
+          <span>9:41</span>
+          <span class="sig">
+            <svg width="16" height="9" viewBox="0 0 16 9" fill="currentColor"><rect x="0" y="6" width="2.6" height="3" rx="1"/><rect x="3.8" y="4" width="2.6" height="5" rx="1"/><rect x="7.6" y="2" width="2.6" height="7" rx="1"/><rect x="11.4" y="0" width="2.6" height="9" rx="1"/></svg>
+            <span class="bat"><i></i></span>
+          </span>
+        </div>
+        <div class="body">
+          <div class="apphead">
+            <div class="ah-row">
+              <div class="ah-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+              <div class="ah-title">Minha Carteira</div>
+              <div style="width:34px;"></div>
+            </div>
+          </div>
+          <div class="content lift" style="overflow-y:auto;">
+            <div class="wallet-hero">
+              <div class="wl">Saldo disponível</div>
+              <div class="wv"><small>R$</small> 1.245<small>,00</small></div>
+              <div class="wrow">
+                <div class="wbtn solid">Sacar via Pix</div>
+                <div class="wbtn">Extrato</div>
+              </div>
+            </div>
+            <div class="sec-title">Histórico recente</div>
+            <div class="ledger">
+              <div class="lrow">
+                <div class="lic in"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1B9E73" stroke-width="2.4" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+                <div class="lm"><div class="lt">Turno · Pizzaria Bella</div><div class="ld">Ontem · 23:14</div></div>
+                <div class="la pos">+95,00</div>
+              </div>
+              <div class="lrow">
+                <div class="lic in"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1B9E73" stroke-width="2.4" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+                <div class="lm"><div class="lt">Turno · Açaí do Centro</div><div class="ld">18 mai · 19:02</div></div>
+                <div class="la pos">+80,00</div>
+              </div>
+              <div class="lrow">
+                <div class="lic out"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9a6206" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div>
+                <div class="lm"><div class="lt">Saque Pix · Nubank</div><div class="ld">16 mai · 10:30</div></div>
+                <div class="la neg">−300,00</div>
+              </div>
+              <div class="lrow">
+                <div class="lic in"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1B9E73" stroke-width="2.4" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+                <div class="lm"><div class="lt">Turno · Lanchonete Cláudia</div><div class="ld">15 mai · 23:08</div></div>
+                <div class="la pos">+90,00</div>
+              </div>
+              <div class="lrow">
+                <div class="lic in"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1B9E73" stroke-width="2.4" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+                <div class="lm"><div class="lt">Turno · Mercado São Jorge</div><div class="ld">14 mai · 13:11</div></div>
+                <div class="la pos">+65,00</div>
+              </div>
+            </div>
+          </div>
+          <div class="nav">
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8M5 9v11h14V9"/></svg>Início</a>
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h13l4 4v8H3z"/><circle cx="7" cy="18" r="2"/></svg>Turnos</a>
+            <a class="on"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18"/></svg>Carteira<span class="dot"></span></a>
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>Perfil</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label"><span class="n">Tela 06</span><span class="t">Carteira Digital</span><span class="d">RF06 — Wallet, histórico & saque</span></div>
+  </div>
+
+  <!-- ================= 7. AVALIAÇÃO MÚTUA ================= -->
+  <div class="device">
+    <div class="phone">
+      <div class="scr s-rate">
+        <div class="notch"></div>
+        <div class="status onTeal">
+          <span>9:41</span>
+          <span class="sig">
+            <svg width="16" height="9" viewBox="0 0 16 9" fill="currentColor"><rect x="0" y="6" width="2.6" height="3" rx="1"/><rect x="3.8" y="4" width="2.6" height="5" rx="1"/><rect x="7.6" y="2" width="2.6" height="7" rx="1"/><rect x="11.4" y="0" width="2.6" height="9" rx="1"/></svg>
+            <span class="bat"><i></i></span>
+          </span>
+        </div>
+        <div class="body">
+          <div class="apphead">
+            <div class="ah-row">
+              <div class="ah-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+              <div class="ah-title">Avaliar Turno</div>
+              <div style="width:34px;"></div>
+            </div>
+          </div>
+          <div class="content lift">
+            <span class="pill good" style="margin:2px 0 12px;">✓ Turno concluído</span>
+            <div class="rate-card">
+              <div class="rate-ava">PB</div>
+              <h3>Pizzaria Bella</h3>
+              <div class="rc">Sexta · 18:00–23:00 · R$ 95,00</div>
+              <div class="rate-q" style="margin-top:14px;">Como foi sua experiência neste turno?</div>
+              <div class="stars">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="#F6A623" stroke="#F6A623"><path d="M12 2l3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z"/></svg>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="#F6A623" stroke="#F6A623"><path d="M12 2l3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z"/></svg>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="#F6A623" stroke="#F6A623"><path d="M12 2l3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z"/></svg>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="#F6A623" stroke="#F6A623"><path d="M12 2l3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z"/></svg>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="#E2EAE9" stroke="#E2EAE9"><path d="M12 2l3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z"/></svg>
+              </div>
+              <div style="font-size:11px;font-weight:700;color:var(--teal-deep);">Muito bom · 4 de 5</div>
+              <div class="tag-row">
+                <span class="qtag on">Pontual</span>
+                <span class="qtag on">Comunicativo</span>
+                <span class="qtag">Organizado</span>
+                <span class="qtag">Cordial</span>
+              </div>
+              <div class="rt-area">Deixe um comentário (opcional)…</div>
+            </div>
+            <button class="btn btn-primary" style="margin-top:14px;">Enviar avaliação</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label"><span class="n">Tela 07</span><span class="t">Avaliação Mútua</span><span class="d">RF08 — Reputação na plataforma</span></div>
+  </div>
+
+  <!-- ================= 8. AGENDA VISUAL ================= -->
+  <div class="device">
+    <div class="phone">
+      <div class="scr">
+        <div class="notch"></div>
+        <div class="status onTeal">
+          <span>9:41</span>
+          <span class="sig">
+            <svg width="16" height="9" viewBox="0 0 16 9" fill="currentColor"><rect x="0" y="6" width="2.6" height="3" rx="1"/><rect x="3.8" y="4" width="2.6" height="5" rx="1"/><rect x="7.6" y="2" width="2.6" height="7" rx="1"/><rect x="11.4" y="0" width="2.6" height="9" rx="1"/></svg>
+            <span class="bat"><i></i></span>
+          </span>
+        </div>
+        <div class="body">
+          <div class="apphead">
+            <div class="ah-row">
+              <div>
+                <div class="ah-hi">Sua programação</div>
+                <div class="ah-name">Minha Agenda</div>
+              </div>
+              <div class="avatar">RA</div>
+            </div>
+          </div>
+          <div class="content lift" style="overflow-y:auto;">
+            <div class="cal">
+              <div class="cal-head">
+                <div class="ar"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0E8B8C" stroke-width="3" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+                <div class="mm">Maio 2026</div>
+                <div class="ar"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0E8B8C" stroke-width="3" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg></div>
+              </div>
+              <div class="cal-grid">
+                <div class="dn">D</div><div class="dn">S</div><div class="dn">T</div><div class="dn">Q</div><div class="dn">Q</div><div class="dn">S</div><div class="dn">S</div>
+                <div class="cd mut">27</div><div class="cd mut">28</div><div class="cd mut">29</div><div class="cd mut">30</div><div class="cd">1</div><div class="cd">2</div><div class="cd has">3</div>
+                <div class="cd">4</div><div class="cd">5</div><div class="cd has">6</div><div class="cd">7</div><div class="cd">8</div><div class="cd has">9</div><div class="cd">10</div>
+                <div class="cd">11</div><div class="cd">12</div><div class="cd has">13</div><div class="cd">14</div><div class="cd">15</div><div class="cd has">16</div><div class="cd">17</div>
+                <div class="cd">18</div><div class="cd">19</div><div class="cd">20</div><div class="cd today">21</div><div class="cd">22</div><div class="cd sel has">23</div><div class="cd has">24</div>
+                <div class="cd">25</div><div class="cd">26</div><div class="cd has">27</div><div class="cd">28</div><div class="cd">29</div><div class="cd has">30</div><div class="cd">31</div>
+              </div>
+            </div>
+            <div class="sec-title">Sexta, 23 de maio <span class="more">2 turnos</span></div>
+            <div class="shift">
+              <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A4D52" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg></div>
+              <div class="mid">
+                <div class="nm">Pizzaria Bella</div>
+                <div class="meta"><span>18:00–23:00</span><span>•</span><span>2,1 km</span></div>
+              </div>
+              <div class="rt"><div class="val">R$ 95</div><span class="pill good" style="margin-top:4px;">Confirmado</span></div>
+            </div>
+            <div class="shift">
+              <div class="ic amber"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9a6206" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg></div>
+              <div class="mid">
+                <div class="nm">Mercado São Jorge</div>
+                <div class="meta"><span>09:00–13:00</span><span>•</span><span>1,9 km</span></div>
+              </div>
+              <div class="rt"><div class="val">R$ 65</div><span class="pill amber" style="margin-top:4px;">A iniciar</span></div>
+            </div>
+          </div>
+          <div class="nav">
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8M5 9v11h14V9"/></svg>Início</a>
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h13l4 4v8H3z"/><circle cx="7" cy="18" r="2"/></svg>Turnos</a>
+            <a class="on"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Agenda<span class="dot"></span></a>
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>Perfil</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label"><span class="n">Tela 08</span><span class="t">Agenda Visual</span><span class="d">RF07 — Calendário de turnos</span></div>
+  </div>
+
+  <!-- ================= 9. PERFIL ================= -->
+  <div class="device">
+    <div class="phone">
+      <div class="scr">
+        <div class="notch"></div>
+        <div class="status onTeal">
+          <span>9:41</span>
+          <span class="sig">
+            <svg width="16" height="9" viewBox="0 0 16 9" fill="currentColor"><rect x="0" y="6" width="2.6" height="3" rx="1"/><rect x="3.8" y="4" width="2.6" height="5" rx="1"/><rect x="7.6" y="2" width="2.6" height="7" rx="1"/><rect x="11.4" y="0" width="2.6" height="9" rx="1"/></svg>
+            <span class="bat"><i></i></span>
+          </span>
+        </div>
+        <div class="body">
+          <div class="prof-hero">
+            <div class="ah-row" style="justify-content:center;">
+              <div class="ah-title" style="font-size:14px;">Meu Perfil</div>
+            </div>
+            <div class="prof-ava">RA
+              <div class="vrf"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4 10-11"/></svg></div>
+            </div>
+            <div class="prof-name">Ricardo Alves</div>
+            <div class="prof-meta">
+              <span class="pp">Motoboy</span>
+              <span class="rt"><svg width="11" height="11" viewBox="0 0 24 24" fill="#ffd98a"><path d="M12 2l3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z"/></svg>4.9</span>
+              <span class="pp">Verificado</span>
+            </div>
+          </div>
+          <div class="content lift" style="margin-top:-30px;overflow-y:auto;background:transparent;padding-top:0;position:relative;z-index:2;">
+            <div class="prof-stats">
+              <div class="ps"><div class="pv">137</div><div class="pk">TURNOS</div></div>
+              <div class="ps"><div class="pv">96%</div><div class="pk">PONTUALIDADE</div></div>
+              <div class="ps"><div class="pv">8 mês</div><div class="pk">NA PLATAFORMA</div></div>
+            </div>
+            <div class="menu-cap">CONTA</div>
+            <div class="menu">
+              <div class="mrow">
+                <div class="mi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0A4D52" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
+                <div class="mtxt"><div class="ml">Dados pessoais</div><div class="ms">Nome, e-mail e telefone</div></div>
+                <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+              <div class="mrow">
+                <div class="mi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0A4D52" stroke-width="2"><rect x="2" y="6" width="20" height="13" rx="2.5"/><path d="M2 11h20M6 16h4"/></svg></div>
+                <div class="mtxt"><div class="ml">CNH & Veículo</div><div class="ms">Honda CG 160 · ABC-1D23</div></div>
+                <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+              <div class="mrow">
+                <div class="mi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0A4D52" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18"/></svg></div>
+                <div class="mtxt"><div class="ml">Carteira & chave Pix</div><div class="ms">Saldo R$ 1.245,00</div></div>
+                <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+            </div>
+            <div class="menu-cap">ATIVIDADE</div>
+            <div class="menu">
+              <div class="mrow">
+                <div class="mi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0A4D52" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9" stroke-linecap="round"/><path d="M3 12V6M3 6h6" stroke-linecap="round"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg></div>
+                <div class="mtxt"><div class="ml">Histórico de turnos</div><div class="ms">137 turnos concluídos</div></div>
+                <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+              <div class="mrow">
+                <div class="mi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0A4D52" stroke-width="2"><path d="M12 2l3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z"/></svg></div>
+                <div class="mtxt"><div class="ml">Minhas avaliações</div><div class="ms">Média 4.9 · 128 avaliações</div></div>
+                <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+              <div class="mrow">
+                <div class="mi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0A4D52" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 21h4" stroke-linecap="round"/></svg></div>
+                <div class="mtxt"><div class="ml">Notificações</div><div class="ms">Alertas de novos turnos</div></div>
+                <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+            </div>
+            <div class="menu" style="margin-top:11px;">
+              <div class="mrow danger">
+                <div class="mi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0392B" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg></div>
+                <div class="mtxt"><div class="ml">Sair da conta</div></div>
+              </div>
+            </div>
+            <div style="text-align:center;font-size:8.5px;color:#9aaeae;margin:13px 0 8px;font-weight:600;">MotoShift · versão 1.0.0</div>
+          </div>
+          <div class="nav">
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8M5 9v11h14V9"/></svg>Início</a>
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h13l4 4v8H3z"/><circle cx="7" cy="18" r="2"/></svg>Turnos</a>
+            <a><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18"/></svg>Carteira</a>
+            <a class="on"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>Perfil<span class="dot"></span></a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label"><span class="n">Tela 09</span><span class="t">Perfil do Usuário</span><span class="d">RF01 — Conta, veículo & reputação</span></div>
+  </div>
+
+  <!-- ================= 10. DETALHE DO TURNO ================= -->
+  <div class="device">
+    <div class="phone">
+      <div class="scr">
+        <div class="notch"></div>
+        <div class="status onTeal">
+          <span>9:41</span>
+          <span class="sig">
+            <svg width="16" height="9" viewBox="0 0 16 9" fill="currentColor"><rect x="0" y="6" width="2.6" height="3" rx="1"/><rect x="3.8" y="4" width="2.6" height="5" rx="1"/><rect x="7.6" y="2" width="2.6" height="7" rx="1"/><rect x="11.4" y="0" width="2.6" height="9" rx="1"/></svg>
+            <span class="bat"><i></i></span>
+          </span>
+        </div>
+        <div class="body">
+          <div class="apphead">
+            <div class="ah-row">
+              <div class="ah-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+              <div class="ah-title">Detalhes do Turno</div>
+              <div class="ah-back"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></div>
+            </div>
+          </div>
+          <div class="content lift" style="overflow-y:auto;">
+            <div class="map">
+              <svg width="100%" height="100%" viewBox="0 0 260 118" preserveAspectRatio="xMidYMid slice">
+                <path d="M-10 30 H270 M-10 78 H270 M40 -10 V128 M150 -10 V128 M210 -10 V128" stroke="#bcdedb" stroke-width="6"/>
+                <path d="M-10 55 H270 M95 -10 V128" stroke="#cde8e6" stroke-width="3.5"/>
+                <path d="M40 92 C 70 92, 80 55, 110 55 S 165 30, 200 30" stroke="#0E8B8C" stroke-width="3.6" fill="none" stroke-linecap="round" stroke-dasharray="1 8"/>
+                <circle cx="40" cy="92" r="6" fill="#fff" stroke="#0E8B8C" stroke-width="3"/>
+                <g transform="translate(200 30)">
+                  <path d="M0 -16 C 9 -16 14 -9 14 -2 C 14 8 0 16 0 16 C 0 16 -14 8 -14 -2 C -14 -9 -9 -16 0 -16 Z" fill="#F6A623"/>
+                  <circle cx="0" cy="-2" r="4.5" fill="#fff"/>
+                </g>
+              </svg>
+            </div>
+            <div class="store-card" style="margin-top:12px;">
+              <div class="slogo">PB</div>
+              <div style="flex:1;">
+                <div class="snm">Pizzaria Bella</div>
+                <div class="sad">Av. Brasil, 1820 · Zona 7, Maringá</div>
+              </div>
+              <span class="pill amber">★ 4.9</span>
+            </div>
+            <div class="sec-title" style="margin-top:14px;">Informações do turno</div>
+            <div class="info-grid">
+              <div class="info-cell">
+                <div class="ik"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6B8487" stroke-width="2.4"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>DATA</div>
+                <div class="iv">Sex, 23 mai</div>
+              </div>
+              <div class="info-cell">
+                <div class="ik"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6B8487" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg>HORÁRIO</div>
+                <div class="iv">18:00–23:00</div>
+              </div>
+              <div class="info-cell">
+                <div class="ik"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6B8487" stroke-width="2.4"><circle cx="12" cy="11" r="3"/><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/></svg>RAIO DE ENTREGA</div>
+                <div class="iv">Até 4 km</div>
+              </div>
+              <div class="info-cell pay">
+                <div class="ik"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#bfe5e3" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h3.5a2 2 0 0 1 0 4H10a2 2 0 0 0 0 4h4" stroke-linecap="round"/></svg>VOCÊ RECEBE</div>
+                <div class="iv">R$ 95,00</div>
+              </div>
+            </div>
+            <div class="sec-title" style="margin-top:14px;">Requisitos do turno</div>
+            <div class="req-list">
+              <div class="ri"><div class="rc"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#1B9E73" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4 10-11"/></svg></div>Baú de entrega próprio</div>
+              <div class="ri"><div class="rc"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#1B9E73" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4 10-11"/></svg></div>CNH categoria A válida</div>
+              <div class="ri"><div class="rc"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#1B9E73" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4 10-11"/></svg></div>Chegar 10 min antes do início</div>
+            </div>
+            <div class="card" style="padding:11px;display:flex;gap:9px;background:var(--amber-soft);border-color:var(--amber-soft);margin:13px 0;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9a6206" stroke-width="2" style="flex:0 0 16px;margin-top:1px;"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+              <span style="font-size:9.5px;color:#9a6206;line-height:1.5;">Cancelamentos a menos de 2h do início descontam pontos da sua reputação.</span>
+            </div>
+          </div>
+          <div class="detail-foot">
+            <button class="btn btn-primary">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4 10-11"/></svg>
+              Aceitar turno · R$ 95,00
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label"><span class="n">Tela 10</span><span class="t">Detalhes do Turno</span><span class="d">RF05 — Visualização & aceite</span></div>
+  </div>
+
+  <!-- ================= 11. DETALHE DO TURNO (LOJISTA) ================= -->
+  <div class="device">
+    <div class="phone">
+      <div class="scr">
+        <div class="notch"></div>
+        <div class="status onTeal">
+          <span>9:41</span>
+          <span class="sig">
+            <svg width="16" height="9" viewBox="0 0 16 9" fill="currentColor"><rect x="0" y="6" width="2.6" height="3" rx="1"/><rect x="3.8" y="4" width="2.6" height="5" rx="1"/><rect x="7.6" y="2" width="2.6" height="7" rx="1"/><rect x="11.4" y="0" width="2.6" height="9" rx="1"/></svg>
+            <span class="bat"><i></i></span>
+          </span>
+        </div>
+        <div class="body">
+          <div class="apphead">
+            <div class="ah-row">
+              <div class="ah-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg></div>
+              <div class="ah-title">Turno Publicado</div>
+              <div class="ah-back"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></div>
+            </div>
+          </div>
+          <div class="content lift" style="overflow-y:auto;">
+            <span class="pill good" style="margin:2px 0 12px;">● Turno preenchido · em andamento</span>
+            <div class="sec-title" style="margin-top:0;">Motoboy escalado</div>
+            <div class="store-card">
+              <div class="rate-ava" style="width:46px;height:46px;border-radius:13px;font-size:16px;margin:0;">RA</div>
+              <div style="flex:1;">
+                <div class="snm" style="font-size:13.5px;">Ricardo Alves</div>
+                <div class="sad">★ 4.9 · 137 turnos · Honda CG 160</div>
+              </div>
+              <div class="contact-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A4D52" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 9.6a16 16 0 0 0 6 6l1.1-1.1a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg></div>
+            </div>
+            <div class="sec-title">Informações do turno</div>
+            <div class="info-grid">
+              <div class="info-cell">
+                <div class="ik"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6B8487" stroke-width="2.4"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>DATA</div>
+                <div class="iv">Sex, 23 mai</div>
+              </div>
+              <div class="info-cell">
+                <div class="ik"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6B8487" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg>HORÁRIO</div>
+                <div class="iv">18:00–23:00</div>
+              </div>
+              <div class="info-cell">
+                <div class="ik"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6B8487" stroke-width="2.4"><circle cx="12" cy="11" r="3"/><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/></svg>RAIO DE ENTREGA</div>
+                <div class="iv">Até 4 km</div>
+              </div>
+              <div class="info-cell pay">
+                <div class="ik"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#bfe5e3" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h3.5a2 2 0 0 1 0 4H10a2 2 0 0 0 0 4h4" stroke-linecap="round"/></svg>CUSTO DO TURNO</div>
+                <div class="iv">R$ 90,00</div>
+              </div>
+            </div>
+            <div class="sec-title">Andamento</div>
+            <div class="timeline">
+              <div class="tl-step done">
+                <div class="tl-dot done"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4 10-11"/></svg></div>
+                <div class="tl-txt"><div class="tll">Turno publicado</div><div class="tld">21 mai · 14:32</div></div>
+              </div>
+              <div class="tl-step done">
+                <div class="tl-dot done"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4 10-11"/></svg></div>
+                <div class="tl-txt"><div class="tll">Aceito por Ricardo Alves</div><div class="tld">21 mai · 16:08</div></div>
+              </div>
+              <div class="tl-step">
+                <div class="tl-dot now"></div>
+                <div class="tl-txt"><div class="tll">Turno em andamento</div><div class="tld">Iniciado hoje · 18:00</div></div>
+              </div>
+              <div class="tl-step pending">
+                <div class="tl-dot"></div>
+                <div class="tl-txt"><div class="tll">Turno concluído</div><div class="tld">Previsto · 23:00</div></div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;margin:14px 0;">
+              <button class="btn btn-ghost" style="flex:1;">Contatar</button>
+              <button class="btn btn-ghost" style="flex:1;background:#FBE4E2;border-color:#FBE4E2;color:#C0392B;">Cancelar turno</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label"><span class="n">Tela 11</span><span class="t">Turno do Lojista</span><span class="d">RF02 — Acompanhamento do turno</span></div>
+  </div>
+
+</main>
+
+</body>
+</html>
