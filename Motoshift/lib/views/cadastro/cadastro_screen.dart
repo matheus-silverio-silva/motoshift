@@ -37,6 +37,18 @@ class _CadastroScreenState extends State<CadastroScreen> {
     super.dispose();
   }
 
+  // RF03 — validação de formato do documento federal (CNPJ/CNH)
+  String? _validarDocumento(String? v) {
+    if (v == null || v.isEmpty) return 'Documento obrigatório';
+    final digitos = v.replaceAll(RegExp(r'\D'), '');
+    if (_tipo == TipoUsuario.lojista) {
+      if (digitos.length != 14) return 'CNPJ inválido — informe 14 dígitos';
+    } else {
+      if (digitos.length != 11) return 'CNH inválida — informe 11 dígitos';
+    }
+    return null;
+  }
+
   // ── Lógica preservada do original ────────────────────────────────────────────
   Future<void> _cadastrar() async {
     if (!_formKey.currentState!.validate()) return;
@@ -238,11 +250,12 @@ class _CadastroScreenState extends State<CadastroScreen> {
                 const SizedBox(height: 9),
                 _InputRow(
                   icon: Icons.badge_outlined,
-                  hint: _tipo == TipoUsuario.lojista ? 'CNPJ' : 'CNH',
+                  hint: _tipo == TipoUsuario.lojista
+                      ? 'CNPJ (00.000.000/0000-00)'
+                      : 'CNH (11 dígitos)',
                   controller: _documentoCtrl,
-                  validator: (v) => v == null || v.isEmpty
-                      ? 'Documento obrigatório'
-                      : null,
+                  keyboardType: TextInputType.number,
+                  validator: _validarDocumento,
                 ),
               ],
             ),

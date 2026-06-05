@@ -43,17 +43,28 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "E-mail já cadastrado");
         }
 
-        // RF01/RF03 — Lojista exige CNPJ; Motoboy exige CNH
+        // RF03 — Lojista exige CNPJ (14 dígitos); Motoboy exige CNH (11 dígitos)
         String tipoNorm = req.getTipo() == null ? "" : req.getTipo().toLowerCase();
+        String doc = req.getDocumentoFederal();
+        String digitos = doc == null ? "" : doc.replaceAll("\\D", "");
+
         if ("lojista".equals(tipoNorm)) {
-            if (req.getDocumentoFederal() == null || req.getDocumentoFederal().isBlank()) {
+            if (doc == null || doc.isBlank()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "CNPJ é obrigatório para cadastro como Lojista.");
             }
+            if (digitos.length() != 14) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "CNPJ inválido. Deve conter 14 dígitos.");
+            }
         } else if ("motoboy".equals(tipoNorm)) {
-            if (req.getDocumentoFederal() == null || req.getDocumentoFederal().isBlank()) {
+            if (doc == null || doc.isBlank()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "CNH é obrigatória para cadastro como Motoboy.");
+            }
+            if (digitos.length() != 11) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "CNH inválida. Deve conter 11 dígitos.");
             }
         } else {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
