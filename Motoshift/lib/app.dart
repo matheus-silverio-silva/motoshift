@@ -112,7 +112,6 @@ class MotoShiftApp extends StatelessWidget {
           // Perfil — sub-páginas
           AppRoutes.dadosPessoais:    (_) => const DadosPessoaisScreen(),
           AppRoutes.cnhVeiculo:       (_) => const CnhVeiculoScreen(),
-          AppRoutes.notificacoes:     (_) => const NotificacoesScreen(),
           AppRoutes.minhasAvaliacoes: (_) => const MinhasAvaliacoesScreen(),
           AppRoutes.historicoTurnos:  (_) => const HistoricoTurnosScreen(),
           AppRoutes.sacarPix:         (_) => const SacarPixScreen(),

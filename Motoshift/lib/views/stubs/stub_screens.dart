@@ -35,15 +35,6 @@ Widget _stubBody(String title) {
   );
 }
 
-class NotificacoesScreen extends StatelessWidget {
-  const NotificacoesScreen({super.key});
-  @override
-  Widget build(BuildContext context) => AppScaffold(
-        header: AppHeader.back(title: 'Notificações'),
-        body: _stubBody('Notificações'),
-      );
-}
-
 class SacarPixScreen extends StatelessWidget {
   const SacarPixScreen({super.key});
   @override

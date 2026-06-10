@@ -124,6 +124,7 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
                   keyboard: TextInputType.phone,
                   validator: (v) =>
                       v == null || v.isEmpty ? 'Informe o telefone' : null),
+              // CNPJ/CNH são imutáveis após o cadastro (anti-fraude)
               _readonlyField(
                   isLojista ? 'CNPJ' : 'CNH',
                   usuario?.documentoFederal ?? '—'),

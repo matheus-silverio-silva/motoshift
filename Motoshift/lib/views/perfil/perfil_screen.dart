@@ -129,12 +129,6 @@ class PerfilScreen extends StatelessWidget {
               onTap: () =>
                   Navigator.pushNamed(context, AppRoutes.cnhVeiculo),
             ),
-            MenuRow(
-              icon: Icons.notifications_outlined,
-              label: 'Notificações',
-              onTap: () => Navigator.pushNamed(
-                  context, AppRoutes.notificacoes),
-            ),
           ]),
           const SizedBox(height: 14),
           // ATIVIDADE

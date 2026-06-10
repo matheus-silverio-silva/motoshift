@@ -133,6 +133,9 @@ public class AuthService {
         Usuario u = repo.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuário não encontrado"));
 
+        // SEGURANÇA: documentoFederal (CNPJ/CNH), email e tipo são IMUTÁVEIS após o cadastro
+        // para evitar fraudes. Qualquer envio desses campos no body é silenciosamente ignorado.
+
         if (body.get("nome") instanceof String s && !s.isBlank()) u.setNome(s);
         if (body.get("telefone") instanceof String s) u.setTelefone(s);
         if (body.get("fotoPerfil") instanceof String s) u.setFotoPerfil(s);

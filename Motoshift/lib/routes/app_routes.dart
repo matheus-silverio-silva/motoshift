@@ -36,7 +36,6 @@ class AppRoutes {
   static const String sacarPix          = '/sacar-pix';
   static const String dadosPessoais     = '/dados-pessoais';
   static const String cnhVeiculo        = '/cnh-veiculo';
-  static const String notificacoes      = '/notificacoes';
   static const String minhasAvaliacoes  = '/minhas-avaliacoes';
   static const String historicoTurnos   = '/historico-turnos';
   static const String esqueceuSenha     = '/esqueceu-senha';
