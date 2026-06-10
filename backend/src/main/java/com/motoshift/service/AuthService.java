@@ -133,8 +133,11 @@ public class AuthService {
         Usuario u = repo.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuário não encontrado"));
 
-        // SEGURANÇA: documentoFederal (CNPJ/CNH), email e tipo são IMUTÁVEIS após o cadastro
-        // para evitar fraudes. Qualquer envio desses campos no body é silenciosamente ignorado.
+        // SEGURANÇA: campos abaixo são IMUTÁVEIS após o cadastro (anti-fraude).
+        // Qualquer envio é silenciosamente ignorado:
+        //   - documentoFederal (CNPJ/CNH)
+        //   - email, tipo
+        //   - cnhNumero, cnhCategoria, cnhValidade (dados legais da CNH)
 
         if (body.get("nome") instanceof String s && !s.isBlank()) u.setNome(s);
         if (body.get("telefone") instanceof String s) u.setTelefone(s);
@@ -146,12 +149,7 @@ public class AuthService {
         if (body.get("cidade") instanceof String s) u.setCidade(s);
         if (body.get("estado") instanceof String s) u.setEstado(s);
 
-        if (body.get("cnhNumero") instanceof String s) u.setCnhNumero(s);
-        if (body.get("cnhCategoria") instanceof String s) u.setCnhCategoria(s);
-        if (body.get("cnhValidade") instanceof String s && !s.isBlank()) {
-            u.setCnhValidade(java.time.LocalDate.parse(s));
-        }
-
+        // Veículo: editável (motoboy pode trocar de moto)
         if (body.get("veiculoModelo") instanceof String s) u.setVeiculoModelo(s);
         if (body.get("veiculoPlaca") instanceof String s) u.setVeiculoPlaca(s);
         if (body.get("veiculoAno") instanceof Number n) u.setVeiculoAno(n.intValue());

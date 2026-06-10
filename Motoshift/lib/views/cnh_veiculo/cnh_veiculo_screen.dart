@@ -19,14 +19,12 @@ class CnhVeiculoScreen extends StatefulWidget {
 class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  // Motoboy
-  late final TextEditingController _cnhNumeroCtrl;
+  // Motoboy — apenas veículo é editável.
+  // CNH (número, categoria, validade) é imutável após o cadastro — anti-fraude.
   late final TextEditingController _modeloCtrl;
   late final TextEditingController _placaCtrl;
   late final TextEditingController _anoCtrl;
   late final TextEditingController _corCtrl;
-  String _cnhCategoria = 'A';
-  DateTime? _cnhValidade;
 
   // Lojista
   late final TextEditingController _enderecoCtrl;
@@ -37,37 +35,22 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
   void initState() {
     super.initState();
     final u = context.read<AuthService>().usuario;
-    _cnhNumeroCtrl = TextEditingController(text: u?.cnhNumero ?? '');
     _modeloCtrl = TextEditingController(text: u?.veiculoModelo ?? '');
     _placaCtrl = TextEditingController(text: u?.veiculoPlaca ?? '');
     _anoCtrl = TextEditingController(
         text: u?.veiculoAno?.toString() ?? '');
     _corCtrl = TextEditingController(text: u?.veiculoCor ?? '');
-    _cnhCategoria = u?.cnhCategoria ?? 'A';
-    _cnhValidade = u?.cnhValidade;
     _enderecoCtrl = TextEditingController(text: u?.enderecoComercial ?? '');
   }
 
   @override
   void dispose() {
-    _cnhNumeroCtrl.dispose();
     _modeloCtrl.dispose();
     _placaCtrl.dispose();
     _anoCtrl.dispose();
     _corCtrl.dispose();
     _enderecoCtrl.dispose();
     super.dispose();
-  }
-
-  Future<void> _pickValidade() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _cnhValidade ??
-          DateTime.now().add(const Duration(days: 365 * 3)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 15)),
-    );
-    if (picked != null) setState(() => _cnhValidade = picked);
   }
 
   Future<void> _salvar() async {
@@ -80,16 +63,12 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
 
     setState(() => _salvando = true);
     try {
+      // CNH (número, categoria, validade) é IMUTÁVEL — não envia ao backend
       final body = isLojista
           ? {
               'enderecoComercial': _enderecoCtrl.text.trim(),
             }
           : {
-              'cnhNumero': _cnhNumeroCtrl.text.trim(),
-              'cnhCategoria': _cnhCategoria,
-              if (_cnhValidade != null)
-                'cnhValidade':
-                    _cnhValidade!.toIso8601String().substring(0, 10),
               'veiculoModelo': _modeloCtrl.text.trim(),
               'veiculoPlaca':
                   _placaCtrl.text.trim().toUpperCase(),
@@ -202,63 +181,50 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
   }
 
   Widget _buildMotoboy(Usuario? u) {
+    final validadeFmt = u?.cnhValidade != null
+        ? DateFormat('dd/MM/yyyy', 'pt_BR').format(u!.cnhValidade!)
+        : '—';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('CNH',
-            style:
-                tsBricolage(14, FontWeight.w800, color: AppColors.ink)),
-        const SizedBox(height: 10),
-        _field('Número da CNH', _cnhNumeroCtrl,
-            keyboard: TextInputType.number),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('CATEGORIA',
-                  style: tsJakarta(9, FontWeight.w700,
-                      color: AppColors.muted)),
-              const SizedBox(height: 8),
-              Row(
-                children: ['A', 'AB', 'B'].map((cat) {
-                  final sel = _cnhCategoria == cat;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 10),
-                    child: GestureDetector(
-                      onTap: () => setState(() => _cnhCategoria = cat),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        constraints:
-                            const BoxConstraints(minWidth: 56),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 18, vertical: 13),
-                        decoration: BoxDecoration(
-                          color:
-                              sel ? AppColors.teal : AppColors.surface2,
-                          borderRadius: BorderRadius.circular(11),
-                          border: Border.all(
-                              color: sel
-                                  ? AppColors.teal
-                                  : AppColors.line,
-                              width: 1.5),
-                        ),
-                        child: Center(
-                          child: Text(cat,
-                              style: tsJakarta(13, FontWeight.w700,
-                                  color: sel
-                                      ? Colors.white
-                                      : AppColors.ink)),
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
+        Row(
+          children: [
+            Text('CNH',
+                style: tsBricolage(14, FontWeight.w800,
+                    color: AppColors.ink)),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.surface3,
+                borderRadius: BorderRadius.circular(999),
               ),
-            ],
-          ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.lock_outline_rounded,
+                      size: 11, color: AppColors.muted),
+                  const SizedBox(width: 4),
+                  Text('Imutável',
+                      style: tsJakarta(9, FontWeight.w700,
+                          color: AppColors.muted)),
+                ],
+              ),
+            ),
+          ],
         ),
-        _dateField('Validade da CNH', _cnhValidade, _pickValidade),
+        const SizedBox(height: 6),
+        Text(
+          'Os dados da CNH não podem ser alterados após o cadastro.',
+          style: tsJakarta(11, FontWeight.w400,
+              color: AppColors.muted),
+        ),
+        const SizedBox(height: 10),
+        _readonlyField('Número da CNH', u?.cnhNumero ?? '—'),
+        _readonlyField('Categoria', u?.cnhCategoria ?? '—'),
+        _readonlyField('Validade da CNH', validadeFmt),
         const SizedBox(height: 18),
         Text('Veículo',
             style:
@@ -338,44 +304,37 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
     );
   }
 
-  Widget _dateField(
-      String label, DateTime? value, VoidCallback onTap) {
+  Widget _readonlyField(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label.toUpperCase(),
-              style: tsJakarta(9, FontWeight.w700, color: AppColors.muted)),
+              style: tsJakarta(9, FontWeight.w700,
+                  color: AppColors.muted)),
           const SizedBox(height: 8),
-          InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(11),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 14),
-              decoration: BoxDecoration(
-                color: AppColors.surface2,
-                borderRadius: BorderRadius.circular(11),
-                border: Border.all(color: AppColors.line, width: 1.5),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      value != null
-                          ? DateFormat('dd/MM/yyyy', 'pt_BR').format(value)
-                          : 'Selecionar',
+          Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: AppColors.surface3,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: AppColors.line, width: 1.5),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(value,
                       style: tsJakarta(13, FontWeight.w500,
-                          color: value != null
-                              ? AppColors.ink
-                              : AppColors.muted),
-                    ),
-                  ),
-                  const Icon(Icons.calendar_today_outlined,
-                      size: 15, color: AppColors.teal),
-                ],
-              ),
+                          color: AppColors.muted),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.lock_outline_rounded,
+                    size: 13, color: AppColors.muted),
+              ],
             ),
           ),
         ],
