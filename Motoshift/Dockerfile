@@ -14,7 +14,7 @@ ARG API_URL=""
 WORKDIR /app
 
 # Resolve dependências primeiro (camada cacheável enquanto o pubspec não muda).
-COPY pubspec.yaml pubspec.lock ./
+COPY pubspec.yaml ./
 RUN flutter pub get
 
 # Copia o restante do código e gera o build de produção.
