@@ -1,6 +1,8 @@
 {
   "build": {
-    "watchPatterns": ["lib/**", "pubspec.yaml", "Dockerfile"]
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile",
+    "watchPatterns": ["lib/**", "web/**", "pubspec.yaml", "Dockerfile", "nginx.conf"]
   },
   "deploy": {
     "healthcheckPath": "/",

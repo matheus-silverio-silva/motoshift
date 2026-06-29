@@ -1,18 +1,37 @@
-# ── Build stage ──────────────────────────────────────────────
+# syntax=docker/dockerfile:1
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Estágio 1 — Build do Flutter web
+# ──────────────────────────────────────────────────────────────────────────────
 FROM ghcr.io/cirruslabs/flutter:stable AS build
 
+# URL base da API, injetada em build-time.
+# No Railway, defina a variável de ambiente API_URL no serviço — ela é repassada
+# automaticamente como build arg para o Dockerfile.
+# Ex.: API_URL=https://motoshift-backend.up.railway.app
+ARG API_URL=""
+
 WORKDIR /app
-COPY pubspec.yaml pubspec.lock* ./
+
+# Resolve dependências primeiro (camada cacheável enquanto o pubspec não muda).
+COPY pubspec.yaml pubspec.lock ./
 RUN flutter pub get
 
+# Copia o restante do código e gera o build de produção.
 COPY . .
-ARG API_URL
-RUN flutter build web --dart-define=API_URL=$API_URL --release
+RUN flutter build web --release --dart-define=API_URL=$API_URL
 
-# ── Serve stage ──────────────────────────────────────────────
-FROM python:3.12-slim
+# ──────────────────────────────────────────────────────────────────────────────
+# Estágio 2 — Servir com nginx
+# ──────────────────────────────────────────────────────────────────────────────
+FROM nginx:stable-alpine AS runtime
 
-WORKDIR /app
-COPY --from=build /app/build/web ./build/web
+# A imagem oficial do nginx processa templates em /etc/nginx/templates com
+# envsubst no entrypoint, gerando /etc/nginx/conf.d/default.conf. Isso permite
+# escutar na porta definida por $PORT (Railway injeta uma dinâmica; default 80).
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 
-CMD python3 -m http.server ${PORT:-8080} --directory build/web
+COPY --from=build /app/build/web /usr/share/nginx/html
+
+ENV PORT=80
+EXPOSE 80

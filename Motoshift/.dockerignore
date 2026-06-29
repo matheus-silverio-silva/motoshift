@@ -1,0 +1,19 @@
+# Artefatos de build e cache — gerados dentro do container
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# IDE / SO
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Testes e goldens (não entram no build web)
+test/
+coverage/
+
+# Git
+.git/
+.gitignore
