@@ -25,8 +25,9 @@ estabilidade financeira para ambos os lados.
 | Front-end | Flutter (Android/iOS/Web) |
 | Back-end | Java 17 + Spring Boot 3.3.6 |
 | Banco de dados | H2 (desenvolvimento) / MySQL (produção) |
-| IA | Claude Sonnet (Anthropic API) |
+| IA | Claude Sonnet 4 (Anthropic API) |
 | Documentação | Springdoc OpenAPI / Swagger UI |
+| Deploy | Railway (back-end + front-end web via Docker/nginx) |
 | Versionamento | Git + GitHub |
 
 ---
@@ -77,18 +78,76 @@ flutter pub get
 
 # Rode o app (emulador Android usa 10.0.2.2 automaticamente)
 flutter run
+
+# Para web, apontando para um back-end específico:
+flutter run -d chrome --dart-define=API_URL=http://localhost:8080
 ```
+
+---
+
+## 🚀 Deploy (Railway)
+
+Ambos os serviços são publicados no **Railway**.
+
+### Front-end (Flutter Web)
+
+A pasta [`Motoshift/`](Motoshift/) contém um **Dockerfile** multi-stage que o
+Railway detecta automaticamente:
+
+1. **Build** — `flutter build web --release`, com a URL da API injetada em
+   tempo de build via `--dart-define=API_URL`.
+2. **Serve** — os arquivos estáticos são servidos por **nginx** com fallback de
+   SPA (todas as rotas caem em `index.html`).
+
+Variável de ambiente necessária no serviço front-end:
+
+| Variável | Exemplo | Observação |
+|----------|---------|------------|
+| `API_URL` | `https://motoshift-backend.up.railway.app` | URL base do back-end, **sem** `/api` no final (o app já anexa) |
+
+### Back-end (Spring Boot)
+
+Roda com o perfil `prod` (MySQL). Variáveis principais:
+
+| Variável | Descrição |
+|----------|-----------|
+| `SPRING_PROFILES_ACTIVE` | Defina como `prod` |
+| `DATABASE_URL` | URL JDBC do MySQL de produção |
+| `DB_USER` | Usuário do banco |
+| `DB_PASSWORD` | Senha do banco |
+| `ANTHROPIC_API_KEY` | Chave da API Anthropic para as funcionalidades de IA |
+| `PORT` | Porta do servidor (injetada automaticamente pelo Railway) |
 
 ---
 
 ## 🔑 Credenciais de Teste
 
-| Perfil | Email | Senha |
-|--------|-------|-------|
-| Lojista | lojista@teste.com | senha123 |
-| Motoboy | motoboy@teste.com | senha123 |
+Todos os usuários abaixo usam a senha **`senha123`**. São criados automaticamente
+na primeira inicialização (junto com turnos, carteiras, avaliações e histórico),
+desde que o banco esteja vazio.
 
-Os usuários e turnos de teste são criados automaticamente na inicialização.
+### 🏪 Lojistas
+
+| Email | Nome | Estabelecimento | Cidade |
+|-------|------|-----------------|--------|
+| `claudia@teste.com` | Cláudia Oliveira | Hamburgueria da Cláudia | Curitiba/PR |
+| `fernando@teste.com` | Fernando Costa | Pizzaria do Fernando | Curitiba/PR |
+| `ana@teste.com` | Ana Souza | Farmácia Ana | Curitiba/PR |
+| `lojista@teste.com` | Maria Andrade | Mercado Andrade | São Paulo/SP |
+
+### 🏍️ Motoboys
+
+| Email | Nome | Veículo | Score |
+|-------|------|---------|-------|
+| `ricardo@teste.com` | Ricardo Souza | Honda CG 160 Titan | 4.7 |
+| `lucas@teste.com` | Lucas Mendes | Yamaha Factor 150 | 4.9 |
+| `thiago@teste.com` | Thiago Alves | Honda Biz 125 | 3.1 |
+| `motoboy@teste.com` | Carlos Mendes | Honda PCX 150 | 5.0 |
+
+> 💡 Para explorar o fluxo completo, recomendamos **`claudia@teste.com`** (lojista
+> com vários turnos) e **`ricardo@teste.com`** (motoboy com histórico, carteira e
+> avaliações). Os turnos de teste cobrem cenários abertos, em andamento,
+> concluídos, pendentes de pagamento e cancelados.
 
 ---
 
