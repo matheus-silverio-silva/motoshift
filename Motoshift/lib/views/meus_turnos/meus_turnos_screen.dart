@@ -246,6 +246,8 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         turno.horarioFormatado,
         turno.regiao,
         '${turno.raioEntregaKm.toStringAsFixed(0)} km',
+        if (turno.multiVaga)
+          '${turno.vagasRestantes} de ${turno.vagas} vagas',
       ],
       value: 'R\$ ${turno.valorEstimado.toStringAsFixed(0)}',
       iconData: Icons.two_wheeler_outlined,

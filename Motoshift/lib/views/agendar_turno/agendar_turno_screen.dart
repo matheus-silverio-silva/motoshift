@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/turno.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/preco_recomendado.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_header.dart';
@@ -27,6 +28,7 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
   TimeOfDay? _horaInicio;
   TimeOfDay? _horaFim;
   double _raio = 15;
+  int _vagas = 1;
   final _valorCtrl = TextEditingController();
   bool _publicando = false;
 
@@ -34,6 +36,18 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
   void dispose() {
     _valorCtrl.dispose();
     super.dispose();
+  }
+
+  /// Sugestão de preço — só disponível quando data e horários estão definidos.
+  PrecoResultado? get _recomendacao {
+    if (_data == null || _horaInicio == null || _horaFim == null) return null;
+    final inicio = DateTime(_data!.year, _data!.month, _data!.day,
+        _horaInicio!.hour, _horaInicio!.minute);
+    final fim = DateTime(_data!.year, _data!.month, _data!.day,
+        _horaFim!.hour, _horaFim!.minute);
+    if (!fim.isAfter(inicio)) return null;
+    return PrecoRecomendado.calcular(
+        inicio: inicio, fim: fim, raioKm: _raio);
   }
 
   Future<void> _pickDate() async {
@@ -144,6 +158,7 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       valorEstimado:
           double.tryParse(_valorCtrl.text.replaceAll(',', '.')) ?? 0.0,
       raioEntregaKm: _raio,
+      vagas: _vagas,
     );
 
     try {
@@ -215,6 +230,8 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
                 child: Column(
                   children: [
                     _buildRaioSection(),
+                    const SizedBox(height: 22),
+                    _buildVagasSection(),
                     const SizedBox(height: 22),
                     _buildValorSection(),
                   ],
@@ -410,6 +427,150 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
     );
   }
 
+  Widget _buildVagasSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Icon(Icons.groups_outlined, color: AppColors.teal, size: 14),
+          const SizedBox(width: 5),
+          Text('VAGAS DE ENTREGADOR',
+              style: tsJakarta(9, FontWeight.w700, color: AppColors.teal)),
+          const Spacer(),
+          Text(
+            _vagas == 1 ? '1 entregador' : '$_vagas entregadores',
+            style: tsJakarta(10, FontWeight.w600, color: AppColors.muted),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            _vagaBtn(Icons.remove_rounded,
+                enabled: _vagas > 1,
+                onTap: () => setState(() => _vagas--)),
+            Expanded(
+              child: Center(
+                child: Text('$_vagas',
+                    style: tsBricolage(22, FontWeight.w800,
+                        color: AppColors.ink)),
+              ),
+            ),
+            _vagaBtn(Icons.add_rounded,
+                enabled: _vagas < 20,
+                onTap: () => setState(() => _vagas++)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Quantos entregadores você precisa neste mesmo turno.',
+          style: tsJakarta(10.5, FontWeight.w400, color: AppColors.muted),
+        ),
+      ],
+    );
+  }
+
+  Widget _vagaBtn(IconData icon,
+      {required bool enabled, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: enabled ? AppColors.tealSoft : AppColors.surface2,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.line, width: 1.5),
+        ),
+        child: Icon(icon,
+            size: 20,
+            color: enabled ? AppColors.tealDeep : AppColors.line),
+      ),
+    );
+  }
+
+  Widget _buildRecomendacao() {
+    final rec = _recomendacao;
+    if (rec == null) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Text(
+          'Defina data e horário para ver o valor recomendado.',
+          style: tsJakarta(10.5, FontWeight.w400, color: AppColors.muted),
+        ),
+      );
+    }
+    final valorFmt = rec.valor.toStringAsFixed(0);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.tealSoft,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.teal.withOpacity(0.35), width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded,
+                  color: AppColors.tealDeep, size: 15),
+              const SizedBox(width: 6),
+              Text('Valor recomendado',
+                  style: tsJakarta(10.5, FontWeight.w700,
+                      color: AppColors.tealDeep)),
+              const Spacer(),
+              Text('R\$ $valorFmt',
+                  style: tsBricolage(18, FontWeight.w800,
+                      color: AppColors.tealDeep)),
+            ],
+          ),
+          if (rec.fatores.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: rec.fatores
+                  .map((f) => Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text('${f.rotulo} ${f.ajuste}',
+                            style: tsJakarta(9, FontWeight.w600,
+                                color: AppColors.muted)),
+                      ))
+                  .toList(),
+            ),
+          ],
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: () {
+              setState(() =>
+                  _valorCtrl.text = rec.valor.toStringAsFixed(2).replaceAll('.', ','));
+              _formKey.currentState?.validate();
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 9),
+              decoration: BoxDecoration(
+                color: AppColors.teal,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Text(
+                'Usar valor recomendado',
+                textAlign: TextAlign.center,
+                style: tsJakarta(11.5, FontWeight.w700, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildValorSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -423,6 +584,7 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
                   color: AppColors.teal)),
         ]),
         const SizedBox(height: 10),
+        _buildRecomendacao(),
         TextFormField(
           controller: _valorCtrl,
           keyboardType:

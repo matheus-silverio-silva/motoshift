@@ -102,6 +102,11 @@ class AppColors {
   static List<BoxShadow> bottomNavShadow = const [
     BoxShadow(color: Color(0x140E8B8C), blurRadius: 24, offset: Offset(0, -8)),
   ];
+
+  // Sombra sutil para dar profundidade aos cards sem pesar no visual clean.
+  static const List<BoxShadow> cardShadow = [
+    BoxShadow(color: Color(0x0A0A4D52), blurRadius: 14, offset: Offset(0, 6)),
+  ];
 }
 
 // ── Helpers de estilo de texto ───────────────────────────────────────────────

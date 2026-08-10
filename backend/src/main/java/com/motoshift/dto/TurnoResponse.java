@@ -16,6 +16,8 @@ public class TurnoResponse {
     private LocalDateTime dataFim;
     private Double valorEstimado;
     private Double raioEntregaKm;
+    private Integer vagas;
+    private Integer vagasPreenchidas;
     private String status;
     private String pagamentoStatus;
     private LocalDateTime lojistaConfirmouEm;
@@ -35,6 +37,8 @@ public class TurnoResponse {
         r.dataFim = t.getDataFim();
         r.valorEstimado = t.getValorEstimado();
         r.raioEntregaKm = t.getRaioEntregaKm();
+        r.vagas = t.getVagas();
+        r.vagasPreenchidas = 0; // atualizado pelo serviço via setVagasPreenchidas
         r.status = t.getStatus();
         r.pagamentoStatus = t.getPagamentoStatus();
         r.lojistaConfirmouEm = t.getLojistaConfirmouEm();
@@ -54,6 +58,9 @@ public class TurnoResponse {
     public LocalDateTime getDataFim() { return dataFim; }
     public Double getValorEstimado() { return valorEstimado; }
     public Double getRaioEntregaKm() { return raioEntregaKm; }
+    public Integer getVagas() { return vagas; }
+    public Integer getVagasPreenchidas() { return vagasPreenchidas; }
+    public void setVagasPreenchidas(Integer v) { this.vagasPreenchidas = v; }
     public String getStatus() { return status; }
     public String getPagamentoStatus() { return pagamentoStatus; }
     public LocalDateTime getLojistaConfirmouEm() { return lojistaConfirmouEm; }

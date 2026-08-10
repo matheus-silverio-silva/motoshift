@@ -125,7 +125,16 @@ public class TurnoController {
     public TurnoResponse confirmarPagamentoLojista(
             @PathVariable Long id,
             @RequestBody Map<String, Long> body) {
-        return service.confirmarPagamentoLojista(id, body.get("lojistaId"));
+        // motoboyId identifica qual entregador está sendo pago (multi-vaga; opcional).
+        return service.confirmarPagamentoLojista(
+                id, body.get("lojistaId"), body.get("motoboyId"));
+    }
+
+    @Operation(summary = "Listar inscritos do turno",
+            description = "Entregadores inscritos no turno, com status de pagamento de cada um.")
+    @GetMapping("/{id}/inscritos")
+    public List<Map<String, Object>> inscritos(@PathVariable Long id) {
+        return service.listarInscritos(id);
     }
 
     @Operation(summary = "Motoboy confirma recebimento",

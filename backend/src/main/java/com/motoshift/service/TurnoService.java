@@ -5,9 +5,11 @@ import com.motoshift.dto.TurnoResponse;
 import com.motoshift.entity.Carteira;
 import com.motoshift.entity.Transacao;
 import com.motoshift.entity.Turno;
+import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.entity.Usuario;
 import com.motoshift.repository.CarteiraRepository;
 import com.motoshift.repository.TransacaoRepository;
+import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
 import org.springframework.http.HttpStatus;
@@ -31,15 +33,30 @@ public class TurnoService {
     private final UsuarioRepository usuarioRepo;
     private final CarteiraRepository carteiraRepo;
     private final TransacaoRepository transacaoRepo;
+    private final TurnoInscricaoRepository inscricaoRepo;
 
     public TurnoService(TurnoRepository turnoRepo,
                         UsuarioRepository usuarioRepo,
                         CarteiraRepository carteiraRepo,
-                        TransacaoRepository transacaoRepo) {
+                        TransacaoRepository transacaoRepo,
+                        TurnoInscricaoRepository inscricaoRepo) {
         this.turnoRepo = turnoRepo;
         this.usuarioRepo = usuarioRepo;
         this.carteiraRepo = carteiraRepo;
         this.transacaoRepo = transacaoRepo;
+        this.inscricaoRepo = inscricaoRepo;
+    }
+
+    /**
+     * Monta o TurnoResponse já preenchendo {@code vagasPreenchidas} com a
+     * contagem de inscrições ativas (status "aceito"). Centraliza para que
+     * todas as listagens exponham a ocupação real do turno.
+     */
+    private TurnoResponse toResponse(Turno t) {
+        TurnoResponse r = TurnoResponse.from(t);
+        long ativas = inscricaoRepo.countByTurnoIdAndStatus(t.getId(), "aceito");
+        r.setVagasPreenchidas((int) ativas);
+        return r;
     }
 
     // RF04 — Criar turno: início deve ser >= agora + 2h
@@ -64,11 +81,16 @@ public class TurnoService {
         t.setDataFim(req.getDataFim());
         t.setValorEstimado(req.getValorEstimado());
         t.setRaioEntregaKm(req.getRaioEntregaKm());
+        int vagas = req.getVagas() == null ? 1 : req.getVagas();
+        if (vagas < 1) vagas = 1;
+        if (vagas > 20) vagas = 20; // teto de segurança
+        t.setVagas(vagas);
 
-        return TurnoResponse.from(turnoRepo.save(t));
+        return toResponse(turnoRepo.save(t));
     }
 
-    // RF05 — Aceitar turno: verifica conflito de agenda
+    // RF05 — Aceitar turno (com vagas): cada motoboy que aceita vira uma inscrição.
+    // O turno permanece "aberto" enquanto houver vagas; fecha ("aceito") ao lotar.
     @Transactional
     public TurnoResponse aceitar(Long turnoId, Long motoboyId) {
         Turno turno = turnoRepo.findById(turnoId)
@@ -78,15 +100,63 @@ public class TurnoService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Turno não está disponível para aceite.");
         }
 
-        List<Turno> conflitos = turnoRepo.findConflitos(motoboyId, turno.getDataInicio(), turno.getDataFim());
-        if (!conflitos.isEmpty()) {
+        // Anti-duplicação: mesmo motoboy não pode aceitar o mesmo turno duas vezes.
+        if (inscricaoRepo.existsByTurnoIdAndMotoboyIdAndStatus(turnoId, motoboyId, "aceito")) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Você já aceitou este turno.");
+        }
+
+        // Capacidade: respeita o número de vagas do turno.
+        int vagas = turno.getVagas();
+        long ocupadas = inscricaoRepo.countByTurnoIdAndStatus(turnoId, "aceito");
+        if (ocupadas >= vagas) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Todas as vagas deste turno já foram preenchidas.");
+        }
+
+        // Conflito de agenda considerando TODAS as inscrições ativas do motoboy.
+        if (temConflitoDeAgenda(motoboyId, turno)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Você já possui um turno agendado neste horário.");
         }
 
-        turno.setMotoboyId(motoboyId);
-        turno.setStatus("aceito");
-        return TurnoResponse.from(turnoRepo.save(turno));
+        // Registra a inscrição.
+        TurnoInscricao ins = new TurnoInscricao();
+        ins.setTurnoId(turnoId);
+        ins.setMotoboyId(motoboyId);
+        ins.setStatus("aceito");
+        inscricaoRepo.save(ins);
+        ocupadas++;
+
+        // Primeiro inscrito vira o motoboy "principal" (compatibilidade com os
+        // fluxos atuais de finalização/pagamento).
+        if (turno.getMotoboyId() == null) {
+            turno.setMotoboyId(motoboyId);
+        }
+        // Fecha o turno quando todas as vagas forem preenchidas.
+        if (ocupadas >= vagas) {
+            turno.setStatus("aceito");
+        }
+        return toResponse(turnoRepo.save(turno));
+    }
+
+    /**
+     * Verifica se o motoboy já tem alguma inscrição ativa cujo turno se
+     * sobrepõe ao horário do turno alvo. Cobre o cenário multi-vaga em que o
+     * turno de origem ainda está "aberto" (não pego pelo antigo findConflitos).
+     */
+    private boolean temConflitoDeAgenda(Long motoboyId, Turno alvo) {
+        List<TurnoInscricao> ativas = inscricaoRepo.findByMotoboyIdAndStatus(motoboyId, "aceito");
+        for (TurnoInscricao ins : ativas) {
+            Turno outro = turnoRepo.findById(ins.getTurnoId()).orElse(null);
+            if (outro == null) continue;
+            if (outro.getId().equals(alvo.getId())) continue;
+            if ("cancelado".equals(outro.getStatus())) continue;
+            boolean sobrepoe = outro.getDataInicio().isBefore(alvo.getDataFim())
+                    && outro.getDataFim().isAfter(alvo.getDataInicio());
+            if (sobrepoe) return true;
+        }
+        return false;
     }
 
     // RF06 — Finalizar turno: credita valor na carteira do motoboy
@@ -106,37 +176,74 @@ public class TurnoService {
         turno.setPagamentoStatus("pendente");
         turnoRepo.save(turno);
 
-        // Registra transação pendente (motoboy aguarda recebimento, lojista deve pagar)
+        List<TurnoInscricao> inscricoes =
+                inscricaoRepo.findByTurnoIdAndStatus(turno.getId(), "aceito");
+
+        if (inscricoes.isEmpty()) {
+            // Legado: turno sem inscrições (aceito antes do sistema de vagas).
+            criarTransacaoPendente(turno, turno.getMotoboyId());
+        } else {
+            // Cada entregador inscrito gera sua própria transação/pagamento.
+            for (TurnoInscricao ins : inscricoes) {
+                ins.setStatus("finalizado");
+                ins.setPagamentoStatus("pendente");
+                inscricaoRepo.save(ins);
+                criarTransacaoPendente(turno, ins.getMotoboyId());
+            }
+        }
+
+        return toResponse(turno);
+    }
+
+    private void criarTransacaoPendente(Turno turno, Long motoboyId) {
+        if (motoboyId == null) return;
         Transacao tx = new Transacao();
-        tx.setMotoboyId(turno.getMotoboyId());
+        tx.setMotoboyId(motoboyId);
         tx.setTurnoId(turno.getId());
         tx.setTipo("turno");
         tx.setValor(turno.getValorEstimado());
         tx.setDescricao("Turno finalizado: " + turno.getTitulo());
         tx.setStatus("pendente");
         transacaoRepo.save(tx);
-
-        return TurnoResponse.from(turno);
     }
 
-    // Lojista declara que enviou o pagamento ao motoboy.
+    // Lojista declara que enviou o pagamento a um entregador específico.
     // Pagamento só é efetivado quando AMBAS as partes confirmarem (anti-fraude).
+    // motoboyId identifica qual entregador está sendo pago (multi-vaga). Se null,
+    // usa o motoboy principal do turno (compatibilidade).
     @Transactional
-    public TurnoResponse confirmarPagamentoLojista(Long turnoId, Long lojistaId) {
+    public TurnoResponse confirmarPagamentoLojista(Long turnoId, Long lojistaId, Long motoboyId) {
         Turno turno = carregarParaConfirmacao(turnoId);
 
         if (!turno.getLojistId().equals(lojistaId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Apenas o lojista do turno pode confirmar o pagamento.");
         }
+
+        Long alvo = motoboyId != null ? motoboyId : turno.getMotoboyId();
+        TurnoInscricao ins = alvo == null ? null
+                : inscricaoRepo.findByTurnoIdAndMotoboyId(turnoId, alvo).orElse(null);
+
+        if (ins != null) {
+            if (ins.getLojistaConfirmouEm() != null) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Você já confirmou o pagamento deste entregador. Aguardando a confirmação dele.");
+            }
+            ins.setLojistaConfirmouEm(LocalDateTime.now());
+            inscricaoRepo.save(ins);
+            liquidarInscricao(turno, ins);
+            atualizarPagamentoTurno(turno);
+            return toResponse(turnoRepo.save(turno));
+        }
+
+        // Fallback legado (turno sem inscrições).
         if (turno.getLojistaConfirmouEm() != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Você já confirmou o pagamento. Aguardando confirmação do motoboy.");
         }
-
         turno.setLojistaConfirmouEm(LocalDateTime.now());
         tentarEfetivarPagamento(turno);
-        return TurnoResponse.from(turnoRepo.save(turno));
+        return toResponse(turnoRepo.save(turno));
     }
 
     // Motoboy declara que recebeu o pagamento.
@@ -144,6 +251,22 @@ public class TurnoService {
     public TurnoResponse confirmarRecebimentoMotoboy(Long turnoId, Long motoboyId) {
         Turno turno = carregarParaConfirmacao(turnoId);
 
+        TurnoInscricao ins =
+                inscricaoRepo.findByTurnoIdAndMotoboyId(turnoId, motoboyId).orElse(null);
+
+        if (ins != null) {
+            if (ins.getMotoboyConfirmouEm() != null) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Você já confirmou o recebimento. Aguardando confirmação do lojista.");
+            }
+            ins.setMotoboyConfirmouEm(LocalDateTime.now());
+            inscricaoRepo.save(ins);
+            liquidarInscricao(turno, ins);
+            atualizarPagamentoTurno(turno);
+            return toResponse(turnoRepo.save(turno));
+        }
+
+        // Fallback legado (turno sem inscrições).
         if (turno.getMotoboyId() == null || !turno.getMotoboyId().equals(motoboyId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Apenas o motoboy do turno pode confirmar o recebimento.");
@@ -152,10 +275,34 @@ public class TurnoService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Você já confirmou o recebimento. Aguardando confirmação do lojista.");
         }
-
         turno.setMotoboyConfirmouEm(LocalDateTime.now());
         tentarEfetivarPagamento(turno);
-        return TurnoResponse.from(turnoRepo.save(turno));
+        return toResponse(turnoRepo.save(turno));
+    }
+
+    /** Efetiva o pagamento de UMA inscrição quando ambas as partes confirmaram. */
+    private void liquidarInscricao(Turno turno, TurnoInscricao ins) {
+        if (ins.getLojistaConfirmouEm() == null || ins.getMotoboyConfirmouEm() == null) {
+            return; // aguardando a outra parte
+        }
+        if ("pago".equals(ins.getPagamentoStatus())) return;
+
+        ins.setPagamentoStatus("pago");
+        inscricaoRepo.save(ins);
+        creditarCarteira(ins.getMotoboyId(), turno.getValorEstimado());
+        marcarTransacaoProcessada(ins.getMotoboyId(), turno.getId());
+    }
+
+    /** Turno vira "pago" quando todas as inscrições finalizadas foram pagas. */
+    private void atualizarPagamentoTurno(Turno turno) {
+        List<TurnoInscricao> participantes = inscricaoRepo.findByTurnoId(turno.getId())
+                .stream()
+                .filter(i -> i.getPagamentoStatus() != null)
+                .collect(Collectors.toList());
+        if (!participantes.isEmpty()
+                && participantes.stream().allMatch(i -> "pago".equals(i.getPagamentoStatus()))) {
+            turno.setPagamentoStatus("pago");
+        }
     }
 
     private Turno carregarParaConfirmacao(Long turnoId) {
@@ -171,29 +318,37 @@ public class TurnoService {
         return turno;
     }
 
-    // Quando AMBAS as partes confirmaram: efetiva (credita carteira + atualiza tx)
+    // Legado: efetiva pagamento no nível do turno (motoboy único, sem inscrições).
     private void tentarEfetivarPagamento(Turno turno) {
         if (turno.getLojistaConfirmouEm() == null
                 || turno.getMotoboyConfirmouEm() == null) {
             return; // ainda aguardando a outra parte
         }
         turno.setPagamentoStatus("pago");
+        creditarCarteira(turno.getMotoboyId(), turno.getValorEstimado());
+        marcarTransacaoProcessada(turno.getMotoboyId(), turno.getId());
+    }
 
-        // Credita carteira do motoboy
-        Carteira carteira = carteiraRepo.findByMotoboyId(turno.getMotoboyId())
+    // Credita saldo e ganhos mensais na carteira do motoboy.
+    private void creditarCarteira(Long motoboyId, Double valor) {
+        if (motoboyId == null || valor == null) return;
+        Carteira carteira = carteiraRepo.findByMotoboyId(motoboyId)
                 .orElseGet(() -> {
                     Carteira c = new Carteira();
-                    c.setMotoboyId(turno.getMotoboyId());
+                    c.setMotoboyId(motoboyId);
                     return c;
                 });
-        carteira.setSaldoAtual(carteira.getSaldoAtual() + turno.getValorEstimado());
-        carteira.setGanhosMensais(carteira.getGanhosMensais() + turno.getValorEstimado());
+        carteira.setSaldoAtual(carteira.getSaldoAtual() + valor);
+        carteira.setGanhosMensais(carteira.getGanhosMensais() + valor);
         carteiraRepo.save(carteira);
+    }
 
-        // Atualiza a transação pendente correspondente
-        transacaoRepo.findByMotoboyIdOrderByCriadoEmDesc(turno.getMotoboyId())
+    // Marca a transação pendente daquele motoboy/turno como processada.
+    private void marcarTransacaoProcessada(Long motoboyId, Long turnoId) {
+        if (motoboyId == null) return;
+        transacaoRepo.findByMotoboyIdOrderByCriadoEmDesc(motoboyId)
                 .stream()
-                .filter(t -> turno.getId().equals(t.getTurnoId()) && "pendente".equals(t.getStatus()))
+                .filter(t -> turnoId.equals(t.getTurnoId()) && "pendente".equals(t.getStatus()))
                 .findFirst()
                 .ifPresent(tx -> {
                     tx.setStatus("processado");
@@ -222,13 +377,19 @@ public class TurnoService {
             });
         }
 
+        // Cancela também as inscrições ativas (libera as vagas ocupadas).
+        for (TurnoInscricao ins : inscricaoRepo.findByTurnoIdAndStatus(turnoId, "aceito")) {
+            ins.setStatus("cancelado");
+            inscricaoRepo.save(ins);
+        }
+
         turno.setStatus("cancelado");
-        return TurnoResponse.from(turnoRepo.save(turno));
+        return toResponse(turnoRepo.save(turno));
     }
 
     public List<TurnoResponse> listarDisponiveis() {
         return turnoRepo.findByStatus("aberto").stream()
-                .map(TurnoResponse::from)
+                .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
@@ -270,25 +431,60 @@ public class TurnoService {
         };
 
         return stream.sorted(comparator)
-                .map(TurnoResponse::from)
+                .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
     public List<TurnoResponse> listarPorLojista(Long lojistId) {
         return turnoRepo.findByLojistId(lojistId).stream()
-                .map(TurnoResponse::from)
+                .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
     public List<TurnoResponse> listarPorMotoboy(Long motoboyId) {
-        return turnoRepo.findByMotoboyId(motoboyId).stream()
-                .map(TurnoResponse::from)
+        // Une turnos onde o motoboy é o principal (motoboyId) com aqueles em que
+        // ele entrou por inscrição (vaga extra), sem duplicar.
+        java.util.LinkedHashMap<Long, Turno> porId = new java.util.LinkedHashMap<>();
+        for (Turno t : turnoRepo.findByMotoboyId(motoboyId)) {
+            porId.put(t.getId(), t);
+        }
+        for (TurnoInscricao ins : inscricaoRepo.findByMotoboyIdAndStatus(motoboyId, "aceito")) {
+            if (!porId.containsKey(ins.getTurnoId())) {
+                turnoRepo.findById(ins.getTurnoId()).ifPresent(t -> porId.put(t.getId(), t));
+            }
+        }
+        // Também inclui inscrições já finalizadas (histórico), evitando duplicatas.
+        for (TurnoInscricao ins : inscricaoRepo.findByMotoboyIdAndStatus(motoboyId, "finalizado")) {
+            if (!porId.containsKey(ins.getTurnoId())) {
+                turnoRepo.findById(ins.getTurnoId()).ifPresent(t -> porId.put(t.getId(), t));
+            }
+        }
+        return porId.values().stream()
+                .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
     public TurnoResponse buscarPorId(Long id) {
         return turnoRepo.findById(id)
-                .map(TurnoResponse::from)
+                .map(this::toResponse)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Turno não encontrado"));
+    }
+
+    /** Entregadores inscritos no turno, com o status de pagamento de cada um. */
+    public List<java.util.Map<String, Object>> listarInscritos(Long turnoId) {
+        return inscricaoRepo.findByTurnoId(turnoId).stream()
+                .filter(i -> !"cancelado".equals(i.getStatus()))
+                .map(i -> {
+                    java.util.Map<String, Object> m = new java.util.HashMap<>();
+                    m.put("motoboyId", i.getMotoboyId());
+                    m.put("nome", usuarioRepo.findById(i.getMotoboyId())
+                            .map(Usuario::getNome).orElse("Entregador"));
+                    m.put("status", i.getStatus());
+                    m.put("pagamentoStatus", i.getPagamentoStatus());
+                    m.put("lojistaConfirmou", i.getLojistaConfirmouEm() != null);
+                    m.put("motoboyConfirmou", i.getMotoboyConfirmouEm() != null);
+                    return m;
+                })
+                .collect(Collectors.toList());
     }
 }

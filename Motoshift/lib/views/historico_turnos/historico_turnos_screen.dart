@@ -192,7 +192,8 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
     try {
       final api = context.read<ApiService>();
       final atualizado = isLojista
-          ? await api.confirmarPagamentoLojista(t.id!, id)
+          ? await api.confirmarPagamentoLojista(t.id!, id,
+              motoboyId: t.motoboyId)
           : await api.confirmarRecebimentoMotoboy(t.id!, id);
       if (!mounted) return;
       final efetivado =
@@ -218,6 +219,168 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
         ),
       );
     }
+  }
+
+  // Painel do lojista para pagar cada entregador de um turno multi-vaga.
+  Future<void> _abrirInscritosPagamento(Turno t) async {
+    if (t.id == null) return;
+    final auth = context.read<AuthService>();
+    final lojistaId = auth.usuario?.id;
+    if (lojistaId == null) return;
+    final api = context.read<ApiService>();
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheet) {
+            return FutureBuilder<List<Map<String, dynamic>>>(
+              future: api.listarInscritos(t.id!),
+              builder: (ctx, snap) {
+                final inscritos = snap.data ?? [];
+                return Padding(
+                  padding: EdgeInsets.fromLTRB(
+                      18, 16, 18, MediaQuery.of(ctx).viewInsets.bottom + 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.line,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text('Pagamento por entregador',
+                          style: tsBricolage(17, FontWeight.w800,
+                              color: AppColors.ink)),
+                      const SizedBox(height: 2),
+                      Text('${t.vagasPreenchidas} de ${t.vagas} vagas • R\$ '
+                          '${t.valorEstimado.toStringAsFixed(0)} cada',
+                          style: tsJakarta(12, FontWeight.w400,
+                              color: AppColors.muted)),
+                      const SizedBox(height: 14),
+                      if (snap.connectionState == ConnectionState.waiting)
+                        const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Center(
+                              child: CircularProgressIndicator(
+                                  color: AppColors.teal)),
+                        )
+                      else if (inscritos.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          child: Text('Nenhum entregador inscrito.',
+                              style: tsJakarta(13, FontWeight.w400,
+                                  color: AppColors.muted)),
+                        )
+                      else
+                        ...inscritos.map((ins) => _linhaInscrito(
+                            ctx, setSheet, t, lojistaId, api, ins)),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+    _carregar();
+  }
+
+  Widget _linhaInscrito(
+      BuildContext ctx,
+      void Function(void Function()) setSheet,
+      Turno t,
+      int lojistaId,
+      ApiService api,
+      Map<String, dynamic> ins) {
+    final nome = (ins['nome'] ?? 'Entregador').toString();
+    final pago = ins['pagamentoStatus'] == 'pago';
+    final lojistaConfirmou = ins['lojistaConfirmou'] == true;
+    final motoboyId = (ins['motoboyId'] as num?)?.toInt();
+
+    final String etiqueta;
+    final Color cor;
+    if (pago) {
+      etiqueta = 'Pago';
+      cor = AppColors.good;
+    } else if (lojistaConfirmou) {
+      etiqueta = 'Aguardando entregador';
+      cor = AppColors.teal;
+    } else {
+      etiqueta = 'A pagar';
+      cor = AppColors.muted;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.line, width: 1.2),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(nome,
+                    style: tsJakarta(13, FontWeight.w700,
+                        color: AppColors.ink)),
+                const SizedBox(height: 2),
+                Text(etiqueta,
+                    style: tsJakarta(11, FontWeight.w600, color: cor)),
+              ],
+            ),
+          ),
+          if (!pago && !lojistaConfirmou && motoboyId != null)
+            GestureDetector(
+              onTap: () async {
+                try {
+                  await api.confirmarPagamentoLojista(t.id!, lojistaId,
+                      motoboyId: motoboyId);
+                  setSheet(() {});
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text('Erro: $e'),
+                        backgroundColor: AppColors.error),
+                  );
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Text('Confirmar',
+                    style: tsJakarta(11, FontWeight.w700,
+                        color: Colors.white)),
+              ),
+            )
+          else
+            Icon(pago ? Icons.check_circle_rounded : Icons.hourglass_bottom_rounded,
+                color: cor, size: 20),
+        ],
+      ),
+    );
   }
 
   // ── UI ───────────────────────────────────────────────────────────────────
@@ -612,8 +775,9 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
           if (podePagar)
             Expanded(
               child: GestureDetector(
-                onTap: () =>
-                    _confirmarPagamento(t, isLojista: isLojista),
+                onTap: () => (isLojista && t.multiVaga)
+                    ? _abrirInscritosPagamento(t)
+                    : _confirmarPagamento(t, isLojista: isLojista),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 11),
                   decoration: BoxDecoration(

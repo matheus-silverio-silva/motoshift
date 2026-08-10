@@ -17,27 +17,53 @@ class AppScaffold extends StatelessWidget {
   final Widget? bottomNav;
   final Widget? floatingActionButton;
 
+  /// Largura máxima do conteúdo. App é mobile-first: em telas largas (web/desktop)
+  /// o conteúdo fica centralizado nesta largura em vez de esticar por toda a tela.
+  static const double maxContentWidth = 640;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.tealDeep,
-      body: Column(
-        children: [
-          header,
-          Expanded(
-            child: ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(18)),
-              child: ColoredBox(
-                color: AppColors.surface2,
-                child: body,
+      body: _centralizar(
+        Column(
+          children: [
+            header,
+            Expanded(
+              child: ClipRRect(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(18)),
+                child: ColoredBox(
+                  color: AppColors.surface2,
+                  child: body,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-      bottomNavigationBar: bottomNav,
+      bottomNavigationBar: bottomNav == null
+          ? null
+          : Center(
+              heightFactor: 1,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: maxContentWidth),
+                child: bottomNav,
+              ),
+            ),
       floatingActionButton: floatingActionButton,
+    );
+  }
+
+  /// Restringe a largura e centraliza o filho quando a tela é maior que
+  /// [maxContentWidth]. No mobile o filho ocupa 100% (comportamento original).
+  Widget _centralizar(Widget child) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: maxContentWidth),
+        child: child,
+      ),
     );
   }
 }

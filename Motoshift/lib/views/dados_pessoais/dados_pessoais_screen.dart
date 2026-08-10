@@ -5,6 +5,7 @@ import '../../models/usuario.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/validators.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_scaffold.dart';
@@ -117,13 +118,11 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
               _section('Informações pessoais'),
               const SizedBox(height: 10),
               _field('Nome completo', _nomeCtrl,
-                  validator: (v) =>
-                      v == null || v.isEmpty ? 'Informe o nome' : null),
+                  validator: Validators.nome),
               _readonlyField('E-mail', usuario?.email ?? ''),
               _field('Telefone', _telefoneCtrl,
                   keyboard: TextInputType.phone,
-                  validator: (v) =>
-                      v == null || v.isEmpty ? 'Informe o telefone' : null),
+                  validator: Validators.telefone),
               // CNPJ/CNH são imutáveis após o cadastro (anti-fraude)
               _readonlyField(
                   isLojista ? 'CNPJ' : 'CNH',

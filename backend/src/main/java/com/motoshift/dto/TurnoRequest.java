@@ -28,6 +28,9 @@ public class TurnoRequest {
 
     private Double raioEntregaKm;
 
+    // Número de vagas de entregador (opcional; default 1 no serviço).
+    private Integer vagas;
+
     public Long getLojistId() { return lojistId; }
     public void setLojistId(Long lojistId) { this.lojistId = lojistId; }
 
@@ -51,4 +54,7 @@ public class TurnoRequest {
 
     public Double getRaioEntregaKm() { return raioEntregaKm; }
     public void setRaioEntregaKm(Double raioEntregaKm) { this.raioEntregaKm = raioEntregaKm; }
+
+    public Integer getVagas() { return vagas; }
+    public void setVagas(Integer vagas) { this.vagas = vagas; }
 }

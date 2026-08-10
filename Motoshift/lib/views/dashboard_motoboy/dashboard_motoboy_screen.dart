@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_scaffold.dart';
+import '../../widgets/empty_state.dart';
 import '../../widgets/mini_bar_chart.dart';
 import '../../widgets/section_title.dart';
 import '../../widgets/shift_card.dart';
@@ -258,21 +259,10 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
             .toList();
 
         if (aceitos.isEmpty) {
-          return Container(
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.line, width: 1.5),
-            ),
-            child: Center(
-              child: Text(
-                'Nenhum turno aceito no momento.\nExplorare os turnos disponíveis!',
-                textAlign: TextAlign.center,
-                style: tsJakarta(12.5, FontWeight.w400,
-                    color: AppColors.muted),
-              ),
-            ),
+          return const EmptyState(
+            icon: Icons.two_wheeler_outlined,
+            titulo: 'Nenhum turno aceito',
+            subtitulo: 'Explore os turnos disponíveis e comece a faturar.',
           );
         }
         return Column(

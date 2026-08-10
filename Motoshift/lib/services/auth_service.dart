@@ -10,6 +10,7 @@ class AuthService extends ChangeNotifier {
   Usuario? _usuario;
   bool _carregando = false;
   String? _erro;
+  bool _inicializado = false;
 
   AuthService(this._api);
 
@@ -18,7 +19,12 @@ class AuthService extends ChangeNotifier {
   String? get erro => _erro;
   bool get autenticado => _usuario != null;
 
+  /// Indica se a restauração de sessão (leitura do token salvo) já rodou.
+  /// Usado pelo AuthGuard para saber se pode decidir sobre redirecionamento.
+  bool get inicializado => _inicializado;
+
   Future<void> inicializar() async {
+    if (_inicializado) return;
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('auth_token');
     final userId = prefs.getInt('user_id');
@@ -26,11 +32,12 @@ class AuthService extends ChangeNotifier {
       _api.setAuthToken(token);
       try {
         _usuario = await _api.buscarUsuario(userId);
-        notifyListeners();
       } catch (_) {
         await _logout();
       }
     }
+    _inicializado = true;
+    notifyListeners();
   }
 
   Future<bool> login(String email, String senha, TipoUsuario tipo) async {

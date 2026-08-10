@@ -46,6 +46,24 @@ class _AvaliacaoScreenState extends State<AvaliacaoScreen> {
     super.dispose();
   }
 
+  /// Combina as tags selecionadas (pontos positivos) com o comentário livre num
+  /// único texto, respeitando o limite de 100 caracteres da coluna `comentario`
+  /// no backend. Formato: "Pontual • Organizado — comentário livre".
+  String _montarComentario() {
+    const max = 100;
+    final tags = _tagsSelected.join(' • ');
+    final texto = _comentarioCtrl.text.trim();
+
+    String resultado;
+    if (tags.isNotEmpty && texto.isNotEmpty) {
+      resultado = '$tags — $texto';
+    } else {
+      resultado = tags.isNotEmpty ? tags : texto;
+    }
+
+    return resultado.length > max ? resultado.substring(0, max) : resultado;
+  }
+
   Future<void> _enviar(AvaliacaoArgs args) async {
     if (_nota == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -61,8 +79,8 @@ class _AvaliacaoScreenState extends State<AvaliacaoScreen> {
         'avaliadorId': args.avaliadorId,
         'avaliadoId': args.avaliadoId,
         'nota': _nota,
-        if (_comentarioCtrl.text.trim().isNotEmpty)
-          'comentario': _comentarioCtrl.text.trim(),
+        if (_montarComentario().isNotEmpty)
+          'comentario': _montarComentario(),
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

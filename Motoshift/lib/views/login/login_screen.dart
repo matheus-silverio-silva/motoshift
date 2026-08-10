@@ -5,6 +5,7 @@ import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/validators.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -56,12 +57,17 @@ class _LoginScreenState extends State<LoginScreen> {
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Column(
-              children: [
-                _buildTop(),
-                _buildCard(auth),
-                const SizedBox(height: 24),
-              ],
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Column(
+                  children: [
+                    _buildTop(),
+                    _buildCard(auth),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -152,8 +158,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   value: _emailCtrl.text,
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
-                  validator: (v) =>
-                      v == null || v.isEmpty ? 'Informe o e-mail' : null,
+                  validator: Validators.email,
                 ),
                 const SizedBox(height: 9),
                 // Senha

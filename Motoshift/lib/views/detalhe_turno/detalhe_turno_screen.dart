@@ -217,6 +217,9 @@ class _GridInfo extends StatelessWidget {
       (Icons.attach_money_rounded, 'Valor estimado',
           'R\$ ${turno.valorEstimado.toStringAsFixed(2).replaceAll('.', ',')}'),
       (Icons.timelapse_rounded, 'Duração', durLabel),
+      if (turno.multiVaga)
+        (Icons.groups_rounded, 'Vagas',
+            '${turno.vagasRestantes} de ${turno.vagas} livres'),
     ];
 
     return GridView.count(

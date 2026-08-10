@@ -21,6 +21,8 @@ class Turno {
   final DateTime dataFim;
   final double valorEstimado;
   final double raioEntregaKm;
+  final int vagas;             // total de vagas de entregador no turno
+  final int vagasPreenchidas;  // quantas já foram aceitas
   final StatusTurno status;
   final PagamentoStatus pagamentoStatus;
   final DateTime? lojistaConfirmouEm;
@@ -41,6 +43,8 @@ class Turno {
     required this.dataFim,
     required this.valorEstimado,
     required this.raioEntregaKm,
+    this.vagas = 1,
+    this.vagasPreenchidas = 0,
     this.status = StatusTurno.aberto,
     this.pagamentoStatus = PagamentoStatus.naoAplicavel,
     this.lojistaConfirmouEm,
@@ -66,6 +70,8 @@ class Turno {
       dataFim: DateTime.parse(json['dataFim'] as String),
       valorEstimado: (json['valorEstimado'] as num).toDouble(),
       raioEntregaKm: (json['raioEntregaKm'] as num).toDouble(),
+      vagas: (json['vagas'] as num?)?.toInt() ?? 1,
+      vagasPreenchidas: (json['vagasPreenchidas'] as num?)?.toInt() ?? 0,
       status: _parseStatus(json['status'] as String),
       pagamentoStatus: _parsePagamento(json['pagamentoStatus'] as String?),
       lojistaConfirmouEm: json['lojistaConfirmouEm'] != null
@@ -99,6 +105,7 @@ class Turno {
       'dataFim': dataFim.toIso8601String(),
       'valorEstimado': valorEstimado,
       'raioEntregaKm': raioEntregaKm,
+      'vagas': vagas,
       'status': status.name.toUpperCase(),
     };
   }
@@ -110,6 +117,13 @@ class Turno {
   }
 
   Duration get duracao => dataFim.difference(dataInicio);
+
+  /// Vagas ainda disponíveis (nunca negativo).
+  int get vagasRestantes =>
+      (vagas - vagasPreenchidas) < 0 ? 0 : (vagas - vagasPreenchidas);
+
+  /// Turno que comporta mais de um entregador.
+  bool get multiVaga => vagas > 1;
 }
 
 enum StatusTurno {

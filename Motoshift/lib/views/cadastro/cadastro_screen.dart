@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/validators.dart';
 import '../../widgets/app_buttons.dart';
 
 class CadastroScreen extends StatefulWidget {
@@ -37,17 +38,9 @@ class _CadastroScreenState extends State<CadastroScreen> {
     super.dispose();
   }
 
-  // RF03 — validação de formato do documento federal (CNPJ/CNH)
-  String? _validarDocumento(String? v) {
-    if (v == null || v.isEmpty) return 'Documento obrigatório';
-    final digitos = v.replaceAll(RegExp(r'\D'), '');
-    if (_tipo == TipoUsuario.lojista) {
-      if (digitos.length != 14) return 'CNPJ inválido — informe 14 dígitos';
-    } else {
-      if (digitos.length != 11) return 'CNH inválida — informe 11 dígitos';
-    }
-    return null;
-  }
+  // RF03 — validação do documento federal (CNPJ/CNH) com dígito verificador
+  String? _validarDocumento(String? v) =>
+      Validators.documento(v, isLojista: _tipo == TipoUsuario.lojista);
 
   // ── Lógica preservada do original ────────────────────────────────────────────
   Future<void> _cadastrar() async {
@@ -90,12 +83,17 @@ class _CadastroScreenState extends State<CadastroScreen> {
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 22),
-            child: Column(
-              children: [
-                _buildTop(),
-                _buildCard(auth),
-                const SizedBox(height: 24),
-              ],
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Column(
+                  children: [
+                    _buildTop(),
+                    _buildCard(auth),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -183,8 +181,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
                   icon: Icons.person_outline_rounded,
                   hint: 'Nome completo',
                   controller: _nomeCtrl,
-                  validator: (v) =>
-                      v == null || v.isEmpty ? 'Informe seu nome' : null,
+                  validator: Validators.nome,
                 ),
                 const SizedBox(height: 9),
                 _InputRow(
@@ -192,8 +189,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
                   hint: 'E-mail',
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
-                  validator: (v) =>
-                      v == null || v.isEmpty ? 'Informe o e-mail' : null,
+                  validator: Validators.email,
                 ),
                 const SizedBox(height: 9),
                 _InputRow(
@@ -201,9 +197,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
                   hint: '(11) 99999-9999',
                   controller: _telefoneCtrl,
                   keyboardType: TextInputType.phone,
-                  validator: (v) => v == null || v.isEmpty
-                      ? 'Informe o telefone'
-                      : null,
+                  validator: Validators.telefone,
                 ),
                 const SizedBox(height: 9),
                 _InputRow(
@@ -222,9 +216,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
                       color: AppColors.muted,
                     ),
                   ),
-                  validator: (v) => v == null || v.length < 6
-                      ? 'Mínimo 6 caracteres'
-                      : null,
+                  validator: Validators.senha,
                 ),
                 const SizedBox(height: 9),
                 _InputRow(
@@ -243,9 +235,8 @@ class _CadastroScreenState extends State<CadastroScreen> {
                       color: AppColors.muted,
                     ),
                   ),
-                  validator: (v) => v != _senhaCtrl.text
-                      ? 'As senhas não coincidem'
-                      : null,
+                  validator: (v) =>
+                      Validators.confirmarSenha(v, _senhaCtrl.text),
                 ),
                 const SizedBox(height: 9),
                 _InputRow(

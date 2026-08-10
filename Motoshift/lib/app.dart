@@ -31,6 +31,8 @@ import 'views/cnh_veiculo/cnh_veiculo_screen.dart';
 import 'views/minhas_avaliacoes/minhas_avaliacoes_screen.dart';
 import 'views/historico_turnos/historico_turnos_screen.dart';
 import 'views/stubs/stub_screens.dart';
+import 'widgets/auth_guard.dart';
+import 'models/usuario.dart';
 
 class MotoShiftApp extends StatelessWidget {
   const MotoShiftApp({super.key});
@@ -85,43 +87,66 @@ class MotoShiftApp extends StatelessWidget {
         ],
         initialRoute: AppRoutes.splash,
         routes: {
-          // Core
+          // ── Públicas (sem guard) ──────────────────────────────────────────
           AppRoutes.splash:    (_) => const SplashScreen(),
           AppRoutes.login:     (_) => const LoginScreen(),
           AppRoutes.cadastro:  (_) => const CadastroScreen(),
+          AppRoutes.esqueceuSenha: (_) => const EsqueceuSenhaScreen(),
 
-          // Dashboards
-          AppRoutes.dashboardMotoboy: (_) => const DashboardMotoboyScreen(),
-          AppRoutes.dashboardLojista: (_) => const DashboardLojistScreen(),
+          // ── Dashboards (protegidas por papel) ─────────────────────────────
+          AppRoutes.dashboardMotoboy: (_) => const AuthGuard(
+                papel: TipoUsuario.motoboy,
+                child: DashboardMotoboyScreen(),
+              ),
+          AppRoutes.dashboardLojista: (_) => const AuthGuard(
+                papel: TipoUsuario.lojista,
+                child: DashboardLojistScreen(),
+              ),
 
-          // Fluxo Lojista
-          AppRoutes.publicarTurno: (_) => const AgendarTurnoScreen(),
-          AppRoutes.turnoLojista:  (_) => const TurnoLojistScreen(),
-          AppRoutes.turnosLojista: (_) => const TurnosLojistaListaScreen(),
+          // ── Fluxo Lojista (papel lojista) ─────────────────────────────────
+          AppRoutes.publicarTurno: (_) => const AuthGuard(
+                papel: TipoUsuario.lojista,
+                child: AgendarTurnoScreen(),
+              ),
+          AppRoutes.turnoLojista: (_) => const AuthGuard(
+                papel: TipoUsuario.lojista,
+                child: TurnoLojistScreen(),
+              ),
+          AppRoutes.turnosLojista: (_) => const AuthGuard(
+                papel: TipoUsuario.lojista,
+                child: TurnosLojistaListaScreen(),
+              ),
 
-          // Fluxo Motoboy
-          AppRoutes.turnosDisponiveis: (_) => const MeusTurnosScreen(),
-          AppRoutes.detalheTurno:      (_) => const DetalheTurnoScreen(),
-          AppRoutes.carteira:          (_) => const CarteiraScreen(),
+          // ── Fluxo Motoboy (papel motoboy) ─────────────────────────────────
+          AppRoutes.turnosDisponiveis: (_) => const AuthGuard(
+                papel: TipoUsuario.motoboy,
+                child: MeusTurnosScreen(),
+              ),
+          AppRoutes.detalheTurno: (_) => const AuthGuard(
+                child: DetalheTurnoScreen(),
+              ),
+          AppRoutes.carteira: (_) => const AuthGuard(
+                papel: TipoUsuario.motoboy,
+                child: CarteiraScreen(),
+              ),
 
-          // Compartilhadas
-          AppRoutes.agenda:    (_) => const AgendaScreen(),
-          AppRoutes.avaliacao: (_) => const AvaliacaoScreen(),
-          AppRoutes.perfil:    (_) => const PerfilScreen(),
+          // ── Compartilhadas (qualquer autenticado) ─────────────────────────
+          AppRoutes.agenda:    (_) => const AuthGuard(child: AgendaScreen()),
+          AppRoutes.avaliacao: (_) => const AuthGuard(child: AvaliacaoScreen()),
+          AppRoutes.perfil:    (_) => const AuthGuard(child: PerfilScreen()),
 
-          // Perfil — sub-páginas
-          AppRoutes.dadosPessoais:    (_) => const DadosPessoaisScreen(),
-          AppRoutes.cnhVeiculo:       (_) => const CnhVeiculoScreen(),
-          AppRoutes.minhasAvaliacoes: (_) => const MinhasAvaliacoesScreen(),
-          AppRoutes.historicoTurnos:  (_) => const HistoricoTurnosScreen(),
-          AppRoutes.sacarPix:         (_) => const SacarPixScreen(),
-          AppRoutes.esqueceuSenha:    (_) => const EsqueceuSenhaScreen(),
+          // ── Perfil — sub-páginas (qualquer autenticado) ───────────────────
+          AppRoutes.dadosPessoais:    (_) => const AuthGuard(child: DadosPessoaisScreen()),
+          AppRoutes.cnhVeiculo:       (_) => const AuthGuard(child: CnhVeiculoScreen()),
+          AppRoutes.minhasAvaliacoes: (_) => const AuthGuard(child: MinhasAvaliacoesScreen()),
+          AppRoutes.historicoTurnos:  (_) => const AuthGuard(child: HistoricoTurnosScreen()),
+          AppRoutes.sacarPix:         (_) => const AuthGuard(papel: TipoUsuario.motoboy, child: SacarPixScreen()),
 
-          // Legadas
-          AppRoutes.meusTurnos:       (_) => const MeusTurnosScreen(),
-          AppRoutes.agendarTurno:     (_) => const AgendarTurnoScreen(),
-          AppRoutes.historico:        (_) => const HistoricoScreen(),
-          AppRoutes.solicitarServico: (_) => const SolicitarServicoScreen(),
+          // ── Legadas (protegidas) ──────────────────────────────────────────
+          AppRoutes.meusTurnos:       (_) => const AuthGuard(child: MeusTurnosScreen()),
+          AppRoutes.agendarTurno:     (_) => const AuthGuard(child: AgendarTurnoScreen()),
+          AppRoutes.historico:        (_) => const AuthGuard(child: HistoricoScreen()),
+          AppRoutes.solicitarServico: (_) => const AuthGuard(child: SolicitarServicoScreen()),
         },
       ),
     );

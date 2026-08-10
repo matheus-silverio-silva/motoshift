@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_scaffold.dart';
+import '../../widgets/empty_state.dart';
 import '../../widgets/section_title.dart';
 import '../../widgets/shift_card.dart';
 import '../../widgets/stat_card.dart';
@@ -192,21 +193,10 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
           );
         }
         if (provider.turnosLojista.isEmpty) {
-          return Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.line, width: 1.5),
-            ),
-            child: Center(
-              child: Text(
-                'Nenhum turno cadastrado ainda.\nPublique o primeiro!',
-                textAlign: TextAlign.center,
-                style: tsJakarta(13, FontWeight.w400,
-                    color: AppColors.muted),
-              ),
-            ),
+          return const EmptyState(
+            icon: Icons.event_available_outlined,
+            titulo: 'Nenhum turno cadastrado',
+            subtitulo: 'Publique o primeiro e receba entregadores na sua região.',
           );
         }
         return Column(

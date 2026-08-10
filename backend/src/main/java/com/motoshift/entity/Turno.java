@@ -34,6 +34,11 @@ public class Turno {
 
     private Double raioEntregaKm;
 
+    // Número de vagas de entregador para este turno (lojista pode precisar de vários).
+    // Default 1 mantém compatibilidade com turnos antigos.
+    @Column(nullable = false)
+    private Integer vagas = 1;
+
     // aberto | aceito | em_andamento | finalizado | cancelado
     @Column(nullable = false)
     private String status = "aberto";
@@ -56,6 +61,7 @@ public class Turno {
         criadoEm = LocalDateTime.now();
         atualizadoEm = LocalDateTime.now();
         if (status == null) status = "aberto";
+        if (vagas == null || vagas < 1) vagas = 1;
     }
 
     @PreUpdate
@@ -91,6 +97,9 @@ public class Turno {
 
     public Double getRaioEntregaKm() { return raioEntregaKm; }
     public void setRaioEntregaKm(Double raioEntregaKm) { this.raioEntregaKm = raioEntregaKm; }
+
+    public Integer getVagas() { return vagas == null ? 1 : vagas; }
+    public void setVagas(Integer vagas) { this.vagas = vagas; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }

@@ -5,6 +5,7 @@ import '../../models/usuario.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/validators.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_scaffold.dart';
@@ -237,7 +238,8 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
             Expanded(
               child: _field('Placa', _placaCtrl,
                   hint: 'ABC-1D23',
-                  maxLength: 8),
+                  maxLength: 8,
+                  validator: Validators.placa),
             ),
             const SizedBox(width: 10),
             Expanded(
