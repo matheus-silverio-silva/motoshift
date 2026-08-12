@@ -35,9 +35,11 @@ public class Turno {
     private Double raioEntregaKm;
 
     // Número de vagas de entregador para este turno (lojista pode precisar de vários).
-    // Default 1 mantém compatibilidade com turnos antigos.
-    @Column(nullable = false)
-    private Integer vagas = 1;
+    // IMPORTANTE: coluna nullable de propósito. Com ddl-auto=update, o MySQL não
+    // consegue adicionar uma coluna NOT NULL a uma tabela que já tem linhas — isso
+    // quebraria as consultas de turno em produção. Sendo nullable, a migração
+    // ocorre sem erro; linhas antigas ficam NULL e o getter devolve 1 (default).
+    private Integer vagas;
 
     // aberto | aceito | em_andamento | finalizado | cancelado
     @Column(nullable = false)
