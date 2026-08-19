@@ -119,6 +119,9 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
         (_dashData?['turnosAtivos'] as num?)?.toInt() ?? 0;
     final totalGasto =
         (_dashData?['totalGasto'] as num?)?.toDouble() ?? 0.0;
+    // avaliacaoMedia = nota que ESTE lojista recebeu. Antes o backend mandava
+    // aqui a média do `score` dos motoboys dele — dado de terceiros, e ainda
+    // por cima confundindo reputação com avaliação.
     final avaliacaoMedia =
         (_dashData?['avaliacaoMedia'] as num?)?.toDouble() ?? 0.0;
 
@@ -144,7 +147,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
             value: avaliacaoMedia > 0
                 ? avaliacaoMedia.toStringAsFixed(1)
                 : 'N/D',
-            sub: avaliacaoMedia > 0 ? '★ média' : null,
+            sub: avaliacaoMedia > 0 ? '★ recebida' : 'sem notas',
             subColor: AppColors.amber,
           ),
         ),

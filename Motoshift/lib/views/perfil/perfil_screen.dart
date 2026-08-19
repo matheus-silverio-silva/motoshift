@@ -2,17 +2,51 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
+import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/menu_row.dart';
 
-class PerfilScreen extends StatelessWidget {
+class PerfilScreen extends StatefulWidget {
   const PerfilScreen({super.key});
 
+  @override
+  State<PerfilScreen> createState() => _PerfilScreenState();
+}
+
+class _PerfilScreenState extends State<PerfilScreen> {
+  /// Métricas do dashboard. O perfil não tem endpoint próprio, e
+  /// `turnosFinalizados` já é calculado lá — reaproveita em vez de recontar.
+  Map<String, dynamic>? _dash;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _carregar());
+  }
+
+  Future<void> _carregar() async {
+    final auth = context.read<AuthService>();
+    final api = context.read<ApiService>();
+    final usuario = auth.usuario;
+    if (usuario?.id == null) return;
+
+    try {
+      final data = usuario!.tipo == TipoUsuario.lojista
+          ? await api.dashboardLojista(usuario.id!)
+          : await api.dashboardMotoboy(usuario.id!);
+      if (mounted) setState(() => _dash = data);
+    } catch (_) {
+      // Estatística é informação secundária: falha vira "—", não erro de tela.
+    }
+  }
+
   Widget _buildStatsCard(Usuario? usuario) {
-    // TODO: integrar turnosConcluidos e pontualidade com backend
+    final turnos = (_dash?['turnosFinalizados'] as num?)?.toInt();
+    final avaliacao = usuario?.mediaAvaliacao;
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -29,12 +63,20 @@ class PerfilScreen extends StatelessWidget {
       padding:
           const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
       child: Row(
-        children: const [
-          _StatCell(value: '137', label: 'TURNOS'),
-          _StatDivider(),
-          _StatCell(value: '96%', label: 'PONTUALIDADE'),
-          _StatDivider(),
-          _StatCellDynamic(),
+        children: [
+          // "137" e "96%" eram literais com um TODO de integração. Turnos
+          // agora vem do backend; pontualidade foi substituída pela avaliação
+          // recebida, porque não existe registro de pontualidade no modelo —
+          // calculá-la exigiria o horário real de início do turno, que a
+          // plataforma ainda não guarda.
+          _StatCell(value: turnos?.toString() ?? '—', label: 'TURNOS'),
+          const _StatDivider(),
+          _StatCell(
+            value: avaliacao != null ? avaliacao.toStringAsFixed(1) : 'N/D',
+            label: 'AVALIAÇÃO',
+          ),
+          const _StatDivider(),
+          const _StatCellDynamic(),
         ],
       ),
     );
@@ -289,13 +331,18 @@ class _PerfilHeader extends StatelessWidget {
                               style: tsJakarta(9.5, FontWeight.w700,
                                   color: const Color(0xFFBFE5E3))),
                         ),
+                        // Reputação, não avaliação. A estrela saiu daqui de
+                        // propósito: estrela lê-se como "nota que me deram", e
+                        // este número é o score da plataforma (começa em 5.0 e
+                        // cai a cada cancelamento tardio). A avaliação recebida
+                        // aparece no card de estatísticas, com estrela.
                         if (score != null) ...[
                           const SizedBox(width: 8),
-                          const Icon(Icons.star_rounded,
-                              color: Color(0xFFF6A623), size: 12),
+                          const Icon(Icons.verified_user_rounded,
+                              color: Color(0xFFBFE5E3), size: 12),
                           const SizedBox(width: 3),
                           Text(
-                            score!.toStringAsFixed(1),
+                            '${score!.toStringAsFixed(1)} reputação',
                             style: tsJakarta(11, FontWeight.w700,
                                 color: Colors.white),
                           ),
@@ -350,7 +397,7 @@ class _StatCellDynamic extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final usuario = context.watch<AuthService>().usuario;
-    final meses = PerfilScreen._calcularMesesPlataforma(usuario?.criadoEm);
+    final meses = _PerfilScreenState._calcularMesesPlataforma(usuario?.criadoEm);
     final valor = meses == 0
         ? '< 1 mês'
         : meses == 1

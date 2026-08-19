@@ -86,6 +86,21 @@ Future<void> setupGoldenTests() async {
 // Fakes de dados
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Base de tempo dos fakes: hoje à meia-noite.
+///
+/// Os fakes usavam `DateTime.now()` cru. Como os cards renderizam
+/// `horarioFormatado` em HH:mm, o golden mudava **a cada minuto** — o snapshot
+/// nascia desatualizado e a suíte ficava vermelha sozinha, sem ninguém tocar em
+/// código. Ancorando na meia-noite, os horários exibidos ficam estáveis ao
+/// longo do dia e a relação "ontem / hoje / amanhã" continua valendo.
+///
+/// A deriva diária que sobra é intencional: os fakes descrevem turnos
+/// relativos a hoje, e é isso que as telas precisam exercitar.
+DateTime hojeAncorado() {
+  final agora = DateTime.now();
+  return DateTime(agora.year, agora.month, agora.day);
+}
+
 Usuario fakeMotoboy() => Usuario(
       id: 1,
       nome: 'Ricardo Souza',
@@ -152,7 +167,7 @@ List<Turno> fakeTurnosDisponiveis() {
 }
 
 List<Turno> fakeMeusTurnos() {
-  final hoje = DateTime.now();
+  final hoje = hojeAncorado();
   return [
     Turno(
       id: 201,
@@ -160,8 +175,10 @@ List<Turno> fakeMeusTurnos() {
       motoboyId: 1,
       titulo: 'Turno Ativo — Hamburgueria',
       regiao: 'Água Verde, Curitiba',
-      dataInicio: hoje.subtract(const Duration(hours: 1)),
-      dataFim: hoje.add(const Duration(hours: 3)),
+      // Cobre o dia inteiro: continua "em andamento" a qualquer hora em que a
+      // suíte rodar, e o horário exibido não muda ao longo do dia.
+      dataInicio: hoje,
+      dataFim: hoje.add(const Duration(hours: 23, minutes: 59)),
       valorEstimado: 120,
       raioEntregaKm: 8,
       status: StatusTurno.emAndamento,
@@ -198,7 +215,7 @@ List<Turno> fakeMeusTurnos() {
 }
 
 List<Turno> fakeTurnosLojista() {
-  final hoje = DateTime.now();
+  final hoje = hojeAncorado();
   return [
     Turno(
       id: 301,
@@ -246,6 +263,8 @@ Map<String, dynamic> fakeDashboardMotoboy() => {
       'saldoAtual': 320.0,
       'ganhosMensais': 1850.0,
       'turnosFinalizadosMes': 14,
+      'turnosFinalizados': 42,
+      'mediaAvaliacao': 4.8,
       'ganhosDiarios': [120.0, 95.0, 0.0, 145.0, 110.0, 130.0, 90.0],
     };
 
@@ -254,6 +273,8 @@ Map<String, dynamic> fakeDashboardLojista() => {
       'totalGasto': 1500.0,
       'avaliacaoMedia': 4.8,
       'turnosMes': 12,
+      'turnosFinalizados': 27,
+      'reputacaoEntregadores': 4.7,
     };
 
 Carteira fakeCarteira() => const Carteira(

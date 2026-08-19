@@ -40,14 +40,16 @@ public class DashboardController {
     }
 
     @Operation(summary = "Dashboard do Lojista",
-               description = "Retorna turnosAtivos, turnosFinalizados, turnosMes, totalGasto e avaliacaoMedia (RF02).")
+               description = "Retorna turnosAtivos, turnosFinalizados, turnosMes, totalGasto, "
+                           + "avaliacaoMedia (nota média recebida pelo lojista) e "
+                           + "reputacaoEntregadores (score médio dos motoboys que o atenderam) (RF02).")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Métricas do lojista"),
         @ApiResponse(responseCode = "404", description = "Usuário não encontrado")
     })
     @GetMapping("/lojista/{id}")
     public Map<String, Object> dashboardLojista(@PathVariable Long id) {
-        usuarioRepo.findById(id)
+        com.motoshift.entity.Usuario lojista = usuarioRepo.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuário não encontrado"));
 
         List<com.motoshift.entity.Turno> todosTurnos = turnoRepo.findByLojistId(id);
@@ -62,7 +64,20 @@ public class DashboardController {
                 .filter(t -> t.getCriadoEm() != null && !t.getCriadoEm().isBefore(inicioMes))
                 .count();
 
-        // Avaliação média dos motoboys que trabalharam para este lojista
+        // Avaliação do próprio lojista: média das notas que ele recebeu,
+        // mantida por AvaliacaoController.atualizarMedia().
+        //
+        // Antes este campo devolvia a média do `score` dos MOTOBOYS que
+        // trabalharam para o lojista — dado de terceiros, num painel que o
+        // lojista lê como sendo sobre ele. Além disso misturava dois
+        // conceitos: `score` é reputação (começa em 5.0 e cai a cada
+        // cancelamento tardio, RF07), não é avaliação.
+        double avaliacaoMedia = lojista.getMediaAvaliacao() != null
+                ? lojista.getMediaAvaliacao()
+                : 0.0;
+
+        // Reputação média dos entregadores que atenderam este lojista.
+        // Continua sendo útil, mas agora com nome próprio.
         OptionalDouble mediaOpt = todosTurnos.stream()
                 .filter(t -> "finalizado".equals(t.getStatus()) && t.getMotoboyId() != null)
                 .map(t -> usuarioRepo.findById(t.getMotoboyId()))
@@ -70,7 +85,7 @@ public class DashboardController {
                 .map(java.util.Optional::get)
                 .mapToDouble(u -> u.getScore() != null ? u.getScore() : 0.0)
                 .average();
-        double avaliacaoMedia = mediaOpt.isPresent()
+        double reputacaoEntregadores = mediaOpt.isPresent()
                 ? Math.round(mediaOpt.getAsDouble() * 10.0) / 10.0
                 : 0.0;
 
@@ -90,13 +105,15 @@ public class DashboardController {
         resp.put("turnosFinalizados", turnosFinalizados);
         resp.put("turnosMes", turnosMes);
         resp.put("avaliacaoMedia", avaliacaoMedia);
+        resp.put("reputacaoEntregadores", reputacaoEntregadores);
         resp.put("totalGasto", totalGasto);
         resp.put("turnosRecentes", turnosRecentes);
         return resp;
     }
 
     @Operation(summary = "Dashboard do Motoboy",
-               description = "Retorna score, saldoAtual, ganhosMensais, turnosAceitos, turnosFinalizados e turnosFinalizadosMes (RF02).")
+               description = "Retorna score (reputação), mediaAvaliacao (notas recebidas), saldoAtual, "
+                           + "ganhosMensais, turnosAceitos, turnosFinalizados e turnosFinalizadosMes (RF02).")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Métricas do motoboy"),
         @ApiResponse(responseCode = "404", description = "Usuário não encontrado")
@@ -128,7 +145,13 @@ public class DashboardController {
                 .count();
 
         Map<String, Object> resp = new HashMap<>();
+        // Duas métricas distintas, expostas com nomes distintos:
+        //   score          — reputação (5.0 inicial, penalizada por cancelamento tardio)
+        //   mediaAvaliacao — média das notas recebidas de lojistas
+        // Null quando o motoboy ainda não foi avaliado: a UI mostra "N/D" em
+        // vez de fingir uma nota que ninguém deu.
         resp.put("score", java.util.Objects.requireNonNullElse(motoboy.getScore(), 5.0));
+        resp.put("mediaAvaliacao", motoboy.getMediaAvaliacao());
         if (carteira != null) {
             resp.put("saldoAtual",    java.util.Objects.requireNonNullElse(carteira.getSaldoAtual(),    0.0));
             resp.put("ganhosMensais", java.util.Objects.requireNonNullElse(carteira.getGanhosMensais(), 0.0));
