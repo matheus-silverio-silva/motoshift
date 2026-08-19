@@ -192,15 +192,25 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
             ),
           );
         }
-        if (provider.turnosLojista.isEmpty) {
-          return const EmptyState(
+        // A seção se chama "Próximos turnos": mostra apenas turnos ativos que
+        // ainda não terminaram, do mais próximo ao mais distante. Antes usava
+        // a lista crua do provider, que vem do backend sem filtro nem ordem —
+        // por isso cancelados e finalizados apareciam aqui.
+        final proximos = provider.turnosLojista.proximos();
+
+        if (proximos.isEmpty) {
+          return EmptyState(
             icon: Icons.event_available_outlined,
-            titulo: 'Nenhum turno cadastrado',
-            subtitulo: 'Publique o primeiro e receba entregadores na sua região.',
+            titulo: provider.turnosLojista.isEmpty
+                ? 'Nenhum turno cadastrado'
+                : 'Nenhum turno agendado',
+            subtitulo: provider.turnosLojista.isEmpty
+                ? 'Publique o primeiro e receba entregadores na sua região.'
+                : 'Seus turnos anteriores estão no histórico. Publique um novo para continuar.',
           );
         }
         return Column(
-          children: provider.turnosLojista
+          children: proximos
               .take(5)
               .map((t) => ShiftCard(
                     name: t.titulo,

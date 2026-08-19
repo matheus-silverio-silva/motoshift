@@ -283,10 +283,13 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     final ativo = provider.meusTurnos
         .where((t) => t.status == StatusTurno.emAndamento)
         .firstOrNull;
+    // Já filtrava por status, mas não por data nem ordem: turno aceito que
+    // ficou para trás continuava listado como "próximo", e a ordem era a que
+    // o backend devolvesse. O turno em andamento sai daqui porque tem seção
+    // própria logo acima.
     final proximos = provider.meusTurnos
-        .where((t) =>
-            t.status == StatusTurno.aceito ||
-            t.status == StatusTurno.aberto)
+        .proximos()
+        .where((t) => ativo == null || t.id != ativo.id)
         .toList();
 
     if (ativo == null && proximos.isEmpty) return const SizedBox.shrink();
