@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/turno.dart';
 import '../../presentation/providers/turno_provider.dart';
@@ -6,9 +7,17 @@ import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/serie_diaria.dart';
+import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_header.dart';
-import '../../widgets/app_scaffold.dart';
+import '../../widgets/desktop/app_topbar.dart';
+import '../../widgets/desktop/content_grid.dart';
+import '../../widgets/desktop/inline_empty.dart';
+import '../../widgets/desktop/panel_card.dart';
+import '../../widgets/desktop/shift_row.dart';
+import '../../widgets/desktop/wallet_kpi_card.dart';
+import '../../widgets/desktop/weekly_bar_chart_card.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/mini_bar_chart.dart';
 import '../../widgets/section_title.dart';
@@ -16,6 +25,11 @@ import '../../widgets/shift_card.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/status_pill.dart';
 
+
+/// Altura da linha de KPIs do desktop. O card de saldo é o mais alto (tem
+/// botão no lugar do subtítulo); no grid do protótipo os demais se esticam
+/// até ele, então todos recebem a mesma altura mínima.
+const double _alturaKpi = 126;
 
 class DashboardMotoboyScreen extends StatefulWidget {
   const DashboardMotoboyScreen({super.key});
@@ -27,8 +41,6 @@ class DashboardMotoboyScreen extends StatefulWidget {
 
 class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
   Map<String, dynamic>? _dashData;
-  // TODO: integrar ganhosDiarios com backend
-  List<double> _ganhosDiarios = List.filled(7, 0.0);
 
   @override
   void initState() {
@@ -46,16 +58,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
 
     try {
       final data = await api.dashboardMotoboy(id);
-      if (mounted) {
-        final raw = data['ganhosDiarios'];
-        setState(() {
-          _dashData = data;
-          if (raw is List && raw.length == 7) {
-            _ganhosDiarios =
-                raw.map((e) => (e as num).toDouble()).toList();
-          }
-        });
-      }
+      if (mounted) setState(() => _dashData = data);
     } catch (_) {}
   }
 
@@ -94,7 +97,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
         ? nome.substring(0, 2).toUpperCase()
         : nome.toUpperCase();
 
-    return AppScaffold(
+    return AdaptiveScaffold(
       header: AppHeader.greeting(
         greeting: _greeting(),
         name: nome,
@@ -120,11 +123,17 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: AppColors.line, width: 1.5),
             ),
-            child: MiniBarChart(
-              values: _ganhosDiarios,
-              labels: const [
-                'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'
-              ],
+            // A série vem dos turnos já carregados, não do dashboard: o
+            // endpoint não devolve `ganhosDiarios`, então o gráfico ficava
+            // permanentemente zerado.
+            child: Consumer<TurnoProvider>(
+              builder: (context, provider, _) {
+                final serie = serieUltimos7Dias(provider.meusTurnos);
+                return MiniBarChart(
+                  values: [for (final p in serie) p.valor],
+                  labels: [for (final p in serie) p.label],
+                );
+              },
             ),
           ),
           SectionTitle(
@@ -136,15 +145,180 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
           _buildTurnosAceitosSection(),
         ],
       ),
+      desktopTitle: 'Início',
+      desktopSubtitle: '${_greeting()} $nome · ${_dataExtenso()}',
+      desktopSelectedRoute: AppRoutes.dashboardMotoboy,
+      desktopPrimaryAction: TopbarSecondaryButton(
+        label: 'Buscar turnos',
+        icon: Icons.search,
+        onTap: () =>
+            Navigator.pushNamed(context, AppRoutes.turnosDisponiveis),
+      ),
+      desktopBody: _buildDesktop(auth),
     );
   }
 
+  String _dataExtenso() {
+    final texto =
+        DateFormat("EEEE, d 'de' MMMM", 'pt_BR').format(DateTime.now());
+    return texto[0].toUpperCase() + texto.substring(1);
+  }
+
+  // ── Métricas ──────────────────────────────────────────────────────────────
+
+  double _score(AuthService auth) =>
+      (_dashData?['score'] as num?)?.toDouble() ??
+      auth.usuario?.score ??
+      5.0;
+
+  double get _saldo => (_dashData?['saldoAtual'] as num?)?.toDouble() ?? 0;
+
+  double get _ganhosMensais =>
+      (_dashData?['ganhosMensais'] as num?)?.toDouble() ?? 0;
+
+  int get _turnosMes =>
+      (_dashData?['turnosFinalizadosMes'] as num?)?.toInt() ?? 0;
+
+  // ── Desktop ───────────────────────────────────────────────────────────────
+
+  Widget _buildDesktop(AuthService auth) {
+    final score = _score(auth);
+    final mesAtual = DateFormat('MMMM', 'pt_BR').format(DateTime.now());
+
+    return Consumer<TurnoProvider>(
+      builder: (context, provider, _) {
+        final aceitos = provider.meusTurnos
+            .where((t) =>
+                t.status == StatusTurno.aceito ||
+                t.status == StatusTurno.emAndamento)
+            .toList()
+          ..sort((a, b) => a.dataInicio.compareTo(b.dataInicio));
+
+        return ContentGrid(
+          children: [
+            GridCol(
+              span: 3,
+              child: StatCard(
+                size: StatCardSize.large,
+                minHeight: _alturaKpi,
+                icon: Icons.military_tech_outlined,
+                iconColor: AppColors.amber,
+                label: 'Score de reputação',
+                value: score.toStringAsFixed(2),
+                sub: _scoreLabel(score),
+                subColor: _scoreColor(score),
+              ),
+            ),
+            GridCol(
+              span: 3,
+              child: StatCard(
+                size: StatCardSize.large,
+                minHeight: _alturaKpi,
+                icon: Icons.payments_outlined,
+                label: 'Ganhos mês',
+                value: 'R\$ ${_ganhosMensais.toStringAsFixed(0)}',
+                sub: 'acumulado na carteira',
+                subColor: AppColors.muted,
+              ),
+            ),
+            GridCol(
+              span: 3,
+              child: StatCard(
+                size: StatCardSize.large,
+                minHeight: _alturaKpi,
+                icon: Icons.check_circle_outline,
+                label: 'Turnos concluídos',
+                value: '$_turnosMes',
+                sub: 'em $mesAtual',
+                subColor: AppColors.muted,
+              ),
+            ),
+            GridCol(
+              span: 3,
+              child: WalletKpiCard(
+                minHeight: _alturaKpi,
+                label: 'Saldo',
+                value: 'R\$ ${_saldo.toStringAsFixed(0)}',
+                actionLabel: 'Sacar via Pix',
+                onAction: () =>
+                    Navigator.pushNamed(context, AppRoutes.sacarPix),
+              ),
+            ),
+            GridCol(
+              span: 8,
+              child: WeeklyBarChartCard(
+                title: 'Ganhos dos últimos dias',
+                subtitle: 'Últimos 7 dias · turnos finalizados',
+                carregando: provider.carregando,
+                pontos: serieUltimos7Dias(provider.meusTurnos),
+                mensagemVazio:
+                    'Nenhum turno finalizado nos últimos 7 dias.',
+              ),
+            ),
+            GridCol(
+              span: 4,
+              child: PanelCard(
+                title: 'Turnos aceitos',
+                actionLabel: 'Ver todos',
+                onAction: () => Navigator.pushNamed(
+                    context, AppRoutes.turnosDisponiveis),
+                child: _buildAceitosDesktop(provider, aceitos),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAceitosDesktop(TurnoProvider provider, List<Turno> aceitos) {
+    if (provider.carregando) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 40),
+        child: Center(
+          child: CircularProgressIndicator(
+              strokeWidth: 2, color: AppColors.teal),
+        ),
+      );
+    }
+    if (aceitos.isEmpty) {
+      return const InlineEmpty(
+        icon: Icons.two_wheeler_outlined,
+        titulo: 'Nenhum turno aceito',
+        subtitulo: 'Explore os turnos disponíveis e comece a faturar.',
+      );
+    }
+    return Column(
+      children: [
+        for (final t in aceitos.take(4)) ...[
+          ShiftRow(
+            horario: t.horarioFormatado,
+            valor: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
+            meta: '${t.titulo} · ${t.regiao}',
+            icon: t.status == StatusTurno.emAndamento
+                ? Icons.schedule_outlined
+                : Icons.two_wheeler_outlined,
+            amberIcon: t.status == StatusTurno.emAndamento,
+            pillLabel: t.status.label,
+            pillVariant: t.status == StatusTurno.emAndamento
+                ? PillVariant.amber
+                : PillVariant.teal,
+            onTap: () => Navigator.pushNamed(
+              context,
+              AppRoutes.detalheTurno,
+              arguments: t,
+            ),
+          ),
+          if (t != aceitos.take(4).last) const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+
+  // ── Mobile ────────────────────────────────────────────────────────────────
+
   Widget _buildScoreRow(AuthService auth) {
-    final score = (_dashData?['score'] as num?)?.toDouble() ??
-        auth.usuario?.score ??
-        5.0;
-    final saldo =
-        (_dashData?['saldoAtual'] as num?)?.toDouble() ?? 0.0;
+    final score = _score(auth);
     final scoreC = _scoreColor(score);
 
     return Row(
@@ -178,7 +352,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
                           color: const Color(0xFFBFE5E3))),
                   const SizedBox(height: 3),
                   Text(
-                    'R\$ ${saldo.toStringAsFixed(0)}',
+                    'R\$ ${_saldo.toStringAsFixed(0)}',
                     style: tsBricolage(16, FontWeight.w800,
                         color: Colors.white),
                   ),
@@ -214,17 +388,12 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
   }
 
   Widget _buildStats() {
-    final ganhos =
-        (_dashData?['ganhosMensais'] as num?)?.toDouble() ?? 0.0;
-    final turnos =
-        (_dashData?['turnosFinalizadosMes'] as num?)?.toInt() ?? 0;
-
     return Row(
       children: [
         Expanded(
           child: StatCard(
             label: 'Ganhos mês',
-            value: 'R\$ ${ganhos.toStringAsFixed(0)}',
+            value: 'R\$ ${_ganhosMensais.toStringAsFixed(0)}',
             sub: '+ este mês',
             subColor: AppColors.good,
           ),
@@ -233,7 +402,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
         Expanded(
           child: StatCard(
             label: 'Turnos concluídos',
-            value: '$turnos',
+            value: '$_turnosMes',
           ),
         ),
       ],

@@ -448,9 +448,15 @@ Future<void> pumpGolden(
   Size viewport = const Size(390, 844),
   Duration settle = const Duration(milliseconds: 600),
 }) async {
-  await tester.binding.setSurfaceSize(viewport);
-  tester.view.physicalSize = viewport * tester.view.devicePixelRatio;
+  // A ordem importa: `physicalSize` precisa ser calculado com o DPR final.
+  // Fazendo o inverso (multiplicar pelo DPR padrão da view, 3.0, e só depois
+  // zerar para 1.0) a MediaQuery passava a reportar 1170x2532 enquanto a
+  // superfície renderizada continuava 390x844 — as duas discordavam, e telas
+  // que decidem layout por largura (AdaptiveScaffold) caíam no shell desktop
+  // dentro de um frame de celular.
   tester.view.devicePixelRatio = 1.0;
+  tester.view.physicalSize = viewport;
+  await tester.binding.setSurfaceSize(viewport);
 
   final api = FakeApiService();
   final usuario =

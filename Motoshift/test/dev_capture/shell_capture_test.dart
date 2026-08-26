@@ -24,9 +24,6 @@ void main() {
 
   for (final entry in tamanhos.entries) {
     testWidgets('shell lojista ${entry.key}', (tester) async {
-      // pumpGolden calcula physicalSize com o DPR vigente; fixa 1.0 antes
-      // para a MediaQuery reportar exatamente a largura do viewport.
-      tester.view.devicePixelRatio = 1.0;
       await pumpGolden(
         tester,
         child: const ShellPreviewScreen(),
@@ -41,7 +38,6 @@ void main() {
   }
 
   testWidgets('shell motoboy desktop_1440', (tester) async {
-    tester.view.devicePixelRatio = 1.0;
     await pumpGolden(
       tester,
       child: const ShellPreviewScreen(),
