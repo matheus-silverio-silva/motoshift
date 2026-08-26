@@ -14,10 +14,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.OptionalDouble;
 import java.util.stream.Collectors;
 
@@ -95,10 +98,12 @@ public class DashboardController {
                 .map(TurnoResponse::from)
                 .collect(Collectors.toList());
 
-        double totalGasto = todosTurnos.stream()
+        BigDecimal totalGasto = todosTurnos.stream()
                 .filter(t -> "finalizado".equals(t.getStatus()))
-                .mapToDouble(t -> t.getValorEstimado() != null ? t.getValorEstimado() : 0)
-                .sum();
+                .map(com.motoshift.entity.Turno::getValorEstimado)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
 
         Map<String, Object> resp = new HashMap<>();
         resp.put("turnosAtivos", turnosAtivos);
@@ -153,11 +158,12 @@ public class DashboardController {
         resp.put("score", java.util.Objects.requireNonNullElse(motoboy.getScore(), 5.0));
         resp.put("mediaAvaliacao", motoboy.getMediaAvaliacao());
         if (carteira != null) {
-            resp.put("saldoAtual",    java.util.Objects.requireNonNullElse(carteira.getSaldoAtual(),    0.0));
-            resp.put("ganhosMensais", java.util.Objects.requireNonNullElse(carteira.getGanhosMensais(), 0.0));
+            // getSaldoAtual/getGanhosMensais nunca devolvem null (default ZERO na entidade).
+            resp.put("saldoAtual",    carteira.getSaldoAtual().setScale(2, RoundingMode.HALF_UP));
+            resp.put("ganhosMensais", carteira.getGanhosMensais().setScale(2, RoundingMode.HALF_UP));
         } else {
-            resp.put("saldoAtual",    0.0);
-            resp.put("ganhosMensais", 0.0);
+            resp.put("saldoAtual",    BigDecimal.ZERO.setScale(2));
+            resp.put("ganhosMensais", BigDecimal.ZERO.setScale(2));
         }
         resp.put("turnosAceitos", turnosAceitos);
         resp.put("turnosFinalizados", turnosFinalizados);

@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -40,7 +41,7 @@ public class CarteiraController {
         @ApiResponse(responseCode = "404", description = "Carteira não encontrada")
     })
     @PostMapping("/{motoboyId}/saque")
-    public Map<String, Object> saque(@PathVariable Long motoboyId, @RequestBody Map<String, Double> body) {
+    public Map<String, Object> saque(@PathVariable Long motoboyId, @RequestBody Map<String, BigDecimal> body) {
         return service.saque(motoboyId, body.get("valor"));
     }
 

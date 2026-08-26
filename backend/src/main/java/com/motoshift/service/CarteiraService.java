@@ -11,12 +11,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 public class CarteiraService {
+
+    /** Valor minimo de saque (RF: R$ 20,00). */
+    private static final BigDecimal SAQUE_MINIMO = new BigDecimal("20.00");
 
     private final CarteiraRepository carteiraRepo;
     private final TransacaoRepository transacaoRepo;
@@ -45,8 +50,13 @@ public class CarteiraService {
     }
 
     @Transactional
-    public Map<String, Object> saque(Long motoboyId, double valor) {
-        if (valor < 20.0) {
+    public Map<String, Object> saque(Long motoboyId, BigDecimal valor) {
+        if (valor == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe o valor do saque.");
+        }
+        // compareTo, nunca equals: equals considera a escala, entao
+        // new BigDecimal("20.0").equals(new BigDecimal("20.00")) e false.
+        if (valor.compareTo(SAQUE_MINIMO) < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Valor mínimo para saque é R$ 20,00.");
         }
@@ -59,11 +69,11 @@ public class CarteiraService {
                     "Cadastre uma chave Pix antes de solicitar saque.");
         }
 
-        if (carteira.getSaldoAtual() < valor) {
+        if (carteira.getSaldoAtual().compareTo(valor) < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Saldo insuficiente para saque.");
         }
 
-        carteira.setSaldoAtual(carteira.getSaldoAtual() - valor);
+        carteira.setSaldoAtual(carteira.getSaldoAtual().subtract(valor));
         carteiraRepo.save(carteira);
 
         Transacao tx = new Transacao();
@@ -76,7 +86,7 @@ public class CarteiraService {
 
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("mensagem", "Saque realizado com sucesso!");
-        resp.put("novoSaldo", carteira.getSaldoAtual());
+        resp.put("novoSaldo", carteira.getSaldoAtual().setScale(2, RoundingMode.HALF_UP));
         return resp;
     }
 
@@ -104,15 +114,16 @@ public class CarteiraService {
             int ano = mesRef.getYear();
             int mes = mesRef.getMonthValue();
 
-            double total = txs.stream()
+            BigDecimal total = txs.stream()
                     .filter(tx -> tx.getCriadoEm().getYear() == ano
                             && tx.getCriadoEm().getMonthValue() == mes)
-                    .mapToDouble(Transacao::getValor)
-                    .sum();
+                    .map(Transacao::getValor)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
 
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("mes", String.format("%02d/%d", mes, ano));
-            item.put("ganhos", Math.round(total * 100.0) / 100.0);
+            item.put("ganhos", total.setScale(2, RoundingMode.HALF_UP));
             result.add(item);
         }
 

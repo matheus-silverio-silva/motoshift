@@ -3,6 +3,7 @@ package com.motoshift.dto;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public class TurnoRequest {
@@ -24,7 +25,7 @@ public class TurnoRequest {
 
     @NotNull
     @Positive
-    private Double valorEstimado;
+    private BigDecimal valorEstimado;
 
     private Double raioEntregaKm;
 
@@ -55,8 +56,8 @@ public class TurnoRequest {
     public LocalDateTime getDataFim() { return dataFim; }
     public void setDataFim(LocalDateTime dataFim) { this.dataFim = dataFim; }
 
-    public Double getValorEstimado() { return valorEstimado; }
-    public void setValorEstimado(Double valorEstimado) { this.valorEstimado = valorEstimado; }
+    public BigDecimal getValorEstimado() { return valorEstimado; }
+    public void setValorEstimado(BigDecimal valorEstimado) { this.valorEstimado = valorEstimado; }
 
     public Double getRaioEntregaKm() { return raioEntregaKm; }
     public void setRaioEntregaKm(Double raioEntregaKm) { this.raioEntregaKm = raioEntregaKm; }

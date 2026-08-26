@@ -12,6 +12,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -87,20 +89,22 @@ public class RelatorioController {
                         && t.getDataInicio().isBefore(inicioMes))
                 .collect(Collectors.toList());
 
-        double ganhosAtual = finalizados.stream()
-                .mapToDouble(t -> t.getValorEstimado() != null ? t.getValorEstimado() : 0).sum();
-        double mediaPorTurno = !finalizados.isEmpty() ? ganhosAtual / finalizados.size() : 0;
+        BigDecimal ganhosAtual = somaValores(finalizados);
+        BigDecimal mediaPorTurno = finalizados.isEmpty() ? BigDecimal.ZERO
+                : ganhosAtual.divide(BigDecimal.valueOf(finalizados.size()), 2, RoundingMode.HALF_UP);
 
         // Melhor e pior dia por ganhos
-        Map<String, Double> ganhosPorDia = finalizados.stream()
+        Map<String, BigDecimal> ganhosPorDia = finalizados.stream()
                 .collect(Collectors.groupingBy(
                         t -> nomeDia(t.getDataInicio().getDayOfWeek()),
-                        Collectors.summingDouble(t -> t.getValorEstimado() != null ? t.getValorEstimado() : 0)));
+                        Collectors.reducing(BigDecimal.ZERO,
+                                RelatorioController::valorOuZero,
+                                BigDecimal::add)));
 
         String melhorDia = "Sem dados";
-        double melhorValor = 0;
+        BigDecimal melhorValor = BigDecimal.ZERO;
         String piorDia = "Sem dados";
-        double piorValor = 0;
+        BigDecimal piorValor = BigDecimal.ZERO;
         if (!ganhosPorDia.isEmpty()) {
             var maxEntry = ganhosPorDia.entrySet().stream().max(Map.Entry.comparingByValue()).get();
             var minEntry = ganhosPorDia.entrySet().stream().min(Map.Entry.comparingByValue()).get();
@@ -126,16 +130,19 @@ public class RelatorioController {
         double score = motoboy.getScore() != null ? motoboy.getScore() : 5.0;
 
         // Comparativo mês anterior
-        double ganhosAnterior = finalizadosAnterior.stream()
-                .mapToDouble(t -> t.getValorEstimado() != null ? t.getValorEstimado() : 0).sum();
+        BigDecimal ganhosAnterior = somaValores(finalizadosAnterior);
         String comparativo;
-        if (ganhosAnterior == 0) {
-            comparativo = ganhosAtual > 0 ? "primeiro mês com ganhos registrados" : "sem dados do mês anterior para comparar";
+        if (ganhosAnterior.signum() == 0) {
+            comparativo = ganhosAtual.signum() > 0 ? "primeiro mês com ganhos registrados" : "sem dados do mês anterior para comparar";
         } else {
-            double pct = ((ganhosAtual - ganhosAnterior) / ganhosAnterior) * 100;
-            comparativo = pct >= 0
-                    ? String.format("melhor em %.0f%% (R$ %.2f a mais)", pct, ganhosAtual - ganhosAnterior)
-                    : String.format("pior em %.0f%% (R$ %.2f a menos)", Math.abs(pct), ganhosAnterior - ganhosAtual);
+            BigDecimal diferenca = ganhosAtual.subtract(ganhosAnterior);
+            // Escala 4 antes de multiplicar por 100: dividir com escala 2 aqui
+            // jogaria fora os centavos do percentual antes de virar porcentagem.
+            BigDecimal pct = diferenca.divide(ganhosAnterior, 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100));
+            comparativo = pct.signum() >= 0
+                    ? String.format("melhor em %.0f%% (R$ %.2f a mais)", pct, diferenca)
+                    : String.format("pior em %.0f%% (R$ %.2f a menos)", pct.abs(), diferenca.abs());
         }
 
         String contexto = String.format(
@@ -200,10 +207,12 @@ public class RelatorioController {
         long comMotoboy = doMes.stream().filter(t -> t.getMotoboyId() != null).count();
         long semCobertura = totalPublicados - comMotoboy;
 
-        double totalGasto = doMes.stream()
+        BigDecimal totalGasto = somaValores(doMes.stream()
                 .filter(t -> "finalizado".equals(t.getStatus()))
-                .mapToDouble(t -> t.getValorEstimado() != null ? t.getValorEstimado() : 0).sum();
-        double mediaPorTurno = totalPublicados > 0 ? totalGasto / totalPublicados : 0;
+                .collect(Collectors.toList()));
+        BigDecimal mediaPorTurno = totalPublicados > 0
+                ? totalGasto.divide(BigDecimal.valueOf(totalPublicados), 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
 
         // Dia com maior demanda
         String diaMaiorDemanda = doMes.stream()
@@ -296,6 +305,17 @@ public class RelatorioController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token de autenticação obrigatório.");
         }
         return authService.validarToken(authHeader.substring(7));
+    }
+
+    /** Valor do turno, com null tratado como zero — nunca propague null em conta. */
+    private static BigDecimal valorOuZero(Turno t) {
+        return t.getValorEstimado() == null ? BigDecimal.ZERO : t.getValorEstimado();
+    }
+
+    private static BigDecimal somaValores(List<Turno> turnos) {
+        return turnos.stream()
+                .map(RelatorioController::valorOuZero)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private String nomeDia(DayOfWeek dia) {

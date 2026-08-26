@@ -1,6 +1,7 @@
 package com.motoshift.entity;
 
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -20,8 +21,8 @@ public class Transacao {
     @Column(nullable = false)
     private String tipo;
 
-    @Column(nullable = false)
-    private Double valor;
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal valor;
 
     private String descricao;
 
@@ -49,8 +50,8 @@ public class Transacao {
     public String getTipo() { return tipo; }
     public void setTipo(String tipo) { this.tipo = tipo; }
 
-    public Double getValor() { return valor; }
-    public void setValor(Double valor) { this.valor = valor; }
+    public BigDecimal getValor() { return valor; }
+    public void setValor(BigDecimal valor) { this.valor = valor; }
 
     public String getDescricao() { return descricao; }
     public void setDescricao(String descricao) { this.descricao = descricao; }

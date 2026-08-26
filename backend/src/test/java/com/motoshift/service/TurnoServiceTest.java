@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -177,7 +178,7 @@ class TurnoServiceTest {
         req.setTitulo("Turno Teste");
         req.setDataInicio(inicio);
         req.setDataFim(fim);
-        req.setValorEstimado(120.0);
+        req.setValorEstimado(new BigDecimal("120.00"));
         return req;
     }
 
@@ -187,7 +188,7 @@ class TurnoServiceTest {
         t.setTitulo("Turno Teste");
         t.setDataInicio(inicio);
         t.setDataFim(fim);
-        t.setValorEstimado(120.0);
+        t.setValorEstimado(new BigDecimal("120.00"));
         t.setStatus(status);
         return t;
     }

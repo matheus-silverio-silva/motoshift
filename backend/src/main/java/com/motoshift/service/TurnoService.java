@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -392,7 +393,7 @@ public class TurnoService {
     }
 
     // Credita saldo e ganhos mensais na carteira do motoboy.
-    private void creditarCarteira(Long motoboyId, Double valor) {
+    private void creditarCarteira(Long motoboyId, BigDecimal valor) {
         if (motoboyId == null || valor == null) return;
         Carteira carteira = carteiraRepo.findByMotoboyId(motoboyId)
                 .orElseGet(() -> {
@@ -400,8 +401,8 @@ public class TurnoService {
                     c.setMotoboyId(motoboyId);
                     return c;
                 });
-        carteira.setSaldoAtual(carteira.getSaldoAtual() + valor);
-        carteira.setGanhosMensais(carteira.getGanhosMensais() + valor);
+        carteira.setSaldoAtual(carteira.getSaldoAtual().add(valor));
+        carteira.setGanhosMensais(carteira.getGanhosMensais().add(valor));
         carteiraRepo.save(carteira);
     }
 

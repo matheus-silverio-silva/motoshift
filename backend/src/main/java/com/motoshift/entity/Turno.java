@@ -1,6 +1,7 @@
 package com.motoshift.entity;
 
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -40,8 +41,8 @@ public class Turno {
     @Column(nullable = false)
     private LocalDateTime dataFim;
 
-    @Column(nullable = false)
-    private Double valorEstimado;
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal valorEstimado;
 
     // Raio de atuação declarado pelo lojista (quão longe o entregador vai rodar).
     // NÃO é a distância até o motoboy — para isso existem latitude/longitude abaixo.
@@ -120,8 +121,8 @@ public class Turno {
     public LocalDateTime getDataFim() { return dataFim; }
     public void setDataFim(LocalDateTime dataFim) { this.dataFim = dataFim; }
 
-    public Double getValorEstimado() { return valorEstimado; }
-    public void setValorEstimado(Double valorEstimado) { this.valorEstimado = valorEstimado; }
+    public BigDecimal getValorEstimado() { return valorEstimado; }
+    public void setValorEstimado(BigDecimal valorEstimado) { this.valorEstimado = valorEstimado; }
 
     public Double getRaioEntregaKm() { return raioEntregaKm; }
     public void setRaioEntregaKm(Double raioEntregaKm) { this.raioEntregaKm = raioEntregaKm; }

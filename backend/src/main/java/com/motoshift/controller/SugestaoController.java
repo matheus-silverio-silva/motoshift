@@ -9,9 +9,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -57,9 +59,10 @@ public class SugestaoController {
     private String construirContexto(List<Turno> historico, List<Turno> disponiveis) {
         int total = historico.size();
 
-        double ganhos = historico.stream()
-                .mapToDouble(Turno::getValorEstimado)
-                .sum();
+        BigDecimal ganhos = historico.stream()
+                .map(Turno::getValorEstimado)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         String horarios = historico.stream()
                 .collect(Collectors.groupingBy(

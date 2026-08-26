@@ -13,6 +13,7 @@ import com.motoshift.repository.UsuarioRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -326,8 +327,8 @@ public class DataInitializer implements CommandLineRunner {
     private void criarCarteira(Long motoboyId, double saldo, double ganhos, String pix) {
         Carteira c = new Carteira();
         c.setMotoboyId(motoboyId);
-        c.setSaldoAtual(saldo);
-        c.setGanhosMensais(ganhos);
+        c.setSaldoAtual(BigDecimal.valueOf(saldo));
+        c.setGanhosMensais(BigDecimal.valueOf(ganhos));
         c.setChavePix(pix);
         carteiraRepo.save(c);
     }
@@ -344,7 +345,7 @@ public class DataInitializer implements CommandLineRunner {
         t.setRegiao(regiao);
         t.setDataInicio(inicio);
         t.setDataFim(fim);
-        t.setValorEstimado(valor);
+        t.setValorEstimado(BigDecimal.valueOf(valor));
         t.setRaioEntregaKm(raio);
         // SCRUM-18: sem coordenada os turnos de exemplo nao aparecem no filtro
         // por raio e a tela parece quebrada em desenvolvimento.
@@ -428,7 +429,7 @@ public class DataInitializer implements CommandLineRunner {
         tx.setMotoboyId(motoboyId);
         tx.setTurnoId(turnoId);
         tx.setTipo(tipo);
-        tx.setValor(valor);
+        tx.setValor(BigDecimal.valueOf(valor));
         tx.setDescricao(descricao);
         tx.setStatus(status);
         transacaoRepo.save(tx);

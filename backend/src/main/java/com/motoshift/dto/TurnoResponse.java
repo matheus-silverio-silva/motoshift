@@ -2,6 +2,7 @@ package com.motoshift.dto;
 
 import com.motoshift.entity.Turno;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public class TurnoResponse {
@@ -14,7 +15,7 @@ public class TurnoResponse {
     private String regiao;
     private LocalDateTime dataInicio;
     private LocalDateTime dataFim;
-    private Double valorEstimado;
+    private BigDecimal valorEstimado;
     private Double raioEntregaKm;
     private Double latitude;
     private Double longitude;
@@ -42,7 +43,7 @@ public class TurnoResponse {
         r.regiao = t.getRegiao();
         r.dataInicio = t.getDataInicio();
         r.dataFim = t.getDataFim();
-        r.valorEstimado = t.getValorEstimado();
+        r.valorEstimado = CarteiraResponse.emReais(t.getValorEstimado());
         r.raioEntregaKm = t.getRaioEntregaKm();
         r.latitude = t.getLatitude();
         r.longitude = t.getLongitude();
@@ -67,7 +68,7 @@ public class TurnoResponse {
     public String getRegiao() { return regiao; }
     public LocalDateTime getDataInicio() { return dataInicio; }
     public LocalDateTime getDataFim() { return dataFim; }
-    public Double getValorEstimado() { return valorEstimado; }
+    public BigDecimal getValorEstimado() { return valorEstimado; }
     public Double getRaioEntregaKm() { return raioEntregaKm; }
     public Double getLatitude() { return latitude; }
     public Double getLongitude() { return longitude; }

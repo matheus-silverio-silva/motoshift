@@ -2,6 +2,7 @@ package com.motoshift.dto;
 
 import com.motoshift.entity.Transacao;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public class TransacaoResponse {
@@ -10,7 +11,7 @@ public class TransacaoResponse {
     private Long motoboyId;
     private Long turnoId;
     private String tipo;
-    private Double valor;
+    private BigDecimal valor;
     private String descricao;
     private String status;
     private LocalDateTime criadoEm;
@@ -21,7 +22,7 @@ public class TransacaoResponse {
         r.motoboyId = t.getMotoboyId();
         r.turnoId = t.getTurnoId();
         r.tipo = t.getTipo();
-        r.valor = t.getValor();
+        r.valor = CarteiraResponse.emReais(t.getValor());
         r.descricao = t.getDescricao();
         r.status = t.getStatus();
         r.criadoEm = t.getCriadoEm();
@@ -32,7 +33,7 @@ public class TransacaoResponse {
     public Long getMotoboyId() { return motoboyId; }
     public Long getTurnoId() { return turnoId; }
     public String getTipo() { return tipo; }
-    public Double getValor() { return valor; }
+    public BigDecimal getValor() { return valor; }
     public String getDescricao() { return descricao; }
     public String getStatus() { return status; }
     public LocalDateTime getCriadoEm() { return criadoEm; }
