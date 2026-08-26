@@ -2,6 +2,7 @@ package com.motoshift.service;
 
 import com.motoshift.dto.AuthResponse;
 import com.motoshift.dto.LoginRequest;
+import com.motoshift.dto.RegistroRequest;
 import com.motoshift.entity.Usuario;
 import com.motoshift.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -24,6 +26,11 @@ class AuthServiceTest {
 
     @Mock
     private UsuarioRepository repo;
+
+    // Cadastro passou a criar carteira para qualquer usuario; sem este mock o
+    // @InjectMocks injeta null e registrar() estoura.
+    @Mock
+    private CarteiraService carteiras;
 
     @InjectMocks
     private AuthService authService;
@@ -39,6 +46,32 @@ class AuthServiceTest {
         usuarioValido.setSenha("senha123");
         usuarioValido.setNome("Carlos Mendes");
         usuarioValido.setTipo("motoboy");
+    }
+
+    @Test
+    @DisplayName("Cadastro cria carteira — inclusive para lojista, que antes nao tinha")
+    void registrar_criaCarteiraParaQualquerTipo() {
+        RegistroRequest req = new RegistroRequest();
+        req.setNome("Padaria Central");
+        req.setEmail("lojista@teste.com");
+        req.setTelefone("41999999999");
+        req.setTipo("lojista");
+        req.setDocumentoFederal("12345678000199"); // CNPJ: 14 digitos
+        req.setSenha("senha123");
+
+        Usuario salvo = new Usuario();
+        ReflectionTestUtils.setField(salvo, "id", 42L);
+        salvo.setNome("Padaria Central");
+        salvo.setEmail("lojista@teste.com");
+        salvo.setTelefone("41999999999");
+        salvo.setTipo("lojista");
+
+        when(repo.existsByEmail("lojista@teste.com")).thenReturn(false);
+        when(repo.save(any(Usuario.class))).thenReturn(salvo);
+
+        authService.registrar(req);
+
+        verify(carteiras).obterOuCriar(42L);
     }
 
     @Test

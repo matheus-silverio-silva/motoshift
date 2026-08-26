@@ -324,11 +324,12 @@ public class DataInitializer implements CommandLineRunner {
         usuarioRepo.save(u);
     }
 
-    private void criarCarteira(Long motoboyId, double saldo, double ganhos, String pix) {
+    // O parametro "ganhos" nao e mais gravado: ganho do mes passou a ser
+    // derivado das transacoes de seed, nao de um contador na carteira.
+    private void criarCarteira(Long usuarioId, double saldo, double ganhos, String pix) {
         Carteira c = new Carteira();
-        c.setMotoboyId(motoboyId);
-        c.setSaldoAtual(BigDecimal.valueOf(saldo));
-        c.setGanhosMensais(BigDecimal.valueOf(ganhos));
+        c.setUsuarioId(usuarioId);
+        c.setSaldoDisponivel(BigDecimal.valueOf(saldo));
         c.setChavePix(pix);
         carteiraRepo.save(c);
     }
@@ -423,10 +424,10 @@ public class DataInitializer implements CommandLineRunner {
                 valor, raio, "cancelado");
     }
 
-    private void criarTransacao(Long motoboyId, Long turnoId, String tipo,
+    private void criarTransacao(Long usuarioId, Long turnoId, String tipo,
                                  double valor, String descricao, String status) {
         Transacao tx = new Transacao();
-        tx.setMotoboyId(motoboyId);
+        tx.setUsuarioId(usuarioId);
         tx.setTurnoId(turnoId);
         tx.setTipo(tipo);
         tx.setValor(BigDecimal.valueOf(valor));

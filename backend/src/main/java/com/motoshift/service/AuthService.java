@@ -22,6 +22,7 @@ public class AuthService {
     private static final int BLOQUEIO_MINUTOS = 15;
 
     private final UsuarioRepository repo;
+    private final CarteiraService carteiras;
 
     // RF01: rastreamento de tentativas em memória (suficiente para H2 dev)
     private final ConcurrentHashMap<String, AttemptInfo> tentativas = new ConcurrentHashMap<>();
@@ -34,8 +35,9 @@ public class AuthService {
         LocalDateTime bloqueadoAte = null;
     }
 
-    public AuthService(UsuarioRepository repo) {
+    public AuthService(UsuarioRepository repo, CarteiraService carteiras) {
         this.repo = repo;
+        this.carteiras = carteiras;
     }
 
     public AuthResponse registrar(RegistroRequest req) {
@@ -80,6 +82,12 @@ public class AuthService {
         u.setSenha(req.getSenha()); // plain-text apenas em dev
 
         Usuario salvo = repo.save(u);
+
+        // Carteira para QUALQUER usuario, nao so entregador: o lojista precisa
+        // dela para reservar o valor do turno ao publicar. Criada zerada aqui
+        // para que nenhum fluxo posterior precise lidar com carteira ausente.
+        carteiras.obterOuCriar(salvo.getId());
+
         String token = UUID.randomUUID().toString();
         tokens.put(token, salvo.getId());
         return new AuthResponse(token, UsuarioResponse.from(salvo));

@@ -33,13 +33,16 @@ public class DashboardController {
     private final UsuarioRepository usuarioRepo;
     private final TurnoRepository turnoRepo;
     private final CarteiraRepository carteiraRepo;
+    private final com.motoshift.service.CarteiraService carteiraService;
 
     public DashboardController(UsuarioRepository usuarioRepo,
                                TurnoRepository turnoRepo,
-                               CarteiraRepository carteiraRepo) {
+                               CarteiraRepository carteiraRepo,
+                               com.motoshift.service.CarteiraService carteiraService) {
         this.usuarioRepo = usuarioRepo;
         this.turnoRepo = turnoRepo;
         this.carteiraRepo = carteiraRepo;
+        this.carteiraService = carteiraService;
     }
 
     @Operation(summary = "Dashboard do Lojista",
@@ -128,7 +131,7 @@ public class DashboardController {
         Usuario motoboy = usuarioRepo.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuário não encontrado"));
 
-        Carteira carteira = carteiraRepo.findByMotoboyId(id).orElse(null);
+        Carteira carteira = carteiraRepo.findByUsuarioId(id).orElse(null);
         List<com.motoshift.entity.Turno> todosTurnos = turnoRepo.findByMotoboyId(id);
 
         List<TurnoResponse> turnosAceitos = todosTurnos.stream()
@@ -158,13 +161,18 @@ public class DashboardController {
         resp.put("score", java.util.Objects.requireNonNullElse(motoboy.getScore(), 5.0));
         resp.put("mediaAvaliacao", motoboy.getMediaAvaliacao());
         if (carteira != null) {
-            // getSaldoAtual/getGanhosMensais nunca devolvem null (default ZERO na entidade).
-            resp.put("saldoAtual",    carteira.getSaldoAtual().setScale(2, RoundingMode.HALF_UP));
-            resp.put("ganhosMensais", carteira.getGanhosMensais().setScale(2, RoundingMode.HALF_UP));
+            // saldoAtual e mantido espelhando o disponivel: o app em producao le
+            // esse nome. saldoBloqueado e novo e vem ao lado.
+            resp.put("saldoAtual",      carteira.getSaldoDisponivel().setScale(2, RoundingMode.HALF_UP));
+            resp.put("saldoDisponivel", carteira.getSaldoDisponivel().setScale(2, RoundingMode.HALF_UP));
+            resp.put("saldoBloqueado",  carteira.getSaldoBloqueado().setScale(2, RoundingMode.HALF_UP));
         } else {
-            resp.put("saldoAtual",    BigDecimal.ZERO.setScale(2));
-            resp.put("ganhosMensais", BigDecimal.ZERO.setScale(2));
+            resp.put("saldoAtual",      BigDecimal.ZERO.setScale(2));
+            resp.put("saldoDisponivel", BigDecimal.ZERO.setScale(2));
+            resp.put("saldoBloqueado",  BigDecimal.ZERO.setScale(2));
         }
+        // Somado das transacoes do mes, nao mais de um contador na carteira.
+        resp.put("ganhosMensais", carteiraService.ganhosDoMes(id));
         resp.put("turnosAceitos", turnosAceitos);
         resp.put("turnosFinalizados", turnosFinalizados);
         resp.put("turnosFinalizadosMes", turnosFinalizadosMes);

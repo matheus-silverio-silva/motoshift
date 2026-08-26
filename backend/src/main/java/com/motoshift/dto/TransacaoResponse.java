@@ -8,7 +8,8 @@ import java.time.LocalDateTime;
 public class TransacaoResponse {
 
     private Long id;
-    private Long motoboyId;
+    private Long usuarioId;
+    private Long contraparteId;
     private Long turnoId;
     private String tipo;
     private BigDecimal valor;
@@ -16,9 +17,16 @@ public class TransacaoResponse {
     private String status;
     private LocalDateTime criadoEm;
 
+    /** @deprecated use {@link #getUsuarioId()}. Mantido para o app antigo. */
+    @Deprecated
+    private Long motoboyId;
+
+    @SuppressWarnings("deprecation")
     public static TransacaoResponse from(Transacao t) {
         TransacaoResponse r = new TransacaoResponse();
         r.id = t.getId();
+        r.usuarioId = t.getUsuarioId();
+        r.contraparteId = t.getContraparteId();
         r.motoboyId = t.getMotoboyId();
         r.turnoId = t.getTurnoId();
         r.tipo = t.getTipo();
@@ -30,11 +38,16 @@ public class TransacaoResponse {
     }
 
     public Long getId() { return id; }
-    public Long getMotoboyId() { return motoboyId; }
+    public Long getUsuarioId() { return usuarioId; }
+    public Long getContraparteId() { return contraparteId; }
     public Long getTurnoId() { return turnoId; }
     public String getTipo() { return tipo; }
     public BigDecimal getValor() { return valor; }
     public String getDescricao() { return descricao; }
     public String getStatus() { return status; }
     public LocalDateTime getCriadoEm() { return criadoEm; }
+
+    /** @deprecated use {@link #getUsuarioId()}. */
+    @Deprecated
+    public Long getMotoboyId() { return motoboyId; }
 }

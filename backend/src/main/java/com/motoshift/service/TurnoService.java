@@ -256,7 +256,8 @@ public class TurnoService {
     private void criarTransacaoPendente(Turno turno, Long motoboyId) {
         if (motoboyId == null) return;
         Transacao tx = new Transacao();
-        tx.setMotoboyId(motoboyId);
+        tx.setUsuarioId(motoboyId);
+        tx.setContraparteId(turno.getLojistId());
         tx.setTurnoId(turno.getId());
         tx.setTipo("turno");
         tx.setValor(turno.getValorEstimado());
@@ -395,21 +396,23 @@ public class TurnoService {
     // Credita saldo e ganhos mensais na carteira do motoboy.
     private void creditarCarteira(Long motoboyId, BigDecimal valor) {
         if (motoboyId == null || valor == null) return;
-        Carteira carteira = carteiraRepo.findByMotoboyId(motoboyId)
+        Carteira carteira = carteiraRepo.findByUsuarioId(motoboyId)
                 .orElseGet(() -> {
                     Carteira c = new Carteira();
-                    c.setMotoboyId(motoboyId);
+                    c.setUsuarioId(motoboyId);
                     return c;
                 });
-        carteira.setSaldoAtual(carteira.getSaldoAtual().add(valor));
-        carteira.setGanhosMensais(carteira.getGanhosMensais().add(valor));
+        // ganhosMensais saiu da carteira: era um contador que so crescia e
+        // nunca zerava. O ganho do mes agora vem de CarteiraService.ganhosDoMes,
+        // somado das transacoes.
+        carteira.setSaldoDisponivel(carteira.getSaldoDisponivel().add(valor));
         carteiraRepo.save(carteira);
     }
 
     // Marca a transação pendente daquele motoboy/turno como processada.
     private void marcarTransacaoProcessada(Long motoboyId, Long turnoId) {
         if (motoboyId == null) return;
-        transacaoRepo.findByMotoboyIdOrderByCriadoEmDesc(motoboyId)
+        transacaoRepo.findByUsuarioIdOrderByCriadoEmDesc(motoboyId)
                 .stream()
                 .filter(t -> turnoId.equals(t.getTurnoId()) && "pendente".equals(t.getStatus()))
                 .findFirst()
