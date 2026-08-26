@@ -46,3 +46,7 @@ app.*.map.json
 
 # Golden test artifacts (PNGs versionados; zip empacotado é redundante)
 test/goldens/goldens.zip
+test/goldens/failures/
+
+# Capturas de conferência visual do shell responsivo (geradas sob demanda)
+test/dev_capture/capturas/
