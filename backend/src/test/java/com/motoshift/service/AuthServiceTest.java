@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Optional;
@@ -32,6 +33,8 @@ class AuthServiceTest {
     @BeforeEach
     void setUp() {
         usuarioValido = new Usuario();
+        // id é gerado pelo JPA (sem setter); simula um usuário já persistido
+        ReflectionTestUtils.setField(usuarioValido, "id", 1L);
         usuarioValido.setEmail("motoboy@teste.com");
         usuarioValido.setSenha("senha123");
         usuarioValido.setNome("Carlos Mendes");
