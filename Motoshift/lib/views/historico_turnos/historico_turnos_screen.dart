@@ -7,9 +7,12 @@ import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
-import '../../widgets/app_scaffold.dart';
+import '../../widgets/desktop/content_grid.dart';
+import '../../widgets/desktop/panel_card.dart';
 import '../../widgets/shift_card.dart';
+import '../../widgets/stat_card.dart';
 import '../../widgets/status_pill.dart';
 import '../avaliacao/avaliacao_screen.dart';
 
@@ -387,8 +390,18 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffold(
+    return AdaptiveScaffold(
       header: AppHeader.back(title: 'Histórico de turnos'),
+      desktopTitle: 'Histórico de turnos',
+      desktopSubtitle: _subtituloDesktop(),
+      desktopSelectedRoute: AppRoutes.historicoTurnos,
+      desktopBody: _carregando
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.teal),
+            )
+          : _turnos.isEmpty
+              ? _buildVazio()
+              : _buildDesktop(),
       body: _carregando
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.teal),
@@ -396,6 +409,286 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
           : _turnos.isEmpty
               ? _buildVazio()
               : _buildLista(),
+    );
+  }
+
+  // ── Desktop — KPIs + tabela ──────────────────────────────────────────────
+
+  String _subtituloDesktop() {
+    if (_carregando) return 'Carregando histórico…';
+    final n = _turnos.length;
+    if (n == 0) return 'Nenhum turno encerrado ainda';
+    final maisAntigo = _turnos.last.dataInicio;
+    return '$n ${n == 1 ? 'turno' : 'turnos'} desde '
+        '${DateFormat('MMMM \'de\' y', 'pt_BR').format(maisAntigo)}';
+  }
+
+  int get _qtdFinalizados =>
+      _turnos.where((t) => t.status == StatusTurno.finalizado).length;
+
+  double get _horasRodadas => _turnos
+      .where((t) => t.status == StatusTurno.finalizado)
+      .fold(0.0, (acc, t) => acc + t.duracao.inMinutes / 60);
+
+  Widget _buildDesktop() {
+    final isLojista =
+        context.read<AuthService>().usuario?.tipo == TipoUsuario.lojista;
+    final total = _turnos.length;
+    final pctConclusao =
+        total == 0 ? 0 : (_qtdFinalizados / total * 100).round();
+    final mediaTurno =
+        _qtdFinalizados == 0 ? 0.0 : _totalGanho / _qtdFinalizados;
+    final mediaHoras =
+        _qtdFinalizados == 0 ? 0.0 : _horasRodadas / _qtdFinalizados;
+
+    return ContentGrid(
+      children: [
+        GridCol(
+          span: 3,
+          child: StatCard(
+            size: StatCardSize.large,
+            label: 'Turnos concluídos',
+            value: '$_qtdFinalizados',
+            sub: '$pctConclusao% de conclusão',
+          ),
+        ),
+        GridCol(
+          span: 3,
+          child: StatCard(
+            size: StatCardSize.large,
+            label: isLojista ? 'Total pago' : 'Total recebido',
+            value: 'R\$ ${_totalGanho.toStringAsFixed(0)}',
+            sub: 'média R\$ ${mediaTurno.toStringAsFixed(0)}',
+            subColor: AppColors.muted,
+          ),
+        ),
+        GridCol(
+          span: 3,
+          child: StatCard(
+            size: StatCardSize.large,
+            label: 'Cancelados',
+            value: '$_qtdCancelados',
+            sub: _qtdCancelados == 0 ? 'nenhum' : 'no período',
+            subColor: _qtdCancelados > 0 ? AppColors.amber : AppColors.muted,
+          ),
+        ),
+        GridCol(
+          span: 3,
+          child: StatCard(
+            size: StatCardSize.large,
+            label: 'Horas rodadas',
+            value: '${_horasRodadas.toStringAsFixed(0)} h',
+            sub: '${mediaHoras.toStringAsFixed(1).replaceAll('.', ',')} h '
+                'por turno',
+            subColor: AppColors.muted,
+          ),
+        ),
+        GridCol(
+          span: 12,
+          child: PanelCard(
+            padding: const EdgeInsets.all(22),
+            gap: 14,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildFiltrosDesktop(isLojista),
+                const SizedBox(height: 14),
+                _buildTabela(isLojista),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFiltrosDesktop(bool isLojista) {
+    final opcoes = [
+      ('todos', 'Todos', _turnos.length),
+      ('avaliar', 'A avaliar', _qtdAvaliar),
+      ('pagamento', isLojista ? 'A pagar' : 'A receber', _qtdPagamento),
+      ('concluidos', 'Concluídos', _qtdConcluidos),
+      ('cancelados', 'Cancelados', _qtdCancelados),
+    ];
+
+    return Row(
+      children: [
+        for (final op in opcoes) ...[
+          InkWell(
+            onTap: () => setState(() => _filtro = op.$1),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: _filtro == op.$1 ? AppColors.teal : AppColors.surface2,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    op.$2,
+                    style: tsJakarta(12, FontWeight.w700,
+                        color: _filtro == op.$1
+                            ? Colors.white
+                            : AppColors.muted),
+                  ),
+                  if (op.$3 > 0) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      '${op.$3}',
+                      style: tsJakarta(11, FontWeight.w800,
+                          color: _filtro == op.$1
+                              ? Colors.white70
+                              : AppColors.muted),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ],
+    );
+  }
+
+  /// Colunas: turno · data · região · status · valor.
+  ///
+  /// O artboard traz "LOJISTA" na terceira coluna, mas o turno só carrega
+  /// `lojistId` — o nome exigiria uma busca por turno. Fica a região, que é
+  /// dado que a lista já tem.
+  Widget _buildTabela(bool isLojista) {
+    const flexes = [26, 16, 20, 15, 14];
+    final linhas = _filtrados;
+
+    Widget celula(int i, Widget filho, {bool fim = false}) => Expanded(
+          flex: flexes[i],
+          child: Align(
+            alignment: fim ? Alignment.centerRight : Alignment.centerLeft,
+            child: filho,
+          ),
+        );
+
+    Widget cabecalho(String texto) => Text(
+          texto,
+          style: tsJakarta(10.5, FontWeight.w700, color: AppColors.muted)
+              .copyWith(letterSpacing: 10.5 * .08),
+        );
+
+    if (linhas.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: Center(
+          child: Text('Nenhum turno nesse filtro.',
+              style: tsJakarta(12.5, FontWeight.w400, color: AppColors.muted)),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+          decoration: const BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: AppColors.line, width: 1.5),
+            ),
+          ),
+          child: Row(
+            children: [
+              celula(0, cabecalho('TURNO')),
+              celula(1, cabecalho('DATA')),
+              celula(2, cabecalho('REGIÃO')),
+              celula(3, cabecalho('STATUS')),
+              celula(4, cabecalho('VALOR'), fim: true),
+            ],
+          ),
+        ),
+        for (final t in linhas) _buildLinhaTabela(t, isLojista, celula),
+      ],
+    );
+  }
+
+  Widget _buildLinhaTabela(
+    Turno t,
+    bool isLojista,
+    Widget Function(int, Widget, {bool fim}) celula,
+  ) {
+    final cancelado = t.status == StatusTurno.cancelado;
+    final pago = t.pagamentoStatus == PagamentoStatus.pago;
+
+    final (String rotulo, PillVariant variante) = cancelado
+        ? ('Cancelado', PillVariant.ghost)
+        : pago
+            ? ('Pago', PillVariant.good)
+            : _aguardandoPagamento(t)
+                ? (isLojista ? 'A pagar' : 'A receber', PillVariant.amber)
+                : ('Finalizado', PillVariant.ghost);
+
+    return InkWell(
+      onTap: () => Navigator.pushNamed(
+        context,
+        isLojista ? AppRoutes.turnoLojista : AppRoutes.detalheTurno,
+        arguments: t,
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: AppColors.line)),
+        ),
+        child: Row(
+          children: [
+            celula(
+              0,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(t.titulo,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tsJakarta(13, FontWeight.w700,
+                          color: cancelado ? AppColors.muted : AppColors.text)),
+                  Text(
+                    '${t.horarioFormatado} · '
+                    '${t.raioEntregaKm.toStringAsFixed(0)} km',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        tsJakarta(11, FontWeight.w400, color: AppColors.muted),
+                  ),
+                ],
+              ),
+            ),
+            celula(
+              1,
+              Text(DateFormat('dd/MM/yyyy', 'pt_BR').format(t.dataInicio),
+                  style: tsJakarta(12.5, FontWeight.w400,
+                      color: AppColors.muted)),
+            ),
+            celula(
+              2,
+              Text(t.regiao,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      tsJakarta(12.5, FontWeight.w400, color: AppColors.text)),
+            ),
+            celula(3, StatusPill(label: rotulo, variant: variante)),
+            celula(
+              4,
+              Text(
+                'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
+                style: tsBricolage(15, FontWeight.w800,
+                    color: cancelado ? AppColors.muted : AppColors.ink),
+              ),
+              fim: true,
+            ),
+          ],
+        ),
+      ),
     );
   }
 

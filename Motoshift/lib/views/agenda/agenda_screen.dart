@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_header.dart';
-import '../../widgets/app_scaffold.dart';
 import '../../widgets/calendar_month.dart';
+import '../../widgets/desktop/app_topbar.dart';
+import '../../widgets/desktop/content_grid.dart';
+import '../../widgets/desktop/panel_card.dart';
 
 class AgendaScreen extends StatefulWidget {
   const AgendaScreen({super.key});
@@ -102,7 +106,9 @@ class _AgendaScreenState extends State<AgendaScreen> {
     final initials = nome.length >= 2
         ? nome.substring(0, 2).toUpperCase()
         : nome.toUpperCase();
-    return AppScaffold(
+    final ehLojista = auth.usuario?.tipo == TipoUsuario.lojista;
+
+    return AdaptiveScaffold(
       header: AppHeader.greeting(
         greeting: _greeting(),
         name: nome,
@@ -113,6 +119,18 @@ class _AgendaScreenState extends State<AgendaScreen> {
         currentIndex: 1,
         onTap: _onNav,
       ),
+      desktopTitle: 'Agenda',
+      desktopSubtitle: _subtituloDesktop(),
+      desktopSelectedRoute: AppRoutes.agenda,
+      desktopPrimaryAction: ehLojista
+          ? TopbarPrimaryButton(
+              label: 'Publicar turno',
+              icon: Icons.add,
+              onTap: () =>
+                  Navigator.pushNamed(context, AppRoutes.publicarTurno),
+            )
+          : null,
+      desktopBody: _buildDesktop(),
       body: _carregando
           ? const Center(
               child: CircularProgressIndicator(
@@ -175,6 +193,265 @@ class _AgendaScreenState extends State<AgendaScreen> {
               ],
             ),
     );
+  }
+
+  // ── Desktop — calendário à esquerda, dia selecionado à direita ───────────
+
+  String _subtituloDesktop() {
+    if (_carregando) return 'Carregando agenda…';
+    final n = _marcados.length;
+    final mes = '${_nomeMesCompleto(_mesAtual.month)} de ${_mesAtual.year}';
+    if (n == 0) return '$mes · nenhum dia com turno';
+    return '$mes · $n ${n == 1 ? 'dia com turno' : 'dias com turno'}';
+  }
+
+  void _mudarMes(int delta) {
+    setState(() {
+      _mesAtual = DateTime(_mesAtual.year, _mesAtual.month + delta);
+      _diaSelecionado = null;
+    });
+    _carregarMensal();
+  }
+
+  Widget _buildDesktop() {
+    if (_carregando) {
+      return const Center(
+        child: CircularProgressIndicator(
+            strokeWidth: 2, color: AppColors.teal),
+      );
+    }
+    return ContentGrid(
+      children: [
+        GridCol(
+          span: 7,
+          child: CalendarMonth(
+            year: _mesAtual.year,
+            month: _mesAtual.month,
+            markedDays: _marcados,
+            selectedDay: _diaSelecionado,
+            today: DateTime.now().month == _mesAtual.month &&
+                    DateTime.now().year == _mesAtual.year
+                ? DateTime.now().day
+                : null,
+            onMonthChange: _mudarMes,
+            onDayTap: (d) => setState(() {
+              _diaSelecionado = _diaSelecionado == d ? null : d;
+            }),
+            footer: _buildLegenda(),
+          ),
+        ),
+        GridCol(
+          span: 5,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildDiaDesktop(),
+              const SizedBox(height: 16),
+              _buildResumoSemana(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLegenda() {
+    Widget item(Widget marca, String texto) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            marca,
+            const SizedBox(width: 6),
+            Text(texto,
+                style:
+                    tsJakarta(11.5, FontWeight.w400, color: AppColors.muted)),
+          ],
+        );
+
+    return Row(
+      children: [
+        item(
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+                color: AppColors.amber, shape: BoxShape.circle),
+          ),
+          'dia com turno',
+        ),
+        const SizedBox(width: 16),
+        item(
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: AppColors.teal, width: 1.5),
+            ),
+          ),
+          'hoje',
+        ),
+        const SizedBox(width: 16),
+        item(
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: AppColors.teal,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          'selecionado',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDiaDesktop() {
+    if (_diaSelecionado == null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.line, width: 1.5),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.tealSoft,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(Icons.calendar_month_outlined,
+                  size: 26, color: AppColors.tealDeep),
+            ),
+            const SizedBox(height: 14),
+            Text('Selecione um dia',
+                style:
+                    tsBricolage(16, FontWeight.w800, color: AppColors.ink)),
+            const SizedBox(height: 5),
+            Text(
+              'Escolha uma data no calendário para ver os turnos daquele dia.',
+              textAlign: TextAlign.center,
+              style: tsJakarta(12.5, FontWeight.w400, color: AppColors.muted),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final turnos = _turnosDiaSelecionado;
+    final total = turnos.fold<double>(
+        0, (a, t) => a + ((t['valorEstimado'] as num?)?.toDouble() ?? 0));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Expanded(
+              child: Text(
+                '$_diaSelecionado de ${_nomeMesCompleto(_mesAtual.month)}',
+                style:
+                    tsBricolage(20, FontWeight.w800, color: AppColors.ink),
+              ),
+            ),
+            Text(
+              turnos.isEmpty
+                  ? 'sem turnos'
+                  : '${turnos.length} ${turnos.length == 1 ? 'turno' : 'turnos'} · R\$ ${total.toStringAsFixed(0)}',
+              style: tsJakarta(12, FontWeight.w600, color: AppColors.muted),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (turnos.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.line, width: 1.5),
+            ),
+            child: Center(
+              child: Text('Nenhum turno neste dia.',
+                  style: tsJakarta(12.5, FontWeight.w400,
+                      color: AppColors.muted)),
+            ),
+          )
+        else
+          for (final t in turnos) ...[
+            _buildTurnoCard(t),
+          ],
+      ],
+    );
+  }
+
+  /// Resumo da semana do dia selecionado (ou da semana corrente), derivado
+  /// dos turnos do mês que a tela já carregou.
+  Widget _buildResumoSemana() {
+    final referencia = _diaSelecionado != null
+        ? DateTime(_mesAtual.year, _mesAtual.month, _diaSelecionado!)
+        : DateTime.now();
+    final inicioSemana =
+        referencia.subtract(Duration(days: referencia.weekday % 7));
+    final fimSemana = inicioSemana.add(const Duration(days: 6));
+
+    var publicados = 0;
+    var preenchidos = 0;
+    var custo = 0.0;
+    for (final entry in _turnosPorDia.entries) {
+      final dia = DateTime.tryParse(entry.key);
+      if (dia == null) continue;
+      if (dia.isBefore(inicioSemana) || dia.isAfter(fimSemana)) continue;
+      for (final t in entry.value) {
+        publicados++;
+        final status = (t['status'] as String? ?? '').toLowerCase();
+        if (status != 'aberto') preenchidos++;
+        custo += (t['valorEstimado'] as num?)?.toDouble() ?? 0;
+      }
+    }
+
+    Widget linha(String rotulo, String valor) => Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(rotulo,
+                    style: tsJakarta(12.5, FontWeight.w400,
+                        color: AppColors.muted)),
+              ),
+              Text(valor,
+                  style: tsJakarta(12.5, FontWeight.w700,
+                      color: AppColors.text)),
+            ],
+          ),
+        );
+
+    return PanelCard(
+      title: 'Resumo da semana',
+      padding: const EdgeInsets.all(18),
+      gap: 0,
+      child: Column(
+        children: [
+          linha('Turnos publicados', '$publicados'),
+          linha('Preenchidos', '$preenchidos'),
+          linha('Custo previsto', 'R\$ ${custo.toStringAsFixed(0)}'),
+        ],
+      ),
+    );
+  }
+
+  String _nomeMesCompleto(int mes) {
+    const meses = [
+      'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+      'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+    ];
+    return meses[mes - 1];
   }
 
   Widget _buildDayDetail() {
