@@ -86,3 +86,6 @@ desktop.ini
 secrets.properties
 google-services.json
 GoogleService-Info.plist
+
+# Artefatos de diagnostico gerados por golden tests que falham
+Motoshift/test/goldens/failures/

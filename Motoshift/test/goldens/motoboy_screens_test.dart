@@ -104,8 +104,10 @@ void main() {
       titulo: 'Turno Tarde — Hamburgueria',
       descricao: 'Entregas na região do Água Verde',
       regiao: 'Água Verde, Curitiba',
-      dataInicio: DateTime.now().add(const Duration(days: 1, hours: 14)),
-      dataFim: DateTime.now().add(const Duration(days: 1, hours: 18)),
+      // Ancorado na meia-noite de hoje: com DateTime.now() cru os minutos
+      // entravam no horário exibido e o golden mudava a cada minuto.
+      dataInicio: hojeAncorado().add(const Duration(days: 1, hours: 14)),
+      dataFim: hojeAncorado().add(const Duration(days: 1, hours: 18)),
       valorEstimado: 120,
       raioEntregaKm: 8,
     );

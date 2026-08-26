@@ -142,6 +142,29 @@ enum StatusTurno {
       StatusTurno.cancelado => 'Cancelado',
     };
   }
+
+  /// Turno que ainda está em jogo — não foi encerrado por nenhuma das partes.
+  bool get ativo =>
+      this == StatusTurno.aberto ||
+      this == StatusTurno.aceito ||
+      this == StatusTurno.emAndamento;
+}
+
+extension TurnosFiltros on Iterable<Turno> {
+  /// Turnos que ainda vão acontecer (ou estão acontecendo), do mais próximo
+  /// para o mais distante.
+  ///
+  /// O corte usa `dataFim` e não `dataInicio` de propósito: um turno que
+  /// começou há uma hora e termina daqui a três ainda interessa a quem está
+  /// olhando o painel — o que não pode aparecer é turno já encerrado.
+  /// Cancelados e finalizados saem pelo filtro de status.
+  List<Turno> proximos() {
+    final agora = DateTime.now();
+    final lista = where((t) => t.status.ativo && t.dataFim.isAfter(agora))
+        .toList();
+    lista.sort((a, b) => a.dataInicio.compareTo(b.dataInicio));
+    return lista;
+  }
 }
 
 PagamentoStatus _parsePagamento(String? raw) {

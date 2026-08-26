@@ -16,6 +16,13 @@ public class TurnoResponse {
     private LocalDateTime dataFim;
     private Double valorEstimado;
     private Double raioEntregaKm;
+    private Double latitude;
+    private Double longitude;
+    private String endereco;
+    // Distância do usuário até o turno, em km. Só vem preenchida quando a
+    // requisição informou lat/lng; null caso contrário.
+    private Double distanciaKm;
+    private LocalDateTime expiradoEm;
     private Integer vagas;
     private Integer vagasPreenchidas;
     private String status;
@@ -37,6 +44,10 @@ public class TurnoResponse {
         r.dataFim = t.getDataFim();
         r.valorEstimado = t.getValorEstimado();
         r.raioEntregaKm = t.getRaioEntregaKm();
+        r.latitude = t.getLatitude();
+        r.longitude = t.getLongitude();
+        r.endereco = t.getEndereco();
+        r.expiradoEm = t.getExpiradoEm();
         r.vagas = t.getVagas();
         r.vagasPreenchidas = 0; // atualizado pelo serviço via setVagasPreenchidas
         r.status = t.getStatus();
@@ -58,6 +69,12 @@ public class TurnoResponse {
     public LocalDateTime getDataFim() { return dataFim; }
     public Double getValorEstimado() { return valorEstimado; }
     public Double getRaioEntregaKm() { return raioEntregaKm; }
+    public Double getLatitude() { return latitude; }
+    public Double getLongitude() { return longitude; }
+    public String getEndereco() { return endereco; }
+    public Double getDistanciaKm() { return distanciaKm; }
+    public void setDistanciaKm(Double d) { this.distanciaKm = d; }
+    public LocalDateTime getExpiradoEm() { return expiradoEm; }
     public Integer getVagas() { return vagas; }
     public Integer getVagasPreenchidas() { return vagasPreenchidas; }
     public void setVagasPreenchidas(Integer v) { this.vagasPreenchidas = v; }

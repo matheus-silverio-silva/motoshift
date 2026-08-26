@@ -4,7 +4,19 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "avaliacoes")
+@Table(
+    name = "avaliacoes",
+    uniqueConstraints = @UniqueConstraint(
+        // A chave é o TRIO. Com (turnoId, avaliadorId) o lojista de um turno
+        // multi-vaga ficaria travado após avaliar o primeiro entregador.
+        name = "uk_avaliacao_turno_avaliador_avaliado",
+        columnNames = {"turnoId", "avaliadorId", "avaliadoId"}
+    ),
+    indexes = {
+        @Index(name = "ix_avaliacao_avaliado", columnList = "avaliadoId"),
+        @Index(name = "ix_avaliacao_turno",    columnList = "turnoId")
+    }
+)
 public class Avaliacao {
 
     @Id

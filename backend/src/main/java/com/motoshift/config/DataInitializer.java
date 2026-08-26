@@ -346,8 +346,35 @@ public class DataInitializer implements CommandLineRunner {
         t.setDataFim(fim);
         t.setValorEstimado(valor);
         t.setRaioEntregaKm(raio);
+        // SCRUM-18: sem coordenada os turnos de exemplo nao aparecem no filtro
+        // por raio e a tela parece quebrada em desenvolvimento.
+        double[] coord = coordenadaDaRegiao(regiao, titulo);
+        t.setLatitude(coord[0]);
+        t.setLongitude(coord[1]);
+        t.setEndereco(regiao);
+
         t.setStatus(status);
         return turnoRepo.save(t);
+    }
+
+    /**
+     * Coordenada aproximada do bairro, com um deslocamento deterministico
+     * derivado do titulo para que turnos do mesmo bairro nao caiam no mesmo
+     * ponto exato. Somente para seed de desenvolvimento.
+     */
+    private double[] coordenadaDaRegiao(String regiao, String titulo) {
+        double lat, lng;
+        String r = regiao == null ? "" : regiao.toLowerCase();
+        if (r.contains("agua verde") || r.contains("\u00e1gua verde")) { lat = -25.4560; lng = -49.2820; }
+        else if (r.contains("batel"))                                   { lat = -25.4420; lng = -49.2900; }
+        else if (r.contains("civico") || r.contains("c\u00edvico"))      { lat = -25.4160; lng = -49.2690; }
+        else                                                            { lat = -25.4284; lng = -49.2733; } // Centro
+
+        // Jitter de ate ~600 m, estavel entre execucoes.
+        int h = titulo == null ? 0 : Math.abs(titulo.hashCode());
+        lat += ((h % 100) - 50) / 10000.0;
+        lng += (((h / 100) % 100) - 50) / 10000.0;
+        return new double[] { lat, lng };
     }
 
     private Turno criarTurnoHistorico(Long lojistId, Long motoboyId, String titulo,

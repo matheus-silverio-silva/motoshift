@@ -119,6 +119,9 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
         (_dashData?['turnosAtivos'] as num?)?.toInt() ?? 0;
     final totalGasto =
         (_dashData?['totalGasto'] as num?)?.toDouble() ?? 0.0;
+    // avaliacaoMedia = nota que ESTE lojista recebeu. Antes o backend mandava
+    // aqui a média do `score` dos motoboys dele — dado de terceiros, e ainda
+    // por cima confundindo reputação com avaliação.
     final avaliacaoMedia =
         (_dashData?['avaliacaoMedia'] as num?)?.toDouble() ?? 0.0;
 
@@ -144,7 +147,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
             value: avaliacaoMedia > 0
                 ? avaliacaoMedia.toStringAsFixed(1)
                 : 'N/D',
-            sub: avaliacaoMedia > 0 ? '★ média' : null,
+            sub: avaliacaoMedia > 0 ? '★ recebida' : 'sem notas',
             subColor: AppColors.amber,
           ),
         ),
@@ -192,15 +195,25 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
             ),
           );
         }
-        if (provider.turnosLojista.isEmpty) {
-          return const EmptyState(
+        // A seção se chama "Próximos turnos": mostra apenas turnos ativos que
+        // ainda não terminaram, do mais próximo ao mais distante. Antes usava
+        // a lista crua do provider, que vem do backend sem filtro nem ordem —
+        // por isso cancelados e finalizados apareciam aqui.
+        final proximos = provider.turnosLojista.proximos();
+
+        if (proximos.isEmpty) {
+          return EmptyState(
             icon: Icons.event_available_outlined,
-            titulo: 'Nenhum turno cadastrado',
-            subtitulo: 'Publique o primeiro e receba entregadores na sua região.',
+            titulo: provider.turnosLojista.isEmpty
+                ? 'Nenhum turno cadastrado'
+                : 'Nenhum turno agendado',
+            subtitulo: provider.turnosLojista.isEmpty
+                ? 'Publique o primeiro e receba entregadores na sua região.'
+                : 'Seus turnos anteriores estão no histórico. Publique um novo para continuar.',
           );
         }
         return Column(
-          children: provider.turnosLojista
+          children: proximos
               .take(5)
               .map((t) => ShiftCard(
                     name: t.titulo,
