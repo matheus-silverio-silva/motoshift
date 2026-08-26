@@ -6,10 +6,15 @@ import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../avaliacao/avaliacao_screen.dart';
+import '../detalhe_turno/detalhe_turno_conteudo.dart';
+import '../../presentation/providers/turno_selecionado_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_header.dart';
-import '../../widgets/app_scaffold.dart';
+import '../../widgets/desktop/app_topbar.dart';
+import '../../widgets/desktop/master_detail.dart';
+import '../../widgets/desktop/shift_row.dart';
 import '../../widgets/section_title.dart';
 import '../../widgets/shift_card.dart';
 import '../../widgets/status_pill.dart';
@@ -112,7 +117,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         ? nome.substring(0, 2).toUpperCase()
         : nome.toUpperCase();
 
-    return AppScaffold(
+    return AdaptiveScaffold(
       header: AppHeader.greeting(
         greeting: _greeting(),
         name: nome,
@@ -138,6 +143,119 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
           );
         },
       ),
+      desktopTitle: 'Turnos disponíveis',
+      desktopSubtitle: _subtituloDesktop(context),
+      desktopSelectedRoute: AppRoutes.turnosDisponiveis,
+      desktopPrimaryAction: TopbarSecondaryButton(
+        label: _hasFilters ? 'Filtros ativos' : 'Filtrar',
+        icon: Icons.tune_rounded,
+        onTap: _abrirFiltros,
+      ),
+      desktopBody: _buildDesktop(),
+    );
+  }
+
+  // ── Desktop — master-detail ───────────────────────────────────────────────
+
+  String _subtituloDesktop(BuildContext context) {
+    final provider = context.watch<TurnoProvider>();
+    if (provider.carregando) return 'Carregando turnos…';
+    final n = provider.turnosDisponiveis.length;
+    final base = n == 1 ? '1 turno aberto' : '$n turnos abertos';
+    return _hasFilters ? '$base · filtros ativos' : base;
+  }
+
+  Widget _buildDesktop() {
+    return Consumer2<TurnoProvider, TurnoSelecionadoProvider>(
+      builder: (context, provider, selecao, _) {
+        final disponiveis = provider.turnosDisponiveis;
+        // A seleção é validada contra a lista atual: um id que veio de outra
+        // tela (ou de um turno que saiu da lista depois de aceito) não pode
+        // deixar o painel preso num turno que não está mais aqui.
+        final selecionado =
+            disponiveis.where((t) => t.id == selecao.id).firstOrNull;
+
+        return MasterDetailLayout(
+          listHeader: MasterDetailListHeader(
+            titulo: provider.carregando
+                ? 'Carregando…'
+                : '${disponiveis.length} '
+                    '${disponiveis.length == 1 ? 'turno' : 'turnos'}',
+            info: _hasFilters ? 'filtros ativos' : null,
+          ),
+          list: _buildListaDesktop(provider, disponiveis, selecao),
+          detail: selecionado == null
+              ? const MasterDetailEmpty(
+                  icon: Icons.two_wheeler_outlined,
+                  titulo: 'Selecione um turno',
+                  subtitulo:
+                      'Escolha um turno na lista ao lado para ver horário, '
+                      'raio de entrega e aceitar.',
+                )
+              : DetalheTurnoConteudo(
+                  // A key troca junto com o turno para o estado interno
+                  // (o "aceitando") não vazar de um turno para o outro.
+                  key: ValueKey(selecionado.id),
+                  turno: selecionado,
+                  desktop: true,
+                  onAceito: () {
+                    selecao.limpar();
+                    _carregar();
+                  },
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _buildListaDesktop(
+    TurnoProvider provider,
+    List<Turno> disponiveis,
+    TurnoSelecionadoProvider selecao,
+  ) {
+    if (provider.carregando) {
+      return const Center(
+        child: CircularProgressIndicator(
+            strokeWidth: 2, color: AppColors.teal),
+      );
+    }
+    if (disponiveis.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Text(
+            _hasFilters
+                ? 'Nenhum turno encontrado com esses filtros.'
+                : 'Nenhum turno disponível no momento.',
+            textAlign: TextAlign.center,
+            style: tsJakarta(12.5, FontWeight.w400, color: AppColors.muted),
+          ),
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: disponiveis.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, i) {
+        final t = disponiveis[i];
+        return ShiftRow(
+          horario: t.horarioFormatado,
+          valor: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
+          meta: '${t.titulo} · ${t.regiao} · '
+              '${t.raioEntregaKm.toStringAsFixed(0)} km',
+          icon: Icons.two_wheeler_outlined,
+          selected: t.id != null && t.id == selecao.id,
+          pillLabel: t.multiVaga
+              ? '${t.vagasRestantes} ${t.vagasRestantes == 1 ? 'vaga' : 'vagas'}'
+              : t.status.label,
+          pillVariant:
+              t.multiVaga ? PillVariant.teal : PillVariant.ghost,
+          // No desktop tocar num card só troca a seleção — o painel da
+          // direita reage. A rota /detalhe-turno não é empilhada aqui.
+          onTap: () => selecao.selecionar(t.id),
+        );
+      },
     );
   }
 

@@ -6,6 +6,7 @@ import 'data/repositories/pedido_repository_impl.dart';
 import 'presentation/providers/historico_provider.dart';
 import 'presentation/providers/pedido_provider.dart';
 import 'presentation/providers/turno_provider.dart';
+import 'presentation/providers/turno_selecionado_provider.dart';
 import 'routes/app_routes.dart';
 import 'services/api_service.dart';
 import 'services/auth_service.dart';
@@ -72,6 +73,11 @@ class MotoShiftApp extends StatelessWidget {
         ChangeNotifierProxyProvider<ApiService, TurnoProvider>(
           create: (ctx) => TurnoProvider(ctx.read<ApiService>()),
           update: (_, api, prev) => prev ?? TurnoProvider(api),
+        ),
+
+        // Seleção do master-detail (só usada em telas >= 1024px)
+        ChangeNotifierProvider<TurnoSelecionadoProvider>(
+          create: (_) => TurnoSelecionadoProvider(),
         ),
       ],
       child: MaterialApp(

@@ -16,6 +16,7 @@ class ShiftRow extends StatefulWidget {
     this.amberIcon = false,
     this.pillLabel,
     this.pillVariant = PillVariant.ghost,
+    this.selected = false,
     this.onTap,
     super.key,
   });
@@ -33,6 +34,9 @@ class ShiftRow extends StatefulWidget {
   final bool amberIcon;
   final String? pillLabel;
   final PillVariant pillVariant;
+
+  /// Item ativo do master-detail: fundo teal claro e borda destacada.
+  final bool selected;
   final VoidCallback? onTap;
 
   @override
@@ -55,10 +59,14 @@ class _ShiftRowState extends State<ShiftRow> {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: _hover ? AppColors.surface2 : AppColors.surface,
+            color: widget.selected
+                ? AppColors.tealSoft
+                : (_hover ? AppColors.surface2 : AppColors.surface),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: _hover ? AppColors.tealBright : AppColors.line,
+              color: widget.selected || _hover
+                  ? AppColors.tealBright
+                  : AppColors.line,
               width: 1.5,
             ),
           ),
@@ -68,9 +76,13 @@ class _ShiftRowState extends State<ShiftRow> {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: widget.amberIcon
-                      ? AppColors.amberSoft
-                      : AppColors.tealSoft,
+                  // Sobre o fundo teal do item ativo o quadro do ícone vira
+                  // branco, senão o ícone some no próprio fundo.
+                  color: widget.selected
+                      ? AppColors.surface
+                      : (widget.amberIcon
+                          ? AppColors.amberSoft
+                          : AppColors.tealSoft),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -117,7 +129,9 @@ class _ShiftRowState extends State<ShiftRow> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: tsJakarta(11.5, FontWeight.w400,
-                                color: AppColors.muted),
+                                color: widget.selected
+                                    ? AppColors.tealDeep
+                                    : AppColors.muted),
                           ),
                         ),
                         if (widget.pillLabel != null) ...[

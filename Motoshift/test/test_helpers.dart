@@ -26,6 +26,7 @@ import 'package:moto_shift/models/usuario.dart';
 import 'package:moto_shift/presentation/providers/historico_provider.dart';
 import 'package:moto_shift/presentation/providers/pedido_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_provider.dart';
+import 'package:moto_shift/presentation/providers/turno_selecionado_provider.dart';
 import 'package:moto_shift/services/api_service.dart';
 import 'package:moto_shift/services/auth_service.dart';
 import 'package:moto_shift/theme/app_theme.dart';
@@ -447,6 +448,7 @@ Future<void> pumpGolden(
   Object? argumentos,
   Size viewport = const Size(390, 844),
   Duration settle = const Duration(milliseconds: 600),
+  int? turnoSelecionado,
 }) async {
   // A ordem importa: `physicalSize` precisa ser calculado com o DPR final.
   // Fazendo o inverso (multiplicar pelo DPR padrão da view, 3.0, e só depois
@@ -466,11 +468,16 @@ Future<void> pumpGolden(
   final turnoProv = TurnoProvider(api);
   turnoProv.setDisponiveisExterno(fakeTurnosDisponiveis());
 
+  final selecaoProv = TurnoSelecionadoProvider();
+  if (turnoSelecionado != null) selecaoProv.selecionar(turnoSelecionado);
+
   final widgetTree = MultiProvider(
     providers: [
       Provider<ApiService>.value(value: api),
       ChangeNotifierProvider<AuthService>.value(value: auth),
       ChangeNotifierProvider<TurnoProvider>.value(value: turnoProv),
+      ChangeNotifierProvider<TurnoSelecionadoProvider>.value(
+          value: selecaoProv),
       ChangeNotifierProvider<PedidoProvider>(
         create: (_) => PedidoProvider(repo: PedidoRepositoryImpl(api)),
       ),
