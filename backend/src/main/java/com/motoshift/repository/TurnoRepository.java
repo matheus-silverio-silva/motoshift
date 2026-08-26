@@ -40,4 +40,26 @@ public interface TurnoRepository extends JpaRepository<Turno, Long> {
             @Param("usuarioId") Long usuarioId,
             @Param("inicio") LocalDateTime inicio,
             @Param("fim") LocalDateTime fim);
+
+    // ── SCRUM-18: pré-filtro geográfico ───────────────────────────────────
+    // Bounding box no banco (usa ix_turno_geo) para não carregar todos os
+    // turnos abertos na memória; o refino exato por Haversine é feito depois.
+    @Query("SELECT t FROM Turno t WHERE t.status = 'aberto' " +
+           "AND t.latitude IS NOT NULL AND t.longitude IS NOT NULL " +
+           "AND t.latitude BETWEEN :latMin AND :latMax " +
+           "AND t.longitude BETWEEN :lngMin AND :lngMax")
+    List<Turno> findAbertosNaArea(
+            @Param("latMin") double latMin, @Param("latMax") double latMax,
+            @Param("lngMin") double lngMin, @Param("lngMax") double lngMax);
+
+    // ── SCRUM-19: vencimento ──────────────────────────────────────────────
+    // Turnos ainda abertos cujo horário de início já passou.
+    List<Turno> findByStatusAndDataInicioBefore(String status, LocalDateTime limite);
+
+    // Turnos em andamento/aceitos cujo fim já passou e ninguém finalizou.
+    List<Turno> findByStatusInAndDataFimBefore(List<String> statuses, LocalDateTime limite);
+
+    // Turnos que começam dentro de uma janela (aviso de "vai vencer").
+    List<Turno> findByStatusAndDataInicioBetween(
+            String status, LocalDateTime de, LocalDateTime ate);
 }

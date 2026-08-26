@@ -48,7 +48,10 @@ public class TurnoController {
         return service.listarDisponiveis();
     }
 
-    @Operation(summary = "Listar turnos disponíveis", description = "Retorna turnos abertos com filtros opcionais de horário, dia da semana, raio e datas.")
+    @Operation(summary = "Listar turnos disponíveis",
+            description = "Turnos abertos com filtros opcionais de horário, dia da semana, "
+                    + "período e proximidade. Informe lat+lng+raioKm para filtrar por "
+                    + "distância real do usuário; a resposta traz distanciaKm em cada turno.")
     @ApiResponse(responseCode = "200", description = "Turnos disponíveis")
     @GetMapping("/disponiveis")
     public List<TurnoResponse> disponiveis(
@@ -58,14 +61,19 @@ public class TurnoController {
             @RequestParam(required = false) Double raioMaxKm,
             @RequestParam(required = false) String dataInicio,
             @RequestParam(required = false) String dataFim,
-            @RequestParam(required = false) String ordenarPor) {
+            @RequestParam(required = false) String ordenarPor,
+            // SCRUM-18: posição do usuário (GPS do app) + raio de busca em km.
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lng,
+            @RequestParam(required = false) Double raioKm) {
 
         boolean hasFilter = horarioInicio != null || horarioFim != null || diaSemana != null
-                || raioMaxKm != null || dataInicio != null || dataFim != null || ordenarPor != null;
+                || raioMaxKm != null || dataInicio != null || dataFim != null
+                || ordenarPor != null || lat != null || lng != null || raioKm != null;
 
         if (hasFilter) {
             return service.listarDisponiveisComFiltros(horarioInicio, horarioFim,
-                    diaSemana, raioMaxKm, dataInicio, dataFim, ordenarPor);
+                    diaSemana, raioMaxKm, dataInicio, dataFim, ordenarPor, lat, lng, raioKm);
         }
         return service.listarDisponiveis();
     }

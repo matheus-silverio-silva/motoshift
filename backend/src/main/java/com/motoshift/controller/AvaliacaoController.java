@@ -2,8 +2,10 @@ package com.motoshift.controller;
 
 import com.motoshift.entity.Avaliacao;
 import com.motoshift.entity.Turno;
+import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.entity.Usuario;
 import com.motoshift.repository.AvaliacaoRepository;
+import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,13 +27,16 @@ public class AvaliacaoController {
     private final AvaliacaoRepository avaliacaoRepo;
     private final TurnoRepository turnoRepo;
     private final UsuarioRepository usuarioRepo;
+    private final TurnoInscricaoRepository inscricaoRepo;
 
     public AvaliacaoController(AvaliacaoRepository avaliacaoRepo,
                                 TurnoRepository turnoRepo,
-                                UsuarioRepository usuarioRepo) {
+                                UsuarioRepository usuarioRepo,
+                                TurnoInscricaoRepository inscricaoRepo) {
         this.avaliacaoRepo = avaliacaoRepo;
         this.turnoRepo = turnoRepo;
         this.usuarioRepo = usuarioRepo;
+        this.inscricaoRepo = inscricaoRepo;
     }
 
     // ─────────────────────────────────────────────────────────
@@ -56,18 +61,24 @@ public class AvaliacaoController {
                     "Só é possível avaliar turnos finalizados.");
         }
 
-        // Valida participação
-        boolean participou = avaliadorId.equals(turno.getLojistId())
-                || avaliadorId.equals(turno.getMotoboyId());
-        if (!participou) {
+        // Valida participação do AVALIADOR.
+        // Antes só olhava turno.motoboyId; entregador que entrou por vaga extra
+        // tomava 403 e nunca conseguia avaliar.
+        if (!participou(turno, avaliadorId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Avaliador não participou deste turno.");
         }
-
-        // Valida duplicata
-        if (avaliacaoRepo.existsByTurnoIdAndAvaliadorId(turnoId, avaliadorId)) {
+        // O alvo também precisa ter participado, e ninguém avalia a si mesmo.
+        if (avaliadoId == null || avaliadorId.equals(avaliadoId) || !participou(turno, avaliadoId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Você já avaliou este turno.");
+                    "Avaliado inválido para este turno.");
+        }
+
+        // Duplicata é o TRIO. Com (turno, avaliador) o lojista de um turno
+        // multi-vaga era barrado depois de avaliar o primeiro entregador.
+        if (avaliacaoRepo.existsByTurnoIdAndAvaliadorIdAndAvaliadoId(turnoId, avaliadorId, avaliadoId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Você já avaliou este participante neste turno.");
         }
 
         // Valida nota
@@ -163,22 +174,59 @@ public class AvaliacaoController {
     // GET /api/avaliacoes/turno/{turnoId}/pendentes/{usuarioId}
     // ─────────────────────────────────────────────────────────
 
-    @Operation(summary = "Verifica se usuário precisa avaliar o turno")
+    @Operation(summary = "Quem o usuário ainda precisa avaliar neste turno",
+            description = "Em turno multi-vaga o lojista avalia cada entregador. "
+                    + "Mantém 'precisaAvaliar' por compatibilidade e acrescenta a lista 'pendentes'.")
     @GetMapping("/turno/{turnoId}/pendentes/{usuarioId}")
-    public Map<String, Boolean> pendente(@PathVariable Long turnoId,
-                                          @PathVariable Long usuarioId) {
+    public Map<String, Object> pendente(@PathVariable Long turnoId,
+                                        @PathVariable Long usuarioId) {
         Turno turno = turnoRepo.findById(turnoId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Turno não encontrado."));
 
-        boolean participou = usuarioId.equals(turno.getLojistId())
-                || usuarioId.equals(turno.getMotoboyId());
+        List<Map<String, Object>> pendentes = new ArrayList<>();
+        if (participou(turno, usuarioId) && "finalizado".equals(turno.getStatus())) {
+            for (Long alvo : alvosDeAvaliacao(turno, usuarioId)) {
+                if (avaliacaoRepo.existsByTurnoIdAndAvaliadorIdAndAvaliadoId(turnoId, usuarioId, alvo)) {
+                    continue;
+                }
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("usuarioId", alvo);
+                m.put("nome", usuarioRepo.findById(alvo).map(Usuario::getNome).orElse("Usuário"));
+                pendentes.add(m);
+            }
+        }
 
-        boolean jaAvaliou = avaliacaoRepo.existsByTurnoIdAndAvaliadorId(turnoId, usuarioId);
-        boolean precisaAvaliar = participou
-                && "finalizado".equals(turno.getStatus())
-                && !jaAvaliou;
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("precisaAvaliar", !pendentes.isEmpty());
+        resp.put("pendentes", pendentes);
+        return resp;
+    }
 
-        return Map.of("precisaAvaliar", precisaAvaliar);
+    /** Participou do turno como lojista, motoboy principal ou inscrito. */
+    private boolean participou(Turno turno, Long usuarioId) {
+        if (usuarioId == null) return false;
+        if (usuarioId.equals(turno.getLojistId())) return true;
+        if (usuarioId.equals(turno.getMotoboyId())) return true;
+        return inscricaoRepo.findByTurnoIdAndMotoboyId(turno.getId(), usuarioId)
+                .filter(i -> !"cancelado".equals(i.getStatus()))
+                .isPresent();
+    }
+
+    /** Lojista avalia todos os entregadores; entregador avalia o lojista. */
+    private List<Long> alvosDeAvaliacao(Turno turno, Long usuarioId) {
+        if (!usuarioId.equals(turno.getLojistId())) {
+            return turno.getLojistId() == null ? List.of() : List.of(turno.getLojistId());
+        }
+        List<Long> ids = inscricaoRepo.findByTurnoId(turno.getId()).stream()
+                .filter(i -> !"cancelado".equals(i.getStatus()))
+                .map(TurnoInscricao::getMotoboyId)
+                .distinct()
+                .collect(Collectors.toList());
+        // Legado: turno aceito antes do sistema de vagas não tem inscrição.
+        if (ids.isEmpty() && turno.getMotoboyId() != null) {
+            ids = List.of(turno.getMotoboyId());
+        }
+        return ids;
     }
 
     // ── Helpers ──────────────────────────────────────────────

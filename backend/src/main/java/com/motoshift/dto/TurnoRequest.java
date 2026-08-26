@@ -28,6 +28,12 @@ public class TurnoRequest {
 
     private Double raioEntregaKm;
 
+    // Ponto de partida do turno (SCRUM-18). Opcional: sem coordenada o turno
+    // continua sendo criado, só não aparece no filtro por raio.
+    private Double latitude;
+    private Double longitude;
+    private String endereco;
+
     // Número de vagas de entregador (opcional; default 1 no serviço).
     private Integer vagas;
 
@@ -54,6 +60,15 @@ public class TurnoRequest {
 
     public Double getRaioEntregaKm() { return raioEntregaKm; }
     public void setRaioEntregaKm(Double raioEntregaKm) { this.raioEntregaKm = raioEntregaKm; }
+
+    public Double getLatitude() { return latitude; }
+    public void setLatitude(Double latitude) { this.latitude = latitude; }
+
+    public Double getLongitude() { return longitude; }
+    public void setLongitude(Double longitude) { this.longitude = longitude; }
+
+    public String getEndereco() { return endereco; }
+    public void setEndereco(String endereco) { this.endereco = endereco; }
 
     public Integer getVagas() { return vagas; }
     public void setVagas(Integer vagas) { this.vagas = vagas; }
