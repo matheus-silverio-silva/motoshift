@@ -51,11 +51,13 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
       final avaliados = await api.buscarTurnosAvaliados(id);
       if (!mounted) return;
       setState(() {
-        _turnos = lista
-            .where((t) =>
-                t.status == StatusTurno.finalizado ||
-                t.status == StatusTurno.cancelado)
-            .toList()
+        // Tudo que não está mais em jogo entra no histórico — por negação,
+        // e não listando os status um a um. Quando `expirado` foi criado
+        // (SCRUM-19) a lista antiga só aceitava finalizado|cancelado, então o
+        // backend expirava o turno e ele sumia da interface: não aparecia em
+        // "Abertos", nem em "Finalizados", nem aqui. Com `!ativo` o próximo
+        // status terminal já nasce visível.
+        _turnos = lista.where((t) => !t.status.ativo).toList()
           ..sort((a, b) => b.dataInicio.compareTo(a.dataInicio));
         _turnosAvaliados = avaliados.toSet();
         _carregando = false;
@@ -99,6 +101,10 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
         return _turnos
             .where((t) => t.status == StatusTurno.cancelado)
             .toList();
+      case 'expirados':
+        return _turnos
+            .where((t) => t.status == StatusTurno.expirado)
+            .toList();
       default:
         return _turnos;
     }
@@ -113,6 +119,8 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
       .length;
   int get _qtdCancelados =>
       _turnos.where((t) => t.status == StatusTurno.cancelado).length;
+  int get _qtdExpirados =>
+      _turnos.where((t) => t.status == StatusTurno.expirado).length;
 
   double get _valorPendente => _turnos
       .where(_aguardandoPagamento)
@@ -468,8 +476,16 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
             size: StatCardSize.large,
             label: 'Cancelados',
             value: '$_qtdCancelados',
-            sub: _qtdCancelados == 0 ? 'nenhum' : 'no período',
-            subColor: _qtdCancelados > 0 ? AppColors.amber : AppColors.muted,
+            // Os expirados entram como subtexto: não cabe um quinto card no
+            // grid de 12 colunas, mas o estado precisa aparecer em algum lugar
+            // desta linha — senão volta a ser invisível.
+            sub: _qtdExpirados > 0
+                ? '+ $_qtdExpirados '
+                    '${_qtdExpirados == 1 ? 'expirado' : 'expirados'}'
+                : (_qtdCancelados == 0 ? 'nenhum' : 'no período'),
+            subColor: _qtdCancelados > 0 || _qtdExpirados > 0
+                ? AppColors.amber
+                : AppColors.muted,
           ),
         ),
         GridCol(
@@ -509,6 +525,7 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
       ('pagamento', isLojista ? 'A pagar' : 'A receber', _qtdPagamento),
       ('concluidos', 'Concluídos', _qtdConcluidos),
       ('cancelados', 'Cancelados', _qtdCancelados),
+      ('expirados', 'Expirados', _qtdExpirados),
     ];
 
     return Row(
@@ -616,11 +633,14 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
     bool isLojista,
     Widget Function(int, Widget, {bool fim}) celula,
   ) {
-    final cancelado = t.status == StatusTurno.cancelado;
+    // Cancelado e expirado terminam sem entrega e sem dinheiro trocando de
+    // mão: mesmo tratamento visual (apagado), rótulo próprio de cada um.
+    final semEntrega = t.status == StatusTurno.cancelado ||
+        t.status == StatusTurno.expirado;
     final pago = t.pagamentoStatus == PagamentoStatus.pago;
 
-    final (String rotulo, PillVariant variante) = cancelado
-        ? ('Cancelado', PillVariant.ghost)
+    final (String rotulo, PillVariant variante) = semEntrega
+        ? (t.status.label, PillVariant.ghost)
         : pago
             ? ('Pago', PillVariant.good)
             : _aguardandoPagamento(t)
@@ -650,7 +670,7 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: tsJakarta(13, FontWeight.w700,
-                          color: cancelado ? AppColors.muted : AppColors.text)),
+                          color: semEntrega ? AppColors.muted : AppColors.text)),
                   Text(
                     '${t.horarioFormatado} · '
                     '${t.raioEntregaKm.toStringAsFixed(0)} km',
@@ -682,7 +702,7 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
               Text(
                 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
                 style: tsBricolage(15, FontWeight.w800,
-                    color: cancelado ? AppColors.muted : AppColors.ink),
+                    color: semEntrega ? AppColors.muted : AppColors.ink),
               ),
               fim: true,
             ),
@@ -715,7 +735,7 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
                     color: AppColors.ink)),
             const SizedBox(height: 4),
             Text(
-              'Turnos concluídos ou cancelados aparecem aqui.',
+              'Turnos concluídos, cancelados ou expirados aparecem aqui.',
               textAlign: TextAlign.center,
               style: tsJakarta(12, FontWeight.w400,
                   color: AppColors.muted),
@@ -863,6 +883,7 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
       ('pagamento', pagamentoLabel, _qtdPagamento),
       ('concluidos', 'Concluídos', _qtdConcluidos),
       ('cancelados', 'Cancelados', _qtdCancelados),
+      ('expirados', 'Expirados', _qtdExpirados),
     ];
 
     return SingleChildScrollView(
@@ -933,9 +954,10 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
     // Determina label/cor da pill conforme estado de confirmação
     PillVariant pill;
     String pillLabel;
-    if (t.status == StatusTurno.cancelado) {
+    if (t.status == StatusTurno.cancelado ||
+        t.status == StatusTurno.expirado) {
       pill = PillVariant.ghost;
-      pillLabel = 'Cancelado';
+      pillLabel = t.status.label;
     } else if (aguardaPagto) {
       pill = PillVariant.amber;
       if (isLojista) {
@@ -1054,11 +1076,11 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(Icons.star_outline_rounded,
-                          size: 14, color: Color(0xFF9A6206)),
+                          size: 14, color: AppColors.onTertiaryContainer),
                       const SizedBox(width: 6),
                       Text('Avaliar',
                           style: tsJakarta(12, FontWeight.w700,
-                              color: const Color(0xFF9A6206))),
+                              color: AppColors.onTertiaryContainer)),
                     ],
                   ),
                 ),
