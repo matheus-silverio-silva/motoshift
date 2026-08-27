@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/carteira.dart';
-import '../../models/transacao.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
@@ -258,9 +257,15 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
                 .map((t) => LedgerRow(
                       title: t.descricao,
                       date: _formatarData(t.criadoEm),
-                      amount:
-                          '${t.tipo == TipoTransacao.saque ? '-' : '+'} R\$ ${t.valor.toStringAsFixed(2).replaceAll('.', ',')}',
-                      isCredit: t.tipo != TipoTransacao.saque,
+                      // O sinal vem do tipo, não de "é saque ou não": reserva e
+                      // pagamento enviado também saem da carteira. Tipo que o
+                      // app não conhece vai sem sinal.
+                      amount: '${switch (t.credito) {
+                        true => '+ ',
+                        false => '- ',
+                        null => '',
+                      }}R\$ ${t.valor.toStringAsFixed(2).replaceAll('.', ',')}',
+                      isCredit: t.credito,
                     ))
                 .toList(),
           ),
