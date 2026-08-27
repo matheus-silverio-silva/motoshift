@@ -12,6 +12,7 @@ import '../../services/localizacao_service.dart';
 import '../../widgets/mapa_raio.dart';
 import '../../presentation/providers/turno_selecionado_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/breakpoints.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_header.dart';
@@ -169,7 +170,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.location_off_outlined,
-              size: 20, color: Color(0xFF9A6206)),
+              size: 20, color: AppColors.onTertiaryContainer),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -179,13 +180,13 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
                 Text(
                   'Mostrando todos os turnos',
                   style: tsJakarta(12.5, FontWeight.w700,
-                      color: const Color(0xFF9A6206)),
+                      color: AppColors.onTertiaryContainer),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   _mensagemFalha,
                   style: tsJakarta(11.5, FontWeight.w400,
-                      color: const Color(0xFF9A6206), height: 1.4),
+                      color: AppColors.onTertiaryContainer, height: 1.4),
                 ),
                 const SizedBox(height: 8),
                 GestureDetector(
@@ -197,7 +198,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
                         ? 'Tentar novamente'
                         : 'Abrir configurações',
                     style: tsJakarta(12, FontWeight.w800,
-                        color: const Color(0xFF9A6206)),
+                        color: AppColors.onTertiaryContainer),
                   ),
                 ),
               ],
@@ -366,7 +367,12 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         },
       ),
       desktopTitle: 'Turnos disponíveis',
-      desktopSubtitle: _subtituloDesktop(context),
+      // O `watch` só é registrado quando o subtítulo vai mesmo ser usado. Se
+      // ficasse solto aqui, o celular — que nem tem topbar — passaria a
+      // rebuildar a tela inteira a cada notifyListeners() do provider.
+      desktopSubtitle: context.isDesktop
+          ? _subtituloDesktop(context.watch<TurnoProvider>())
+          : null,
       desktopSelectedRoute: AppRoutes.turnosDisponiveis,
       desktopPrimaryAction: TopbarSecondaryButton(
         label: _hasFilters ? 'Filtros ativos' : 'Filtrar',
@@ -379,30 +385,50 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
 
   // ── Desktop — master-detail ───────────────────────────────────────────────
 
-  String _subtituloDesktop(BuildContext context) {
-    final provider = context.watch<TurnoProvider>();
+  String _subtituloDesktop(TurnoProvider provider) {
     if (provider.carregando) return 'Carregando turnos…';
     final n = provider.turnosDisponiveis.length;
     final base = n == 1 ? '1 turno aberto' : '$n turnos abertos';
-    return _hasFilters ? '$base · filtros ativos' : base;
+
+    final aceitos = _turnosAceitos(provider).length;
+    final partes = [
+      base,
+      if (aceitos > 0) '$aceitos ${aceitos == 1 ? 'aceito' : 'aceitos'}',
+      if (_hasFilters) 'filtros ativos',
+    ];
+    return partes.join(' · ');
   }
+
+  /// Turnos que o motoboy já aceitou e ainda vão acontecer (ou estão
+  /// acontecendo) — a mesma seleção que o mobile mostra em "Meus turnos".
+  List<Turno> _turnosAceitos(TurnoProvider provider) =>
+      provider.meusTurnos.proximos();
 
   Widget _buildDesktop() {
     return Consumer2<TurnoProvider, TurnoSelecionadoProvider>(
       builder: (context, provider, selecao, _) {
         final disponiveis = provider.turnosDisponiveis;
-        // A seleção é validada contra a lista atual: um id que veio de outra
-        // tela (ou de um turno que saiu da lista depois de aceito) não pode
-        // deixar o painel preso num turno que não está mais aqui.
-        final selecionado =
-            disponiveis.where((t) => t.id == selecao.id).firstOrNull;
+        final aceitos = _turnosAceitos(provider);
+
+        // A seleção é resolvida contra os disponíveis MAIS os turnos do
+        // próprio motoboy. `turnosDisponiveis` perde o turno no instante em
+        // que ele é aceito, então quem chega aqui redirecionado de
+        // /detalhe-turno (dashboard ou histórico do desktop) apontando para um
+        // turno já aceito caía no "Selecione um turno" — o detalhe do turno
+        // que a pessoa está rodando não tinha como ser aberto no desktop.
+        // `meusTurnos` inteiro, e não só os aceitos, para o deep-link de um
+        // turno já finalizado também abrir.
+        final selecionado = [...disponiveis, ...provider.meusTurnos]
+            .where((t) => t.id != null && t.id == selecao.id)
+            .firstOrNull;
+
+        final total = disponiveis.length + aceitos.length;
 
         return MasterDetailLayout(
           listHeader: MasterDetailListHeader(
             titulo: provider.carregando
                 ? 'Carregando…'
-                : '${disponiveis.length} '
-                    '${disponiveis.length == 1 ? 'turno' : 'turnos'}',
+                : '$total ${total == 1 ? 'turno' : 'turnos'}',
             info: _porPerto
                 ? 'até ${_raioKm.toStringAsFixed(0)} km'
                 : (_hasFilters ? 'filtros ativos' : null),
@@ -422,7 +448,8 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
                 ),
               ),
               Expanded(
-                child: _buildListaDesktop(provider, disponiveis, selecao),
+                child: _buildListaDesktop(
+                    provider, disponiveis, aceitos, selecao),
               ),
             ],
           ),
@@ -450,9 +477,12 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     );
   }
 
+  /// Lista da esquerda do master-detail: os turnos já aceitos primeiro (são os
+  /// que têm ação pendente), depois os disponíveis.
   Widget _buildListaDesktop(
     TurnoProvider provider,
     List<Turno> disponiveis,
+    List<Turno> aceitos,
     TurnoSelecionadoProvider selecao,
   ) {
     if (provider.carregando) {
@@ -461,7 +491,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
             strokeWidth: 2, color: AppColors.teal),
       );
     }
-    if (disponiveis.isEmpty) {
+    if (disponiveis.isEmpty && aceitos.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(24),
         child: Center(
@@ -475,29 +505,81 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         ),
       );
     }
-    return ListView.separated(
+
+    return ListView(
       padding: const EdgeInsets.all(12),
-      itemCount: disponiveis.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, i) {
-        final t = disponiveis[i];
-        return ShiftRow(
-          horario: t.horarioFormatado,
-          valor: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
-          meta: '${t.titulo} · ${t.regiao} · '
-              '${t.distanciaKm != null ? 'a ${t.distanciaKm!.toStringAsFixed(1).replaceAll('.', ',')} km' : '${t.raioEntregaKm.toStringAsFixed(0)} km'}',
-          icon: Icons.two_wheeler_outlined,
-          selected: t.id != null && t.id == selecao.id,
-          pillLabel: t.multiVaga
-              ? '${t.vagasRestantes} ${t.vagasRestantes == 1 ? 'vaga' : 'vagas'}'
-              : t.status.label,
-          pillVariant:
-              t.multiVaga ? PillVariant.teal : PillVariant.ghost,
-          // No desktop tocar num card só troca a seleção — o painel da
-          // direita reage. A rota /detalhe-turno não é empilhada aqui.
-          onTap: () => selecao.selecionar(t.id),
-        );
-      },
+      children: [
+        if (aceitos.isNotEmpty) ...[
+          _tituloSecaoDesktop('Meus turnos'),
+          for (final t in aceitos) ...[
+            _linhaAceitaDesktop(t, selecao),
+            const SizedBox(height: 8),
+          ],
+          const SizedBox(height: 8),
+          _tituloSecaoDesktop('Disponíveis'),
+        ],
+        if (disponiveis.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Center(
+              child: Text(
+                _hasFilters
+                    ? 'Nenhum turno com esses filtros.'
+                    : 'Nenhum turno disponível no momento.',
+                textAlign: TextAlign.center,
+                style:
+                    tsJakarta(12, FontWeight.w400, color: AppColors.muted),
+              ),
+            ),
+          )
+        else
+          for (final t in disponiveis) ...[
+            _linhaDisponivelDesktop(t, selecao),
+            if (t != disponiveis.last) const SizedBox(height: 8),
+          ],
+      ],
+    );
+  }
+
+  Widget _tituloSecaoDesktop(String texto) => Padding(
+        padding: const EdgeInsets.fromLTRB(4, 2, 4, 8),
+        child: Text(
+          texto.toUpperCase(),
+          style: tsJakarta(10.5, FontWeight.w700, color: AppColors.muted)
+              .copyWith(letterSpacing: 10.5 * .08),
+        ),
+      );
+
+  Widget _linhaAceitaDesktop(Turno t, TurnoSelecionadoProvider selecao) {
+    final emAndamento = t.status == StatusTurno.emAndamento;
+    return ShiftRow(
+      horario: t.horarioFormatado,
+      valor: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
+      meta: '${t.titulo} · ${t.regiao}',
+      icon: emAndamento ? Icons.schedule_outlined : Icons.two_wheeler_outlined,
+      amberIcon: emAndamento,
+      selected: t.id != null && t.id == selecao.id,
+      pillLabel: t.status.label,
+      pillVariant: emAndamento ? PillVariant.amber : PillVariant.teal,
+      onTap: () => selecao.selecionar(t.id),
+    );
+  }
+
+  Widget _linhaDisponivelDesktop(Turno t, TurnoSelecionadoProvider selecao) {
+    return ShiftRow(
+      horario: t.horarioFormatado,
+      valor: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
+      meta: '${t.titulo} · ${t.regiao} · '
+          '${t.distanciaKm != null ? 'a ${t.distanciaKm!.toStringAsFixed(1).replaceAll('.', ',')} km' : '${t.raioEntregaKm.toStringAsFixed(0)} km'}',
+      icon: Icons.two_wheeler_outlined,
+      selected: t.id != null && t.id == selecao.id,
+      pillLabel: t.multiVaga
+          ? '${t.vagasRestantes} ${t.vagasRestantes == 1 ? 'vaga' : 'vagas'}'
+          : t.status.label,
+      pillVariant: t.multiVaga ? PillVariant.teal : PillVariant.ghost,
+      // No desktop tocar num card só troca a seleção — o painel da
+      // direita reage. A rota /detalhe-turno não é empilhada aqui.
+      onTap: () => selecao.selecionar(t.id),
     );
   }
 

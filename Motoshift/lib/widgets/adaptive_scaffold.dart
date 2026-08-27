@@ -25,6 +25,8 @@ class AdaptiveScaffold extends StatelessWidget {
     this.desktopNotificationCount = 0,
     this.desktopOnNotificationsTap,
     this.desktopSelectedRoute,
+    this.desktopShowBack,
+    this.desktopOnBack,
     super.key,
   });
 
@@ -46,6 +48,11 @@ class AdaptiveScaffold extends StatelessWidget {
   final VoidCallback? desktopOnNotificationsTap;
   final String? desktopSelectedRoute;
 
+  /// Seta de voltar na topbar. Nulo = o shell decide pelo `canPop()`, que é o
+  /// equivalente desktop do `AppHeader.back` que a tela já usa no mobile.
+  final bool? desktopShowBack;
+  final VoidCallback? desktopOnBack;
+
   @override
   Widget build(BuildContext context) {
     if (context.isDesktop && desktopTitle != null) {
@@ -57,6 +64,8 @@ class AdaptiveScaffold extends StatelessWidget {
         notificationCount: desktopNotificationCount,
         onNotificationsTap: desktopOnNotificationsTap,
         selectedRoute: desktopSelectedRoute,
+        showBack: desktopShowBack,
+        onBack: desktopOnBack,
       );
     }
     return AppScaffold(

@@ -122,7 +122,13 @@ void main() {
     expect(selecao.id, isNull, reason: 'começa sem seleção');
     expect(find.text('Selecione um turno'), findsOneWidget);
 
-    await tester.tap(find.byType(ShiftRow).first);
+    // Pelo conteúdo da linha, não pela posição: a lista da esquerda passou a
+    // ter também a seção dos turnos aceitos, e a primeira linha nem sempre é
+    // um turno disponível.
+    await tester.tap(find.ancestor(
+      of: find.textContaining(_turnoDisponivel().titulo),
+      matching: find.byType(ShiftRow),
+    ));
     await tester.pumpAndSettle();
 
     expect(selecao.id, _turnoDisponivel().id);
@@ -167,6 +173,51 @@ void main() {
     expect(espiao.rotas, contains(AppRoutes.turnosDisponiveis));
     expect(selecao.id, turno.id);
     expect(find.byType(DetalheTurnoScreen), findsNothing);
+  });
+
+  // ── Turno já aceito no desktop ─────────────────────────────────────────────
+  //
+  // `turnosDisponiveis` perde o turno no instante em que ele é aceito
+  // (turno_provider.dart). Como o master-detail resolvia a seleção só contra
+  // essa lista, o motoboy que clicasse no turno em andamento (dashboard ou
+  // histórico do desktop) caía em "Turnos disponíveis" com o painel dizendo
+  // "Selecione um turno" — o detalhe do turno que ele está rodando não tinha
+  // como ser aberto no desktop. No mobile sempre funcionou.
+
+  testWidgets('desktop: o turno já aceito aparece na lista da esquerda',
+      (tester) async {
+    final espiao = _Espiao();
+    await _montar(
+      tester,
+      tela: const MeusTurnosScreen(),
+      viewport: const Size(1440, 1024),
+      espiao: espiao,
+    );
+
+    expect(find.text('MEUS TURNOS'), findsOneWidget,
+        reason: 'a lista do desktop precisa da seção dos turnos aceitos');
+    expect(find.textContaining('Turno Ativo — Hamburgueria'), findsWidgets);
+  });
+
+  testWidgets('desktop: selecionar um turno aceito abre o painel de detalhe',
+      (tester) async {
+    final espiao = _Espiao();
+    final selecao = await _montar(
+      tester,
+      tela: const MeusTurnosScreen(),
+      viewport: const Size(1440, 1024),
+      espiao: espiao,
+    );
+
+    // 201 é o turno em andamento de fakeMeusTurnos(): está em `meusTurnos`,
+    // nunca em `turnosDisponiveis`. É exatamente o id com que /detalhe-turno
+    // redireciona para cá vindo do dashboard.
+    selecao.selecionar(201);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Selecione um turno'), findsNothing,
+        reason: 'o painel não pode ficar vazio para um turno que existe');
+    expect(find.text('Turno Ativo — Hamburgueria'), findsWidgets);
   });
 
   testWidgets('mobile: /detalhe-turno continua sendo a tela empilhada',

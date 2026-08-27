@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 
 /// Topbar desktop de 72px — fundo branco, borda inferior 1.5px na cor da linha,
-/// padding horizontal 24. Título e subtítulo à esquerda; à direita ação
-/// primária, sino de notificações com badge e avatar.
+/// padding horizontal 24. Voltar (quando há para onde), título e subtítulo à
+/// esquerda; à direita ação primária, sino de notificações com badge e avatar.
 class AppTopbar extends StatelessWidget {
   const AppTopbar({
     required this.title,
@@ -12,6 +12,7 @@ class AppTopbar extends StatelessWidget {
     this.notificationCount = 0,
     this.onNotificationsTap,
     this.avatarInitials,
+    this.onBack,
     super.key,
   });
 
@@ -26,6 +27,14 @@ class AppTopbar extends StatelessWidget {
   final VoidCallback? onNotificationsTap;
   final String? avatarInitials;
 
+  /// Seta de voltar à esquerda do título. Nula = a tela não tem para onde
+  /// voltar (é raiz), e o botão não é montado.
+  ///
+  /// O equivalente mobile é o `AppHeader.back`. Sem isto, telas empilhadas no
+  /// desktop (notificações, carteira, histórico…) viravam beco sem saída: a
+  /// única saída era a sidebar, que faz `pushReplacementNamed`.
+  final VoidCallback? onBack;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -37,6 +46,14 @@ class AppTopbar extends StatelessWidget {
       ),
       child: Row(
         children: [
+          if (onBack != null) ...[
+            _TopbarIconButton(
+              icon: Icons.arrow_back_rounded,
+              tooltip: 'Voltar',
+              onTap: onBack,
+            ),
+            const SizedBox(width: 14),
+          ],
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -95,15 +112,24 @@ class AppTopbar extends StatelessWidget {
   }
 }
 
-class _NotificationBell extends StatelessWidget {
-  const _NotificationBell({required this.count, this.onTap});
+/// Quadrado de 44px da topbar — fundo surface2, borda 1.5px, raio 12.
+/// É a moldura do sino e do voltar; [overlay] empilha o badge por cima.
+class _TopbarIconButton extends StatelessWidget {
+  const _TopbarIconButton({
+    required this.icon,
+    this.onTap,
+    this.tooltip,
+    this.overlay,
+  });
 
-  final int count;
+  final IconData icon;
   final VoidCallback? onTap;
+  final String? tooltip;
+  final Widget? overlay;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    final botao = Material(
       color: AppColors.surface2,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
@@ -119,37 +145,55 @@ class _NotificationBell extends StatelessWidget {
           ),
           child: Stack(
             children: [
-              const Center(
-                child: Icon(Icons.notifications_outlined,
-                    size: 20, color: AppColors.tealDeep),
+              Center(
+                child: Icon(icon, size: 20, color: AppColors.tealDeep),
               ),
-              if (count > 0)
-                Positioned(
-                  top: 7,
-                  right: 8,
-                  child: Container(
-                    constraints:
-                        const BoxConstraints(minWidth: 16, minHeight: 16),
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.amber,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                          color: AppColors.surface, width: 2),
-                    ),
-                    child: Center(
-                      child: Text(
-                        count > 9 ? '9+' : '$count',
-                        style: tsJakarta(9.5, FontWeight.w800,
-                            color: const Color(0xFF3A2603)),
-                      ),
-                    ),
-                  ),
-                ),
+              if (overlay != null) overlay!,
             ],
           ),
         ),
       ),
+    );
+
+    return tooltip == null ? botao : Tooltip(message: tooltip!, child: botao);
+  }
+}
+
+class _NotificationBell extends StatelessWidget {
+  const _NotificationBell({required this.count, this.onTap});
+
+  final int count;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _TopbarIconButton(
+      icon: Icons.notifications_outlined,
+      tooltip: 'Notificações',
+      onTap: onTap,
+      overlay: count == 0
+          ? null
+          : Positioned(
+              top: 7,
+              right: 8,
+              child: Container(
+                constraints:
+                    const BoxConstraints(minWidth: 16, minHeight: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.amber,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: AppColors.surface, width: 2),
+                ),
+                child: Center(
+                  child: Text(
+                    count > 9 ? '9+' : '$count',
+                    style: tsJakarta(9.5, FontWeight.w800,
+                        color: AppColors.onTertiary),
+                  ),
+                ),
+              ),
+            ),
     );
   }
 }
@@ -195,13 +239,13 @@ class TopbarPrimaryButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (icon != null) ...[
-                  Icon(icon, size: 18, color: const Color(0xFF3A2603)),
+                  Icon(icon, size: 18, color: AppColors.onTertiary),
                   const SizedBox(width: 8),
                 ],
                 Text(
                   label,
                   style: tsJakarta(13.5, FontWeight.w700,
-                      color: const Color(0xFF3A2603)),
+                      color: AppColors.onTertiary),
                 ),
               ],
             ),

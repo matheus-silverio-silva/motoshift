@@ -19,6 +19,8 @@ class DesktopShell extends StatelessWidget {
     this.notificationCount = 0,
     this.onNotificationsTap,
     this.selectedRoute,
+    this.showBack,
+    this.onBack,
     super.key,
   });
 
@@ -32,6 +34,15 @@ class DesktopShell extends StatelessWidget {
   /// Rota destacada na sidebar; por padrão usa a rota atual do Navigator.
   final String? selectedRoute;
 
+  /// Mostra a seta de voltar na topbar. Nulo = decide sozinho, pelo
+  /// `Navigator.canPop()` — que é exatamente a pergunta "tem para onde
+  /// voltar?". Telas de raiz (dashboards, itens de sidebar alcançados por
+  /// `pushReplacementNamed`) não podem dar pop, então não ganham a seta.
+  final bool? showBack;
+
+  /// Substitui o `Navigator.maybePop` padrão.
+  final VoidCallback? onBack;
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
@@ -42,6 +53,8 @@ class DesktopShell extends StatelessWidget {
         ehLojista ? SidebarItems.lojista() : SidebarItems.motoboy();
     final rotaAtual =
         selectedRoute ?? ModalRoute.of(context)?.settings.name;
+
+    final podeVoltar = showBack ?? Navigator.of(context).canPop();
 
     return Scaffold(
       backgroundColor: AppColors.surface2,
@@ -62,6 +75,9 @@ class DesktopShell extends StatelessWidget {
                   title: title,
                   subtitle: subtitle,
                   primaryAction: primaryAction,
+                  onBack: podeVoltar
+                      ? (onBack ?? () => Navigator.maybePop(context))
+                      : null,
                   // A contagem vem do provider quando a tela não informa uma
                   // própria — assim o sino tem badge em toda tela do desktop.
                   notificationCount: notificationCount > 0
