@@ -268,6 +268,7 @@ class TurnoInfoCard extends StatelessWidget {
         StatusTurno.emAndamento => AppColors.teal,
         StatusTurno.finalizado => AppColors.good,
         StatusTurno.cancelado => AppColors.error,
+        StatusTurno.expirado => AppColors.muted,
       };
 }
 

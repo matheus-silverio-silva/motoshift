@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:moto_shift/models/turno.dart';
+import 'package:moto_shift/presentation/providers/notificacao_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_selecionado_provider.dart';
 import 'package:moto_shift/routes/app_routes.dart';
@@ -21,6 +22,7 @@ import 'package:moto_shift/theme/app_theme.dart';
 import 'package:moto_shift/views/detalhe_turno/detalhe_turno_screen.dart';
 import 'package:moto_shift/views/meus_turnos/meus_turnos_screen.dart';
 import 'package:moto_shift/widgets/desktop/shift_row.dart';
+import 'package:moto_shift/widgets/shift_card.dart';
 
 import '../test_helpers.dart';
 
@@ -67,6 +69,9 @@ Future<TurnoSelecionadoProvider> _montar(
         ChangeNotifierProvider<AuthService>.value(value: auth),
         ChangeNotifierProvider<TurnoProvider>.value(value: turnos),
         ChangeNotifierProvider<TurnoSelecionadoProvider>.value(value: selecao),
+        ChangeNotifierProvider<NotificacaoProvider>(
+          create: (_) => NotificacaoProvider(api),
+        ),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -123,7 +128,7 @@ void main() {
     expect(selecao.id, _turnoDisponivel().id);
     expect(espiao.rotas, isNot(contains(AppRoutes.detalheTurno)),
         reason: 'no desktop o detalhe não é uma rota empilhada');
-    // O painel direito reagiu: o título do turno agora aparece nele.
+    // O painel direito reagiu: o cabeçalho do detalhe traz o título do turno.
     expect(find.text(_turnoDisponivel().titulo), findsWidgets);
     expect(find.text('Selecione um turno'), findsNothing);
   });
@@ -137,7 +142,9 @@ void main() {
       espiao: espiao,
     );
 
-    await tester.tap(find.text(_turnoDisponivel().titulo).first);
+    // Por widget, não por texto: o refinamento da Fase 5 juntou título e
+    // região numa linha só, então o título deixou de ser um Text isolado.
+    await tester.tap(find.byType(ShiftCard).first);
     await tester.pumpAndSettle();
 
     expect(espiao.rotas, contains(AppRoutes.detalheTurno));

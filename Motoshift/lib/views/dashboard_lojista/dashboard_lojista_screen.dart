@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/turno.dart';
+import '../../presentation/providers/notificacao_provider.dart';
 import '../../presentation/providers/turno_provider.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
@@ -55,6 +56,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
     if (mounted) setState(() => _loadingDash = false);
 
     turnoProvider.carregarTurnosLojista(id);
+    if (mounted) context.read<NotificacaoProvider>().carregarContagem(id);
   }
 
   String _greeting() {
@@ -121,6 +123,9 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
         greeting: _greeting(),
         name: nome,
         avatarInitials: initials,
+        notificacoes: context.watch<NotificacaoProvider>().naoLidas,
+        onNotificacoes: () =>
+            Navigator.pushNamed(context, AppRoutes.notificacoes),
       ),
       bottomNav: AppBottomNav(
         userType: UserType.lojista,
@@ -432,9 +437,9 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
               .take(5)
               .map(
                 (t) => ShiftCard(
+                  horario: t.horarioFormatado,
                   name: t.titulo,
                   meta: [
-                    t.horarioFormatado,
                     t.regiao,
                     '${t.raioEntregaKm.toStringAsFixed(0)} km',
                   ],

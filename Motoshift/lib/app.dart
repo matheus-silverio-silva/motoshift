@@ -7,6 +7,7 @@ import 'presentation/providers/historico_provider.dart';
 import 'presentation/providers/pedido_provider.dart';
 import 'presentation/providers/turno_provider.dart';
 import 'presentation/providers/turno_selecionado_provider.dart';
+import 'presentation/providers/notificacao_provider.dart';
 import 'routes/app_routes.dart';
 import 'services/api_service.dart';
 import 'services/auth_service.dart';
@@ -31,6 +32,9 @@ import 'views/dados_pessoais/dados_pessoais_screen.dart';
 import 'views/cnh_veiculo/cnh_veiculo_screen.dart';
 import 'views/minhas_avaliacoes/minhas_avaliacoes_screen.dart';
 import 'views/historico_turnos/historico_turnos_screen.dart';
+import 'views/notificacoes/notificacoes_screen.dart';
+import 'views/saldo_lojista/saldo_lojista_screen.dart';
+import 'views/avaliar_entregadores/avaliar_entregadores_screen.dart';
 import 'views/stubs/stub_screens.dart';
 import 'widgets/auth_guard.dart';
 import 'models/usuario.dart';
@@ -78,6 +82,12 @@ class MotoShiftApp extends StatelessWidget {
         // Seleção do master-detail (só usada em telas >= 1024px)
         ChangeNotifierProvider<TurnoSelecionadoProvider>(
           create: (_) => TurnoSelecionadoProvider(),
+        ),
+
+        // Notificações (RF09) — lista e badge do sino
+        ChangeNotifierProxyProvider<ApiService, NotificacaoProvider>(
+          create: (ctx) => NotificacaoProvider(ctx.read<ApiService>()),
+          update: (_, api, prev) => prev ?? NotificacaoProvider(api),
         ),
       ],
       child: MaterialApp(
@@ -140,6 +150,14 @@ class MotoShiftApp extends StatelessWidget {
           AppRoutes.agenda:    (_) => const AuthGuard(child: AgendaScreen()),
           AppRoutes.avaliacao: (_) => const AuthGuard(child: AvaliacaoScreen()),
           AppRoutes.perfil:    (_) => const AuthGuard(child: PerfilScreen()),
+          AppRoutes.notificacoes:
+              (_) => const AuthGuard(child: NotificacoesScreen()),
+          AppRoutes.saldoLojista: (_) => const AuthGuard(
+                papel: TipoUsuario.lojista,
+                child: SaldoLojistaScreen(),
+              ),
+          AppRoutes.avaliarEntregadores:
+              (_) => const AuthGuard(child: AvaliarEntregadoresScreen()),
 
           // ── Perfil — sub-páginas (qualquer autenticado) ───────────────────
           AppRoutes.dadosPessoais:    (_) => const AuthGuard(child: DadosPessoaisScreen()),

@@ -150,9 +150,9 @@ class _TurnosLojistaListaScreenState
                       )
                     else
                       ...filtrados.map((t) => ShiftCard(
+                            horario: t.horarioFormatado,
                             name: t.titulo,
                             meta: [
-                              t.horarioFormatado,
                               t.regiao,
                               '${t.raioEntregaKm.toStringAsFixed(0)} km',
                             ],

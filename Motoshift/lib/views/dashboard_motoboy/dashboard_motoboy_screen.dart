@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/turno.dart';
+import '../../presentation/providers/notificacao_provider.dart';
 import '../../presentation/providers/turno_provider.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
@@ -55,6 +56,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
     if (id == null) return;
 
     context.read<TurnoProvider>().carregarMeusTurnos(id);
+    context.read<NotificacaoProvider>().carregarContagem(id);
 
     try {
       final data = await api.dashboardMotoboy(id);
@@ -102,6 +104,9 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
         greeting: _greeting(),
         name: nome,
         avatarInitials: initials,
+        notificacoes: context.watch<NotificacaoProvider>().naoLidas,
+        onNotificacoes: () =>
+            Navigator.pushNamed(context, AppRoutes.notificacoes),
       ),
       bottomNav: AppBottomNav(
         userType: UserType.motoboy,
@@ -437,8 +442,9 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
         return Column(
           children: aceitos
               .map((t) => ShiftCard(
+                    horario: t.horarioFormatado,
                     name: t.titulo,
-                    meta: [t.horarioFormatado, t.regiao],
+                    meta: [t.regiao],
                     value: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
                     iconData: Icons.two_wheeler_rounded,
                     pillLabel: t.status.label,

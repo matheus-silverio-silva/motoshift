@@ -366,6 +366,9 @@ class ApiService {
     String? dataInicio,
     String? dataFim,
     String? ordenarPor,
+    double? lat,
+    double? lng,
+    double? raioKm,
   }) async {
     final params = <String, String>{};
     if (horarioInicio != null) params['horarioInicio'] = horarioInicio;
@@ -375,6 +378,11 @@ class ApiService {
     if (dataInicio != null) params['dataInicio'] = dataInicio;
     if (dataFim != null) params['dataFim'] = dataFim;
     if (ordenarPor != null) params['ordenarPor'] = ordenarPor;
+    // lat+lng+raioKm ligam o filtro por distância real; a resposta passa a
+    // trazer distanciaKm em cada turno.
+    if (lat != null) params['lat'] = lat.toString();
+    if (lng != null) params['lng'] = lng.toString();
+    if (raioKm != null) params['raioKm'] = raioKm.toString();
 
     final query = params.isEmpty
         ? ''
@@ -384,6 +392,60 @@ class ApiService {
     return list
         .map((e) => Turno.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  // --------------------------------------------------------
+  // NOTIFICAÇÕES — /api/notificacoes  (RF09 / SCRUM-20)
+  // --------------------------------------------------------
+
+  /// Lista as notificações do usuário. Cada item traz id, tipo, titulo,
+  /// mensagem, referenciaTipo, referenciaId, lida e criadoEm.
+  Future<List<Map<String, dynamic>>> listarNotificacoes(
+    int usuarioId, {
+    bool apenasNaoLidas = false,
+  }) async {
+    final query = '/notificacoes?usuarioId=$usuarioId'
+        '${apenasNaoLidas ? '&apenasNaoLidas=true' : ''}';
+    final list = await _get(query) as List<dynamic>;
+    return list.map((e) => (e as Map).cast<String, dynamic>()).toList();
+  }
+
+  /// Contagem de não lidas — alimenta o badge do sino.
+  Future<int> contarNotificacoesNaoLidas(int usuarioId) async {
+    final data =
+        await _get('/notificacoes/contagem?usuarioId=$usuarioId')
+            as Map<String, dynamic>;
+    return (data['naoLidas'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<void> marcarNotificacaoLida(int id) async {
+    await _put('/notificacoes/$id/lida', const {});
+  }
+
+  Future<int> marcarTodasNotificacoesLidas(int usuarioId) async {
+    final data = await _put(
+        '/notificacoes/marcar-todas-lidas?usuarioId=$usuarioId', const {});
+    return ((data as Map)['atualizadas'] as num?)?.toInt() ?? 0;
+  }
+
+  // --------------------------------------------------------
+  // AVALIAÇÕES PENDENTES DO TURNO
+  // GET /api/avaliacoes/turno/{turnoId}/pendentes/{usuarioId}
+  // --------------------------------------------------------
+
+  /// Devolve `precisaAvaliar` e a lista `pendentes` de `{usuarioId, nome}` —
+  /// um turno multi-vaga tem um pendente por entregador.
+  Future<({bool precisaAvaliar, List<Map<String, dynamic>> pendentes})>
+      buscarAvaliacoesPendentes(int turnoId, int usuarioId) async {
+    final data = await _get('/avaliacoes/turno/$turnoId/pendentes/$usuarioId')
+        as Map<String, dynamic>;
+    final lista = (data['pendentes'] as List<dynamic>? ?? [])
+        .map((e) => (e as Map).cast<String, dynamic>())
+        .toList();
+    return (
+      precisaAvaliar: data['precisaAvaliar'] == true,
+      pendentes: lista,
+    );
   }
 
   // --------------------------------------------------------

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
+import '../../presentation/providers/notificacao_provider.dart';
 import '../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
@@ -61,8 +62,14 @@ class DesktopShell extends StatelessWidget {
                   title: title,
                   subtitle: subtitle,
                   primaryAction: primaryAction,
-                  notificationCount: notificationCount,
-                  onNotificationsTap: onNotificationsTap,
+                  // A contagem vem do provider quando a tela não informa uma
+                  // própria — assim o sino tem badge em toda tela do desktop.
+                  notificationCount: notificationCount > 0
+                      ? notificationCount
+                      : context.watch<NotificacaoProvider>().naoLidas,
+                  onNotificationsTap: onNotificationsTap ??
+                      () => Navigator.pushNamed(
+                          context, AppRoutes.notificacoes),
                   avatarInitials: _iniciais(usuario?.nome),
                 ),
                 Expanded(child: body),

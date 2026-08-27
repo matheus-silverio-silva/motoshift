@@ -967,8 +967,9 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
       child: Column(
         children: [
           ShiftCard(
+            horario: dataFmt,
             name: t.titulo,
-            meta: [dataFmt, t.regiao],
+            meta: [t.regiao],
             value: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
             iconData: isLojista
                 ? Icons.store_outlined

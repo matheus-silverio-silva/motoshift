@@ -5,8 +5,11 @@ import '../../presentation/providers/turno_provider.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import 'package:latlong2/latlong.dart';
 import '../avaliacao/avaliacao_screen.dart';
 import '../detalhe_turno/detalhe_turno_conteudo.dart';
+import '../../services/localizacao_service.dart';
+import '../../widgets/mapa_raio.dart';
 import '../../presentation/providers/turno_selecionado_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
@@ -15,6 +18,7 @@ import '../../widgets/app_header.dart';
 import '../../widgets/desktop/app_topbar.dart';
 import '../../widgets/desktop/master_detail.dart';
 import '../../widgets/desktop/shift_row.dart';
+import '../../widgets/empty_state.dart';
 import '../../widgets/section_title.dart';
 import '../../widgets/shift_card.dart';
 import '../../widgets/status_pill.dart';
@@ -32,6 +36,18 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
   int? _fDiaSemana;
   double? _fRaioMax;
   String _fOrdenarPor = 'valorAsc';
+
+  // ── Filtro por raio (tela 18) ────────────────────────────────────────────
+  double? _lat;
+  double? _lng;
+  double _raioKm = 8;
+  bool _buscandoLocalizacao = false;
+
+  /// Motivo de não ter localização. Fica visível na tela — sem posição a lista
+  /// não é "vazia", ela é "não sei onde você está".
+  FalhaLocalizacao? _falhaLocalizacao;
+
+  bool get _porPerto => _lat != null && _lng != null;
 
   bool get _hasFilters =>
       _fHorarioInicio != null ||
@@ -60,14 +76,21 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     final api = context.read<ApiService>();
     final provider = context.read<TurnoProvider>();
 
-    if (_hasFilters) {
+    if (_hasFilters || _porPerto) {
       try {
         final lista = await api.listarTurnosDisponiveisComFiltros(
           horarioInicio: _fHorarioInicio,
           horarioFim: _fHorarioFim,
           diaSemana: _fDiaSemana,
           raioMaxKm: _fRaioMax,
-          ordenarPor: _fOrdenarPor == 'valorAsc' ? null : _fOrdenarPor,
+          // Com lat+lng+raioKm o backend filtra por distância real e devolve
+          // distanciaKm em cada turno.
+          lat: _lat,
+          lng: _lng,
+          raioKm: _porPerto ? _raioKm : null,
+          ordenarPor: _porPerto
+              ? 'distanciaAsc'
+              : (_fOrdenarPor == 'valorAsc' ? null : _fOrdenarPor),
         );
         provider.setDisponiveisExterno(lista);
       } catch (_) {
@@ -76,6 +99,199 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     } else {
       provider.carregarDisponiveis();
     }
+  }
+
+  // ── Filtro por raio (tela 18) ────────────────────────────────────────────
+
+  Future<void> _ativarPorPerto() async {
+    setState(() {
+      _buscandoLocalizacao = true;
+      _falhaLocalizacao = null;
+    });
+
+    const servico = LocalizacaoService();
+    final resultado = await servico.posicaoAtual();
+    if (!mounted) return;
+
+    setState(() {
+      _buscandoLocalizacao = false;
+      if (resultado.temPosicao) {
+        _lat = resultado.latitude;
+        _lng = resultado.longitude;
+      } else {
+        _falhaLocalizacao = resultado.falha;
+      }
+    });
+
+    if (resultado.temPosicao) _carregarDisponiveis();
+  }
+
+  void _desativarPorPerto() {
+    setState(() {
+      _lat = null;
+      _lng = null;
+      _falhaLocalizacao = null;
+    });
+    _carregarDisponiveis();
+  }
+
+  String get _mensagemFalha => switch (_falhaLocalizacao) {
+        FalhaLocalizacao.permissaoNegada =>
+          'Sem permissão de localização, não dá para ordenar por distância. '
+              'Você pode permitir e tentar de novo.',
+        FalhaLocalizacao.permissaoNegadaParaSempre =>
+          'A permissão de localização está bloqueada para o app. Libere nas '
+              'configurações do sistema para filtrar por raio.',
+        FalhaLocalizacao.servicoDesligado =>
+          'A localização do aparelho está desligada. Ligue o GPS para filtrar '
+              'por raio.',
+        _ => 'Não foi possível obter sua localização agora.',
+      };
+
+  /// Faixa que aparece quando o usuário pediu "perto de mim" e não deu certo.
+  /// Deixa explícito que a lista não está filtrada — em vez de mostrar um mapa
+  /// vazio ou uma lista que parece filtrada e não está.
+  Widget _buildFalhaLocalizacao() {
+    final podeTentarDeNovo =
+        _falhaLocalizacao == FalhaLocalizacao.permissaoNegada ||
+            _falhaLocalizacao == FalhaLocalizacao.servicoDesligado ||
+            _falhaLocalizacao == FalhaLocalizacao.erro;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.amberSoft,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: AppColors.amber.withOpacity(0.4), width: 1.5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.location_off_outlined,
+              size: 20, color: Color(0xFF9A6206)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Mostrando todos os turnos',
+                  style: tsJakarta(12.5, FontWeight.w700,
+                      color: const Color(0xFF9A6206)),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _mensagemFalha,
+                  style: tsJakarta(11.5, FontWeight.w400,
+                      color: const Color(0xFF9A6206), height: 1.4),
+                ),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: podeTentarDeNovo
+                      ? _ativarPorPerto
+                      : () => const LocalizacaoService().abrirConfiguracoes(),
+                  child: Text(
+                    podeTentarDeNovo
+                        ? 'Tentar novamente'
+                        : 'Abrir configurações',
+                    style: tsJakarta(12, FontWeight.w800,
+                        color: const Color(0xFF9A6206)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Controle de raio: liga/desliga o "perto de mim" e ajusta a distância.
+  Widget _buildControleRaio() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: _porPerto ? AppColors.teal : AppColors.line,
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                _porPerto
+                    ? Icons.my_location_rounded
+                    : Icons.location_searching_rounded,
+                size: 18,
+                color: _porPerto ? AppColors.teal : AppColors.muted,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _porPerto ? 'Perto de mim' : 'Filtrar por distância',
+                  style: tsJakarta(12.5, FontWeight.w700,
+                      color: _porPerto ? AppColors.tealDeep : AppColors.text),
+                ),
+              ),
+              if (_buscandoLocalizacao)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: AppColors.teal),
+                )
+              else
+                Switch(
+                  value: _porPerto,
+                  activeColor: AppColors.teal,
+                  onChanged: (v) =>
+                      v ? _ativarPorPerto() : _desativarPorPerto(),
+                ),
+            ],
+          ),
+          if (_porPerto) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: AppColors.teal,
+                      inactiveTrackColor: AppColors.surface3,
+                      thumbColor: AppColors.teal,
+                      trackHeight: 3,
+                    ),
+                    child: Slider(
+                      value: _raioKm,
+                      min: 1,
+                      max: 30,
+                      divisions: 29,
+                      onChanged: (v) => setState(() => _raioKm = v),
+                      onChangeEnd: (_) => _carregarDisponiveis(),
+                    ),
+                  ),
+                ),
+                Text('${_raioKm.toStringAsFixed(0)} km',
+                    style: tsJakarta(12, FontWeight.w700,
+                        color: AppColors.teal)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            MapaRaio(
+              centro: LatLng(_lat!, _lng!),
+              raioKm: _raioKm,
+              height: 150,
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   void _limparFiltros() {
@@ -133,6 +349,12 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
             children: [
+              _buildControleRaio(),
+              if (_falhaLocalizacao != null) ...[
+                const SizedBox(height: 12),
+                _buildFalhaLocalizacao(),
+              ],
+              const SizedBox(height: 4),
               _buildDisponiveisSection(provider, auth),
               // Turnos em andamento
               if (!provider.carregando) ...[
@@ -181,9 +403,29 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
                 ? 'Carregando…'
                 : '${disponiveis.length} '
                     '${disponiveis.length == 1 ? 'turno' : 'turnos'}',
-            info: _hasFilters ? 'filtros ativos' : null,
+            info: _porPerto
+                ? 'até ${_raioKm.toStringAsFixed(0)} km'
+                : (_hasFilters ? 'filtros ativos' : null),
           ),
-          list: _buildListaDesktop(provider, disponiveis, selecao),
+          list: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                child: Column(
+                  children: [
+                    _buildControleRaio(),
+                    if (_falhaLocalizacao != null) ...[
+                      const SizedBox(height: 12),
+                      _buildFalhaLocalizacao(),
+                    ],
+                  ],
+                ),
+              ),
+              Expanded(
+                child: _buildListaDesktop(provider, disponiveis, selecao),
+              ),
+            ],
+          ),
           detail: selecionado == null
               ? const MasterDetailEmpty(
                   icon: Icons.two_wheeler_outlined,
@@ -243,7 +485,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
           horario: t.horarioFormatado,
           valor: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
           meta: '${t.titulo} · ${t.regiao} · '
-              '${t.raioEntregaKm.toStringAsFixed(0)} km',
+              '${t.distanciaKm != null ? 'a ${t.distanciaKm!.toStringAsFixed(1).replaceAll('.', ',')} km' : '${t.raioEntregaKm.toStringAsFixed(0)} km'}',
           icon: Icons.two_wheeler_outlined,
           selected: t.id != null && t.id == selecao.id,
           pillLabel: t.multiVaga
@@ -334,19 +576,27 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
               ),
             ),
           ),
-        if (provider.turnosDisponiveis.isEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 28),
+        if (provider.carregando)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
             child: Center(
-              child: Text(
-                _hasFilters
-                    ? 'Nenhum turno encontrado com esses filtros.'
-                    : 'Nenhum turno disponível no momento.',
-                textAlign: TextAlign.center,
-                style: tsJakarta(12, FontWeight.w400,
-                    color: AppColors.muted),
-              ),
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: AppColors.teal),
             ),
+          )
+        else if (provider.turnosDisponiveis.isEmpty)
+          EmptyState(
+            icon: _hasFilters || _porPerto
+                ? Icons.filter_alt_off_outlined
+                : Icons.two_wheeler_outlined,
+            titulo: _hasFilters || _porPerto
+                ? 'Nenhum turno encontrado'
+                : 'Nenhum turno disponível',
+            subtitulo: _porPerto
+                ? 'Aumente o raio ou desligue o filtro por distância.'
+                : _hasFilters
+                    ? 'Tente afrouxar os filtros para ver mais turnos.'
+                    : 'Assim que um lojista publicar, ele aparece aqui.',
           )
         else
           ...provider.turnosDisponiveis
@@ -359,36 +609,28 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
   Widget _buildDisponivelCard(
       Turno turno, TurnoProvider provider, AuthService auth) {
     return ShiftCard(
+      horario: turno.horarioFormatado,
       name: turno.titulo,
       meta: [
-        turno.horarioFormatado,
         turno.regiao,
-        '${turno.raioEntregaKm.toStringAsFixed(0)} km',
+        // distanciaKm só vem quando a busca foi por raio; fora disso mostra o
+        // raio de entrega do turno, como sempre mostrou.
+        if (turno.distanciaKm != null)
+          'a ${turno.distanciaKm!.toStringAsFixed(1).replaceAll('.', ',')} km'
+        else
+          '${turno.raioEntregaKm.toStringAsFixed(0)} km',
         if (turno.multiVaga)
           '${turno.vagasRestantes} de ${turno.vagas} vagas',
       ],
       value: 'R\$ ${turno.valorEstimado.toStringAsFixed(0)}',
       iconData: Icons.two_wheeler_outlined,
-      trailing: GestureDetector(
-        onTap: () => Navigator.pushNamed(
-          context,
-          AppRoutes.detalheTurno,
-          arguments: turno,
-        ),
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            gradient: AppColors.primaryGradient,
-            borderRadius: BorderRadius.circular(9),
-          ),
-          child: Text(
-            'Ver',
-            style: tsJakarta(10, FontWeight.w700,
-                color: Colors.white),
-          ),
-        ),
-      ),
+      // O chip "Ver" saiu: ele abria exatamente o que o toque no card já abre,
+      // e com 24px de altura ficava abaixo do alvo mínimo de 44px. A pílula de
+      // vagas ocupa o lugar e informa mais.
+      pillLabel: turno.multiVaga
+          ? '${turno.vagasRestantes} ${turno.vagasRestantes == 1 ? 'vaga' : 'vagas'}'
+          : null,
+      pillVariant: PillVariant.teal,
       onTap: () => Navigator.pushNamed(
         context,
         AppRoutes.detalheTurno,
@@ -427,11 +669,9 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
           ...proximos
               .take(3)
               .map((t) => ShiftCard(
+                    horario: _formatProximoData(t.dataInicio, t.dataFim),
                     name: t.titulo,
-                    meta: [
-                      _formatProximoData(t.dataInicio, t.dataFim),
-                      t.regiao,
-                    ],
+                    meta: [t.regiao],
                     value:
                         'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
                     iconData: Icons.schedule_outlined,
