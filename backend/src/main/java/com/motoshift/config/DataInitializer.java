@@ -96,10 +96,10 @@ public class DataInitializer implements CommandLineRunner {
 
         // ── Carteiras ────────────────────────────────────────────────────────
 
-        criarCarteira(ricardo.getId(), 320.00, 220.00, "ricardo@pix.com");
-        criarCarteira(lucas.getId(), 150.00, 110.00, "lucas@pix.com");
-        criarCarteira(thiago.getId(), 80.00, 120.00, null);
-        criarCarteira(motoboyOriginal.getId(), 0.00, 0.00, null);
+        criarCarteira(ricardo.getId(), 320.00, "ricardo@pix.com");
+        criarCarteira(lucas.getId(), 150.00, "lucas@pix.com");
+        criarCarteira(thiago.getId(), 80.00, null);
+        criarCarteira(motoboyOriginal.getId(), 0.00, null);
 
         // ── Datas auxiliares ─────────────────────────────────────────────────
 
@@ -326,7 +326,7 @@ public class DataInitializer implements CommandLineRunner {
 
     // O parametro "ganhos" nao e mais gravado: ganho do mes passou a ser
     // derivado das transacoes de seed, nao de um contador na carteira.
-    private void criarCarteira(Long usuarioId, double saldo, double ganhos, String pix) {
+    private void criarCarteira(Long usuarioId, double saldo, String pix) {
         Carteira c = new Carteira();
         c.setUsuarioId(usuarioId);
         c.setSaldoDisponivel(BigDecimal.valueOf(saldo));

@@ -8,6 +8,7 @@ import com.motoshift.entity.Usuario;
 import com.motoshift.repository.UsuarioRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -40,6 +41,13 @@ public class AuthService {
         this.carteiras = carteiras;
     }
 
+    /**
+     * Cadastro. Transacional porque grava duas coisas: o usuario e a carteira
+     * dele. Sem isso, uma falha na criacao da carteira deixava o usuario
+     * gravado e sem carteira — e o retry do cadastro respondia "E-mail ja
+     * cadastrado", com a pessoa presa sem conseguir nem entrar nem repetir.
+     */
+    @Transactional
     public AuthResponse registrar(RegistroRequest req) {
         if (repo.existsByEmail(req.getEmail())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "E-mail já cadastrado");
