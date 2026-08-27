@@ -39,7 +39,7 @@ void main() {
       find.byType(MeusTurnosScreen),
       matchesGoldenFile('goldens/meus_turnos_screen.png'),
     );
-  }, skip: true); // Timer HTTP do retry de socket fica pendente após dispose
+  });
 
   testWidgets('CarteiraScreen', (tester) async {
     await pumpGolden(tester, child: const CarteiraScreen());
@@ -91,12 +91,17 @@ void main() {
   });
 
   testWidgets('HistoricoTurnosScreen (motoboy)', (tester) async {
-    await pumpGolden(tester, child: const HistoricoTurnosScreen());
+    // Data fixa — ver a nota em lojista_screens_test.dart.
+    await pumpGolden(
+      tester,
+      child: const HistoricoTurnosScreen(),
+      apiFake: FakeApiHistorico(),
+    );
     await expectLater(
       find.byType(HistoricoTurnosScreen),
       matchesGoldenFile('goldens/historico_turnos_motoboy.png'),
     );
-  }, skip: true); // Timer HTTP do retry de socket fica pendente após dispose
+  });
 
   testWidgets('DetalheTurnoScreen', (tester) async {
     final turno = Turno(

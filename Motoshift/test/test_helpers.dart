@@ -510,6 +510,69 @@ class FakeApiService extends ApiService {
           (precisaAvaliar: false, pendentes: <Map<String, dynamic>>[]);
 }
 
+/// Turnos encerrados com data ABSOLUTA, para as telas de histórico.
+///
+/// Os demais fakes se ancoram em `hojeAncorado()` de propósito: as telas de
+/// turno filtram por "ainda vai acontecer", e isso só funciona com datas
+/// relativas a hoje. O histórico é o oposto — ele só mostra turnos encerrados
+/// e imprime a data em dd/MM/yyyy. Com fixture relativa, o golden dele mudaria
+/// de dia junto com o calendário e a suíte amanheceria vermelha sozinha.
+List<Turno> fakeTurnosEncerradosFixos() {
+  final base = DateTime(2026, 8, 19); // mesmo dia do dataAncoraGolden
+  return [
+    Turno(
+      id: 401,
+      lojistId: 2,
+      motoboyId: 1,
+      titulo: 'Turno Concluído — pendente pagamento',
+      regiao: 'Água Verde, Curitiba',
+      dataInicio: base.subtract(const Duration(days: 3)),
+      dataFim: base.subtract(const Duration(days: 3)).add(const Duration(hours: 4)),
+      valorEstimado: 125,
+      raioEntregaKm: 8,
+      status: StatusTurno.finalizado,
+      pagamentoStatus: PagamentoStatus.pendente,
+    ),
+    Turno(
+      id: 402,
+      lojistId: 2,
+      motoboyId: 1,
+      titulo: 'Turno Concluído — Hamburgueria',
+      regiao: 'Água Verde, Curitiba',
+      dataInicio: base.subtract(const Duration(days: 7)),
+      dataFim: base.subtract(const Duration(days: 7)).add(const Duration(hours: 4)),
+      valorEstimado: 120,
+      raioEntregaKm: 8,
+      status: StatusTurno.finalizado,
+      pagamentoStatus: PagamentoStatus.pago,
+      lojistaConfirmouEm: base.subtract(const Duration(days: 7)),
+      motoboyConfirmouEm: base.subtract(const Duration(days: 7)),
+    ),
+    Turno(
+      id: 403,
+      lojistId: 2,
+      titulo: 'Turno sem candidato',
+      regiao: 'Batel, Curitiba',
+      dataInicio: base.subtract(const Duration(days: 5)),
+      dataFim: base.subtract(const Duration(days: 5)).add(const Duration(hours: 4)),
+      valorEstimado: 150,
+      raioEntregaKm: 5,
+      status: StatusTurno.expirado,
+    ),
+  ];
+}
+
+/// Fake para os goldens de histórico: datas fixas nas duas listagens.
+class FakeApiHistorico extends FakeApiService {
+  @override
+  Future<List<Turno>> listarMeusTurnos(int motoboyId) async =>
+      fakeTurnosEncerradosFixos();
+
+  @override
+  Future<List<Turno>> listarTurnosLojista(int lojistId) async =>
+      fakeTurnosEncerradosFixos();
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Wrapper que monta MaterialApp + Providers + Locale para a tela sob teste
 // ─────────────────────────────────────────────────────────────────────────────
@@ -524,6 +587,7 @@ Future<void> pumpGolden(
   Size viewport = const Size(390, 844),
   Duration settle = const Duration(milliseconds: 600),
   int? turnoSelecionado,
+  ApiService? apiFake,
 }) async {
   // A ordem importa: `physicalSize` precisa ser calculado com o DPR final.
   // Fazendo o inverso (multiplicar pelo DPR padrão da view, 3.0, e só depois
@@ -535,7 +599,9 @@ Future<void> pumpGolden(
   tester.view.physicalSize = viewport;
   await tester.binding.setSurfaceSize(viewport);
 
-  final api = FakeApiService();
+  // Telas que imprimem data absoluta precisam de um fake de data fixa, senão
+  // o golden vira o dia junto com o calendário — ver [FakeApiHistorico].
+  final api = apiFake ?? FakeApiService();
   final usuario =
       tipoUsuario == TipoUsuario.motoboy ? fakeMotoboy() : fakeLojista();
   final auth = AuthService(api)..atualizarUsuarioLocal(usuario);
