@@ -32,6 +32,17 @@ public class CarteiraService {
      */
     public static final List<String> TIPOS_GANHO = List.of("turno", "pagamento_recebido");
 
+    /**
+     * Status que valem como dinheiro que o usuario ja tem.
+     *
+     * "processado" e o legado, "concluido" e o atual. O que fica de fora e o
+     * que importa: a Transacao de tipo "turno" nasce PENDENTE na finalizacao
+     * do turno, muito antes do pagamento ser confirmado. Somar pendente em
+     * "ganhos do mes" mostra ao entregador dinheiro que ele ainda nao recebeu
+     * — o dashboard diria R$ 120 com o saldo em R$ 0.
+     */
+    public static final List<String> STATUS_LIQUIDADO = List.of("processado", "concluido");
+
     private final CarteiraRepository carteiraRepo;
     private final TransacaoRepository transacaoRepo;
 
@@ -76,7 +87,8 @@ public class CarteiraService {
      */
     public BigDecimal ganhosDoMes(Long usuarioId) {
         LocalDateTime inicioMes = LocalDate.now().withDayOfMonth(1).atStartOfDay();
-        BigDecimal total = transacaoRepo.somarPorTipoDesde(usuarioId, TIPOS_GANHO, inicioMes);
+        BigDecimal total = transacaoRepo.somarPorTipoDesde(
+                usuarioId, TIPOS_GANHO, STATUS_LIQUIDADO, inicioMes);
         return (total == null ? BigDecimal.ZERO : total).setScale(2, RoundingMode.HALF_UP);
     }
 
@@ -129,9 +141,16 @@ public class CarteiraService {
         carteiraRepo.save(carteira);
     }
 
+    /**
+     * Ganhos por mes, para o grafico da carteira.
+     *
+     * Mesmo filtro de status do {@link #ganhosDoMes}: o grafico e a serie
+     * historica do mesmo numero, e as duas leituras nao podem discordar.
+     */
     public List<Map<String, Object>> grafico(Long usuarioId, int meses) {
         List<Transacao> txs = transacaoRepo
-                .findByUsuarioIdAndTipoInOrderByCriadoEmDesc(usuarioId, TIPOS_GANHO);
+                .findByUsuarioIdAndTipoInAndStatusInOrderByCriadoEmDesc(
+                        usuarioId, TIPOS_GANHO, STATUS_LIQUIDADO);
 
         LocalDate hoje = LocalDate.now();
         List<Map<String, Object>> result = new ArrayList<>();

@@ -23,7 +23,13 @@ public class CarteiraResponse {
     @Deprecated
     private BigDecimal saldoAtual;
 
-    /** @deprecated idem saldoAtual — o app le como obrigatorio. */
+    /**
+     * @deprecated Espelha usuarioId. Mesmo motivo do saldoAtual: o app le este
+     * campo como `int` NAO-NULAVEL (carteira.dart), e `null as int` lanca
+     * TypeError em Dart — a tela de carteira nao abriria. Nao pode vir da
+     * coluna legada: depois da etapa 2 nada mais preenche motoboy_id, entao
+     * carteira nova nasce com ele nulo.
+     */
     @Deprecated
     private Long motoboyId;
 
@@ -43,7 +49,7 @@ public class CarteiraResponse {
         CarteiraResponse r = new CarteiraResponse();
         r.id = c.getId();
         r.usuarioId = c.getUsuarioId();
-        r.motoboyId = c.getMotoboyId();
+        r.motoboyId = c.getUsuarioId();
         r.saldoDisponivel = emReais(c.getSaldoDisponivel());
         r.saldoBloqueado = emReais(c.getSaldoBloqueado());
         r.saldoTotal = emReais(c.getSaldoTotal());

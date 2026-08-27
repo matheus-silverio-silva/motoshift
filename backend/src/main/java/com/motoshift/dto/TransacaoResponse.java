@@ -17,7 +17,12 @@ public class TransacaoResponse {
     private String status;
     private LocalDateTime criadoEm;
 
-    /** @deprecated use {@link #getUsuarioId()}. Mantido para o app antigo. */
+    /**
+     * @deprecated Espelha usuarioId. Mantido para o app antigo, que le este
+     * campo como `int` NAO-NULAVEL (transacao.dart) — e uma transacao com
+     * motoboy_id nulo no meio do extrato quebraria a tela de carteira inteira,
+     * de forma permanente para aquele usuario.
+     */
     @Deprecated
     private Long motoboyId;
 
@@ -27,7 +32,7 @@ public class TransacaoResponse {
         r.id = t.getId();
         r.usuarioId = t.getUsuarioId();
         r.contraparteId = t.getContraparteId();
-        r.motoboyId = t.getMotoboyId();
+        r.motoboyId = t.getUsuarioId();
         r.turnoId = t.getTurnoId();
         r.tipo = t.getTipo();
         r.valor = CarteiraResponse.emReais(t.getValor());
