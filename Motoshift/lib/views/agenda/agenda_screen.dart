@@ -14,7 +14,16 @@ import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/desktop/panel_card.dart';
 
 class AgendaScreen extends StatefulWidget {
-  const AgendaScreen({super.key});
+  const AgendaScreen({super.key, this.agora});
+
+  /// Fixa o "agora" da tela. Só os testes passam isto.
+  ///
+  /// Esta tela lê o relógio em cinco pontos — o anel do dia de hoje no
+  /// calendário, o mês inicial, a semana do resumo e a saudação por faixa de
+  /// hora. Com `DateTime.now()` espalhado, o golden dela passava só na máquina
+  /// e no momento em que foi gravado: o baseline de 19/08 falhava em qualquer
+  /// outro dia do mês, com o anel do "hoje" fora do lugar.
+  final DateTime? agora;
 
   @override
   State<AgendaScreen> createState() => _AgendaScreenState();
@@ -23,7 +32,11 @@ class AgendaScreen extends StatefulWidget {
 class _AgendaScreenState extends State<AgendaScreen> {
   bool _carregando = false;
 
-  DateTime _mesAtual = DateTime.now();
+  /// Lido uma vez só: duas leituras do relógio no mesmo build podiam cair em
+  /// lados opostos da virada do dia.
+  late final DateTime _agora = widget.agora ?? DateTime.now();
+
+  late DateTime _mesAtual = _agora;
   Map<String, List<Map<String, dynamic>>> _turnosPorDia = {};
   int? _diaSelecionado;
 
@@ -93,7 +106,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
   }
 
   String _greeting() {
-    final h = DateTime.now().hour;
+    final h = _agora.hour;
     if (h < 12) return 'Bom dia,';
     if (h < 18) return 'Boa tarde,';
     return 'Boa noite,';
@@ -144,9 +157,9 @@ class _AgendaScreenState extends State<AgendaScreen> {
                   month: _mesAtual.month,
                   markedDays: _marcados,
                   selectedDay: _diaSelecionado,
-                  today: DateTime.now().month == _mesAtual.month &&
-                          DateTime.now().year == _mesAtual.year
-                      ? DateTime.now().day
+                  today: _agora.month == _mesAtual.month &&
+                          _agora.year == _mesAtual.year
+                      ? _agora.day
                       : null,
                   onDayTap: (d) => setState(() {
                     _diaSelecionado =
@@ -229,9 +242,9 @@ class _AgendaScreenState extends State<AgendaScreen> {
             month: _mesAtual.month,
             markedDays: _marcados,
             selectedDay: _diaSelecionado,
-            today: DateTime.now().month == _mesAtual.month &&
-                    DateTime.now().year == _mesAtual.year
-                ? DateTime.now().day
+            today: _agora.month == _mesAtual.month &&
+                    _agora.year == _mesAtual.year
+                ? _agora.day
                 : null,
             onMonthChange: _mudarMes,
             onDayTap: (d) => setState(() {
@@ -396,7 +409,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
   Widget _buildResumoSemana() {
     final referencia = _diaSelecionado != null
         ? DateTime(_mesAtual.year, _mesAtual.month, _diaSelecionado!)
-        : DateTime.now();
+        : _agora;
     final inicioSemana =
         referencia.subtract(Duration(days: referencia.weekday % 7));
     final fimSemana = inicioSemana.add(const Duration(days: 6));

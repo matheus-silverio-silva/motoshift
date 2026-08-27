@@ -89,7 +89,7 @@ class _ShiftRowState extends State<ShiftRow> {
                   widget.icon,
                   size: 20,
                   color: widget.amberIcon
-                      ? const Color(0xFF9A6206)
+                      ? AppColors.onTertiaryContainer
                       : AppColors.tealDeep,
                 ),
               ),

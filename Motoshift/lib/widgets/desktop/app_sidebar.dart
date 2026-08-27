@@ -332,7 +332,7 @@ class _SidebarTile extends StatelessWidget {
                     child: Text(
                       item.badge!,
                       style: tsJakarta(10, FontWeight.w800,
-                          color: const Color(0xFF3A2603)),
+                          color: AppColors.onTertiary),
                     ),
                   ),
               ],

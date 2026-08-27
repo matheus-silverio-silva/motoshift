@@ -102,7 +102,7 @@ class _WalletBtn extends StatelessWidget {
           child: Text(
             label,
             style: tsJakarta(10.5, FontWeight.w700,
-                color: solid ? const Color(0xFF3A2603) : const Color(0xFFFFFFFF)),
+                color: solid ? AppColors.onTertiary : const Color(0xFFFFFFFF)),
           ),
         ),
       ),
@@ -129,7 +129,7 @@ class LedgerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final iconColor =
-        isCredit ? AppColors.good : const Color(0xFF9A6206);
+        isCredit ? AppColors.good : AppColors.onTertiaryContainer;
     final amountColor = iconColor;
     final iconBg = isCredit ? AppColors.goodSoft : AppColors.amberSoft;
 

@@ -345,14 +345,14 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Icon(Icons.info_outline,
-                          size: 20, color: Color(0xFF9A6206)),
+                          size: 20, color: AppColors.onTertiaryContainer),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           'Agende com pelo menos 2 h de antecedência. O valor '
                           'fica bloqueado na carteira até a conclusão.',
                           style: tsJakarta(12, FontWeight.w600,
-                              color: const Color(0xFF9A6206), height: 1.45),
+                              color: AppColors.onTertiaryContainer, height: 1.45),
                         ),
                       ),
                     ],

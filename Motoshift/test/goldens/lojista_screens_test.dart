@@ -89,7 +89,10 @@ void main() {
   testWidgets('AgendaScreen (lojista)', (tester) async {
     await pumpGolden(
       tester,
-      child: const AgendaScreen(),
+      // Data fixa: o baseline foi gravado em 19/08/2026 às 14h10, e a tela
+      // desenha o anel do "hoje" e a saudação a partir do relógio. Sem
+      // fixar, este golden falha em todo dia que não seja 19.
+      child: AgendaScreen(agora: dataAncoraGolden),
       tipoUsuario: TipoUsuario.lojista,
     );
     await expectLater(

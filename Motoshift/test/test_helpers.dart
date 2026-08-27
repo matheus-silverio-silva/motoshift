@@ -98,6 +98,14 @@ Future<void> setupGoldenTests() async {
 ///
 /// A deriva diária que sobra é intencional: os fakes descrevem turnos
 /// relativos a hoje, e é isso que as telas precisam exercitar.
+/// Momento em que os goldens desta suíte foram gravados.
+///
+/// Telas que leem o relógio (a agenda desenha o anel do "hoje" e escolhe a
+/// saudação por faixa de hora) precisam recebê-lo em vez de chamar
+/// `DateTime.now()`, senão o golden só passa no dia e na hora em que foi
+/// gerado — e uma suíte que já falha esconde a próxima regressão de verdade.
+final DateTime dataAncoraGolden = DateTime(2026, 8, 19, 14, 10);
+
 DateTime hojeAncorado() {
   final agora = DateTime.now();
   return DateTime(agora.year, agora.month, agora.day);

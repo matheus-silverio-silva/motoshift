@@ -169,7 +169,7 @@ class _HeaderSino extends StatelessWidget {
                     child: Text(
                       quantidade > 9 ? '9+' : '$quantidade',
                       style: tsJakarta(9.5, FontWeight.w800,
-                          color: const Color(0xFF3A2603)),
+                          color: AppColors.onTertiary),
                     ),
                   ),
                 ),

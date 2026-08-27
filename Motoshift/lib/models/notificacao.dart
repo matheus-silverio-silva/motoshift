@@ -62,17 +62,17 @@ class Notificacao {
         'turno_vencendo' => const NotificacaoEstilo(
             icone: Icons.schedule_outlined,
             fundo: AppColors.amberSoft,
-            frente: Color(0xFF9A6206),
+            frente: AppColors.onTertiaryContainer,
           ),
         'turno_pendente_finalizacao' => const NotificacaoEstilo(
             icone: Icons.hourglass_bottom_outlined,
             fundo: AppColors.amberSoft,
-            frente: Color(0xFF9A6206),
+            frente: AppColors.onTertiaryContainer,
           ),
         'avaliacao_pendente' => const NotificacaoEstilo(
             icone: Icons.star_outline_rounded,
             fundo: AppColors.amberSoft,
-            frente: Color(0xFF9A6206),
+            frente: AppColors.onTertiaryContainer,
           ),
         'turno_expirado' => const NotificacaoEstilo(
             icone: Icons.timer_off_outlined,

@@ -109,7 +109,7 @@ class WalletKpiCard extends StatelessWidget {
                               Text(
                                 actionLabel!,
                                 style: tsJakarta(11.5, FontWeight.w700,
-                                    color: const Color(0xFF3A2603)),
+                                    color: AppColors.onTertiary),
                               ),
                             ],
                           ),

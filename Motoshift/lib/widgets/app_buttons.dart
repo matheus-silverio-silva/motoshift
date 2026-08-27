@@ -179,7 +179,7 @@ class _AmberButtonState extends State<AmberButton>
                 Text(
                   widget.label,
                   style:
-                      tsJakarta(13.5, FontWeight.w700, color: const Color(0xFF3A2603)),
+                      tsJakarta(13.5, FontWeight.w700, color: AppColors.onTertiary),
                 ),
               ],
             ),

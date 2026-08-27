@@ -70,7 +70,7 @@ class ShiftCard extends StatelessWidget {
                 iconData,
                 size: 18,
                 color: amberIcon
-                    ? const Color(0xFF9A6206)
+                    ? AppColors.onTertiaryContainer
                     : AppColors.tealDeep,
               ),
             ),
@@ -148,7 +148,7 @@ class ShiftCard extends StatelessWidget {
                 iconData,
                 size: 20,
                 color: amberIcon
-                    ? const Color(0xFF9A6206)
+                    ? AppColors.onTertiaryContainer
                     : AppColors.tealDeep,
               ),
             ),

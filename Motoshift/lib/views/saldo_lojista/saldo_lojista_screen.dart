@@ -326,7 +326,7 @@ class _SaldoLojistaScreenState extends State<SaldoLojistaScreen> {
                     : Icons.lock_outline_rounded,
                 size: 17,
                 color: emAndamento
-                    ? const Color(0xFF9A6206)
+                    ? AppColors.onTertiaryContainer
                     : AppColors.tealDeep,
               ),
             ),

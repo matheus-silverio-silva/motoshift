@@ -385,14 +385,14 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.add_rounded, color: Color(0xFF9A6206), size: 18),
+            const Icon(Icons.add_rounded, color: AppColors.onTertiaryContainer, size: 18),
             const SizedBox(width: 7),
             Text(
               'Publicar novo turno',
               style: tsJakarta(
                 13,
                 FontWeight.w700,
-                color: const Color(0xFF9A6206),
+                color: AppColors.onTertiaryContainer,
               ),
             ),
           ],

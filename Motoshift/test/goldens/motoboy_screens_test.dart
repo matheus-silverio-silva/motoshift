@@ -49,7 +49,8 @@ void main() {
   });
 
   testWidgets('AgendaScreen (motoboy)', (tester) async {
-    await pumpGolden(tester, child: const AgendaScreen());
+    // Data fixa — ver a nota em lojista_screens_test.dart.
+    await pumpGolden(tester, child: AgendaScreen(agora: dataAncoraGolden));
     await expectLater(
       find.byType(AgendaScreen),
       matchesGoldenFile('goldens/agenda_screen_motoboy.png'),

@@ -246,7 +246,7 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
                         ),
                         child: Text('${op.$4}',
                             style: tsJakarta(10.5, FontWeight.w800,
-                                color: const Color(0xFF3A2603))),
+                                color: AppColors.onTertiary)),
                       )
                     else
                       Text('${op.$4}',
