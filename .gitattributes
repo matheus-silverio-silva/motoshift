@@ -26,6 +26,12 @@
 *.js          text eol=lf
 *.sql         text eol=lf
 *.sh          text eol=lf
+# Gerados pelo `flutter pub get` no desktop. Sem eol=lf explicito eles caem no
+# `text=auto` acima, nascem CRLF na arvore de trabalho e ficam permanentemente
+# "modificados" no git status — os tres reapareciam a cada pub get.
+*.cmake       text eol=lf
+*.cc          text eol=lf
+*.swift       text eol=lf
 Dockerfile    text eol=lf
 .dockerignore text eol=lf
 .gitignore    text eol=lf
