@@ -25,7 +25,11 @@ import '../../widgets/shift_card.dart';
 import '../../widgets/status_pill.dart';
 
 class MeusTurnosScreen extends StatefulWidget {
-  const MeusTurnosScreen({super.key});
+  const MeusTurnosScreen({super.key, this.agora});
+
+  /// Fixa o "agora" da saudação. Só os testes passam isto — ver
+  /// [AgendaScreen.agora] para o porquê.
+  final DateTime? agora;
 
   @override
   State<MeusTurnosScreen> createState() => _MeusTurnosScreenState();
@@ -307,7 +311,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
   }
 
   String _greeting() {
-    final h = DateTime.now().hour;
+    final h = (widget.agora ?? DateTime.now()).hour;
     if (h < 12) return 'Bom dia,';
     if (h < 18) return 'Boa tarde,';
     return 'Boa noite,';

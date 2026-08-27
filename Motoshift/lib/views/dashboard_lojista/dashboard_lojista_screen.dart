@@ -25,7 +25,11 @@ import '../../widgets/stat_card.dart';
 import '../../widgets/status_pill.dart';
 
 class DashboardLojistScreen extends StatefulWidget {
-  const DashboardLojistScreen({super.key});
+  const DashboardLojistScreen({super.key, this.agora});
+
+  /// Fixa o "agora" da saudação. Só os testes passam isto — ver
+  /// [AgendaScreen.agora] para o porquê.
+  final DateTime? agora;
 
   @override
   State<DashboardLojistScreen> createState() => _DashboardLojistScreenState();
@@ -60,7 +64,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
   }
 
   String _greeting() {
-    final h = DateTime.now().hour;
+    final h = (widget.agora ?? DateTime.now()).hour;
     if (h < 12) return 'Bom dia,';
     if (h < 18) return 'Boa tarde,';
     return 'Boa noite,';
@@ -162,7 +166,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
     final texto = DateFormat(
       "EEEE, d 'de' MMMM",
       'pt_BR',
-    ).format(DateTime.now());
+    ).format(widget.agora ?? DateTime.now());
     return texto[0].toUpperCase() + texto.substring(1);
   }
 

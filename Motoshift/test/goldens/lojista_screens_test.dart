@@ -27,7 +27,7 @@ void main() {
   testWidgets('DashboardLojistScreen', (tester) async {
     await pumpGolden(
       tester,
-      child: const DashboardLojistScreen(),
+      child: DashboardLojistScreen(agora: dataAncoraGolden),
       tipoUsuario: TipoUsuario.lojista,
     );
     await expectLater(
