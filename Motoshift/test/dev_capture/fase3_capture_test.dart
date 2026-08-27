@@ -8,6 +8,8 @@ import 'package:moto_shift/views/agenda/agenda_screen.dart';
 import 'package:moto_shift/views/agendar_turno/agendar_turno_screen.dart';
 import 'package:moto_shift/views/avaliacao/avaliacao_screen.dart';
 import 'package:moto_shift/views/carteira/carteira_screen.dart';
+import 'package:moto_shift/views/cnh_veiculo/cnh_veiculo_screen.dart';
+import 'package:moto_shift/views/dados_pessoais/dados_pessoais_screen.dart';
 import 'package:moto_shift/views/historico_turnos/historico_turnos_screen.dart';
 import 'package:moto_shift/views/minhas_avaliacoes/minhas_avaliacoes_screen.dart';
 import 'package:moto_shift/views/perfil/perfil_screen.dart';
@@ -94,5 +96,40 @@ void main() {
   testWidgets('14 perfil', (t) async {
     await capturar(t,
         tela: const PerfilScreen(), tipo: PerfilScreen, nome: 'perfil');
+  }, skip: !_capture);
+
+  // ── Sub-páginas do perfil ────────────────────────────────────────────────
+  // Ficaram de fora da Fase 3 e eram as duas últimas telas roteadas sem shell
+  // desktop: o Perfil é item de sidebar e leva a elas por pushNamed, então o
+  // shell inteiro sumia no meio da navegação.
+
+  testWidgets('15 dados pessoais (motoboy)', (t) async {
+    await capturar(t,
+        tela: const DadosPessoaisScreen(),
+        tipo: DadosPessoaisScreen,
+        nome: 'dados_pessoais_motoboy');
+  }, skip: !_capture);
+
+  testWidgets('15 dados pessoais (lojista)', (t) async {
+    await capturar(t,
+        tela: const DadosPessoaisScreen(),
+        tipo: DadosPessoaisScreen,
+        usuario: TipoUsuario.lojista,
+        nome: 'dados_pessoais_lojista');
+  }, skip: !_capture);
+
+  testWidgets('16 cnh e veiculo (motoboy)', (t) async {
+    await capturar(t,
+        tela: const CnhVeiculoScreen(),
+        tipo: CnhVeiculoScreen,
+        nome: 'cnh_veiculo_motoboy');
+  }, skip: !_capture);
+
+  testWidgets('16 estabelecimento (lojista)', (t) async {
+    await capturar(t,
+        tela: const CnhVeiculoScreen(),
+        tipo: CnhVeiculoScreen,
+        usuario: TipoUsuario.lojista,
+        nome: 'cnh_veiculo_lojista');
   }, skip: !_capture);
 }

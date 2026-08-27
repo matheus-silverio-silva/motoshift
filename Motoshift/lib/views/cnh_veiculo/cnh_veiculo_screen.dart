@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
+import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/validators.dart';
+import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_header.dart';
-import '../../widgets/app_scaffold.dart';
+import '../../widgets/desktop/content_grid.dart';
+import '../../widgets/desktop/panel_card.dart';
 
 class CnhVeiculoScreen extends StatefulWidget {
   const CnhVeiculoScreen({super.key});
@@ -103,9 +106,18 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
     final usuario = context.watch<AuthService>().usuario;
     final isLojista = usuario?.tipo == TipoUsuario.lojista;
 
-    return AppScaffold(
-      header: AppHeader.back(
-          title: isLojista ? 'Estabelecimento' : 'CNH e Veículo'),
+    final titulo = isLojista ? 'Estabelecimento' : 'CNH e Veículo';
+
+    return AdaptiveScaffold(
+      header: AppHeader.back(title: titulo),
+      desktopTitle: titulo,
+      desktopSubtitle: isLojista
+          ? 'Endereço de onde saem as entregas'
+          : 'Os dados da CNH não mudam depois do cadastro',
+      // Sub-página do Perfil: mantém "Perfil" aceso na sidebar em vez de
+      // deixar o desktop sem nenhum item destacado.
+      desktopSelectedRoute: AppRoutes.perfil,
+      desktopBody: _buildDesktop(usuario, isLojista),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(18, 18, 18, 40),
         child: Form(
@@ -118,74 +130,143 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
     );
   }
 
+  // ── Desktop ───────────────────────────────────────────────────────────────
+  //
+  // O lojista tem um formulário curto (um endereço), então ele fica numa
+  // coluna só, sem esticar por 1280px. O motoboy tem dois blocos de natureza
+  // diferente — a CNH que ele não pode mudar e o veículo que ele pode — e
+  // esses ganham uma coluna cada.
+
+  Widget _buildDesktop(Usuario? usuario, bool isLojista) {
+    return Form(
+      key: _formKey,
+      child: ContentGrid(
+        children: isLojista
+            ? [
+                GridCol(
+                  span: 7,
+                  child: PanelCard(
+                    title: 'Endereço comercial',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _cabecalhoEstabelecimento(usuario),
+                        const SizedBox(height: 16),
+                        _campoEndereco(),
+                        const SizedBox(height: 20),
+                        _botaoSalvar(),
+                      ],
+                    ),
+                  ),
+                ),
+              ]
+            : [
+                GridCol(
+                  span: 5,
+                  child: PanelCard(
+                    title: 'CNH',
+                    subtitle:
+                        'Não pode ser alterada depois do cadastro.',
+                    trailing: _pilulaImutavel(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: _camposCnh(usuario),
+                    ),
+                  ),
+                ),
+                GridCol(
+                  span: 7,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      PanelCard(
+                        title: 'Veículo',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: _camposVeiculo(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _botaoSalvar(),
+                    ],
+                  ),
+                ),
+              ],
+      ),
+    );
+  }
+
+  Widget _botaoSalvar() => PrimaryButton(
+        label: 'Salvar alterações',
+        loading: _salvando,
+        onPressed: _salvar,
+      );
+
   Widget _buildLojista(Usuario? u) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppColors.tealSoft,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.storefront_outlined,
-                  color: AppColors.tealDeep, size: 18),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  u?.nomeFantasia ?? 'Estabelecimento',
-                  style: tsJakarta(13, FontWeight.w700,
-                      color: AppColors.tealDeep),
-                ),
-              ),
-            ],
-          ),
-        ),
+        _cabecalhoEstabelecimento(u),
         const SizedBox(height: 20),
         Text('Endereço comercial',
             style:
                 tsBricolage(14, FontWeight.w800, color: AppColors.ink)),
         const SizedBox(height: 10),
-        TextFormField(
-          controller: _enderecoCtrl,
-          maxLines: 3,
-          style: tsJakarta(13, FontWeight.w500, color: AppColors.ink),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: AppColors.surface2,
-            hintText: 'Av. Exemplo, 123 — Bairro, Cidade/UF',
-            hintStyle: tsJakarta(13, FontWeight.w400,
-                color: AppColors.muted),
-            contentPadding: const EdgeInsets.all(12),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: AppColors.line, width: 1.5),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide:
-                  const BorderSide(color: AppColors.teal, width: 1.5),
-            ),
-          ),
-        ),
+        _campoEndereco(),
         const SizedBox(height: 24),
-        PrimaryButton(
-          label: 'Salvar alterações',
-          loading: _salvando,
-          onPressed: _salvar,
-        ),
+        _botaoSalvar(),
       ],
     );
   }
 
-  Widget _buildMotoboy(Usuario? u) {
-    final validadeFmt = u?.cnhValidade != null
-        ? DateFormat('dd/MM/yyyy', 'pt_BR').format(u!.cnhValidade!)
-        : '—';
+  Widget _cabecalhoEstabelecimento(Usuario? u) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.tealSoft,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.storefront_outlined,
+              color: AppColors.tealDeep, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              u?.nomeFantasia ?? 'Estabelecimento',
+              style: tsJakarta(13, FontWeight.w700,
+                  color: AppColors.tealDeep),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
+  Widget _campoEndereco() {
+    return TextFormField(
+      controller: _enderecoCtrl,
+      maxLines: 3,
+      style: tsJakarta(13, FontWeight.w500, color: AppColors.ink),
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: AppColors.surface2,
+        hintText: 'Av. Exemplo, 123 — Bairro, Cidade/UF',
+        hintStyle: tsJakarta(13, FontWeight.w400, color: AppColors.muted),
+        contentPadding: const EdgeInsets.all(12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.teal, width: 1.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMotoboy(Usuario? u) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -195,25 +276,7 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
                 style: tsBricolage(14, FontWeight.w800,
                     color: AppColors.ink)),
             const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: AppColors.surface3,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.lock_outline_rounded,
-                      size: 11, color: AppColors.muted),
-                  const SizedBox(width: 4),
-                  Text('Imutável',
-                      style: tsJakarta(9, FontWeight.w700,
-                          color: AppColors.muted)),
-                ],
-              ),
-            ),
+            _pilulaImutavel(),
           ],
         ),
         const SizedBox(height: 6),
@@ -223,16 +286,53 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
               color: AppColors.muted),
         ),
         const SizedBox(height: 10),
-        _readonlyField('Número da CNH', u?.cnhNumero ?? '—'),
-        _readonlyField('Categoria', u?.cnhCategoria ?? '—'),
-        _readonlyField('Validade da CNH', validadeFmt),
+        ..._camposCnh(u),
         const SizedBox(height: 18),
         Text('Veículo',
             style:
                 tsBricolage(14, FontWeight.w800, color: AppColors.ink)),
         const SizedBox(height: 10),
-        _field('Modelo', _modeloCtrl,
-            hint: 'Ex: Honda CG 160 Titan'),
+        ..._camposVeiculo(),
+        const SizedBox(height: 24),
+        _botaoSalvar(),
+      ],
+    );
+  }
+
+  Widget _pilulaImutavel() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.surface3,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.lock_outline_rounded,
+              size: 11, color: AppColors.muted),
+          const SizedBox(width: 4),
+          Text('Imutável',
+              style:
+                  tsJakarta(9, FontWeight.w700, color: AppColors.muted)),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _camposCnh(Usuario? u) {
+    final validadeFmt = u?.cnhValidade != null
+        ? DateFormat('dd/MM/yyyy', 'pt_BR').format(u!.cnhValidade!)
+        : '—';
+    return [
+      _readonlyField('Número da CNH', u?.cnhNumero ?? '—'),
+      _readonlyField('Categoria', u?.cnhCategoria ?? '—'),
+      _readonlyField('Validade da CNH', validadeFmt),
+    ];
+  }
+
+  List<Widget> _camposVeiculo() => [
+        _field('Modelo', _modeloCtrl, hint: 'Ex: Honda CG 160 Titan'),
         Row(
           children: [
             Expanded(
@@ -249,15 +349,7 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
           ],
         ),
         _field('Cor', _corCtrl, hint: 'Ex: Vermelha'),
-        const SizedBox(height: 24),
-        PrimaryButton(
-          label: 'Salvar alterações',
-          loading: _salvando,
-          onPressed: _salvar,
-        ),
-      ],
-    );
-  }
+      ];
 
   Widget _field(String label, TextEditingController ctrl,
       {String? hint,

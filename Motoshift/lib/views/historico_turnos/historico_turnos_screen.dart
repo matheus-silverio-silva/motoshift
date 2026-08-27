@@ -402,7 +402,9 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
       header: AppHeader.back(title: 'Histórico de turnos'),
       desktopTitle: 'Histórico de turnos',
       desktopSubtitle: _subtituloDesktop(),
-      desktopSelectedRoute: AppRoutes.historicoTurnos,
+      // Também é sub-página do Perfil, e /historico-turnos não é item de
+      // sidebar: apontar para ele deixava o desktop sem nada destacado.
+      desktopSelectedRoute: AppRoutes.perfil,
       desktopBody: _carregando
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.teal),

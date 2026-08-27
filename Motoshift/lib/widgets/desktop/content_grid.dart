@@ -7,6 +7,12 @@ import 'package:flutter/widgets.dart';
 ///
 /// Os filhos normalmente são [GridCol]; um filho que não seja [GridCol] ocupa
 /// as 12 colunas (linha inteira).
+///
+/// Com um único filho que não some 12 colunas, o [Wrap] encolhe até a largura
+/// dele e o [Align] o centraliza — é o que acontece na tela de estabelecimento
+/// do lojista, que tem uma coluna só. O efeito é desejável (formulário curto
+/// centrado em vez de encostado à esquerda), mas não é óbvio olhando o código,
+/// daí a nota.
 class ContentGrid extends StatelessWidget {
   const ContentGrid({
     required this.children,
