@@ -42,7 +42,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.primary,
+      backgroundColor: AppColors.teal,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -61,26 +61,21 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
+            // Tipografia do tema. Antes pedia `fontFamily: 'Manrope'`, que o
+            // pubspec não declara em lugar nenhum — a primeira tela do app
+            // caía na fonte padrão do sistema enquanto todo o resto usa
+            // Bricolage + Jakarta.
+            Text(
               'Moto Shift',
-              style: TextStyle(
-                fontFamily: 'Manrope',
-                fontSize: 34,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-                letterSpacing: -1.5,
-              ),
+              style: tsBricolage(34, FontWeight.w800, color: Colors.white)
+                  .copyWith(letterSpacing: -1.5),
             ),
             const SizedBox(height: 6),
             Text(
               'URBAN KINETIC',
-              style: TextStyle(
-                fontFamily: 'Manrope',
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Colors.white.withOpacity(0.55),
-                letterSpacing: 3,
-              ),
+              style: tsJakarta(12, FontWeight.w700,
+                      color: Colors.white.withOpacity(0.55))
+                  .copyWith(letterSpacing: 3),
             ),
             const SizedBox(height: 56),
             const SizedBox(

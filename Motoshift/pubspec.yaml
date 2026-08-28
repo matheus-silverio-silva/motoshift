@@ -22,7 +22,7 @@ dependencies:
   # State Management
   provider: ^6.1.2
 
-  # Fontes Google (Manrope)
+  # Fontes do tema (Bricolage Grotesque + Plus Jakarta Sans)
   google_fonts: ^6.2.1
 
   # Utilitários

@@ -33,8 +33,6 @@ class AppRoutes {
   // ── Legadas (mantidas para compatibilidade até remoção) ──────────────────
   static const String meusTurnos        = '/meus-turnos';
   static const String agendarTurno      = '/agendar-turno';
-  static const String historico         = '/historico';
-  static const String solicitarServico  = '/solicitar-servico';
 
   // ── Stubs (sub-páginas do perfil / fluxos secundários) ───────────────────
   static const String sacarPix          = '/sacar-pix';

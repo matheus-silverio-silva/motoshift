@@ -20,8 +20,6 @@ import 'views/dashboard_lojista/dashboard_lojista_screen.dart';
 import 'views/agendar_turno/agendar_turno_screen.dart';
 import 'views/meus_turnos/meus_turnos_screen.dart';
 import 'views/carteira/carteira_screen.dart';
-import 'views/solicitar_servico/solicitar_servico_screen.dart';
-import 'views/historico/historico_screen.dart';
 import 'views/agenda/agenda_screen.dart';
 import 'views/avaliacao/avaliacao_screen.dart';
 import 'views/perfil/perfil_screen.dart';
@@ -167,10 +165,10 @@ class MotoShiftApp extends StatelessWidget {
           AppRoutes.sacarPix:         (_) => const AuthGuard(papel: TipoUsuario.motoboy, child: SacarPixScreen()),
 
           // ── Legadas (protegidas) ──────────────────────────────────────────
+          // /historico e /solicitar-servico sairam junto com as telas: eram da
+          // geracao anterior da UI e ninguem navegava para elas.
           AppRoutes.meusTurnos:       (_) => const AuthGuard(child: MeusTurnosScreen()),
           AppRoutes.agendarTurno:     (_) => const AuthGuard(child: AgendarTurnoScreen()),
-          AppRoutes.historico:        (_) => const AuthGuard(child: HistoricoScreen()),
-          AppRoutes.solicitarServico: (_) => const AuthGuard(child: SolicitarServicoScreen()),
         },
       ),
     );
