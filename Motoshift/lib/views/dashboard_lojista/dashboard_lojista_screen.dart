@@ -101,8 +101,16 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
   double get _avaliacaoMedia =>
       (_dashData?['avaliacaoMedia'] as num?)?.toDouble() ?? 0;
 
+  /// Quantos turnos ativos começam hoje — vira o subtítulo do card "Turnos
+  /// ativos", nas duas larguras.
+  ///
+  /// Lê a data injetada pelo mesmo motivo do resto da tela: com o fixture do
+  /// golden ancorado numa data e esta contagem lendo o relógio, os dois ficam
+  /// comparando dias diferentes. Hoje o resultado coincide porque nenhum turno
+  /// do fixture começa no dia da âncora nem no de hoje — coincidência, não
+  /// garantia.
   int _comecamHoje(List<Turno> turnos) {
-    final hoje = DateTime.now();
+    final hoje = widget.agora ?? DateTime.now();
     return turnos
         .where(
           (t) =>
