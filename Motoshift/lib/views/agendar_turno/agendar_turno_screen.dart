@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' show DateFormat;
 import 'package:latlong2/latlong.dart';
@@ -6,11 +7,15 @@ import '../../models/turno.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/preco_recomendado.dart';
+import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_header.dart';
-import '../../widgets/app_scaffold.dart';
+import '../../widgets/desktop/content_grid.dart';
+import '../../widgets/desktop/shift_row.dart';
 import '../../widgets/mapa_raio.dart';
+import '../../widgets/status_pill.dart';
 
 class AgendarTurnoScreen extends StatefulWidget {
   const AgendarTurnoScreen({super.key});
@@ -33,7 +38,19 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
   bool _publicando = false;
 
   @override
+  void initState() {
+    super.initState();
+    // A pré-visualização do desktop mostra o valor enquanto ele é digitado.
+    _valorCtrl.addListener(_aoDigitarValor);
+  }
+
+  void _aoDigitarValor() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    _valorCtrl.removeListener(_aoDigitarValor);
     _valorCtrl.dispose();
     super.dispose();
   }
@@ -53,9 +70,9 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().add(const Duration(days: 1)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 90)),
+      initialDate: clock.now().add(const Duration(days: 1)),
+      firstDate: clock.now(),
+      lastDate: clock.now().add(const Duration(days: 90)),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.light(
@@ -125,7 +142,7 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       _horaFim!.hour, _horaFim!.minute,
     );
 
-    if (inicio.isBefore(DateTime.now().add(const Duration(hours: 2)))) {
+    if (inicio.isBefore(clock.now().add(const Duration(hours: 2)))) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -186,11 +203,15 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffold(
+    return AdaptiveScaffold(
       header: AppHeader.back(
         title: 'Publicar Turno',
         onBack: () => Navigator.pop(context),
       ),
+      desktopTitle: 'Publicar turno',
+      desktopSubtitle: 'Defina data, horário e valor para sua operação',
+      desktopSelectedRoute: AppRoutes.turnosLojista,
+      desktopBody: _buildDesktop(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
         child: Form(
@@ -263,6 +284,191 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       ),
     );
   }
+
+  // ── Desktop — formulário em 2 colunas + pré-visualização ao vivo ─────────
+
+  Widget _buildDesktop() {
+    return Form(
+      key: _formKey,
+      child: ContentGrid(
+        children: [
+          GridCol(
+            span: 7,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: _buildDataCard()),
+                      const SizedBox(width: 16),
+                      Expanded(child: _buildHorarioCard()),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.line, width: 1.5),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildRaioSection(),
+                      const SizedBox(height: 24),
+                      _buildVagasSection(),
+                      const SizedBox(height: 24),
+                      _buildValorSection(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GridCol(
+            span: 5,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildPreview(),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.amberSoft,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline,
+                          size: 20, color: AppColors.onTertiaryContainer),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Agende com pelo menos 2 h de antecedência. O valor '
+                          'fica bloqueado na carteira até a conclusão.',
+                          style: tsJakarta(12, FontWeight.w600,
+                              color: AppColors.onTertiaryContainer, height: 1.45),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                PrimaryButton(
+                  label: 'Publicar turno',
+                  loading: _publicando,
+                  onPressed: _publicar,
+                  icon: const Icon(Icons.send_rounded,
+                      color: Colors.white, size: 18),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Ao publicar, o turno ficará visível para entregadores na '
+                  'região.',
+                  textAlign: TextAlign.center,
+                  style:
+                      tsJakarta(11.5, FontWeight.w400, color: AppColors.muted),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Pré-visualização ao vivo: reflete o que já foi preenchido, sem inventar
+  /// o que falta — campo vazio aparece como travessão.
+  Widget _buildPreview() {
+    final valor = double.tryParse(_valorCtrl.text.replaceAll(',', '.'));
+    final horario = (_horaInicio != null && _horaFim != null)
+        ? '${_fmtHora(_horaInicio!)} – ${_fmtHora(_horaFim!)}'
+        : '--:-- – --:--';
+    final titulo = _data != null
+        ? 'Turno ${DateFormat('dd/MM').format(_data!)}'
+        : 'Novo turno';
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.line, width: 1.5),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text('Pré-visualização',
+                  style:
+                      tsBricolage(16, FontWeight.w800, color: AppColors.ink)),
+              const SizedBox(width: 8),
+              const StatusPill(label: 'como o entregador vê'),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ShiftRow(
+            horario: horario,
+            valor: valor == null
+                ? 'R\$ --'
+                : 'R\$ ${valor.toStringAsFixed(0)}',
+            meta: '$titulo · ${_raio.toStringAsFixed(0)} km',
+            icon: Icons.two_wheeler_outlined,
+            pillLabel:
+                _vagas == 1 ? '1 vaga' : '$_vagas vagas',
+            pillVariant: PillVariant.ghost,
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 200,
+            child: MapaRaio(centro: _centro, raioKm: _raio),
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Custo do turno',
+                        style: tsJakarta(12.5, FontWeight.w700,
+                            color: AppColors.text)),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${_vagas == 1 ? '1 vaga' : '$_vagas vagas'} × '
+                      '${valor == null ? 'R\$ --' : 'R\$ ${valor.toStringAsFixed(0)}'}',
+                      style: tsJakarta(11.5, FontWeight.w400,
+                          color: AppColors.muted),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                valor == null
+                    ? '—'
+                    : 'R\$ ${(valor * _vagas).toStringAsFixed(0)}',
+                style: tsBricolage(16, FontWeight.w800, color: AppColors.ink),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _fmtHora(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   Widget _buildDataCard() {
     return GestureDetector(

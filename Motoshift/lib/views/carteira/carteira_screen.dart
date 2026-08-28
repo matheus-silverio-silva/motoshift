@@ -1,18 +1,28 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/carteira.dart';
+import '../../models/transacao.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_header.dart';
-import '../../widgets/app_scaffold.dart';
+import '../../widgets/desktop/app_topbar.dart';
+import '../../widgets/desktop/content_grid.dart';
+import '../../widgets/desktop/panel_card.dart';
 import '../../widgets/section_title.dart';
 import '../../widgets/wallet_widgets.dart';
 
 class CarteiraScreen extends StatefulWidget {
-  const CarteiraScreen({super.key});
+  const CarteiraScreen({super.key, this.agora});
+
+  /// Fixa o "agora" do extrato. So os testes passam isto — e o padrao e o
+  /// mesmo das outras telas com golden (AgendaScreen, dashboards,
+  /// MeusTurnosScreen, PerfilScreen).
+  final DateTime? agora;
 
   @override
   State<CarteiraScreen> createState() => _CarteiraScreenState();
@@ -22,6 +32,9 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
   Carteira? _carteira;
   bool _carregando = false;
   String? _erro;
+
+  /// Filtro do extrato no desktop: todos | entradas | saques.
+  String _filtroExtrato = 'todos';
 
   @override
   void initState() {
@@ -148,7 +161,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffold(
+    return AdaptiveScaffold(
       header: AppHeader.back(
         title: 'Carteira Digital',
         onBack: () => Navigator.pushReplacementNamed(
@@ -159,6 +172,22 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
         currentIndex: 2,
         onTap: _onNav,
       ),
+      desktopTitle: 'Carteira digital',
+      desktopSubtitle: _subtituloDesktop(),
+      desktopSelectedRoute: AppRoutes.carteira,
+      desktopPrimaryAction: TopbarPrimaryButton(
+        label: 'Sacar via Pix',
+        icon: Icons.qr_code_rounded,
+        onTap: _solicitarSaque,
+      ),
+      desktopBody: _carregando
+          ? const Center(
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: AppColors.teal),
+            )
+          : _erro != null
+              ? _erroView()
+              : _buildDesktop(),
       body: _carregando
           ? const Center(
               child: CircularProgressIndicator(
@@ -191,6 +220,153 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  // ── Desktop — saldo à esquerda, extrato à direita ────────────────────────
+
+  String _subtituloDesktop() {
+    final atualizado = _carteira?.atualizadoEm;
+    if (atualizado == null) return 'Saldo e extrato da sua conta';
+    return 'Última atualização: ${_formatarData(atualizado)}';
+  }
+
+  List<Transacao> get _extratoFiltrado {
+    final todas = _carteira?.transacoes ?? const <Transacao>[];
+    return switch (_filtroExtrato) {
+      'entradas' =>
+        todas.where((t) => t.tipo != TipoTransacao.saque).toList(),
+      'saques' =>
+        todas.where((t) => t.tipo == TipoTransacao.saque).toList(),
+      _ => todas,
+    };
+  }
+
+  Widget _buildDesktop() {
+    final saldo = _carteira?.saldoAtual ?? 0.0;
+    final ganhos = _carteira?.ganhosMensais ?? 0.0;
+    final media = _carteira?.mediaPorTurno ?? 0.0;
+
+    return ContentGrid(
+      children: [
+        GridCol(
+          span: 4,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              WalletHero(
+                balance:
+                    'R\$ ${saldo.toStringAsFixed(2).replaceAll('.', ',')}',
+                onWithdraw: _solicitarSaque,
+                onExtract: _carregar,
+              ),
+              const SizedBox(height: 16),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: _statTile(Icons.trending_up_rounded,
+                          'Ganhos mensais', 'R\$ ${ganhos.toStringAsFixed(0)}'),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _statTile(Icons.speed_rounded, 'Média/turno',
+                          'R\$ ${media.toStringAsFixed(0)}'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        GridCol(
+          span: 8,
+          child: PanelCard(
+            title: 'Extrato',
+            padding: const EdgeInsets.all(22),
+            gap: 14,
+            trailing: _buildFiltroExtrato(),
+            child: _buildExtratoDesktop(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFiltroExtrato() {
+    const opcoes = [
+      ('todos', 'Tudo'),
+      ('entradas', 'Entradas'),
+      ('saques', 'Saques'),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.surface2,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: opcoes.map((op) {
+          final sel = _filtroExtrato == op.$1;
+          return InkWell(
+            onTap: () => setState(() => _filtroExtrato = op.$1),
+            borderRadius: BorderRadius.circular(9),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: sel ? AppColors.teal : Colors.transparent,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Text(
+                op.$2,
+                style: tsJakarta(11.5, FontWeight.w700,
+                    color: sel ? Colors.white : AppColors.muted),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildExtratoDesktop() {
+    final transacoes = _extratoFiltrado;
+    if (transacoes.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: Center(
+          child: Text(
+            _filtroExtrato == 'todos'
+                ? 'Nenhuma transação registrada ainda.'
+                : 'Nenhum lançamento neste filtro.',
+            style: tsJakarta(12.5, FontWeight.w400, color: AppColors.muted),
+          ),
+        ),
+      );
+    }
+    return Column(
+      children: [
+        for (var i = 0; i < transacoes.length; i++) ...[
+          if (i > 0) const Divider(height: 1),
+          // Mesmo critério do extrato do celular, logo abaixo: o sinal vem do
+          // tipo e não de "é saque ou não". O merge deixou os dois extratos
+          // discordando — este ainda rotularia `reserva` e
+          // `pagamento_enviado` como entrada.
+          LedgerRow(
+            title: transacoes[i].descricao,
+            date: _formatarData(transacoes[i].criadoEm),
+            amount: '${switch (transacoes[i].credito) {
+              true => '+ ',
+              false => '− ',
+              null => '',
+            }}R\$ ${transacoes[i].valor.toStringAsFixed(2).replaceAll('.', ',')}',
+            isCredit: transacoes[i].credito,
+          ),
+        ],
+      ],
     );
   }
 
@@ -298,8 +474,19 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     );
   }
 
+  /// "Hoje, 14:30" / "Ontem, 09:15" / "12/08, 20:00".
+  ///
+  /// A data de referência vem de `widget.agora` — o mesmo mecanismo que as
+  /// outras telas com golden já usam. Não leva parâmetro próprio como
+  /// `serieUltimos7Dias` e `proximos()` porque aqui é método privado do
+  /// State: quem chama já está dentro da tela, e um parâmetro que ninguém
+  /// passa seria API morta.
+  ///
+  /// Sem isso, o dia em que alguém acrescentasse uma transação ao fixture
+  /// seria o dia em que o golden da carteira passaria a virar sozinho à
+  /// meia-noite.
   String _formatarData(DateTime d) {
-    final agora = DateTime.now();
+    final agora = widget.agora ?? clock.now();
     final hoje = DateTime(agora.year, agora.month, agora.day);
     final dia = DateTime(d.year, d.month, d.day);
     final hora =

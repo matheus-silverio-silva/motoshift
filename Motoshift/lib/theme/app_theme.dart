@@ -57,7 +57,18 @@ class AppColors {
     colors: [teal, tealDeep],
   );
 
-  // ── Aliases legados — usados pelos kinetic_* widgets; remover após migração ─
+  /// Texto e ícone sobre âmbar. O par que o app realmente usa: `onTertiary`
+  /// no botão âmbar sólido, `onTertiaryContainer` sobre `amberSoft`.
+  static const Color onTertiary              = Color(0xFF3A2603);
+  static const Color onTertiaryContainer     = Color(0xFF9A6206);
+
+  // ── Nomes do ColorScheme do Material ────────────────────────────────────
+  //
+  // O comentário antigo aqui dizia "aliases legados — usados pelos kinetic_*
+  // widgets; remover após migração". Estava errado, e por isso ficou: os
+  // kinetic_* usavam meia dúzia deles, mas quem consome a maioria é o
+  // `ColorScheme` montado em AppTheme.light, logo abaixo. Removê-los quebra o
+  // tema. Os que de fato só os kinetic_* usavam saíram junto com eles.
   static const Color primary                 = teal;
   static const Color primaryContainer        = tealBright;
   static const Color onPrimary               = Color(0xFFFFFFFF);
@@ -67,20 +78,13 @@ class AppColors {
   static const Color secondaryContainer      = surface3;
   static const Color onSecondaryContainer    = text;
   static const Color tertiary                = amber;
-  static const Color onTertiary              = Color(0xFF3A2603);
   static const Color tertiaryContainer       = amberSoft;
-  static const Color onTertiaryContainer     = Color(0xFF9A6206);
-  static const Color background              = surface2;
   static const Color surfaceBright           = surface;
   static const Color surfaceDim              = surface3;
   static const Color onBackground            = text;
   static const Color onSurface              = text;
-  static const Color onSurfaceVariant        = muted;
-  static const Color surfaceContainerLowest  = surface;
-  static const Color surfaceContainerLow     = surface2;
   static const Color surfaceContainer        = surface3;
   static const Color surfaceContainerHigh    = line;
-  static const Color surfaceContainerHighest = line;
   static const Color surfaceVariant          = surface3;
   static const Color surfaceTint             = teal;
   static const Color outline                 = muted;
@@ -94,14 +98,7 @@ class AppColors {
   static const Color primaryFixedDim         = Color(0xFFBCE0DF);
   static const Color onPrimaryFixed          = tealDeep;
   static const Color onPrimaryFixedVariant   = teal;
-  static const LinearGradient kineticGradient = primaryGradient;
 
-  static List<BoxShadow> kineticShadow = const [
-    BoxShadow(color: Color(0x140E8B8C), blurRadius: 24, offset: Offset(0, 8)),
-  ];
-  static List<BoxShadow> bottomNavShadow = const [
-    BoxShadow(color: Color(0x140E8B8C), blurRadius: 24, offset: Offset(0, -8)),
-  ];
 
   // Sombra sutil para dar profundidade aos cards sem pesar no visual clean.
   static const List<BoxShadow> cardShadow = [

@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
@@ -5,12 +6,18 @@ import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_bottom_nav.dart';
-import '../../widgets/app_scaffold.dart';
+import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/menu_row.dart';
 
 class PerfilScreen extends StatefulWidget {
-  const PerfilScreen({super.key});
+  const PerfilScreen({super.key, this.agora});
+
+  /// Fixa o "agora" do contador "X meses na plataforma". So os testes passam
+  /// isto: o numero sobe todo dia 1o, e sem fixar o golden do perfil quebra
+  /// sozinho na virada do mes.
+  final DateTime? agora;
 
   @override
   State<PerfilScreen> createState() => _PerfilScreenState();
@@ -76,15 +83,15 @@ class _PerfilScreenState extends State<PerfilScreen> {
             label: 'AVALIAÇÃO',
           ),
           const _StatDivider(),
-          const _StatCellDynamic(),
+          _StatCellDynamic(agora: widget.agora),
         ],
       ),
     );
   }
 
-  static int _calcularMesesPlataforma(DateTime? criadoEm) {
+  static int _calcularMesesPlataforma(DateTime? criadoEm, DateTime? agoraInjetado) {
     if (criadoEm == null) return 0;
-    final agora = DateTime.now();
+    final agora = agoraInjetado ?? clock.now();
     final meses = (agora.year - criadoEm.year) * 12 +
         (agora.month - criadoEm.month);
     return meses < 0 ? 0 : meses;
@@ -130,7 +137,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
         ? nome.substring(0, 2).toUpperCase()
         : nome.toUpperCase();
 
-    return AppScaffold(
+    return AdaptiveScaffold(
       header: _PerfilHeader(
         nome: nome,
         initials: initials,
@@ -143,6 +150,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
         currentIndex: 3,
         onTap: (i) => _onNav(context, i, isLojista),
       ),
+      desktopTitle: 'Perfil',
+      desktopSubtitle: isLojista ? 'Conta de lojista' : 'Conta de entregador',
+      desktopSelectedRoute: AppRoutes.perfil,
+      desktopBody: _buildDesktop(context, usuario, isLojista, nome, initials),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 14, 18, 40),
         children: [
@@ -151,6 +162,90 @@ class _PerfilScreenState extends State<PerfilScreen> {
             child: _buildStatsCard(usuario),
           ),
           const SizedBox(height: 4),
+          ..._buildMenus(context, isLojista, nome),
+        ],
+      ),
+    );
+  }
+
+  // ── Desktop — identidade à esquerda, menus à direita ─────────────────────
+
+  Widget _buildDesktop(BuildContext context, Usuario? usuario, bool isLojista,
+      String nome, String initials) {
+    return ContentGrid(
+      children: [
+        GridCol(
+          span: 4,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  gradient: AppColors.headerGradient,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: const Color(0x29FFFFFF),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(
+                            color: const Color(0x38FFFFFF), width: 1.5),
+                      ),
+                      child: Center(
+                        child: Text(initials,
+                            style: tsBricolage(26, FontWeight.w800,
+                                color: const Color(0xFFEAFFFD))),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(nome,
+                        textAlign: TextAlign.center,
+                        style: tsBricolage(18, FontWeight.w800,
+                            color: const Color(0xFFFFFFFF))),
+                    const SizedBox(height: 4),
+                    Text(
+                      isLojista ? 'Lojista' : 'Motoboy',
+                      style: tsJakarta(12, FontWeight.w600,
+                          color: const Color(0xFFBFE5E3)),
+                    ),
+                    if (usuario?.email != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        usuario!.email,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tsJakarta(11.5, FontWeight.w400,
+                            color: const Color(0xFFBFE5E3)),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildStatsCard(usuario),
+            ],
+          ),
+        ),
+        GridCol(
+          span: 8,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: _buildMenus(context, isLojista, nome),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Grupos de menu do perfil — os mesmos no mobile e no desktop.
+  List<Widget> _buildMenus(
+      BuildContext context, bool isLojista, String nome) {
+    return [
           // CONTA
           MenuGroup(children: [
             MenuRow(
@@ -234,9 +329,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               },
             ),
           ]),
-        ],
-      ),
-    );
+    ];
   }
 }
 
@@ -392,12 +485,15 @@ class _StatCell extends StatelessWidget {
 
 /// Stat cell que renderiza "X meses" baseado em criadoEm do AuthService.
 class _StatCellDynamic extends StatelessWidget {
-  const _StatCellDynamic();
+  const _StatCellDynamic({this.agora});
+
+  final DateTime? agora;
 
   @override
   Widget build(BuildContext context) {
     final usuario = context.watch<AuthService>().usuario;
-    final meses = _PerfilScreenState._calcularMesesPlataforma(usuario?.criadoEm);
+    final meses =
+        _PerfilScreenState._calcularMesesPlataforma(usuario?.criadoEm, agora);
     final valor = meses == 0
         ? '< 1 mês'
         : meses == 1

@@ -91,6 +91,7 @@ class _WalletBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        constraints: const BoxConstraints(minHeight: 44),
         padding: const EdgeInsets.symmetric(vertical: 9),
         decoration: BoxDecoration(
           color: solid ? AppColors.amber : const Color(0x29FFFFFF),
@@ -102,7 +103,7 @@ class _WalletBtn extends StatelessWidget {
           child: Text(
             label,
             style: tsJakarta(10.5, FontWeight.w700,
-                color: solid ? const Color(0xFF3A2603) : const Color(0xFFFFFFFF)),
+                color: solid ? AppColors.onTertiary : const Color(0xFFFFFFFF)),
           ),
         ),
       ),
@@ -132,9 +133,12 @@ class LedgerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Os dois lados do merge: os três estados vieram da branch de pagamentos
+    // (`bool?` — entra, sai, ou não dá para afirmar), e o token no lugar do
+    // literal 0xFF9A6206 veio da main.
     final iconColor = switch (isCredit) {
       true => AppColors.good,
-      false => const Color(0xFF9A6206),
+      false => AppColors.onTertiaryContainer,
       null => AppColors.muted,
     };
     final amountColor = iconColor;

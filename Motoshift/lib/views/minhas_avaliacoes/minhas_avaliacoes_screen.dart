@@ -3,9 +3,12 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
-import '../../widgets/app_scaffold.dart';
+import '../../widgets/desktop/content_grid.dart';
+import '../../widgets/desktop/panel_card.dart';
 
 class MinhasAvaliacoesScreen extends StatefulWidget {
   const MinhasAvaliacoesScreen({super.key});
@@ -52,8 +55,26 @@ class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffold(
+    final media = (_dados?['mediaGeral'] as num?)?.toDouble() ?? 0.0;
+    final total = (_dados?['totalAvaliacoes'] as num?)?.toInt() ?? 0;
+
+    return AdaptiveScaffold(
       header: AppHeader.back(title: 'Minhas avaliações'),
+      desktopTitle: 'Minhas avaliações',
+      desktopSubtitle: _carregando
+          ? 'Carregando…'
+          : total == 0
+              ? 'Nenhuma avaliação recebida ainda'
+              : '$total ${total == 1 ? 'avaliação' : 'avaliações'} · '
+                  'média ${media.toStringAsFixed(1)}',
+      desktopSelectedRoute: AppRoutes.minhasAvaliacoes,
+      desktopBody: _carregando
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.teal),
+            )
+          : _erro != null
+              ? _buildErro()
+              : _buildDesktop(),
       body: _carregando
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.teal),
@@ -61,6 +82,57 @@ class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
           : _erro != null
               ? _buildErro()
               : _buildConteudo(),
+    );
+  }
+
+  // ── Desktop — resumo à esquerda, comentários à direita ───────────────────
+
+  Widget _buildDesktop() {
+    final media = (_dados?['mediaGeral'] as num?)?.toDouble() ?? 0.0;
+    final total = (_dados?['totalAvaliacoes'] as num?)?.toInt() ?? 0;
+    final dist =
+        Map<String, dynamic>.from((_dados?['distribuicao'] as Map?) ?? {});
+    final avaliacoes = (_dados?['avaliacoes'] as List?) ?? const [];
+
+    if (total == 0) return _buildConteudo();
+
+    return ContentGrid(
+      children: [
+        GridCol(
+          span: 4,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildResumo(media, total),
+              const SizedBox(height: 16),
+              _buildDistribuicao(dist, total),
+            ],
+          ),
+        ),
+        GridCol(
+          span: 8,
+          child: PanelCard(
+            title: 'Comentários recentes',
+            padding: const EdgeInsets.all(22),
+            gap: 14,
+            child: avaliacoes.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 40),
+                    child: Center(
+                      child: Text('Nenhum comentário ainda.',
+                          style: tsJakarta(12.5, FontWeight.w400,
+                              color: AppColors.muted)),
+                    ),
+                  )
+                : Column(
+                    children: avaliacoes
+                        .map((a) => _buildAvaliacaoCard(
+                            Map<String, dynamic>.from(a as Map)))
+                        .toList(),
+                  ),
+          ),
+        ),
+      ],
     );
   }
 

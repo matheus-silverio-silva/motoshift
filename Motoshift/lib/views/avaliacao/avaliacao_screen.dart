@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/breakpoints.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_scaffold.dart';
@@ -108,9 +109,74 @@ class _AvaliacaoScreenState extends State<AvaliacaoScreen> {
     final args =
         ModalRoute.of(context)?.settings.arguments as AvaliacaoArgs?;
 
+    if (context.isDesktop) return _buildModalDesktop(args);
+
     return AppScaffold(
       header: AppHeader.back(title: 'Avaliação'),
-      body: ListView(
+      body: _buildFormulario(args),
+    );
+  }
+
+  /// No desktop a avaliação é um modal de 480px sobre um fundo escurecido,
+  /// conforme o artboard 12.
+  ///
+  /// A rota continua opaca, então a tela de origem não aparece por trás — um
+  /// overlay de verdade exigiria trocar `routes:` por uma rota transparente
+  /// em app.dart.
+  Widget _buildModalDesktop(AvaliacaoArgs? args) {
+    return Scaffold(
+      backgroundColor: AppColors.ink.withOpacity(0.45),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 720),
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: AppColors.surface2,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.line, width: 1.5),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.fromLTRB(22, 16, 12, 16),
+                  decoration: const BoxDecoration(
+                    color: AppColors.surface,
+                    border: Border(
+                      bottom:
+                          BorderSide(color: AppColors.line, width: 1.5),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text('Avaliação',
+                            style: tsBricolage(17, FontWeight.w800,
+                                color: AppColors.ink)),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close_rounded,
+                            size: 20, color: AppColors.muted),
+                        tooltip: 'Fechar',
+                      ),
+                    ],
+                  ),
+                ),
+                Flexible(child: _buildFormulario(args)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFormulario(AvaliacaoArgs? args) {
+    return ListView(
+        shrinkWrap: true,
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 32),
         children: [
           // Avatar + nome avaliado
@@ -256,7 +322,6 @@ class _AvaliacaoScreenState extends State<AvaliacaoScreen> {
             ),
           ),
         ],
-      ),
-    );
+      );
   }
 }

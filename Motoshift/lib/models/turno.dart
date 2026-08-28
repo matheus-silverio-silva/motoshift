@@ -1,9 +1,13 @@
+import 'package:clock/clock.dart';
 StatusTurno _parseStatus(String raw) {
   return switch (raw.toLowerCase()) {
     'em_andamento' || 'emandamento' => StatusTurno.emAndamento,
     'aceito' => StatusTurno.aceito,
     'finalizado' => StatusTurno.finalizado,
     'cancelado' => StatusTurno.cancelado,
+    // O backend expira turnos que ninguém aceitou até o horário de início
+    // (SCRUM-19). Sem este caso o turno caía no `_` e voltava como "Aberto".
+    'expirado' => StatusTurno.expirado,
     _ => StatusTurno.aberto,
   };
 }
@@ -29,6 +33,12 @@ class Turno {
   final DateTime? motoboyConfirmouEm;
   final double? distanciaPercorridaKm;
   final int? totalEntregas;
+
+  /// Distância entre o usuário e o turno. Só vem preenchida quando a busca
+  /// manda lat+lng+raioKm (`GET /api/turnos/disponiveis`); nas outras
+  /// listagens é nula.
+  final double? distanciaKm;
+
   final DateTime? criadoEm;
   final DateTime? atualizadoEm;
 
@@ -51,6 +61,7 @@ class Turno {
     this.motoboyConfirmouEm,
     this.distanciaPercorridaKm,
     this.totalEntregas,
+    this.distanciaKm,
     this.criadoEm,
     this.atualizadoEm,
   });
@@ -84,6 +95,7 @@ class Turno {
           ? (json['distanciaPercorridaKm'] as num).toDouble()
           : null,
       totalEntregas: json['totalEntregas'] as int?,
+      distanciaKm: (json['distanciaKm'] as num?)?.toDouble(),
       criadoEm: json['criadoEm'] != null
           ? DateTime.parse(json['criadoEm'] as String)
           : null,
@@ -131,7 +143,8 @@ enum StatusTurno {
   aceito,
   emAndamento,
   finalizado,
-  cancelado;
+  cancelado,
+  expirado;
 
   String get label {
     return switch (this) {
@@ -140,6 +153,7 @@ enum StatusTurno {
       StatusTurno.emAndamento => 'Em Andamento',
       StatusTurno.finalizado => 'Finalizado',
       StatusTurno.cancelado => 'Cancelado',
+      StatusTurno.expirado => 'Expirado',
     };
   }
 
@@ -158,8 +172,13 @@ extension TurnosFiltros on Iterable<Turno> {
   /// começou há uma hora e termina daqui a três ainda interessa a quem está
   /// olhando o painel — o que não pode aparecer é turno já encerrado.
   /// Cancelados e finalizados saem pelo filtro de status.
-  List<Turno> proximos() {
-    final agora = DateTime.now();
+  ///
+  /// [hoje] existe pelo mesmo motivo do parâmetro homônimo em
+  /// `serieUltimos7Dias`: sem ele, o golden de qualquer tela que use esta
+  /// lista fica preso ao relógio da máquina. Só os testes passam a data; em
+  /// produção o parâmetro é omitido e o comportamento é o de sempre.
+  List<Turno> proximos({DateTime? hoje}) {
+    final agora = hoje ?? clock.now();
     final lista = where((t) => t.status.ativo && t.dataFim.isAfter(agora))
         .toList();
     lista.sort((a, b) => a.dataInicio.compareTo(b.dataInicio));

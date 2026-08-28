@@ -26,7 +26,7 @@ class StatusPill extends StatelessWidget {
 
   Color get _fg => switch (variant) {
         PillVariant.teal  => AppColors.tealDeep,
-        PillVariant.amber => const Color(0xFF9A6206),
+        PillVariant.amber => AppColors.onTertiaryContainer,
         PillVariant.good  => const Color(0xFF0F6E4E),
         PillVariant.ghost => AppColors.muted,
       };

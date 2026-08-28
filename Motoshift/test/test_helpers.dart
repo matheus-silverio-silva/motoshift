@@ -10,6 +10,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -26,6 +27,8 @@ import 'package:moto_shift/models/usuario.dart';
 import 'package:moto_shift/presentation/providers/historico_provider.dart';
 import 'package:moto_shift/presentation/providers/pedido_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_provider.dart';
+import 'package:moto_shift/presentation/providers/turno_selecionado_provider.dart';
+import 'package:moto_shift/presentation/providers/notificacao_provider.dart';
 import 'package:moto_shift/services/api_service.dart';
 import 'package:moto_shift/services/auth_service.dart';
 import 'package:moto_shift/theme/app_theme.dart';
@@ -94,12 +97,23 @@ Future<void> setupGoldenTests() async {
 /// código. Ancorando na meia-noite, os horários exibidos ficam estáveis ao
 /// longo do dia e a relação "ontem / hoje / amanhã" continua valendo.
 ///
-/// A deriva diária que sobra é intencional: os fakes descrevem turnos
-/// relativos a hoje, e é isso que as telas precisam exercitar.
+/// Telas que NÃO imprimem data absoluta usam esta base e ficam estáveis ao
+/// longo do dia; as que imprimem recebem o [dataAncoraGolden] abaixo.
 DateTime hojeAncorado() {
-  final agora = DateTime.now();
+  // clock.now() e nao DateTime.now(): dentro de withClock, fixture e tela
+  // precisam concordar sobre que dia e hoje.
+  final agora = clock.now();
   return DateTime(agora.year, agora.month, agora.day);
 }
+
+/// Momento em que os goldens desta suíte foram gravados.
+///
+/// Tudo que a tela deriva do relógio — o anel do "hoje" no calendário, a
+/// saudação por faixa de hora, os rótulos dos sete dias do gráfico — precisa
+/// receber esta data em vez de chamar `DateTime.now()`. Senão o golden só
+/// passa no dia e na hora em que foi gerado, e uma suíte que já falha esconde
+/// a próxima regressão de verdade.
+final DateTime dataAncoraGolden = DateTime(2026, 8, 19, 14, 10);
 
 Usuario fakeMotoboy() => Usuario(
       id: 1,
@@ -141,7 +155,7 @@ Usuario fakeLojista() => Usuario(
     );
 
 List<Turno> fakeTurnosDisponiveis() {
-  final base = DateTime.now().add(const Duration(days: 1));
+  final base = clock.now().add(const Duration(days: 1));
   return [
     Turno(
       id: 101,
@@ -166,8 +180,14 @@ List<Turno> fakeTurnosDisponiveis() {
   ];
 }
 
-List<Turno> fakeMeusTurnos() {
-  final hoje = hojeAncorado();
+/// Turnos do motoboy, relativos a [ancora] (padrão: hoje à meia-noite).
+///
+/// O gráfico "ganhos dos últimos dias" do dashboard rotula os sete dias com o
+/// dia da semana, e esses rótulos giram junto com o calendário. Passando a
+/// mesma âncora do golden, a barra cai sempre no mesmo dia — ver
+/// [FakeApiDatasFixas].
+List<Turno> fakeMeusTurnos({DateTime? ancora}) {
+  final hoje = ancora ?? hojeAncorado();
   return [
     Turno(
       id: 201,
@@ -211,11 +231,42 @@ List<Turno> fakeMeusTurnos() {
       status: StatusTurno.finalizado,
       pagamentoStatus: PagamentoStatus.pendente,
     ),
+    // ── Aceitos e futuros: exercitam a seção "Próximos turnos" ──────────────
+    // Sem estes dois a seção ficava vazia, e `_formatProximoData` ("Amanhã",
+    // "Sáb", "Hoje") não era exercitado por teste nenhum — armadilha pronta
+    // para o dia em que alguém acrescentasse um turno futuro aqui.
+    Turno(
+      id: 204,
+      lojistId: 2,
+      motoboyId: 1,
+      titulo: 'Turno Manhã — Padaria do Zé',
+      regiao: 'Batel, Curitiba',
+      // ramo "Amanhã"
+      dataInicio: hoje.add(const Duration(days: 1, hours: 14)),
+      dataFim: hoje.add(const Duration(days: 1, hours: 18)),
+      valorEstimado: 130,
+      raioEntregaKm: 6,
+      status: StatusTurno.aceito,
+    ),
+    Turno(
+      id: 205,
+      lojistId: 3,
+      motoboyId: 1,
+      titulo: 'Turno Noite — Pizzaria Bella',
+      regiao: 'Centro, Curitiba',
+      // ramo do dia da semana (nem hoje nem amanhã)
+      dataInicio: hoje.add(const Duration(days: 3, hours: 19)),
+      dataFim: hoje.add(const Duration(days: 3, hours: 23)),
+      valorEstimado: 145,
+      raioEntregaKm: 7,
+      status: StatusTurno.aceito,
+    ),
   ];
 }
 
-List<Turno> fakeTurnosLojista() {
-  final hoje = hojeAncorado();
+/// Turnos do lojista, relativos a [ancora] — mesmo motivo do fakeMeusTurnos.
+List<Turno> fakeTurnosLojista({DateTime? ancora}) {
+  final hoje = ancora ?? hojeAncorado();
   return [
     Turno(
       id: 301,
@@ -277,11 +328,64 @@ Map<String, dynamic> fakeDashboardLojista() => {
       'reputacaoEntregadores': 4.7,
     };
 
-Carteira fakeCarteira() => const Carteira(
-      motoboyId: 1,
-      saldoAtual: 320,
-      ganhosMensais: 1850,
-    );
+/// Carteira com extrato, ancorado em [dataAncoraGolden].
+///
+/// Antes vinha sem transações, e o golden da carteira mostrava só o estado
+/// vazio — ou seja, `_formatarData` ("Hoje, 14:30" / "Ontem, ..." / "12/08,
+/// ...") não era exercitado por teste nenhum. Não quebrava, e viraria falha no
+/// dia em que alguém acrescentasse dados aqui.
+///
+/// Os três lançamentos cobrem os três ramos do formatador, de propósito. As
+/// datas são absolutas: com `DateTime.now()` o rótulo "Hoje" viraria "Ontem"
+/// à meia-noite e levaria o golden junto.
+Carteira fakeCarteira() {
+  final dia = DateTime(
+      dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
+  return Carteira(
+    motoboyId: 1,
+    saldoAtual: 320,
+    ganhosMensais: 1850,
+    atualizadoEm: dia.add(const Duration(hours: 14, minutes: 30)),
+    transacoes: [
+      // ramo "Hoje, HH:mm"
+      Transacao(
+        id: 1,
+        motoboyId: 1,
+        turnoId: 202,
+        tipo: TipoTransacao.turno,
+        valor: 120,
+        descricao: 'Turno concluído — Hamburgueria',
+        status: StatusTransacao.processado,
+        criadoEm: dia.add(const Duration(hours: 14, minutes: 30)),
+      ),
+      // ramo "Ontem, HH:mm"
+      Transacao(
+        id: 2,
+        motoboyId: 1,
+        tipo: TipoTransacao.saque,
+        valor: 200,
+        descricao: 'Transferência Pix — ricardo@pix.com',
+        status: StatusTransacao.concluido,
+        criadoEm: dia.subtract(const Duration(days: 1)).add(
+              const Duration(hours: 9, minutes: 15),
+            ),
+      ),
+      // ramo "d/MM, HH:mm"
+      Transacao(
+        id: 3,
+        motoboyId: 1,
+        turnoId: 201,
+        tipo: TipoTransacao.bonus,
+        valor: 35,
+        descricao: 'Bônus por avaliação 5 estrelas',
+        status: StatusTransacao.processado,
+        criadoEm: dia.subtract(const Duration(days: 7)).add(
+              const Duration(hours: 20),
+            ),
+      ),
+    ],
+  );
+}
 
 List<Transacao> fakeTransacoes() => [
       Transacao(
@@ -292,7 +396,7 @@ List<Transacao> fakeTransacoes() => [
         valor: 120,
         descricao: 'Turno concluído - Hamburgueria',
         status: StatusTransacao.processado,
-        criadoEm: DateTime.now().subtract(const Duration(days: 7)),
+        criadoEm: clock.now().subtract(const Duration(days: 7)),
       ),
       Transacao(
         id: 2,
@@ -301,7 +405,7 @@ List<Transacao> fakeTransacoes() => [
         valor: 200,
         descricao: 'Transferência Pix — ricardo@pix.com',
         status: StatusTransacao.concluido,
-        criadoEm: DateTime.now().subtract(const Duration(days: 5)),
+        criadoEm: clock.now().subtract(const Duration(days: 5)),
       ),
     ];
 
@@ -333,14 +437,58 @@ Map<String, dynamic> fakeAvaliacoes() => {
       ],
     };
 
+/// Notificações fake cobrindo os tipos que a tela 17 estiliza.
+List<Map<String, dynamic>> fakeNotificacoes() {
+  final agora = clock.now();
+  Map<String, dynamic> n(
+    int id,
+    String tipo,
+    String titulo,
+    String mensagem,
+    bool lida,
+    Duration atras,
+  ) =>
+      {
+        'id': id,
+        'tipo': tipo,
+        'titulo': titulo,
+        'mensagem': mensagem,
+        'referenciaTipo': 'turno',
+        'referenciaId': 101,
+        'lida': lida,
+        'criadoEm': agora.subtract(atras).toIso8601String(),
+      };
+
+  return [
+    n(1, 'turno_aceito', 'Turno aceito',
+        'Lucas Mendes aceitou Sexta cheia · Rebouças (17:30 – 22:30).',
+        false, const Duration(minutes: 12)),
+    n(2, 'avaliacao_pendente', 'Avaliação pendente',
+        'Avalie Lucas Mendes e Thiago Alves pelo turno de almoço.',
+        false, const Duration(hours: 1)),
+    n(3, 'pagamento_confirmado', 'Pagamento confirmado',
+        'R\$ 130 creditados na sua carteira.', false,
+        const Duration(hours: 4)),
+    n(4, 'turno_vencendo', 'Turno começa em breve',
+        'Seu turno no Batel começa em 1 hora.', false,
+        const Duration(hours: 6)),
+    n(5, 'turno_expirado', 'Turno expirado',
+        'Manhã · Cristo Rei expirou sem entregador.', true,
+        const Duration(days: 1)),
+    n(6, 'turno_lotado', 'Todas as vagas preenchidas',
+        'Sábado · Portão está com as 3 vagas preenchidas.', true,
+        const Duration(days: 2)),
+  ];
+}
+
 Map<String, dynamic> fakeAgendaMensal() => {
-      'mes': DateTime.now().month,
-      'ano': DateTime.now().year,
+      'mes': clock.now().month,
+      'ano': clock.now().year,
       'turnos': [],
     };
 
 Map<String, dynamic> fakeAgendaSemanal() => {
-      'inicioSemana': DateTime.now().toIso8601String().substring(0, 10),
+      'inicioSemana': clock.now().toIso8601String().substring(0, 10),
       'dias': [],
     };
 
@@ -382,6 +530,9 @@ class FakeApiService extends ApiService {
     String? dataInicio,
     String? dataFim,
     String? ordenarPor,
+    double? lat,
+    double? lng,
+    double? raioKm,
   }) async =>
       fakeTurnosDisponiveis();
 
@@ -432,6 +583,110 @@ class FakeApiService extends ApiService {
 
   @override
   Future<bool> verificarPendente(int turnoId, int usuarioId) async => false;
+
+  @override
+  Future<int> contarNotificacoesNaoLidas(int usuarioId) async =>
+      fakeNotificacoes().where((n) => n['lida'] == false).length;
+
+  @override
+  Future<List<Map<String, dynamic>>> listarNotificacoes(
+    int usuarioId, {
+    bool apenasNaoLidas = false,
+  }) async {
+    final todas = fakeNotificacoes();
+    if (!apenasNaoLidas) return todas;
+    return todas.where((n) => n['lida'] == false).toList();
+  }
+
+  @override
+  Future<({bool precisaAvaliar, List<Map<String, dynamic>> pendentes})>
+      buscarAvaliacoesPendentes(int turnoId, int usuarioId) async =>
+          (precisaAvaliar: false, pendentes: <Map<String, dynamic>>[]);
+}
+
+/// Turnos encerrados com data ABSOLUTA, para as telas de histórico.
+///
+/// Os demais fakes se ancoram em `hojeAncorado()` de propósito: as telas de
+/// turno filtram por "ainda vai acontecer", e isso só funciona com datas
+/// relativas a hoje. O histórico é o oposto — ele só mostra turnos encerrados
+/// e imprime a data em dd/MM/yyyy. Com fixture relativa, o golden dele mudaria
+/// de dia junto com o calendário e a suíte amanheceria vermelha sozinha.
+List<Turno> fakeTurnosEncerradosFixos() {
+  final base = DateTime(2026, 8, 19); // mesmo dia do dataAncoraGolden
+  return [
+    Turno(
+      id: 401,
+      lojistId: 2,
+      motoboyId: 1,
+      titulo: 'Turno Concluído — pendente pagamento',
+      regiao: 'Água Verde, Curitiba',
+      dataInicio: base.subtract(const Duration(days: 3)),
+      dataFim: base.subtract(const Duration(days: 3)).add(const Duration(hours: 4)),
+      valorEstimado: 125,
+      raioEntregaKm: 8,
+      status: StatusTurno.finalizado,
+      pagamentoStatus: PagamentoStatus.pendente,
+    ),
+    Turno(
+      id: 402,
+      lojistId: 2,
+      motoboyId: 1,
+      titulo: 'Turno Concluído — Hamburgueria',
+      regiao: 'Água Verde, Curitiba',
+      dataInicio: base.subtract(const Duration(days: 7)),
+      dataFim: base.subtract(const Duration(days: 7)).add(const Duration(hours: 4)),
+      valorEstimado: 120,
+      raioEntregaKm: 8,
+      status: StatusTurno.finalizado,
+      pagamentoStatus: PagamentoStatus.pago,
+      lojistaConfirmouEm: base.subtract(const Duration(days: 7)),
+      motoboyConfirmouEm: base.subtract(const Duration(days: 7)),
+    ),
+    Turno(
+      id: 403,
+      lojistId: 2,
+      titulo: 'Turno sem candidato',
+      regiao: 'Batel, Curitiba',
+      dataInicio: base.subtract(const Duration(days: 5)),
+      dataFim: base.subtract(const Duration(days: 5)).add(const Duration(hours: 4)),
+      valorEstimado: 150,
+      raioEntregaKm: 5,
+      status: StatusTurno.expirado,
+    ),
+  ];
+}
+
+/// Fake para os goldens do histórico: só turnos encerrados, com data absoluta.
+class FakeApiHistorico extends FakeApiService {
+  @override
+  Future<List<Turno>> listarMeusTurnos(int motoboyId) async =>
+      fakeTurnosEncerradosFixos();
+
+  @override
+  Future<List<Turno>> listarTurnosLojista(int lojistId) async =>
+      fakeTurnosEncerradosFixos();
+}
+
+/// Fake para os goldens de dashboard: a mesma lista de sempre, só que ancorada
+/// no [dataAncoraGolden] em vez de em hoje.
+///
+/// O dashboard desenha os ganhos dos últimos sete dias com o dia da semana em
+/// cada barra. Com fixture relativa a hoje, esses rótulos giram todo dia e o
+/// golden amanhece vermelho — foi o que aconteceu na virada de 27 para 28/08.
+class FakeApiDatasFixas extends FakeApiService {
+  /// Meia-noite do dia da âncora. Os fakes usam a âncora como início do turno
+  /// e somam 23h59 para o "dia inteiro"; com a hora do [dataAncoraGolden] o
+  /// card exibiria "14:10 - 14:09" em vez de "00:00 - 23:59".
+  static final DateTime _dia = DateTime(
+      dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
+
+  @override
+  Future<List<Turno>> listarMeusTurnos(int motoboyId) async =>
+      fakeMeusTurnos(ancora: _dia);
+
+  @override
+  Future<List<Turno>> listarTurnosLojista(int lojistId) async =>
+      fakeTurnosLojista(ancora: _dia);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -447,12 +702,22 @@ Future<void> pumpGolden(
   Object? argumentos,
   Size viewport = const Size(390, 844),
   Duration settle = const Duration(milliseconds: 600),
+  int? turnoSelecionado,
+  ApiService? apiFake,
 }) async {
-  await tester.binding.setSurfaceSize(viewport);
-  tester.view.physicalSize = viewport * tester.view.devicePixelRatio;
+  // A ordem importa: `physicalSize` precisa ser calculado com o DPR final.
+  // Fazendo o inverso (multiplicar pelo DPR padrão da view, 3.0, e só depois
+  // zerar para 1.0) a MediaQuery passava a reportar 1170x2532 enquanto a
+  // superfície renderizada continuava 390x844 — as duas discordavam, e telas
+  // que decidem layout por largura (AdaptiveScaffold) caíam no shell desktop
+  // dentro de um frame de celular.
   tester.view.devicePixelRatio = 1.0;
+  tester.view.physicalSize = viewport;
+  await tester.binding.setSurfaceSize(viewport);
 
-  final api = FakeApiService();
+  // Telas que imprimem data absoluta precisam de um fake de data fixa, senão
+  // o golden vira o dia junto com o calendário — ver [FakeApiHistorico].
+  final api = apiFake ?? FakeApiService();
   final usuario =
       tipoUsuario == TipoUsuario.motoboy ? fakeMotoboy() : fakeLojista();
   final auth = AuthService(api)..atualizarUsuarioLocal(usuario);
@@ -460,11 +725,19 @@ Future<void> pumpGolden(
   final turnoProv = TurnoProvider(api);
   turnoProv.setDisponiveisExterno(fakeTurnosDisponiveis());
 
+  final selecaoProv = TurnoSelecionadoProvider();
+  if (turnoSelecionado != null) selecaoProv.selecionar(turnoSelecionado);
+
   final widgetTree = MultiProvider(
     providers: [
       Provider<ApiService>.value(value: api),
       ChangeNotifierProvider<AuthService>.value(value: auth),
       ChangeNotifierProvider<TurnoProvider>.value(value: turnoProv),
+      ChangeNotifierProvider<TurnoSelecionadoProvider>.value(
+          value: selecaoProv),
+      ChangeNotifierProvider<NotificacaoProvider>(
+        create: (_) => NotificacaoProvider(api),
+      ),
       ChangeNotifierProvider<PedidoProvider>(
         create: (_) => PedidoProvider(repo: PedidoRepositoryImpl(api)),
       ),
