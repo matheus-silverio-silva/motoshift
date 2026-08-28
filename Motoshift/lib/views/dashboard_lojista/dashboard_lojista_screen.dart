@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -64,7 +65,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
   }
 
   String _greeting() {
-    final h = (widget.agora ?? DateTime.now()).hour;
+    final h = (widget.agora ?? clock.now()).hour;
     if (h < 12) return 'Bom dia,';
     if (h < 18) return 'Boa tarde,';
     return 'Boa noite,';
@@ -110,7 +111,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
   /// do fixture começa no dia da âncora nem no de hoje — coincidência, não
   /// garantia.
   int _comecamHoje(List<Turno> turnos) {
-    final hoje = widget.agora ?? DateTime.now();
+    final hoje = widget.agora ?? clock.now();
     return turnos
         .where(
           (t) =>
@@ -174,7 +175,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
     final texto = DateFormat(
       "EEEE, d 'de' MMMM",
       'pt_BR',
-    ).format(widget.agora ?? DateTime.now());
+    ).format(widget.agora ?? clock.now());
     return texto[0].toUpperCase() + texto.substring(1);
   }
 

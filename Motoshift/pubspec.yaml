@@ -22,6 +22,12 @@ dependencies:
   # State Management
   provider: ^6.1.2
 
+  # Relógio injetável. A UI lê `clock.now()` em vez de `DateTime.now()` para
+  # que os golden tests possam fixar a data com `withClock` e provar que a
+  # renderização não depende do relógio da máquina. Em runtime é idêntico:
+  # sem `withClock` ativo, `clock.now()` devolve `DateTime.now()`.
+  clock: ^1.1.1
+
   # Fontes do tema (Bricolage Grotesque + Plus Jakarta Sans)
   google_fonts: ^6.2.1
 

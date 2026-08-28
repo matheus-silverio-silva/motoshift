@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
@@ -35,7 +36,7 @@ class Notificacao {
       lida: json['lida'] == true,
       criadoEm: json['criadoEm'] != null
           ? DateTime.parse(json['criadoEm'] as String)
-          : DateTime.now(),
+          : clock.now(),
       referenciaTipo: json['referenciaTipo'] as String?,
       referenciaId: (json['referenciaId'] as num?)?.toInt(),
     );
@@ -88,7 +89,7 @@ class Notificacao {
 
   /// Grupo de dia usado no cabeçalho da lista.
   String get grupoDia {
-    final agora = DateTime.now();
+    final agora = clock.now();
     final hoje = DateTime(agora.year, agora.month, agora.day);
     final dia = DateTime(criadoEm.year, criadoEm.month, criadoEm.day);
     if (dia == hoje) return 'HOJE';
@@ -99,7 +100,7 @@ class Notificacao {
 
   /// "há 12 min", "há 3 h", "há 2 d".
   String get tempoRelativo {
-    final d = DateTime.now().difference(criadoEm);
+    final d = clock.now().difference(criadoEm);
     if (d.inMinutes < 1) return 'agora';
     if (d.inMinutes < 60) return 'há ${d.inMinutes} min';
     if (d.inHours < 24) return 'há ${d.inHours} h';

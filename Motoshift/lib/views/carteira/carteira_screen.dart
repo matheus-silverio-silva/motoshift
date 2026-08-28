@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/carteira.dart';
@@ -16,7 +17,12 @@ import '../../widgets/section_title.dart';
 import '../../widgets/wallet_widgets.dart';
 
 class CarteiraScreen extends StatefulWidget {
-  const CarteiraScreen({super.key});
+  const CarteiraScreen({super.key, this.agora});
+
+  /// Fixa o "agora" do extrato. So os testes passam isto — e o padrao e o
+  /// mesmo das outras telas com golden (AgendaScreen, dashboards,
+  /// MeusTurnosScreen, PerfilScreen).
+  final DateTime? agora;
 
   @override
   State<CarteiraScreen> createState() => _CarteiraScreenState();
@@ -455,8 +461,19 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     );
   }
 
+  /// "Hoje, 14:30" / "Ontem, 09:15" / "12/08, 20:00".
+  ///
+  /// A data de referência vem de `widget.agora` — o mesmo mecanismo que as
+  /// outras telas com golden já usam. Não leva parâmetro próprio como
+  /// `serieUltimos7Dias` e `proximos()` porque aqui é método privado do
+  /// State: quem chama já está dentro da tela, e um parâmetro que ninguém
+  /// passa seria API morta.
+  ///
+  /// Sem isso, o dia em que alguém acrescentasse uma transação ao fixture
+  /// seria o dia em que o golden da carteira passaria a virar sozinho à
+  /// meia-noite.
   String _formatarData(DateTime d) {
-    final agora = DateTime.now();
+    final agora = widget.agora ?? clock.now();
     final hoje = DateTime(agora.year, agora.month, agora.day);
     final dia = DateTime(d.year, d.month, d.day);
     final hora =

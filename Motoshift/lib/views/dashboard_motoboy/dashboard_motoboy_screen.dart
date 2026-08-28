@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -69,7 +70,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
   }
 
   String _greeting() {
-    final h = (widget.agora ?? DateTime.now()).hour;
+    final h = (widget.agora ?? clock.now()).hour;
     if (h < 12) return 'Bom dia,';
     if (h < 18) return 'Boa tarde,';
     return 'Boa noite,';
@@ -170,7 +171,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
   String _dataExtenso() {
     final texto =
         DateFormat("EEEE, d 'de' MMMM", 'pt_BR')
-            .format(widget.agora ?? DateTime.now());
+            .format(widget.agora ?? clock.now());
     return texto[0].toUpperCase() + texto.substring(1);
   }
 
@@ -193,7 +194,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
 
   Widget _buildDesktop(AuthService auth) {
     final score = _score(auth);
-    final mesAtual = DateFormat('MMMM', 'pt_BR').format(DateTime.now());
+    final mesAtual = DateFormat('MMMM', 'pt_BR').format(clock.now());
 
     return Consumer<TurnoProvider>(
       builder: (context, provider, _) {

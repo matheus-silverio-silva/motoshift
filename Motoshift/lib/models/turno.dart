@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 StatusTurno _parseStatus(String raw) {
   return switch (raw.toLowerCase()) {
     'em_andamento' || 'emandamento' => StatusTurno.emAndamento,
@@ -177,7 +178,7 @@ extension TurnosFiltros on Iterable<Turno> {
   /// lista fica preso ao relógio da máquina. Só os testes passam a data; em
   /// produção o parâmetro é omitido e o comportamento é o de sempre.
   List<Turno> proximos({DateTime? hoje}) {
-    final agora = hoje ?? DateTime.now();
+    final agora = hoje ?? clock.now();
     final lista = where((t) => t.status.ativo && t.dataFim.isAfter(agora))
         .toList();
     lista.sort((a, b) => a.dataInicio.compareTo(b.dataInicio));

@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/turno.dart';
@@ -309,7 +310,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
   }
 
   String _greeting() {
-    final h = (widget.agora ?? DateTime.now()).hour;
+    final h = (widget.agora ?? clock.now()).hour;
     if (h < 12) return 'Bom dia,';
     if (h < 18) return 'Boa tarde,';
     return 'Boa noite,';
@@ -414,7 +415,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
   /// Turnos que o motoboy já aceitou e ainda vão acontecer (ou estão
   /// acontecendo) — a mesma seleção que o mobile mostra em "Meus turnos".
   List<Turno> _turnosAceitos(TurnoProvider provider) =>
-      provider.meusTurnos.proximos();
+      provider.meusTurnos.proximos(hoje: widget.agora);
 
 
   Widget _buildDisponiveisSection(
@@ -567,7 +568,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     // o backend devolvesse. O turno em andamento sai daqui porque tem seção
     // própria logo acima.
     final proximos = provider.meusTurnos
-        .proximos()
+        .proximos(hoje: widget.agora)
         .where((t) => ativo == null || t.id != ativo.id)
         .toList();
 
@@ -780,8 +781,13 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     );
   }
 
+  /// "Amanhã, 14:00 – 18:00" / "Hoje, ..." / "Qua, ...".
+  ///
+  /// A data de referência vem de `widget.agora`, como nas outras telas com
+  /// golden. Sem isso, a seção "Próximos turnos" mudava de rótulo à
+  /// meia-noite e o golden desta tela ia junto.
   String _formatProximoData(DateTime inicio, DateTime fim) {
-    final agora = DateTime.now();
+    final agora = widget.agora ?? clock.now();
     final diff = inicio
         .difference(DateTime(agora.year, agora.month, agora.day));
     String dia;

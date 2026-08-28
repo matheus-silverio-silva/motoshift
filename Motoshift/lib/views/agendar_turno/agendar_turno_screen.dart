@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' show DateFormat;
 import 'package:latlong2/latlong.dart';
@@ -69,9 +70,9 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().add(const Duration(days: 1)),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 90)),
+      initialDate: clock.now().add(const Duration(days: 1)),
+      firstDate: clock.now(),
+      lastDate: clock.now().add(const Duration(days: 90)),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.light(
@@ -141,7 +142,7 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       _horaFim!.hour, _horaFim!.minute,
     );
 
-    if (inicio.isBefore(DateTime.now().add(const Duration(hours: 2)))) {
+    if (inicio.isBefore(clock.now().add(const Duration(hours: 2)))) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(

@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
@@ -90,7 +91,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
   static int _calcularMesesPlataforma(DateTime? criadoEm, DateTime? agoraInjetado) {
     if (criadoEm == null) return 0;
-    final agora = agoraInjetado ?? DateTime.now();
+    final agora = agoraInjetado ?? clock.now();
     final meses = (agora.year - criadoEm.year) * 12 +
         (agora.month - criadoEm.month);
     return meses < 0 ? 0 : meses;

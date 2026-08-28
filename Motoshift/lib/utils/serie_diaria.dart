@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import '../models/turno.dart';
 
 /// Um dia da série de 7 dias exibida no gráfico do dashboard.
@@ -27,7 +28,7 @@ const _rotulosSemana = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 /// por turno (ver `DashboardController.totalGasto`). O dia do turno é o de
 /// `dataFim`, que é quando o valor de fato entra.
 List<PontoDiario> serieUltimos7Dias(Iterable<Turno> turnos, {DateTime? hoje}) {
-  final base = hoje ?? DateTime.now();
+  final base = hoje ?? clock.now();
   final fim = DateTime(base.year, base.month, base.day);
   final inicio = fim.subtract(const Duration(days: 6));
 

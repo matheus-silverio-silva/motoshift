@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
@@ -34,7 +35,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
 
   /// Lido uma vez só: duas leituras do relógio no mesmo build podiam cair em
   /// lados opostos da virada do dia.
-  late final DateTime _agora = widget.agora ?? DateTime.now();
+  late final DateTime _agora = widget.agora ?? clock.now();
 
   late DateTime _mesAtual = _agora;
   Map<String, List<Map<String, dynamic>>> _turnosPorDia = {};

@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -57,9 +58,9 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
     final picked = await showDatePicker(
       context: context,
       initialDate: _dataNascimento ??
-          DateTime.now().subtract(const Duration(days: 365 * 30)),
+          clock.now().subtract(const Duration(days: 365 * 30)),
       firstDate: DateTime(1930),
-      lastDate: DateTime.now(),
+      lastDate: clock.now(),
     );
     if (picked != null) setState(() => _dataNascimento = picked);
   }
