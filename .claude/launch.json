@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "shell-preview",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d Motoshift && flutter run -d web-server --web-port=8123 -t lib/dev/shell_preview_main.dart"
+      ],
+      "port": 8123
+    }
+  ]
+}

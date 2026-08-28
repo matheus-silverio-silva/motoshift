@@ -10,6 +10,8 @@ class CalendarMonth extends StatelessWidget {
     this.selectedDay,
     this.today,
     this.onDayTap,
+    this.onMonthChange,
+    this.footer,
     super.key,
   });
 
@@ -19,6 +21,13 @@ class CalendarMonth extends StatelessWidget {
   final int? selectedDay;
   final int? today;
   final ValueChanged<int>? onDayTap;
+
+  /// -1 para o mês anterior, +1 para o próximo. Sem isso as setas do
+  /// cabeçalho ficam inertes, como sempre estiveram.
+  final ValueChanged<int>? onMonthChange;
+
+  /// Conteúdo extra no rodapé do card (a legenda, no desktop).
+  final Widget? footer;
 
   static const _dayNames = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
@@ -41,6 +50,10 @@ class CalendarMonth extends StatelessWidget {
           _buildHeader(context),
           const SizedBox(height: 12),
           _buildGrid(),
+          if (footer != null) ...[
+            const SizedBox(height: 14),
+            footer!,
+          ],
         ],
       ),
     );
@@ -52,9 +65,7 @@ class CalendarMonth extends StatelessWidget {
       children: [
         _ArrowBtn(
           icon: Icons.chevron_left_rounded,
-          onTap: () {
-            // navegação de mês — controlada pelo pai
-          },
+          onTap: () => onMonthChange?.call(-1),
         ),
         Text(
           '${_monthNames[month]} $year',
@@ -62,7 +73,7 @@ class CalendarMonth extends StatelessWidget {
         ),
         _ArrowBtn(
           icon: Icons.chevron_right_rounded,
-          onTap: () {},
+          onTap: () => onMonthChange?.call(1),
         ),
       ],
     );

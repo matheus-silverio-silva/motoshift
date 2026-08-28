@@ -9,6 +9,7 @@ class ShiftCard extends StatelessWidget {
     required this.name,
     required this.meta,
     required this.value,
+    this.horario,
     this.iconData = Icons.schedule_outlined,
     this.amberIcon = false,
     this.pillLabel,
@@ -23,6 +24,12 @@ class ShiftCard extends StatelessWidget {
   /// Itens de metadados separados por " • " (ex: ['18:00–23:00', '4 km', '★ 4.9'])
   final List<String> meta;
   final String value;
+
+  /// Quando informado, o card usa a hierarquia do protótipo v2: horário e
+  /// valor na primeira linha, título e região na segunda. Sem ele o card
+  /// mantém o formato antigo (título em cima), para não quebrar chamadas que
+  /// ainda não migraram.
+  final String? horario;
   final IconData iconData;
   final bool amberIcon;
   final String? pillLabel;
@@ -34,6 +41,8 @@ class ShiftCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (horario != null) return _buildHierarquiaNova();
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -61,7 +70,7 @@ class ShiftCard extends StatelessWidget {
                 iconData,
                 size: 18,
                 color: amberIcon
-                    ? const Color(0xFF9A6206)
+                    ? AppColors.onTertiaryContainer
                     : AppColors.tealDeep,
               ),
             ),
@@ -105,6 +114,94 @@ class ShiftCard extends StatelessWidget {
                 else if (pillLabel != null)
                   StatusPill(label: pillLabel!, variant: pillVariant),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Hierarquia do protótipo v2 — o que o entregador procura primeiro é
+  /// quando e quanto, não o nome do turno.
+  Widget _buildHierarquiaNova() {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.line, width: 1.5),
+          boxShadow: AppColors.cardShadow,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: amberIcon ? AppColors.amberSoft : AppColors.tealSoft,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                iconData,
+                size: 20,
+                color: amberIcon
+                    ? AppColors.onTertiaryContainer
+                    : AppColors.tealDeep,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          horario!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tsJakarta(13, FontWeight.w700,
+                              color: AppColors.text),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        value,
+                        style: tsBricolage(15, FontWeight.w800,
+                            color: AppColors.ink),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          [name, ...meta].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tsJakarta(11, FontWeight.w400,
+                              color: AppColors.muted),
+                        ),
+                      ),
+                      if (trailing != null) ...[
+                        const SizedBox(width: 8),
+                        trailing!,
+                      ] else if (pillLabel != null) ...[
+                        const SizedBox(width: 8),
+                        StatusPill(label: pillLabel!, variant: pillVariant),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),

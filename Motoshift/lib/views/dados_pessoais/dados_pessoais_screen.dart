@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
+import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/validators.dart';
+import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_header.dart';
-import '../../widgets/app_scaffold.dart';
+import '../../widgets/desktop/content_grid.dart';
+import '../../widgets/desktop/panel_card.dart';
 
 class DadosPessoaisScreen extends StatefulWidget {
   const DadosPessoaisScreen({super.key});
@@ -106,8 +109,16 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
     final usuario = context.watch<AuthService>().usuario;
     final isLojista = usuario?.tipo == TipoUsuario.lojista;
 
-    return AppScaffold(
+    return AdaptiveScaffold(
       header: AppHeader.back(title: 'Dados pessoais'),
+      desktopTitle: 'Dados pessoais',
+      desktopSubtitle: isLojista
+          ? 'O CNPJ não muda depois do cadastro'
+          : 'A CNH não muda depois do cadastro',
+      // Sub-página do Perfil: mantém "Perfil" aceso na sidebar em vez de
+      // deixar o desktop sem nenhum item destacado.
+      desktopSelectedRoute: AppRoutes.perfil,
+      desktopBody: _buildDesktop(usuario, isLojista),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(18, 18, 18, 40),
         child: Form(
@@ -117,44 +128,100 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
             children: [
               _section('Informações pessoais'),
               const SizedBox(height: 10),
-              _field('Nome completo', _nomeCtrl,
-                  validator: Validators.nome),
-              _readonlyField('E-mail', usuario?.email ?? ''),
-              _field('Telefone', _telefoneCtrl,
-                  keyboard: TextInputType.phone,
-                  validator: Validators.telefone),
-              // CNPJ/CNH são imutáveis após o cadastro (anti-fraude)
-              _readonlyField(
-                  isLojista ? 'CNPJ' : 'CNH',
-                  usuario?.documentoFederal ?? '—'),
-              _dateField('Data de nascimento', _dataNascimento, _pickData),
+              ..._camposPessoais(usuario, isLojista),
               const SizedBox(height: 18),
               _section('Endereço'),
               const SizedBox(height: 10),
-              _field('Cidade', _cidadeCtrl),
-              _field('Estado (UF)', _estadoCtrl,
-                  maxLength: 2,
-                  validator: (v) {
-                    if (v != null && v.isNotEmpty && v.length != 2) {
-                      return 'Use 2 letras (UF)';
-                    }
-                    return null;
-                  }),
+              ..._camposEndereco(),
               if (isLojista) ...[
                 const SizedBox(height: 18),
                 _section('Estabelecimento'),
                 const SizedBox(height: 10),
-                _field('Nome fantasia', _nomeFantasiaCtrl),
+                _campoEstabelecimento(),
               ],
               const SizedBox(height: 24),
-              PrimaryButton(
-                label: 'Salvar alterações',
-                loading: _salvando,
-                onPressed: _salvar,
-              ),
+              _botaoSalvar(),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ── Campos — uma definição só, montada de dois jeitos ─────────────────────
+
+  List<Widget> _camposPessoais(Usuario? usuario, bool isLojista) => [
+        _field('Nome completo', _nomeCtrl, validator: Validators.nome),
+        _readonlyField('E-mail', usuario?.email ?? ''),
+        _field('Telefone', _telefoneCtrl,
+            keyboard: TextInputType.phone, validator: Validators.telefone),
+        // CNPJ/CNH são imutáveis após o cadastro (anti-fraude)
+        _readonlyField(
+            isLojista ? 'CNPJ' : 'CNH', usuario?.documentoFederal ?? '—'),
+        _dateField('Data de nascimento', _dataNascimento, _pickData),
+      ];
+
+  List<Widget> _camposEndereco() => [
+        _field('Cidade', _cidadeCtrl),
+        _field('Estado (UF)', _estadoCtrl, maxLength: 2, validator: (v) {
+          if (v != null && v.isNotEmpty && v.length != 2) {
+            return 'Use 2 letras (UF)';
+          }
+          return null;
+        }),
+      ];
+
+  Widget _campoEstabelecimento() =>
+      _field('Nome fantasia', _nomeFantasiaCtrl);
+
+  Widget _botaoSalvar() => PrimaryButton(
+        label: 'Salvar alterações',
+        loading: _salvando,
+        onPressed: _salvar,
+      );
+
+  // ── Desktop — o formulário em duas colunas, dentro do shell ───────────────
+
+  Widget _buildDesktop(Usuario? usuario, bool isLojista) {
+    return Form(
+      key: _formKey,
+      child: ContentGrid(
+        children: [
+          GridCol(
+            span: 7,
+            child: PanelCard(
+              title: 'Informações pessoais',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: _camposPessoais(usuario, isLojista),
+              ),
+            ),
+          ),
+          GridCol(
+            span: 5,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                PanelCard(
+                  title: 'Endereço',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: _camposEndereco(),
+                  ),
+                ),
+                if (isLojista) ...[
+                  const SizedBox(height: 16),
+                  PanelCard(
+                    title: 'Estabelecimento',
+                    child: _campoEstabelecimento(),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                _botaoSalvar(),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

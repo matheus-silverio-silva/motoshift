@@ -22,7 +22,7 @@ dependencies:
   # State Management
   provider: ^6.1.2
 
-  # Fontes Google (Manrope)
+  # Fontes do tema (Bricolage Grotesque + Plus Jakarta Sans)
   google_fonts: ^6.2.1
 
   # Utilitários
@@ -35,6 +35,9 @@ dependencies:
   # Mapa
   flutter_map: ^6.1.0
   latlong2: ^0.9.0
+
+  # Localização — filtro de turnos por raio (tela 18)
+  geolocator: ^13.0.2
 
 dev_dependencies:
   flutter_test:

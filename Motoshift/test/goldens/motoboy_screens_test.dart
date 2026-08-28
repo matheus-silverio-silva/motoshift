@@ -25,7 +25,8 @@ void main() {
   });
 
   testWidgets('DashboardMotoboyScreen', (tester) async {
-    await pumpGolden(tester, child: const DashboardMotoboyScreen());
+    await pumpGolden(
+        tester, child: DashboardMotoboyScreen(agora: dataAncoraGolden));
     await expectLater(
       find.byType(DashboardMotoboyScreen),
       matchesGoldenFile('goldens/dashboard_motoboy_screen.png'),
@@ -33,12 +34,12 @@ void main() {
   });
 
   testWidgets('MeusTurnosScreen', (tester) async {
-    await pumpGolden(tester, child: const MeusTurnosScreen());
+    await pumpGolden(tester, child: MeusTurnosScreen(agora: dataAncoraGolden));
     await expectLater(
       find.byType(MeusTurnosScreen),
       matchesGoldenFile('goldens/meus_turnos_screen.png'),
     );
-  }, skip: true); // Timer HTTP do retry de socket fica pendente após dispose
+  });
 
   testWidgets('CarteiraScreen', (tester) async {
     await pumpGolden(tester, child: const CarteiraScreen());
@@ -49,7 +50,8 @@ void main() {
   });
 
   testWidgets('AgendaScreen (motoboy)', (tester) async {
-    await pumpGolden(tester, child: const AgendaScreen());
+    // Data fixa — ver a nota em lojista_screens_test.dart.
+    await pumpGolden(tester, child: AgendaScreen(agora: dataAncoraGolden));
     await expectLater(
       find.byType(AgendaScreen),
       matchesGoldenFile('goldens/agenda_screen_motoboy.png'),
@@ -89,12 +91,17 @@ void main() {
   });
 
   testWidgets('HistoricoTurnosScreen (motoboy)', (tester) async {
-    await pumpGolden(tester, child: const HistoricoTurnosScreen());
+    // Data fixa — ver a nota em lojista_screens_test.dart.
+    await pumpGolden(
+      tester,
+      child: const HistoricoTurnosScreen(),
+      apiFake: FakeApiHistorico(),
+    );
     await expectLater(
       find.byType(HistoricoTurnosScreen),
       matchesGoldenFile('goldens/historico_turnos_motoboy.png'),
     );
-  }, skip: true); // Timer HTTP do retry de socket fica pendente após dispose
+  });
 
   testWidgets('DetalheTurnoScreen', (tester) async {
     final turno = Turno(

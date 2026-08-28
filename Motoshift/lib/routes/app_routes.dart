@@ -25,12 +25,14 @@ class AppRoutes {
   static const String agenda            = '/agenda';              // tela 8
   static const String avaliacao         = '/avaliacao';           // tela 7
   static const String perfil            = '/perfil';              // tela 9
+  static const String notificacoes      = '/notificacoes';        // tela 17
+  static const String saldoLojista      = '/saldo-lojista';       // tela 21
+  static const String avaliarEntregadores =
+      '/avaliar-entregadores';                                     // tela 19
 
   // ── Legadas (mantidas para compatibilidade até remoção) ──────────────────
   static const String meusTurnos        = '/meus-turnos';
   static const String agendarTurno      = '/agendar-turno';
-  static const String historico         = '/historico';
-  static const String solicitarServico  = '/solicitar-servico';
 
   // ── Stubs (sub-páginas do perfil / fluxos secundários) ───────────────────
   static const String sacarPix          = '/sacar-pix';

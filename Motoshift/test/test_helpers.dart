@@ -26,6 +26,8 @@ import 'package:moto_shift/models/usuario.dart';
 import 'package:moto_shift/presentation/providers/historico_provider.dart';
 import 'package:moto_shift/presentation/providers/pedido_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_provider.dart';
+import 'package:moto_shift/presentation/providers/turno_selecionado_provider.dart';
+import 'package:moto_shift/presentation/providers/notificacao_provider.dart';
 import 'package:moto_shift/services/api_service.dart';
 import 'package:moto_shift/services/auth_service.dart';
 import 'package:moto_shift/theme/app_theme.dart';
@@ -96,6 +98,14 @@ Future<void> setupGoldenTests() async {
 ///
 /// A deriva diária que sobra é intencional: os fakes descrevem turnos
 /// relativos a hoje, e é isso que as telas precisam exercitar.
+/// Momento em que os goldens desta suíte foram gravados.
+///
+/// Telas que leem o relógio (a agenda desenha o anel do "hoje" e escolhe a
+/// saudação por faixa de hora) precisam recebê-lo em vez de chamar
+/// `DateTime.now()`, senão o golden só passa no dia e na hora em que foi
+/// gerado — e uma suíte que já falha esconde a próxima regressão de verdade.
+final DateTime dataAncoraGolden = DateTime(2026, 8, 19, 14, 10);
+
 DateTime hojeAncorado() {
   final agora = DateTime.now();
   return DateTime(agora.year, agora.month, agora.day);
@@ -333,6 +343,50 @@ Map<String, dynamic> fakeAvaliacoes() => {
       ],
     };
 
+/// Notificações fake cobrindo os tipos que a tela 17 estiliza.
+List<Map<String, dynamic>> fakeNotificacoes() {
+  final agora = DateTime.now();
+  Map<String, dynamic> n(
+    int id,
+    String tipo,
+    String titulo,
+    String mensagem,
+    bool lida,
+    Duration atras,
+  ) =>
+      {
+        'id': id,
+        'tipo': tipo,
+        'titulo': titulo,
+        'mensagem': mensagem,
+        'referenciaTipo': 'turno',
+        'referenciaId': 101,
+        'lida': lida,
+        'criadoEm': agora.subtract(atras).toIso8601String(),
+      };
+
+  return [
+    n(1, 'turno_aceito', 'Turno aceito',
+        'Lucas Mendes aceitou Sexta cheia · Rebouças (17:30 – 22:30).',
+        false, const Duration(minutes: 12)),
+    n(2, 'avaliacao_pendente', 'Avaliação pendente',
+        'Avalie Lucas Mendes e Thiago Alves pelo turno de almoço.',
+        false, const Duration(hours: 1)),
+    n(3, 'pagamento_confirmado', 'Pagamento confirmado',
+        'R\$ 130 creditados na sua carteira.', false,
+        const Duration(hours: 4)),
+    n(4, 'turno_vencendo', 'Turno começa em breve',
+        'Seu turno no Batel começa em 1 hora.', false,
+        const Duration(hours: 6)),
+    n(5, 'turno_expirado', 'Turno expirado',
+        'Manhã · Cristo Rei expirou sem entregador.', true,
+        const Duration(days: 1)),
+    n(6, 'turno_lotado', 'Todas as vagas preenchidas',
+        'Sábado · Portão está com as 3 vagas preenchidas.', true,
+        const Duration(days: 2)),
+  ];
+}
+
 Map<String, dynamic> fakeAgendaMensal() => {
       'mes': DateTime.now().month,
       'ano': DateTime.now().year,
@@ -382,6 +436,9 @@ class FakeApiService extends ApiService {
     String? dataInicio,
     String? dataFim,
     String? ordenarPor,
+    double? lat,
+    double? lng,
+    double? raioKm,
   }) async =>
       fakeTurnosDisponiveis();
 
@@ -432,6 +489,88 @@ class FakeApiService extends ApiService {
 
   @override
   Future<bool> verificarPendente(int turnoId, int usuarioId) async => false;
+
+  @override
+  Future<int> contarNotificacoesNaoLidas(int usuarioId) async =>
+      fakeNotificacoes().where((n) => n['lida'] == false).length;
+
+  @override
+  Future<List<Map<String, dynamic>>> listarNotificacoes(
+    int usuarioId, {
+    bool apenasNaoLidas = false,
+  }) async {
+    final todas = fakeNotificacoes();
+    if (!apenasNaoLidas) return todas;
+    return todas.where((n) => n['lida'] == false).toList();
+  }
+
+  @override
+  Future<({bool precisaAvaliar, List<Map<String, dynamic>> pendentes})>
+      buscarAvaliacoesPendentes(int turnoId, int usuarioId) async =>
+          (precisaAvaliar: false, pendentes: <Map<String, dynamic>>[]);
+}
+
+/// Turnos encerrados com data ABSOLUTA, para as telas de histórico.
+///
+/// Os demais fakes se ancoram em `hojeAncorado()` de propósito: as telas de
+/// turno filtram por "ainda vai acontecer", e isso só funciona com datas
+/// relativas a hoje. O histórico é o oposto — ele só mostra turnos encerrados
+/// e imprime a data em dd/MM/yyyy. Com fixture relativa, o golden dele mudaria
+/// de dia junto com o calendário e a suíte amanheceria vermelha sozinha.
+List<Turno> fakeTurnosEncerradosFixos() {
+  final base = DateTime(2026, 8, 19); // mesmo dia do dataAncoraGolden
+  return [
+    Turno(
+      id: 401,
+      lojistId: 2,
+      motoboyId: 1,
+      titulo: 'Turno Concluído — pendente pagamento',
+      regiao: 'Água Verde, Curitiba',
+      dataInicio: base.subtract(const Duration(days: 3)),
+      dataFim: base.subtract(const Duration(days: 3)).add(const Duration(hours: 4)),
+      valorEstimado: 125,
+      raioEntregaKm: 8,
+      status: StatusTurno.finalizado,
+      pagamentoStatus: PagamentoStatus.pendente,
+    ),
+    Turno(
+      id: 402,
+      lojistId: 2,
+      motoboyId: 1,
+      titulo: 'Turno Concluído — Hamburgueria',
+      regiao: 'Água Verde, Curitiba',
+      dataInicio: base.subtract(const Duration(days: 7)),
+      dataFim: base.subtract(const Duration(days: 7)).add(const Duration(hours: 4)),
+      valorEstimado: 120,
+      raioEntregaKm: 8,
+      status: StatusTurno.finalizado,
+      pagamentoStatus: PagamentoStatus.pago,
+      lojistaConfirmouEm: base.subtract(const Duration(days: 7)),
+      motoboyConfirmouEm: base.subtract(const Duration(days: 7)),
+    ),
+    Turno(
+      id: 403,
+      lojistId: 2,
+      titulo: 'Turno sem candidato',
+      regiao: 'Batel, Curitiba',
+      dataInicio: base.subtract(const Duration(days: 5)),
+      dataFim: base.subtract(const Duration(days: 5)).add(const Duration(hours: 4)),
+      valorEstimado: 150,
+      raioEntregaKm: 5,
+      status: StatusTurno.expirado,
+    ),
+  ];
+}
+
+/// Fake para os goldens de histórico: datas fixas nas duas listagens.
+class FakeApiHistorico extends FakeApiService {
+  @override
+  Future<List<Turno>> listarMeusTurnos(int motoboyId) async =>
+      fakeTurnosEncerradosFixos();
+
+  @override
+  Future<List<Turno>> listarTurnosLojista(int lojistId) async =>
+      fakeTurnosEncerradosFixos();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -447,12 +586,22 @@ Future<void> pumpGolden(
   Object? argumentos,
   Size viewport = const Size(390, 844),
   Duration settle = const Duration(milliseconds: 600),
+  int? turnoSelecionado,
+  ApiService? apiFake,
 }) async {
-  await tester.binding.setSurfaceSize(viewport);
-  tester.view.physicalSize = viewport * tester.view.devicePixelRatio;
+  // A ordem importa: `physicalSize` precisa ser calculado com o DPR final.
+  // Fazendo o inverso (multiplicar pelo DPR padrão da view, 3.0, e só depois
+  // zerar para 1.0) a MediaQuery passava a reportar 1170x2532 enquanto a
+  // superfície renderizada continuava 390x844 — as duas discordavam, e telas
+  // que decidem layout por largura (AdaptiveScaffold) caíam no shell desktop
+  // dentro de um frame de celular.
   tester.view.devicePixelRatio = 1.0;
+  tester.view.physicalSize = viewport;
+  await tester.binding.setSurfaceSize(viewport);
 
-  final api = FakeApiService();
+  // Telas que imprimem data absoluta precisam de um fake de data fixa, senão
+  // o golden vira o dia junto com o calendário — ver [FakeApiHistorico].
+  final api = apiFake ?? FakeApiService();
   final usuario =
       tipoUsuario == TipoUsuario.motoboy ? fakeMotoboy() : fakeLojista();
   final auth = AuthService(api)..atualizarUsuarioLocal(usuario);
@@ -460,11 +609,19 @@ Future<void> pumpGolden(
   final turnoProv = TurnoProvider(api);
   turnoProv.setDisponiveisExterno(fakeTurnosDisponiveis());
 
+  final selecaoProv = TurnoSelecionadoProvider();
+  if (turnoSelecionado != null) selecaoProv.selecionar(turnoSelecionado);
+
   final widgetTree = MultiProvider(
     providers: [
       Provider<ApiService>.value(value: api),
       ChangeNotifierProvider<AuthService>.value(value: auth),
       ChangeNotifierProvider<TurnoProvider>.value(value: turnoProv),
+      ChangeNotifierProvider<TurnoSelecionadoProvider>.value(
+          value: selecaoProv),
+      ChangeNotifierProvider<NotificacaoProvider>(
+        create: (_) => NotificacaoProvider(api),
+      ),
       ChangeNotifierProvider<PedidoProvider>(
         create: (_) => PedidoProvider(repo: PedidoRepositoryImpl(api)),
       ),

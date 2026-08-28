@@ -2,15 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/turno.dart';
 import '../../presentation/providers/turno_provider.dart';
+import '../../presentation/providers/turno_selecionado_provider.dart';
 import '../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/breakpoints.dart';
+import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_header.dart';
-import '../../widgets/app_scaffold.dart';
+import '../../widgets/desktop/app_topbar.dart';
+import '../../widgets/desktop/master_detail.dart';
+import '../../widgets/desktop/shift_row.dart';
 import '../../widgets/shift_card.dart';
 import '../../widgets/status_pill.dart';
+import '../turno_lojista/turno_lojista_conteudo.dart';
 
 class TurnosLojistaListaScreen extends StatefulWidget {
   const TurnosLojistaListaScreen({super.key});
@@ -54,6 +60,17 @@ class _TurnosLojistaListaScreenState
     }
   }
 
+  /// Abas da lista. "Expirados" existe porque o backend expira sozinho os
+  /// turnos que ninguém aceitou até o horário de início (SCRUM-19): sem uma
+  /// aba própria eles não estavam em "Abertos" nem em "Finalizados" e o
+  /// lojista só os encontrava por acaso, em "Todos".
+  static const List<(String, String)> _opcoesFiltro = [
+    ('todos', 'Todos'),
+    ('abertos', 'Abertos'),
+    ('finalizados', 'Finalizados'),
+    ('expirados', 'Expirados'),
+  ];
+
   List<Turno> _turnosFiltrados(List<Turno> todos) {
     if (_filtro == 'abertos') {
       return todos
@@ -67,13 +84,23 @@ class _TurnosLojistaListaScreenState
           .where((t) => t.status == StatusTurno.finalizado)
           .toList();
     }
+    if (_filtro == 'expirados') {
+      return todos
+          .where((t) => t.status == StatusTurno.expirado)
+          .toList();
+    }
     return todos;
   }
+
+  int _qtdExpirados(List<Turno> todos) =>
+      todos.where((t) => t.status == StatusTurno.expirado).length;
 
   PillVariant _pillFor(StatusTurno s) => switch (s) {
         StatusTurno.aceito => PillVariant.teal,
         StatusTurno.emAndamento => PillVariant.amber,
         StatusTurno.finalizado => PillVariant.good,
+        // Expirado e cancelado são fins de linha: pílula apagada, com o
+        // rótulo dizendo qual dos dois foi.
         _ => PillVariant.ghost,
       };
 
@@ -85,7 +112,7 @@ class _TurnosLojistaListaScreenState
         ? nome.substring(0, 2).toUpperCase()
         : nome.toUpperCase();
 
-    return AppScaffold(
+    return AdaptiveScaffold(
       header: AppHeader.greeting(
         greeting: 'Seus turnos',
         name: nome,
@@ -96,6 +123,20 @@ class _TurnosLojistaListaScreenState
         currentIndex: 2,
         onTap: _onNav,
       ),
+      desktopTitle: 'Turnos',
+      // O `watch` só é registrado quando o subtítulo vai mesmo ser usado. Se
+      // ficasse solto aqui, o celular — que nem tem topbar — passaria a
+      // rebuildar a tela inteira a cada notifyListeners() do provider.
+      desktopSubtitle: context.isDesktop
+          ? _subtituloDesktop(context.watch<TurnoProvider>())
+          : null,
+      desktopSelectedRoute: AppRoutes.turnosLojista,
+      desktopPrimaryAction: TopbarPrimaryButton(
+        label: 'Publicar turno',
+        icon: Icons.add,
+        onTap: () => Navigator.pushNamed(context, AppRoutes.publicarTurno),
+      ),
+      desktopBody: _buildDesktop(),
       body: Consumer<TurnoProvider>(
         builder: (context, provider, _) {
           final filtrados = _turnosFiltrados(provider.turnosLojista);
@@ -136,9 +177,9 @@ class _TurnosLojistaListaScreenState
                       )
                     else
                       ...filtrados.map((t) => ShiftCard(
+                            horario: t.horarioFormatado,
                             name: t.titulo,
                             meta: [
-                              t.horarioFormatado,
                               t.regiao,
                               '${t.raioEntregaKm.toStringAsFixed(0)} km',
                             ],
@@ -164,37 +205,176 @@ class _TurnosLojistaListaScreenState
     );
   }
 
-  Widget _buildFiltros() {
-    const opcoes = [
-      ('todos', 'Todos'),
-      ('abertos', 'Abertos'),
-      ('finalizados', 'Finalizados'),
-    ];
+  // ── Desktop — master-detail ───────────────────────────────────────────────
 
+  String _subtituloDesktop(TurnoProvider provider) {
+    if (provider.carregando) return 'Carregando turnos…';
+    final todos = provider.turnosLojista;
+    final ativos = todos.where((t) => t.status.ativo).length;
+    final base = ativos == 1 ? '1 turno ativo' : '$ativos turnos ativos';
+
+    // O expirado é o que o lojista mais precisa notar — ninguém aceitou o
+    // turno a tempo. Vai no subtítulo para ele ver sem abrir a aba.
+    final expirados = _qtdExpirados(todos);
+    if (expirados == 0) return base;
+    return '$base · $expirados '
+        '${expirados == 1 ? 'expirado' : 'expirados'}';
+  }
+
+  Widget _buildDesktop() {
+    return Consumer2<TurnoProvider, TurnoSelecionadoProvider>(
+      builder: (context, provider, selecao, _) {
+        final filtrados = _turnosFiltrados(provider.turnosLojista);
+        final selecionado =
+            filtrados.where((t) => t.id == selecao.id).firstOrNull;
+
+        return MasterDetailLayout(
+          listHeader: MasterDetailListHeader(
+            titulo: provider.carregando
+                ? 'Carregando…'
+                : '${filtrados.length} '
+                    '${filtrados.length == 1 ? 'turno' : 'turnos'}',
+            trailing: _buildFiltrosDesktop(),
+          ),
+          list: _buildListaDesktop(provider, filtrados, selecao),
+          detail: selecionado == null
+              ? const MasterDetailEmpty(
+                  icon: Icons.local_shipping_outlined,
+                  titulo: 'Selecione um turno',
+                  subtitulo:
+                      'Escolha um turno na lista ao lado para acompanhar o '
+                      'andamento e o entregador designado.',
+                )
+              : TurnoLojistaConteudo(
+                  key: ValueKey(selecionado.id),
+                  turno: selecionado,
+                  desktop: true,
+                  onCancelado: () {
+                    selecao.limpar();
+                    _recarregar();
+                  },
+                ),
+        );
+      },
+    );
+  }
+
+  Future<void> _recarregar() async {
+    final auth = context.read<AuthService>();
+    final id = auth.usuario?.id;
+    if (id == null) return;
+    context.read<TurnoProvider>().carregarTurnosLojista(id);
+  }
+
+  Widget _buildFiltrosDesktop() {
     return Row(
-      children: opcoes.map((op) {
+      mainAxisSize: MainAxisSize.min,
+      children: _opcoesFiltro.map((op) {
         final sel = _filtro == op.$1;
         return Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: GestureDetector(
+          padding: const EdgeInsets.only(left: 6),
+          child: InkWell(
             onTap: () => setState(() => _filtro = op.$1),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 8),
+            borderRadius: BorderRadius.circular(9),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: sel ? AppColors.teal : AppColors.surface2,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(9),
               ),
               child: Text(
                 op.$2,
-                style: tsJakarta(12, FontWeight.w700,
+                style: tsJakarta(11, FontWeight.w700,
                     color: sel ? Colors.white : AppColors.muted),
               ),
             ),
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildListaDesktop(
+    TurnoProvider provider,
+    List<Turno> filtrados,
+    TurnoSelecionadoProvider selecao,
+  ) {
+    if (provider.carregando) {
+      return const Center(
+        child: CircularProgressIndicator(
+            strokeWidth: 2, color: AppColors.teal),
+      );
+    }
+    if (filtrados.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Text(
+            _filtro == 'todos'
+                ? 'Nenhum turno publicado ainda.'
+                : 'Nenhum turno neste filtro.',
+            textAlign: TextAlign.center,
+            style: tsJakarta(12.5, FontWeight.w400, color: AppColors.muted),
+          ),
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: filtrados.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, i) {
+        final t = filtrados[i];
+        return ShiftRow(
+          horario: t.horarioFormatado,
+          valor: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
+          meta: '${t.titulo} · ${t.regiao}',
+          icon: t.status == StatusTurno.emAndamento
+              ? Icons.schedule_outlined
+              : Icons.storefront_outlined,
+          amberIcon: t.status == StatusTurno.emAndamento,
+          selected: t.id != null && t.id == selecao.id,
+          pillLabel: t.status.label,
+          pillVariant: _pillFor(t.status),
+          onTap: () => selecao.selecionar(t.id),
+        );
+      },
+    );
+  }
+
+  Widget _buildFiltros() {
+    // Rolável na horizontal: com a aba "Expirados" as quatro pílulas passam
+    // da largura de um celular estreito.
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: _opcoesFiltro.map((op) {
+          final sel = _filtro == op.$1;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () => setState(() => _filtro = op.$1),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                constraints: const BoxConstraints(minHeight: 44),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 8),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: sel ? AppColors.teal : AppColors.surface2,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  op.$2,
+                  style: tsJakarta(12, FontWeight.w700,
+                      color: sel ? Colors.white : AppColors.muted),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -210,7 +390,7 @@ class _TurnosLojistaListaScreenState
       child: AmberButton(
         label: 'Publicar novo turno',
         icon: const Icon(Icons.add_rounded,
-            color: Color(0xFF3A2603), size: 18),
+            color: AppColors.onTertiary, size: 18),
         onPressed: () =>
             Navigator.pushNamed(context, AppRoutes.publicarTurno),
       ),

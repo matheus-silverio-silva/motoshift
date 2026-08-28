@@ -27,7 +27,7 @@ void main() {
   testWidgets('DashboardLojistScreen', (tester) async {
     await pumpGolden(
       tester,
-      child: const DashboardLojistScreen(),
+      child: DashboardLojistScreen(agora: dataAncoraGolden),
       tipoUsuario: TipoUsuario.lojista,
     );
     await expectLater(
@@ -58,7 +58,7 @@ void main() {
       find.byType(TurnosLojistaListaScreen),
       matchesGoldenFile('goldens/turnos_lojista_lista_screen.png'),
     );
-  }, skip: true); // Timer HTTP do retry de socket fica pendente após dispose
+  });
 
   testWidgets('TurnoLojistScreen', (tester) async {
     final turno = Turno(
@@ -68,8 +68,11 @@ void main() {
       titulo: 'Turno Tarde — Hamburgueria',
       descricao: 'Entregas na região do Água Verde',
       regiao: 'Água Verde, Curitiba',
-      dataInicio: DateTime.now().add(const Duration(days: 1, hours: 14)),
-      dataFim: DateTime.now().add(const Duration(days: 1, hours: 18)),
+      // Ancorado na meia-noite, não em `DateTime.now()`: a tela mostra o
+      // horário em HH:mm, e "agora + 14h" muda a cada minuto — o golden
+      // nascia desatualizado e falhava na execução seguinte.
+      dataInicio: hojeAncorado().add(const Duration(days: 1, hours: 14)),
+      dataFim: hojeAncorado().add(const Duration(days: 1, hours: 18)),
       valorEstimado: 120,
       raioEntregaKm: 8,
       status: StatusTurno.aceito,
@@ -84,12 +87,15 @@ void main() {
       find.byType(TurnoLojistScreen),
       matchesGoldenFile('goldens/turno_lojista_screen.png'),
     );
-  }, skip: true); // Timer HTTP do retry de socket fica pendente após dispose
+  });
 
   testWidgets('AgendaScreen (lojista)', (tester) async {
     await pumpGolden(
       tester,
-      child: const AgendaScreen(),
+      // Data fixa: o baseline foi gravado em 19/08/2026 às 14h10, e a tela
+      // desenha o anel do "hoje" e a saudação a partir do relógio. Sem
+      // fixar, este golden falha em todo dia que não seja 19.
+      child: AgendaScreen(agora: dataAncoraGolden),
       tipoUsuario: TipoUsuario.lojista,
     );
     await expectLater(
@@ -151,10 +157,13 @@ void main() {
       tester,
       child: const HistoricoTurnosScreen(),
       tipoUsuario: TipoUsuario.lojista,
+      // Data fixa: esta tela imprime dd/MM/yyyy. Com o fake relativo a hoje,
+      // o golden mudaria de dia junto com o calendário.
+      apiFake: FakeApiHistorico(),
     );
     await expectLater(
       find.byType(HistoricoTurnosScreen),
       matchesGoldenFile('goldens/historico_turnos_lojista.png'),
     );
-  }, skip: true); // Timer HTTP do retry de socket fica pendente após dispose
+  });
 }
