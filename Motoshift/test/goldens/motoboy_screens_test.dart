@@ -26,7 +26,10 @@ void main() {
 
   testWidgets('DashboardMotoboyScreen', (tester) async {
     await pumpGolden(
-        tester, child: DashboardMotoboyScreen(agora: dataAncoraGolden));
+      tester,
+      child: DashboardMotoboyScreen(agora: dataAncoraGolden),
+      apiFake: FakeApiDatasFixas(),
+    );
     await expectLater(
       find.byType(DashboardMotoboyScreen),
       matchesGoldenFile('goldens/dashboard_motoboy_screen.png'),
@@ -59,7 +62,7 @@ void main() {
   });
 
   testWidgets('PerfilScreen (motoboy)', (tester) async {
-    await pumpGolden(tester, child: const PerfilScreen());
+    await pumpGolden(tester, child: PerfilScreen(agora: dataAncoraGolden));
     await expectLater(
       find.byType(PerfilScreen),
       matchesGoldenFile('goldens/perfil_screen_motoboy.png'),

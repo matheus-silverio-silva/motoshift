@@ -107,7 +107,7 @@ void main() {
   testWidgets('PerfilScreen (lojista)', (tester) async {
     await pumpGolden(
       tester,
-      child: const PerfilScreen(),
+      child: PerfilScreen(agora: dataAncoraGolden),
       tipoUsuario: TipoUsuario.lojista,
     );
     await expectLater(

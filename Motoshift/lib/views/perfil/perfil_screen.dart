@@ -11,7 +11,12 @@ import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/menu_row.dart';
 
 class PerfilScreen extends StatefulWidget {
-  const PerfilScreen({super.key});
+  const PerfilScreen({super.key, this.agora});
+
+  /// Fixa o "agora" do contador "X meses na plataforma". So os testes passam
+  /// isto: o numero sobe todo dia 1o, e sem fixar o golden do perfil quebra
+  /// sozinho na virada do mes.
+  final DateTime? agora;
 
   @override
   State<PerfilScreen> createState() => _PerfilScreenState();
@@ -77,15 +82,15 @@ class _PerfilScreenState extends State<PerfilScreen> {
             label: 'AVALIAÇÃO',
           ),
           const _StatDivider(),
-          const _StatCellDynamic(),
+          _StatCellDynamic(agora: widget.agora),
         ],
       ),
     );
   }
 
-  static int _calcularMesesPlataforma(DateTime? criadoEm) {
+  static int _calcularMesesPlataforma(DateTime? criadoEm, DateTime? agoraInjetado) {
     if (criadoEm == null) return 0;
-    final agora = DateTime.now();
+    final agora = agoraInjetado ?? DateTime.now();
     final meses = (agora.year - criadoEm.year) * 12 +
         (agora.month - criadoEm.month);
     return meses < 0 ? 0 : meses;
@@ -479,12 +484,15 @@ class _StatCell extends StatelessWidget {
 
 /// Stat cell que renderiza "X meses" baseado em criadoEm do AuthService.
 class _StatCellDynamic extends StatelessWidget {
-  const _StatCellDynamic();
+  const _StatCellDynamic({this.agora});
+
+  final DateTime? agora;
 
   @override
   Widget build(BuildContext context) {
     final usuario = context.watch<AuthService>().usuario;
-    final meses = _PerfilScreenState._calcularMesesPlataforma(usuario?.criadoEm);
+    final meses =
+        _PerfilScreenState._calcularMesesPlataforma(usuario?.criadoEm, agora);
     final valor = meses == 0
         ? '< 1 mês'
         : meses == 1

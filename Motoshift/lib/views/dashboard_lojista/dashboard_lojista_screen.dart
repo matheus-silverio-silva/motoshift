@@ -238,7 +238,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
                 title: 'Gasto com turnos',
                 subtitle: 'Últimos 7 dias · turnos finalizados',
                 carregando: provider.carregando,
-                pontos: serieUltimos7Dias(provider.turnosLojista),
+                pontos: serieUltimos7Dias(provider.turnosLojista, hoje: widget.agora),
                 mensagemVazio: 'Nenhum turno finalizado nos últimos 7 dias.',
               ),
             ),

@@ -96,20 +96,21 @@ Future<void> setupGoldenTests() async {
 /// código. Ancorando na meia-noite, os horários exibidos ficam estáveis ao
 /// longo do dia e a relação "ontem / hoje / amanhã" continua valendo.
 ///
-/// A deriva diária que sobra é intencional: os fakes descrevem turnos
-/// relativos a hoje, e é isso que as telas precisam exercitar.
-/// Momento em que os goldens desta suíte foram gravados.
-///
-/// Telas que leem o relógio (a agenda desenha o anel do "hoje" e escolhe a
-/// saudação por faixa de hora) precisam recebê-lo em vez de chamar
-/// `DateTime.now()`, senão o golden só passa no dia e na hora em que foi
-/// gerado — e uma suíte que já falha esconde a próxima regressão de verdade.
-final DateTime dataAncoraGolden = DateTime(2026, 8, 19, 14, 10);
-
+/// Telas que NÃO imprimem data absoluta usam esta base e ficam estáveis ao
+/// longo do dia; as que imprimem recebem o [dataAncoraGolden] abaixo.
 DateTime hojeAncorado() {
   final agora = DateTime.now();
   return DateTime(agora.year, agora.month, agora.day);
 }
+
+/// Momento em que os goldens desta suíte foram gravados.
+///
+/// Tudo que a tela deriva do relógio — o anel do "hoje" no calendário, a
+/// saudação por faixa de hora, os rótulos dos sete dias do gráfico — precisa
+/// receber esta data em vez de chamar `DateTime.now()`. Senão o golden só
+/// passa no dia e na hora em que foi gerado, e uma suíte que já falha esconde
+/// a próxima regressão de verdade.
+final DateTime dataAncoraGolden = DateTime(2026, 8, 19, 14, 10);
 
 Usuario fakeMotoboy() => Usuario(
       id: 1,
@@ -176,8 +177,14 @@ List<Turno> fakeTurnosDisponiveis() {
   ];
 }
 
-List<Turno> fakeMeusTurnos() {
-  final hoje = hojeAncorado();
+/// Turnos do motoboy, relativos a [ancora] (padrão: hoje à meia-noite).
+///
+/// O gráfico "ganhos dos últimos dias" do dashboard rotula os sete dias com o
+/// dia da semana, e esses rótulos giram junto com o calendário. Passando a
+/// mesma âncora do golden, a barra cai sempre no mesmo dia — ver
+/// [FakeApiDatasFixas].
+List<Turno> fakeMeusTurnos({DateTime? ancora}) {
+  final hoje = ancora ?? hojeAncorado();
   return [
     Turno(
       id: 201,
@@ -224,8 +231,9 @@ List<Turno> fakeMeusTurnos() {
   ];
 }
 
-List<Turno> fakeTurnosLojista() {
-  final hoje = hojeAncorado();
+/// Turnos do lojista, relativos a [ancora] — mesmo motivo do fakeMeusTurnos.
+List<Turno> fakeTurnosLojista({DateTime? ancora}) {
+  final hoje = ancora ?? hojeAncorado();
   return [
     Turno(
       id: 301,
@@ -562,7 +570,7 @@ List<Turno> fakeTurnosEncerradosFixos() {
   ];
 }
 
-/// Fake para os goldens de histórico: datas fixas nas duas listagens.
+/// Fake para os goldens do histórico: só turnos encerrados, com data absoluta.
 class FakeApiHistorico extends FakeApiService {
   @override
   Future<List<Turno>> listarMeusTurnos(int motoboyId) async =>
@@ -571,6 +579,28 @@ class FakeApiHistorico extends FakeApiService {
   @override
   Future<List<Turno>> listarTurnosLojista(int lojistId) async =>
       fakeTurnosEncerradosFixos();
+}
+
+/// Fake para os goldens de dashboard: a mesma lista de sempre, só que ancorada
+/// no [dataAncoraGolden] em vez de em hoje.
+///
+/// O dashboard desenha os ganhos dos últimos sete dias com o dia da semana em
+/// cada barra. Com fixture relativa a hoje, esses rótulos giram todo dia e o
+/// golden amanhece vermelho — foi o que aconteceu na virada de 27 para 28/08.
+class FakeApiDatasFixas extends FakeApiService {
+  /// Meia-noite do dia da âncora. Os fakes usam a âncora como início do turno
+  /// e somam 23h59 para o "dia inteiro"; com a hora do [dataAncoraGolden] o
+  /// card exibiria "14:10 - 14:09" em vez de "00:00 - 23:59".
+  static final DateTime _dia = DateTime(
+      dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
+
+  @override
+  Future<List<Turno>> listarMeusTurnos(int motoboyId) async =>
+      fakeMeusTurnos(ancora: _dia);
+
+  @override
+  Future<List<Turno>> listarTurnosLojista(int lojistId) async =>
+      fakeTurnosLojista(ancora: _dia);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

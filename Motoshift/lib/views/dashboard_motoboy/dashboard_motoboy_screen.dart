@@ -137,7 +137,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
             // permanentemente zerado.
             child: Consumer<TurnoProvider>(
               builder: (context, provider, _) {
-                final serie = serieUltimos7Dias(provider.meusTurnos);
+                final serie = serieUltimos7Dias(provider.meusTurnos, hoje: widget.agora);
                 return MiniBarChart(
                   values: [for (final p in serie) p.valor],
                   labels: [for (final p in serie) p.label],
@@ -260,7 +260,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
                 title: 'Ganhos dos últimos dias',
                 subtitle: 'Últimos 7 dias · turnos finalizados',
                 carregando: provider.carregando,
-                pontos: serieUltimos7Dias(provider.meusTurnos),
+                pontos: serieUltimos7Dias(provider.meusTurnos, hoje: widget.agora),
                 mensagemVazio:
                     'Nenhum turno finalizado nos últimos 7 dias.',
               ),
