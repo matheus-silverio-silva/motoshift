@@ -10,6 +10,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -99,7 +100,9 @@ Future<void> setupGoldenTests() async {
 /// Telas que NÃO imprimem data absoluta usam esta base e ficam estáveis ao
 /// longo do dia; as que imprimem recebem o [dataAncoraGolden] abaixo.
 DateTime hojeAncorado() {
-  final agora = DateTime.now();
+  // clock.now() e nao DateTime.now(): dentro de withClock, fixture e tela
+  // precisam concordar sobre que dia e hoje.
+  final agora = clock.now();
   return DateTime(agora.year, agora.month, agora.day);
 }
 
@@ -152,7 +155,7 @@ Usuario fakeLojista() => Usuario(
     );
 
 List<Turno> fakeTurnosDisponiveis() {
-  final base = DateTime.now().add(const Duration(days: 1));
+  final base = clock.now().add(const Duration(days: 1));
   return [
     Turno(
       id: 101,
@@ -228,6 +231,36 @@ List<Turno> fakeMeusTurnos({DateTime? ancora}) {
       status: StatusTurno.finalizado,
       pagamentoStatus: PagamentoStatus.pendente,
     ),
+    // ── Aceitos e futuros: exercitam a seção "Próximos turnos" ──────────────
+    // Sem estes dois a seção ficava vazia, e `_formatProximoData` ("Amanhã",
+    // "Sáb", "Hoje") não era exercitado por teste nenhum — armadilha pronta
+    // para o dia em que alguém acrescentasse um turno futuro aqui.
+    Turno(
+      id: 204,
+      lojistId: 2,
+      motoboyId: 1,
+      titulo: 'Turno Manhã — Padaria do Zé',
+      regiao: 'Batel, Curitiba',
+      // ramo "Amanhã"
+      dataInicio: hoje.add(const Duration(days: 1, hours: 14)),
+      dataFim: hoje.add(const Duration(days: 1, hours: 18)),
+      valorEstimado: 130,
+      raioEntregaKm: 6,
+      status: StatusTurno.aceito,
+    ),
+    Turno(
+      id: 205,
+      lojistId: 3,
+      motoboyId: 1,
+      titulo: 'Turno Noite — Pizzaria Bella',
+      regiao: 'Centro, Curitiba',
+      // ramo do dia da semana (nem hoje nem amanhã)
+      dataInicio: hoje.add(const Duration(days: 3, hours: 19)),
+      dataFim: hoje.add(const Duration(days: 3, hours: 23)),
+      valorEstimado: 145,
+      raioEntregaKm: 7,
+      status: StatusTurno.aceito,
+    ),
   ];
 }
 
@@ -295,11 +328,64 @@ Map<String, dynamic> fakeDashboardLojista() => {
       'reputacaoEntregadores': 4.7,
     };
 
-Carteira fakeCarteira() => const Carteira(
-      motoboyId: 1,
-      saldoAtual: 320,
-      ganhosMensais: 1850,
-    );
+/// Carteira com extrato, ancorado em [dataAncoraGolden].
+///
+/// Antes vinha sem transações, e o golden da carteira mostrava só o estado
+/// vazio — ou seja, `_formatarData` ("Hoje, 14:30" / "Ontem, ..." / "12/08,
+/// ...") não era exercitado por teste nenhum. Não quebrava, e viraria falha no
+/// dia em que alguém acrescentasse dados aqui.
+///
+/// Os três lançamentos cobrem os três ramos do formatador, de propósito. As
+/// datas são absolutas: com `DateTime.now()` o rótulo "Hoje" viraria "Ontem"
+/// à meia-noite e levaria o golden junto.
+Carteira fakeCarteira() {
+  final dia = DateTime(
+      dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
+  return Carteira(
+    motoboyId: 1,
+    saldoAtual: 320,
+    ganhosMensais: 1850,
+    atualizadoEm: dia.add(const Duration(hours: 14, minutes: 30)),
+    transacoes: [
+      // ramo "Hoje, HH:mm"
+      Transacao(
+        id: 1,
+        motoboyId: 1,
+        turnoId: 202,
+        tipo: TipoTransacao.turno,
+        valor: 120,
+        descricao: 'Turno concluído — Hamburgueria',
+        status: StatusTransacao.processado,
+        criadoEm: dia.add(const Duration(hours: 14, minutes: 30)),
+      ),
+      // ramo "Ontem, HH:mm"
+      Transacao(
+        id: 2,
+        motoboyId: 1,
+        tipo: TipoTransacao.saque,
+        valor: 200,
+        descricao: 'Transferência Pix — ricardo@pix.com',
+        status: StatusTransacao.concluido,
+        criadoEm: dia.subtract(const Duration(days: 1)).add(
+              const Duration(hours: 9, minutes: 15),
+            ),
+      ),
+      // ramo "d/MM, HH:mm"
+      Transacao(
+        id: 3,
+        motoboyId: 1,
+        turnoId: 201,
+        tipo: TipoTransacao.bonus,
+        valor: 35,
+        descricao: 'Bônus por avaliação 5 estrelas',
+        status: StatusTransacao.processado,
+        criadoEm: dia.subtract(const Duration(days: 7)).add(
+              const Duration(hours: 20),
+            ),
+      ),
+    ],
+  );
+}
 
 List<Transacao> fakeTransacoes() => [
       Transacao(
@@ -310,7 +396,7 @@ List<Transacao> fakeTransacoes() => [
         valor: 120,
         descricao: 'Turno concluído - Hamburgueria',
         status: StatusTransacao.processado,
-        criadoEm: DateTime.now().subtract(const Duration(days: 7)),
+        criadoEm: clock.now().subtract(const Duration(days: 7)),
       ),
       Transacao(
         id: 2,
@@ -319,7 +405,7 @@ List<Transacao> fakeTransacoes() => [
         valor: 200,
         descricao: 'Transferência Pix — ricardo@pix.com',
         status: StatusTransacao.concluido,
-        criadoEm: DateTime.now().subtract(const Duration(days: 5)),
+        criadoEm: clock.now().subtract(const Duration(days: 5)),
       ),
     ];
 
@@ -353,7 +439,7 @@ Map<String, dynamic> fakeAvaliacoes() => {
 
 /// Notificações fake cobrindo os tipos que a tela 17 estiliza.
 List<Map<String, dynamic>> fakeNotificacoes() {
-  final agora = DateTime.now();
+  final agora = clock.now();
   Map<String, dynamic> n(
     int id,
     String tipo,
@@ -396,13 +482,13 @@ List<Map<String, dynamic>> fakeNotificacoes() {
 }
 
 Map<String, dynamic> fakeAgendaMensal() => {
-      'mes': DateTime.now().month,
-      'ano': DateTime.now().year,
+      'mes': clock.now().month,
+      'ano': clock.now().year,
       'turnos': [],
     };
 
 Map<String, dynamic> fakeAgendaSemanal() => {
-      'inicioSemana': DateTime.now().toIso8601String().substring(0, 10),
+      'inicioSemana': clock.now().toIso8601String().substring(0, 10),
       'dias': [],
     };
 

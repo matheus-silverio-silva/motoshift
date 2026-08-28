@@ -37,7 +37,11 @@ void main() {
   });
 
   testWidgets('MeusTurnosScreen', (tester) async {
-    await pumpGolden(tester, child: MeusTurnosScreen(agora: dataAncoraGolden));
+    await pumpGolden(
+      tester,
+      child: MeusTurnosScreen(agora: dataAncoraGolden),
+      apiFake: FakeApiDatasFixas(),
+    );
     await expectLater(
       find.byType(MeusTurnosScreen),
       matchesGoldenFile('goldens/meus_turnos_screen.png'),
@@ -45,7 +49,7 @@ void main() {
   });
 
   testWidgets('CarteiraScreen', (tester) async {
-    await pumpGolden(tester, child: const CarteiraScreen());
+    await pumpGolden(tester, child: CarteiraScreen(agora: dataAncoraGolden));
     await expectLater(
       find.byType(CarteiraScreen),
       matchesGoldenFile('goldens/carteira_screen.png'),
