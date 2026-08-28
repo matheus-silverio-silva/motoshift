@@ -175,7 +175,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
   Widget _buildDesktop() {
     return Consumer<TurnoProvider>(
       builder: (context, provider, _) {
-        final proximos = provider.turnosLojista.proximos();
+        final proximos = provider.turnosLojista.proximos(hoje: widget.agora);
         final hoje = _comecamHoje(provider.turnosLojista);
 
         return ContentGrid(
@@ -423,7 +423,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
         // ainda não terminaram, do mais próximo ao mais distante. Antes usava
         // a lista crua do provider, que vem do backend sem filtro nem ordem —
         // por isso cancelados e finalizados apareciam aqui.
-        final proximos = provider.turnosLojista.proximos();
+        final proximos = provider.turnosLojista.proximos(hoje: widget.agora);
 
         if (proximos.isEmpty) {
           return EmptyState(

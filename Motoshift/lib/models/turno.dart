@@ -171,8 +171,13 @@ extension TurnosFiltros on Iterable<Turno> {
   /// começou há uma hora e termina daqui a três ainda interessa a quem está
   /// olhando o painel — o que não pode aparecer é turno já encerrado.
   /// Cancelados e finalizados saem pelo filtro de status.
-  List<Turno> proximos() {
-    final agora = DateTime.now();
+  ///
+  /// [hoje] existe pelo mesmo motivo do parâmetro homônimo em
+  /// `serieUltimos7Dias`: sem ele, o golden de qualquer tela que use esta
+  /// lista fica preso ao relógio da máquina. Só os testes passam a data; em
+  /// produção o parâmetro é omitido e o comportamento é o de sempre.
+  List<Turno> proximos({DateTime? hoje}) {
+    final agora = hoje ?? DateTime.now();
     final lista = where((t) => t.status.ativo && t.dataFim.isAfter(agora))
         .toList();
     lista.sort((a, b) => a.dataInicio.compareTo(b.dataInicio));
