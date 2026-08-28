@@ -91,6 +91,7 @@ class _WalletBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        constraints: const BoxConstraints(minHeight: 44),
         padding: const EdgeInsets.symmetric(vertical: 9),
         decoration: BoxDecoration(
           color: solid ? AppColors.amber : const Color(0x29FFFFFF),

@@ -56,7 +56,10 @@ class AppHeader extends StatelessWidget {
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(18, 4, 18, _isGreeting ? 28 : 18),
+          // O 8 embaixo no modo "voltar" compensa os 10px que o botão ganhou
+          // ao chegar nos 44px de alvo de toque: a altura total do header
+          // continua a mesma, e nada abaixo dele se desloca.
+          padding: EdgeInsets.fromLTRB(18, 4, 18, _isGreeting ? 28 : 8),
           child: _isGreeting ? _buildGreeting() : _buildBack(context),
         ),
       ),
@@ -187,19 +190,29 @@ class _BackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Mesmo padrão do sino aqui do lado: o quadrado visível continua com 34,
+    // mas a área que responde ao toque tem os 44 do mínimo. Sem o `opaque` o
+    // espaço em volta do Container não recebe o toque.
     return GestureDetector(
       onTap: onTap ?? () => Navigator.of(context).pop(),
-      child: Container(
-        width: 34,
-        height: 34,
-        decoration: BoxDecoration(
-          color: const Color(0x24FFFFFF),
-          borderRadius: BorderRadius.circular(11),
-        ),
-        child: const Icon(
-          Icons.chevron_left_rounded,
-          color: Color(0xFFFFFFFF),
-          size: 22,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: Center(
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: const Color(0x24FFFFFF),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: const Icon(
+              Icons.chevron_left_rounded,
+              color: Color(0xFFFFFFFF),
+              size: 22,
+            ),
+          ),
         ),
       ),
     );

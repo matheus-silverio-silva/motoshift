@@ -432,7 +432,10 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
             ),
             GestureDetector(
               onTap: _abrirFiltros,
+              behavior: HitTestBehavior.opaque,
               child: Container(
+                constraints: const BoxConstraints(minHeight: 44),
+                alignment: Alignment.center,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
                 decoration: BoxDecoration(
@@ -672,7 +675,13 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
                     }
                   },
                   child: Container(
+
+                    constraints: const BoxConstraints(minHeight: 44),
+
+                    alignment: Alignment.center,
+
                     padding:
+
                         const EdgeInsets.symmetric(vertical: 11),
                     decoration: BoxDecoration(
                       gradient: AppColors.primaryGradient,
@@ -704,6 +713,8 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
                   if (ok) _carregar();
                 },
                 child: Container(
+                  constraints: const BoxConstraints(minHeight: 44),
+                  alignment: Alignment.center,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 11),
                   decoration: BoxDecoration(

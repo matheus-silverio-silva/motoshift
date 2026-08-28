@@ -357,8 +357,10 @@ class _TurnosLojistaListaScreenState
               onTap: () => setState(() => _filtro = op.$1),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
+                constraints: const BoxConstraints(minHeight: 44),
                 padding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 8),
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: sel ? AppColors.teal : AppColors.surface2,
                   borderRadius: BorderRadius.circular(10),

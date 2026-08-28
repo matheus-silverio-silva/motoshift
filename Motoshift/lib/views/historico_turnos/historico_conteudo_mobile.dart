@@ -180,8 +180,10 @@ class HistoricoConteudoMobile extends StatelessWidget {
               onTap: () => onFiltro(op.chave),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
+                constraints: const BoxConstraints(minHeight: 44),
                 padding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 11),
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: sel ? AppColors.teal : AppColors.surface2,
                   borderRadius: BorderRadius.circular(11),
@@ -340,7 +342,9 @@ class HistoricoConteudoMobile extends StatelessWidget {
               child: GestureDetector(
                 onTap: () => onAvaliar(t),
                 child: Container(
+                  constraints: const BoxConstraints(minHeight: 44),
                   padding: const EdgeInsets.symmetric(vertical: 11),
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: AppColors.amberSoft,
                     borderRadius: BorderRadius.circular(10),
@@ -369,7 +373,9 @@ class HistoricoConteudoMobile extends StatelessWidget {
               child: GestureDetector(
                 onTap: () => onPagar(t),
                 child: Container(
+                  constraints: const BoxConstraints(minHeight: 44),
                   padding: const EdgeInsets.symmetric(vertical: 11),
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                     gradient: AppColors.primaryGradient,
                     borderRadius: BorderRadius.circular(10),
