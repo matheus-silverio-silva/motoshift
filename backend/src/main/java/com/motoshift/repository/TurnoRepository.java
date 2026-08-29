@@ -1,5 +1,6 @@
 package com.motoshift.repository;
 
+import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -14,22 +15,26 @@ public interface TurnoRepository extends JpaRepository<Turno, Long> {
 
     List<Turno> findByMotoboyId(Long motoboyId);
 
-    List<Turno> findByStatus(String status);
+    List<Turno> findByStatus(StatusTurno status);
 
     // RF05: verifica conflito de horário para o motoboy
     @Query("SELECT t FROM Turno t WHERE t.motoboyId = :motoboyId " +
-           "AND t.status IN ('aceito', 'em_andamento') " +
+           // Literal de enum qualificado, e nao a string: assim o valor passa
+           // pelo StatusTurnoConverter na hora de montar o SQL. String crua
+           // aqui deixaria a comparacao ao acaso da caixa que o dialeto usar.
+           "AND t.status IN (com.motoshift.entity.StatusTurno.ACEITO, "
+         + "                 com.motoshift.entity.StatusTurno.EM_ANDAMENTO) " +
            "AND t.dataInicio < :fim AND t.dataFim > :inicio")
     List<Turno> findConflitos(
             @Param("motoboyId") Long motoboyId,
             @Param("inicio") LocalDateTime inicio,
             @Param("fim") LocalDateTime fim);
 
-    long countByLojistIdAndStatusIn(Long lojistId, List<String> statuses);
+    long countByLojistIdAndStatusIn(Long lojistId, List<StatusTurno> statuses);
 
     // Histórico de turnos finalizados pelo motoboy a partir de uma data
     List<Turno> findByMotoboyIdAndStatusAndDataInicioAfter(
-            Long motoboyId, String status, LocalDateTime inicio);
+            Long motoboyId, StatusTurno status, LocalDateTime inicio);
 
     // Agenda: turnos do usuário (como lojista ou motoboy) em um período
     @Query("SELECT t FROM Turno t WHERE " +
@@ -44,7 +49,7 @@ public interface TurnoRepository extends JpaRepository<Turno, Long> {
     // ── SCRUM-18: pré-filtro geográfico ───────────────────────────────────
     // Bounding box no banco (usa ix_turno_geo) para não carregar todos os
     // turnos abertos na memória; o refino exato por Haversine é feito depois.
-    @Query("SELECT t FROM Turno t WHERE t.status = 'aberto' " +
+    @Query("SELECT t FROM Turno t WHERE t.status = com.motoshift.entity.StatusTurno.ABERTO " +
            "AND t.latitude IS NOT NULL AND t.longitude IS NOT NULL " +
            "AND t.latitude BETWEEN :latMin AND :latMax " +
            "AND t.longitude BETWEEN :lngMin AND :lngMax")
@@ -54,12 +59,12 @@ public interface TurnoRepository extends JpaRepository<Turno, Long> {
 
     // ── SCRUM-19: vencimento ──────────────────────────────────────────────
     // Turnos ainda abertos cujo horário de início já passou.
-    List<Turno> findByStatusAndDataInicioBefore(String status, LocalDateTime limite);
+    List<Turno> findByStatusAndDataInicioBefore(StatusTurno status, LocalDateTime limite);
 
     // Turnos em andamento/aceitos cujo fim já passou e ninguém finalizou.
-    List<Turno> findByStatusInAndDataFimBefore(List<String> statuses, LocalDateTime limite);
+    List<Turno> findByStatusInAndDataFimBefore(List<StatusTurno> statuses, LocalDateTime limite);
 
     // Turnos que começam dentro de uma janela (aviso de "vai vencer").
     List<Turno> findByStatusAndDataInicioBetween(
-            String status, LocalDateTime de, LocalDateTime ate);
+            StatusTurno status, LocalDateTime de, LocalDateTime ate);
 }

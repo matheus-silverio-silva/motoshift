@@ -1,5 +1,7 @@
 package com.motoshift.config;
 
+import com.motoshift.entity.StatusPagamento;
+import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Avaliacao;
 import com.motoshift.entity.Carteira;
 import com.motoshift.entity.Transacao;
@@ -138,35 +140,35 @@ public class DataInitializer implements CommandLineRunner {
 
         criarTurno(claudia.getId(), null, "Turno Tarde — Hamburgueria da Cláudia",
                 "Entregas na região do Água Verde", "Água Verde, Curitiba",
-                hoje3h, hoje7h, 120.00, 8.0, "aberto");
+                hoje3h, hoje7h, 120.00, 8.0, StatusTurno.ABERTO);
 
         criarTurno(fernando.getId(), null, "Turno Tarde — Pizzaria do Fernando",
                 "Entregas zona Batel e adjacências", "Batel, Curitiba",
-                hoje5h, hoje9h, 100.00, 5.0, "aberto");
+                hoje5h, hoje9h, 100.00, 5.0, StatusTurno.ABERTO);
 
         criarTurno(ana.getId(), null, "Turno Manhã — Farmácia Ana",
                 "Entregas de medicamentos", "Centro Cívico, Curitiba",
-                amanha8, amanha12, 110.00, 6.0, "aberto");
+                amanha8, amanha12, 110.00, 6.0, StatusTurno.ABERTO);
 
         criarTurno(claudia.getId(), null, "Turno Noite — Hamburgueria da Cláudia",
                 "Entregas noturnas", "Água Verde, Curitiba",
-                amanha18, amanha22, 130.00, 10.0, "aberto");
+                amanha18, amanha22, 130.00, 10.0, StatusTurno.ABERTO);
 
         criarTurno(fernando.getId(), null, "Turno Manhã — Pizzaria do Fernando",
                 "Preparação e entregas", "Batel, Curitiba",
-                depoisAmanha10, depoisAmanha14, 105.00, 7.0, "aberto");
+                depoisAmanha10, depoisAmanha14, 105.00, 7.0, StatusTurno.ABERTO);
 
         // ── Turnos CONFIRMADOS (aceitos) ──────────────────────────────────────
 
         Turno t6 = criarTurno(claudia.getId(), ricardo.getId(),
                 "Turno Ativo — Hamburgueria da Cláudia",
                 "Entregas em andamento", "Água Verde, Curitiba",
-                hoje1h, hoje5h, 120.00, 8.0, "aceito");
+                hoje1h, hoje5h, 120.00, 8.0, StatusTurno.ACEITO);
 
         Turno t7 = criarTurno(ana.getId(), lucas.getId(),
                 "Turno Confirmado — Farmácia Ana",
                 "Entregas de medicamentos tarde", "Centro Cívico, Curitiba",
-                amanha14, amanha18, 110.00, 6.0, "aceito");
+                amanha14, amanha18, 110.00, 6.0, StatusTurno.ACEITO);
 
         // ── Turnos CONCLUÍDOS (histórico) ─────────────────────────────────────
         //
@@ -180,29 +182,29 @@ public class DataInitializer implements CommandLineRunner {
         // Concluídos completos (pago + ambos avaliaram)
         Turno t8 = criarTurnoHistorico(claudia.getId(), ricardo.getId(),
                 "Turno Concluído — Hamburgueria da Cláudia",
-                "Água Verde, Curitiba", agora.minusDays(7), 4, 120.00, 8.0, "pago");
+                "Água Verde, Curitiba", agora.minusDays(7), 4, 120.00, 8.0, StatusPagamento.PAGO);
         Turno t9 = criarTurnoHistorico(fernando.getId(), ricardo.getId(),
                 "Turno Concluído — Pizzaria do Fernando",
-                "Batel, Curitiba", agora.minusDays(15), 4, 100.00, 5.0, "pago");
+                "Batel, Curitiba", agora.minusDays(15), 4, 100.00, 5.0, StatusPagamento.PAGO);
         Turno t10 = criarTurnoHistorico(ana.getId(), lucas.getId(),
                 "Turno Concluído — Farmácia Ana",
-                "Centro Cívico, Curitiba", agora.minusDays(3), 4, 110.00, 6.0, "pago");
+                "Centro Cívico, Curitiba", agora.minusDays(3), 4, 110.00, 6.0, StatusPagamento.PAGO);
 
         // Concluídos com avaliação só do lojista (motoboy ainda deve avaliar)
         Turno t11 = criarTurnoHistorico(claudia.getId(), thiago.getId(),
                 "Turno Concluído — Hamburgueria da Cláudia",
-                "Água Verde, Curitiba", agora.minusDays(20), 4, 120.00, 8.0, "pago");
+                "Água Verde, Curitiba", agora.minusDays(20), 4, 120.00, 8.0, StatusPagamento.PAGO);
         Turno t12 = criarTurnoHistorico(fernando.getId(), lucas.getId(),
                 "Turno Concluído — Pizzaria do Fernando",
-                "Batel, Curitiba", agora.minusDays(10), 4, 100.00, 5.0, "pago");
+                "Batel, Curitiba", agora.minusDays(10), 4, 100.00, 5.0, StatusPagamento.PAGO);
 
         // Concluídos sem nenhuma avaliação ainda (ambos veem em "A avaliar")
         Turno t13 = criarTurnoHistorico(ana.getId(), ricardo.getId(),
                 "Turno Manhã — Farmácia Ana",
-                "Centro Cívico, Curitiba", agora.minusDays(2), 4, 95.00, 5.0, "pago");
+                "Centro Cívico, Curitiba", agora.minusDays(2), 4, 95.00, 5.0, StatusPagamento.PAGO);
         Turno t14 = criarTurnoHistorico(claudia.getId(), lucas.getId(),
                 "Turno Noite — Hamburgueria da Cláudia",
-                "Água Verde, Curitiba", agora.minusDays(1), 4, 130.00, 8.0, "pago");
+                "Água Verde, Curitiba", agora.minusDays(1), 4, 130.00, 8.0, StatusPagamento.PAGO);
 
         // Finalizados PENDENTES de pagamento — combinações de quem já confirmou
         //   t15: ninguém confirmou (ambos veem "Confirmar")
@@ -354,7 +356,7 @@ public class DataInitializer implements CommandLineRunner {
     private Turno criarTurno(Long lojistId, Long motoboyId, String titulo,
                               String descricao, String regiao,
                               LocalDateTime inicio, LocalDateTime fim,
-                              double valor, double raio, String status) {
+                              double valor, double raio, StatusTurno status) {
         Turno t = new Turno();
         t.setLojistId(lojistId);
         t.setMotoboyId(motoboyId);
@@ -399,14 +401,14 @@ public class DataInitializer implements CommandLineRunner {
     private Turno criarTurnoHistorico(Long lojistId, Long motoboyId, String titulo,
                                        String regiao, LocalDateTime inicio,
                                        int duracaoHoras, double valor, double raio,
-                                       String pagamentoStatus) {
+                                       StatusPagamento pagamentoStatus) {
         Turno t = criarTurno(lojistId, motoboyId, titulo,
                 "Turno concluído", regiao,
                 inicio, inicio.plusHours(duracaoHoras),
-                valor, raio, "finalizado");
+                valor, raio, StatusTurno.FINALIZADO);
         t.setPagamentoStatus(pagamentoStatus);
         // Se pago, marca ambas confirmações (já efetivado historicamente)
-        if (pagamentoStatus == "pago") {
+        if (pagamentoStatus == StatusPagamento.PAGO) {
             LocalDateTime fim = inicio.plusHours(duracaoHoras);
             t.setLojistaConfirmouEm(fim.plusHours(1));
             t.setMotoboyConfirmouEm(fim.plusHours(2));
@@ -424,8 +426,8 @@ public class DataInitializer implements CommandLineRunner {
         Turno t = criarTurno(lojistId, motoboyId, titulo,
                 "Turno concluído", regiao,
                 inicio, inicio.plusHours(duracaoHoras),
-                valor, raio, "finalizado");
-        t.setPagamentoStatus("pendente");
+                valor, raio, StatusTurno.FINALIZADO);
+        t.setPagamentoStatus(StatusPagamento.PENDENTE);
         LocalDateTime fim = inicio.plusHours(duracaoHoras);
         if (lojistaConfirmou) t.setLojistaConfirmouEm(fim.plusHours(1));
         if (motoboyConfirmou) t.setMotoboyConfirmouEm(fim.plusHours(2));
@@ -438,7 +440,7 @@ public class DataInitializer implements CommandLineRunner {
         return criarTurno(lojistId, motoboyId, titulo,
                 "Turno cancelado", regiao,
                 inicio, inicio.plusHours(duracaoHoras),
-                valor, raio, "cancelado");
+                valor, raio, StatusTurno.CANCELADO);
     }
 
     private void criarTransacao(Long usuarioId, Long turnoId, String tipo,

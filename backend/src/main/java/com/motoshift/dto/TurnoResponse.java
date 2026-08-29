@@ -1,5 +1,7 @@
 package com.motoshift.dto;
 
+import com.motoshift.entity.StatusPagamento;
+import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
 
 import java.math.BigDecimal;
@@ -26,8 +28,11 @@ public class TurnoResponse {
     private LocalDateTime expiradoEm;
     private Integer vagas;
     private Integer vagasPreenchidas;
-    private String status;
-    private String pagamentoStatus;
+    // Tipados como enum: o JSON continua saindo minúsculo por causa do
+    // @JsonValue em StatusTurno/StatusPagamento, e o contrato com o app fica
+    // preso ao enum em vez de a uma String que qualquer atribuição altera.
+    private StatusTurno status;
+    private StatusPagamento pagamentoStatus;
     private LocalDateTime lojistaConfirmouEm;
     private LocalDateTime motoboyConfirmouEm;
     private LocalDateTime criadoEm;
@@ -79,8 +84,8 @@ public class TurnoResponse {
     public Integer getVagas() { return vagas; }
     public Integer getVagasPreenchidas() { return vagasPreenchidas; }
     public void setVagasPreenchidas(Integer v) { this.vagasPreenchidas = v; }
-    public String getStatus() { return status; }
-    public String getPagamentoStatus() { return pagamentoStatus; }
+    public StatusTurno getStatus() { return status; }
+    public StatusPagamento getPagamentoStatus() { return pagamentoStatus; }
     public LocalDateTime getLojistaConfirmouEm() { return lojistaConfirmouEm; }
     public LocalDateTime getMotoboyConfirmouEm() { return motoboyConfirmouEm; }
     public LocalDateTime getCriadoEm() { return criadoEm; }

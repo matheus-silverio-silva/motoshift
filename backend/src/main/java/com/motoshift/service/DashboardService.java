@@ -1,5 +1,6 @@
 package com.motoshift.service;
 
+import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Carteira;
 import com.motoshift.entity.Usuario;
 import com.motoshift.repository.CarteiraRepository;
@@ -52,8 +53,8 @@ public class DashboardService {
 
         List<com.motoshift.entity.Turno> todosTurnos = turnoRepo.findByLojistId(id);
 
-        long turnosAtivos = turnoRepo.countByLojistIdAndStatusIn(id, List.of("aberto", "aceito", "em_andamento"));
-        long turnosFinalizados = turnoRepo.countByLojistIdAndStatusIn(id, List.of("finalizado"));
+        long turnosAtivos = turnoRepo.countByLojistIdAndStatusIn(id, List.of(StatusTurno.ABERTO, StatusTurno.ACEITO, StatusTurno.EM_ANDAMENTO));
+        long turnosFinalizados = turnoRepo.countByLojistIdAndStatusIn(id, List.of(StatusTurno.FINALIZADO));
 
         // Turnos publicados no mês corrente
         LocalDateTime inicioMes = LocalDateTime.now()
@@ -77,7 +78,7 @@ public class DashboardService {
         // Reputação média dos entregadores que atenderam este lojista.
         // Continua sendo útil, mas agora com nome próprio.
         OptionalDouble mediaOpt = todosTurnos.stream()
-                .filter(t -> "finalizado".equals(t.getStatus()) && t.getMotoboyId() != null)
+                .filter(t -> t.getStatus() == StatusTurno.FINALIZADO && t.getMotoboyId() != null)
                 .map(t -> usuarioRepo.findById(t.getMotoboyId()))
                 .filter(java.util.Optional::isPresent)
                 .map(java.util.Optional::get)
@@ -94,7 +95,7 @@ public class DashboardService {
                 .collect(Collectors.toList());
 
         BigDecimal totalGasto = todosTurnos.stream()
-                .filter(t -> "finalizado".equals(t.getStatus()))
+                .filter(t -> t.getStatus() == StatusTurno.FINALIZADO)
                 .map(com.motoshift.entity.Turno::getValorEstimado)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
@@ -119,19 +120,19 @@ public class DashboardService {
         List<com.motoshift.entity.Turno> todosTurnos = turnoRepo.findByMotoboyId(id);
 
         List<TurnoResponse> turnosAceitos = todosTurnos.stream()
-                .filter(t -> "aceito".equals(t.getStatus()) || "em_andamento".equals(t.getStatus()))
+                .filter(t -> t.getStatus() == StatusTurno.ACEITO || t.getStatus() == StatusTurno.EM_ANDAMENTO)
                 .map(TurnoResponse::from)
                 .collect(Collectors.toList());
 
         long turnosFinalizados = todosTurnos.stream()
-                .filter(t -> "finalizado".equals(t.getStatus()))
+                .filter(t -> t.getStatus() == StatusTurno.FINALIZADO)
                 .count();
 
         // Turnos finalizados no mês corrente
         LocalDateTime inicioMes = LocalDateTime.now()
                 .withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
         long turnosFinalizadosMes = todosTurnos.stream()
-                .filter(t -> "finalizado".equals(t.getStatus())
+                .filter(t -> t.getStatus() == StatusTurno.FINALIZADO
                         && t.getAtualizadoEm() != null
                         && !t.getAtualizadoEm().isBefore(inicioMes))
                 .count();

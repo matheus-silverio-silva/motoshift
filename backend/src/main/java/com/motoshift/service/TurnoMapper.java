@@ -1,6 +1,7 @@
 package com.motoshift.service;
 
 import com.motoshift.dto.TurnoResponse;
+import com.motoshift.entity.StatusInscricao;
 import com.motoshift.entity.Turno;
 import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.util.GeoUtils;
@@ -37,7 +38,7 @@ public class TurnoMapper {
      */
     public TurnoResponse toResponse(Turno t, Double origemLat, Double origemLng) {
         TurnoResponse r = TurnoResponse.from(t);
-        long ativas = inscricaoRepo.countByTurnoIdAndStatus(t.getId(), "aceito");
+        long ativas = inscricaoRepo.countByTurnoIdAndStatus(t.getId(), StatusInscricao.ACEITO);
         r.setVagasPreenchidas((int) ativas);
         r.setDistanciaKm(GeoUtils.arredondar1(
                 GeoUtils.distanciaKm(origemLat, origemLng, t.getLatitude(), t.getLongitude())));

@@ -1,5 +1,6 @@
 package com.motoshift.repository;
 
+import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,10 +40,10 @@ class TurnoRepositoryTest {
     @Test
     @DisplayName("findAbertosNaArea traz so o que esta dentro da caixa, e so o que esta aberto")
     void findAbertosNaArea_filtraPelaCaixaEPeloStatus() {
-        Turno dentro = salvar("Dentro da area", "aberto", LAT + 0.01, LNG + 0.01);
-        salvar("Fora da area", "aberto", LAT + 5.0, LNG + 5.0);
-        salvar("Dentro mas ja aceito", "aceito", LAT + 0.01, LNG + 0.01);
-        salvar("Dentro e sem coordenada", "aberto", null, null);
+        Turno dentro = salvar("Dentro da area", StatusTurno.ABERTO, LAT + 0.01, LNG + 0.01);
+        salvar("Fora da area", StatusTurno.ABERTO, LAT + 5.0, LNG + 5.0);
+        salvar("Dentro mas ja aceito", StatusTurno.ACEITO, LAT + 0.01, LNG + 0.01);
+        salvar("Dentro e sem coordenada", StatusTurno.ABERTO, null, null);
 
         List<Turno> achados = repo.findAbertosNaArea(
                 LAT - 0.05, LAT + 0.05, LNG - 0.05, LNG + 0.05);
@@ -90,11 +91,11 @@ class TurnoRepositoryTest {
         LocalDateTime fim    = inicio.plusHours(4);
 
         Turno aceito = salvarComDatas("Sobrepoe e aceito", 900_020L, 900_021L, inicio.plusHours(1));
-        aceito.setStatus("aceito");
+        aceito.setStatus(StatusTurno.ACEITO);
         repo.save(aceito);
 
         Turno aberto = salvarComDatas("Sobrepoe mas aberto", 900_020L, 900_021L, inicio.plusHours(2));
-        aberto.setStatus("aberto");
+        aberto.setStatus(StatusTurno.ABERTO);
         repo.save(aberto);
 
         List<Turno> conflitos = repo.findConflitos(900_021L, inicio, fim);
@@ -104,7 +105,7 @@ class TurnoRepositoryTest {
 
     // ── Helpers ──────────────────────────────────────────────
 
-    private Turno salvar(String titulo, String status, Double lat, Double lng) {
+    private Turno salvar(String titulo, StatusTurno status, Double lat, Double lng) {
         Turno t = novo(titulo, 900_100L, null, LocalDateTime.of(2026, 4, 1, 10, 0));
         t.setStatus(status);
         t.setLatitude(lat);

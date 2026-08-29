@@ -1,5 +1,6 @@
 package com.motoshift.service;
 
+import com.motoshift.entity.StatusInscricao;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.repository.TurnoInscricaoRepository;
@@ -43,7 +44,7 @@ public class TurnoAcesso {
         if (turno.getLojistId() != null) ids.add(turno.getLojistId());
         if (turno.getMotoboyId() != null) ids.add(turno.getMotoboyId());
         for (TurnoInscricao ins : inscricaoRepo.findByTurnoId(turno.getId())) {
-            if (!"cancelado".equals(ins.getStatus())) ids.add(ins.getMotoboyId());
+            if (ins.getStatus() != StatusInscricao.CANCELADO) ids.add(ins.getMotoboyId());
         }
         return new ArrayList<>(ids);
     }

@@ -1,6 +1,8 @@
 package com.motoshift.service;
 
 import com.motoshift.dto.TurnoResponse;
+import com.motoshift.entity.StatusPagamento;
+import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Carteira;
 import com.motoshift.entity.Transacao;
 import com.motoshift.entity.Turno;
@@ -146,6 +148,8 @@ public class PagamentoTurnoService {
         tx.setTipo("turno");
         tx.setValor(turno.getValorEstimado());
         tx.setDescricao("Turno finalizado: " + turno.getTitulo());
+        // Transacao.status e outro dominio (pendente|processado|concluido) e
+        // segue como String — nao confundir com StatusPagamento.
         tx.setStatus("pendente");
         transacaoRepo.save(tx);
     }
@@ -155,9 +159,9 @@ public class PagamentoTurnoService {
         if (ins.getLojistaConfirmouEm() == null || ins.getMotoboyConfirmouEm() == null) {
             return; // aguardando a outra parte
         }
-        if ("pago".equals(ins.getPagamentoStatus())) return;
+        if (ins.getPagamentoStatus() == StatusPagamento.PAGO) return;
 
-        ins.setPagamentoStatus("pago");
+        ins.setPagamentoStatus(StatusPagamento.PAGO);
         inscricaoRepo.save(ins);
         creditarCarteira(ins.getMotoboyId(), turno.getValorEstimado());
         marcarTransacaoProcessada(ins.getMotoboyId(), turno.getId());
@@ -175,19 +179,19 @@ public class PagamentoTurnoService {
                 .filter(i -> i.getPagamentoStatus() != null)
                 .collect(Collectors.toList());
         if (!participantes.isEmpty()
-                && participantes.stream().allMatch(i -> "pago".equals(i.getPagamentoStatus()))) {
-            turno.setPagamentoStatus("pago");
+                && participantes.stream().allMatch(i -> i.getPagamentoStatus() == StatusPagamento.PAGO)) {
+            turno.setPagamentoStatus(StatusPagamento.PAGO);
         }
     }
 
     private Turno carregarParaConfirmacao(Long turnoId) {
         Turno turno = turnoRepo.findById(turnoId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Turno não encontrado"));
-        if (!"finalizado".equals(turno.getStatus())) {
+        if (turno.getStatus() != StatusTurno.FINALIZADO) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Só é possível confirmar pagamento de turnos finalizados.");
         }
-        if ("pago".equals(turno.getPagamentoStatus())) {
+        if (turno.getPagamentoStatus() == StatusPagamento.PAGO) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Turno já foi pago.");
         }
         return turno;
@@ -199,7 +203,7 @@ public class PagamentoTurnoService {
                 || turno.getMotoboyConfirmouEm() == null) {
             return; // ainda aguardando a outra parte
         }
-        turno.setPagamentoStatus("pago");
+        turno.setPagamentoStatus(StatusPagamento.PAGO);
         creditarCarteira(turno.getMotoboyId(), turno.getValorEstimado());
         marcarTransacaoProcessada(turno.getMotoboyId(), turno.getId());
     }

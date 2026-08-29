@@ -2,6 +2,8 @@ package com.motoshift.service;
 
 import com.motoshift.dto.TurnoRequest;
 import com.motoshift.dto.TurnoResponse;
+import com.motoshift.entity.StatusInscricao;
+import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.repository.TurnoInscricaoRepository;
@@ -63,13 +65,13 @@ class TurnoServiceTest {
         LocalDateTime inicio = LocalDateTime.now().plusHours(3);
         LocalDateTime fim    = inicio.plusHours(4);
 
-        Turno salvo = buildTurno(1L, inicio, fim, "aberto");
+        Turno salvo = buildTurno(1L, inicio, fim, StatusTurno.ABERTO);
         when(turnoRepo.save(any(Turno.class))).thenReturn(salvo);
 
         TurnoResponse resp = turnoService.criar(buildRequest(inicio, fim), 1L);
 
         assertThat(resp).isNotNull();
-        assertThat(resp.getStatus()).isEqualTo("aberto");
+        assertThat(resp.getStatus().getValor()).isEqualTo("aberto");
         verify(turnoRepo, times(1)).save(any(Turno.class));
     }
 
@@ -121,7 +123,7 @@ class TurnoServiceTest {
         Turno turno = buildTurno(1L,
                 LocalDateTime.now().plusHours(3),
                 LocalDateTime.now().plusHours(7),
-                "aberto");
+                StatusTurno.ABERTO);
 
         when(turnoRepo.findById(1L)).thenReturn(Optional.of(turno));
         when(turnoRepo.save(any(Turno.class))).thenReturn(turno);
@@ -130,7 +132,7 @@ class TurnoServiceTest {
 
         // Turno de vaga única: a primeira inscrição já lota e fecha o turno.
         assertThat(resp).isNotNull();
-        assertThat(resp.getStatus()).isEqualTo("aceito");
+        assertThat(resp.getStatus().getValor()).isEqualTo("aceito");
         verify(inscricaoRepo).save(any(TurnoInscricao.class));
         verify(turnoRepo).save(any(Turno.class));
     }
@@ -141,18 +143,18 @@ class TurnoServiceTest {
         Turno turno = buildTurno(1L,
                 LocalDateTime.now().plusHours(3),
                 LocalDateTime.now().plusHours(7),
-                "aberto");
+                StatusTurno.ABERTO);
 
         Turno conflitante = buildTurno(2L,
                 LocalDateTime.now().plusHours(2),
                 LocalDateTime.now().plusHours(6),
-                "aceito");
+                StatusTurno.ACEITO);
 
         // O conflito é detectado pelas inscrições ativas do motoboy, e não mais
         // por turnoRepo.findConflitos: com várias vagas o turno de origem pode
         // continuar "aberto" e escapava da query antiga.
         when(turnoRepo.findById(1L)).thenReturn(Optional.of(turno));
-        when(inscricaoRepo.findByMotoboyIdAndStatus(2L, "aceito"))
+        when(inscricaoRepo.findByMotoboyIdAndStatus(2L, StatusInscricao.ACEITO))
                 .thenReturn(List.of(buildInscricao(2L, 2L)));
         when(turnoRepo.findById(2L)).thenReturn(Optional.of(conflitante));
 
@@ -180,7 +182,7 @@ class TurnoServiceTest {
         Turno turno = buildTurno(1L,
                 LocalDateTime.now().plusHours(3),
                 LocalDateTime.now().plusHours(7),
-                "aceito");
+                StatusTurno.ACEITO);
 
         when(turnoRepo.findById(1L)).thenReturn(Optional.of(turno));
 
@@ -197,11 +199,11 @@ class TurnoServiceTest {
         Turno turno = buildTurno(1L,
                 LocalDateTime.now().plusHours(3),
                 LocalDateTime.now().plusHours(7),
-                "aberto");
+                StatusTurno.ABERTO);
         turno.setVagas(2);
 
         when(turnoRepo.findById(1L)).thenReturn(Optional.of(turno));
-        when(inscricaoRepo.countByTurnoIdAndStatus(1L, "aceito")).thenReturn(2L);
+        when(inscricaoRepo.countByTurnoIdAndStatus(1L, StatusInscricao.ACEITO)).thenReturn(2L);
 
         assertThatExceptionOfType(ResponseStatusException.class)
                 .isThrownBy(() -> turnoService.aceitar(1L, 3L))
@@ -216,10 +218,10 @@ class TurnoServiceTest {
         Turno turno = buildTurno(1L,
                 LocalDateTime.now().plusHours(3),
                 LocalDateTime.now().plusHours(7),
-                "aberto");
+                StatusTurno.ABERTO);
 
         when(turnoRepo.findById(1L)).thenReturn(Optional.of(turno));
-        when(inscricaoRepo.existsByTurnoIdAndMotoboyIdAndStatus(1L, 2L, "aceito"))
+        when(inscricaoRepo.existsByTurnoIdAndMotoboyIdAndStatus(1L, 2L, StatusInscricao.ACEITO))
                 .thenReturn(true);
 
         assertThatExceptionOfType(ResponseStatusException.class)
@@ -243,7 +245,7 @@ class TurnoServiceTest {
         return req;
     }
 
-    private Turno buildTurno(long id, LocalDateTime inicio, LocalDateTime fim, String status) {
+    private Turno buildTurno(long id, LocalDateTime inicio, LocalDateTime fim, StatusTurno status) {
         Turno t = new Turno();
         // id é gerado pelo JPA (não tem setter); simula um turno já persistido.
         // temConflitoDeAgenda compara ids, então eles não podem ser nulos.
@@ -261,7 +263,7 @@ class TurnoServiceTest {
         TurnoInscricao ins = new TurnoInscricao();
         ins.setTurnoId(turnoId);
         ins.setMotoboyId(motoboyId);
-        ins.setStatus("aceito");
+        ins.setStatus(StatusInscricao.ACEITO);
         return ins;
     }
 }

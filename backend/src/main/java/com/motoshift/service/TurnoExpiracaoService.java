@@ -1,5 +1,7 @@
 package com.motoshift.service;
 
+import com.motoshift.entity.StatusInscricao;
+import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.repository.TurnoInscricaoRepository;
@@ -46,14 +48,14 @@ public class TurnoExpiracaoService {
     @Transactional
     public void expirarTurnosNaoPreenchidos() {
         LocalDateTime agora = LocalDateTime.now();
-        List<Turno> candidatos = turnoRepo.findByStatusAndDataInicioBefore("aberto", agora);
+        List<Turno> candidatos = turnoRepo.findByStatusAndDataInicioBefore(StatusTurno.ABERTO, agora);
         int expirados = 0, fechados = 0;
 
         for (Turno t : candidatos) {
-            long ativas = inscricaoRepo.countByTurnoIdAndStatus(t.getId(), "aceito");
+            long ativas = inscricaoRepo.countByTurnoIdAndStatus(t.getId(), StatusInscricao.ACEITO);
 
             if (ativas == 0) {
-                t.setStatus("expirado");
+                t.setStatus(StatusTurno.EXPIRADO);
                 t.setExpiradoEm(agora);
                 turnoRepo.save(t);
                 expirados++;
@@ -64,7 +66,7 @@ public class TurnoExpiracaoService {
                         "turno", t.getId());
             } else {
                 // Parcialmente preenchido: fecha para novos aceites, mas o turno vale.
-                t.setStatus("aceito");
+                t.setStatus(StatusTurno.ACEITO);
                 turnoRepo.save(t);
                 fechados++;
                 notificacoes.criarUnica(t.getLojistId(), "turno_lotado",
@@ -85,10 +87,10 @@ public class TurnoExpiracaoService {
     public void avisarTurnosProximosDoVencimento() {
         LocalDateTime agora = LocalDateTime.now();
         List<Turno> proximos = turnoRepo.findByStatusAndDataInicioBetween(
-                "aberto", agora, agora.plusHours(1));
+                StatusTurno.ABERTO, agora, agora.plusHours(1));
 
         for (Turno t : proximos) {
-            long ativas = inscricaoRepo.countByTurnoIdAndStatus(t.getId(), "aceito");
+            long ativas = inscricaoRepo.countByTurnoIdAndStatus(t.getId(), StatusInscricao.ACEITO);
             if (ativas >= t.getVagas()) continue;
             notificacoes.criarUnica(t.getLojistId(), "turno_vencendo",
                     "Turno comeca em menos de 1 hora",
@@ -104,7 +106,7 @@ public class TurnoExpiracaoService {
     public void cobrarFinalizacaoPendente() {
         LocalDateTime agora = LocalDateTime.now();
         List<Turno> vencidos = turnoRepo.findByStatusInAndDataFimBefore(
-                List.of("aceito", "em_andamento"), agora);
+                List.of(StatusTurno.ACEITO, StatusTurno.EM_ANDAMENTO), agora);
 
         for (Turno t : vencidos) {
             notificacoes.criarUnica(t.getLojistId(), "turno_pendente_finalizacao",
@@ -113,7 +115,7 @@ public class TurnoExpiracaoService {
                             + "Finalize para liberar o pagamento dos entregadores.",
                     "turno", t.getId());
 
-            for (TurnoInscricao ins : inscricaoRepo.findByTurnoIdAndStatus(t.getId(), "aceito")) {
+            for (TurnoInscricao ins : inscricaoRepo.findByTurnoIdAndStatus(t.getId(), StatusInscricao.ACEITO)) {
                 notificacoes.criarUnica(ins.getMotoboyId(), "turno_pendente_finalizacao",
                         "Turno terminou",
                         "O turno \"" + t.getTitulo() + "\" terminou e aguarda a "

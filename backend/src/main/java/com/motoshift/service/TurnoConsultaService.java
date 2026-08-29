@@ -1,6 +1,8 @@
 package com.motoshift.service;
 
 import com.motoshift.dto.TurnoResponse;
+import com.motoshift.entity.StatusInscricao;
+import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.entity.Usuario;
@@ -54,7 +56,7 @@ public class TurnoConsultaService {
     }
 
     public List<TurnoResponse> listarDisponiveis() {
-        return turnoRepo.findByStatus("aberto").stream()
+        return turnoRepo.findByStatus(StatusTurno.ABERTO).stream()
                 .map(mapper::toResponse)
                 .collect(Collectors.toList());
     }
@@ -75,7 +77,7 @@ public class TurnoConsultaService {
             double dLng = GeoUtils.deltaLongitude(raioKm, lat);
             base = turnoRepo.findAbertosNaArea(lat - dLat, lat + dLat, lng - dLng, lng + dLng);
         } else {
-            base = turnoRepo.findByStatus("aberto");
+            base = turnoRepo.findByStatus(StatusTurno.ABERTO);
         }
 
         DateTimeFormatter hmFmt = DateTimeFormatter.ofPattern("HH:mm");
@@ -156,13 +158,13 @@ public class TurnoConsultaService {
         for (Turno t : turnoRepo.findByMotoboyId(motoboyId)) {
             porId.put(t.getId(), t);
         }
-        for (TurnoInscricao ins : inscricaoRepo.findByMotoboyIdAndStatus(motoboyId, "aceito")) {
+        for (TurnoInscricao ins : inscricaoRepo.findByMotoboyIdAndStatus(motoboyId, StatusInscricao.ACEITO)) {
             if (!porId.containsKey(ins.getTurnoId())) {
                 turnoRepo.findById(ins.getTurnoId()).ifPresent(t -> porId.put(t.getId(), t));
             }
         }
         // Também inclui inscrições já finalizadas (histórico), evitando duplicatas.
-        for (TurnoInscricao ins : inscricaoRepo.findByMotoboyIdAndStatus(motoboyId, "finalizado")) {
+        for (TurnoInscricao ins : inscricaoRepo.findByMotoboyIdAndStatus(motoboyId, StatusInscricao.FINALIZADO)) {
             if (!porId.containsKey(ins.getTurnoId())) {
                 turnoRepo.findById(ins.getTurnoId()).ifPresent(t -> porId.put(t.getId(), t));
             }
@@ -181,7 +183,7 @@ public class TurnoConsultaService {
         acesso.exigirParticipante(acesso.carregar(turnoId), usuarioId);
 
         return inscricaoRepo.findByTurnoId(turnoId).stream()
-                .filter(i -> !"cancelado".equals(i.getStatus()))
+                .filter(i -> i.getStatus() != StatusInscricao.CANCELADO)
                 .map(i -> {
                     Map<String, Object> m = new HashMap<>();
                     m.put("motoboyId", i.getMotoboyId());

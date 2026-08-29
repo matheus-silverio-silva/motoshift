@@ -1,5 +1,6 @@
 package com.motoshift.service;
 
+import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.Usuario;
 import com.motoshift.repository.TurnoRepository;
@@ -58,15 +59,15 @@ public class RelatorioService {
                 .collect(Collectors.toList());
 
         List<Turno> finalizados = doMes.stream()
-                .filter(t -> "finalizado".equals(t.getStatus()))
+                .filter(t -> t.getStatus() == StatusTurno.FINALIZADO)
                 .collect(Collectors.toList());
 
         List<Turno> cancelados = doMes.stream()
-                .filter(t -> "cancelado".equals(t.getStatus()))
+                .filter(t -> t.getStatus() == StatusTurno.CANCELADO)
                 .collect(Collectors.toList());
 
         List<Turno> finalizadosAnterior = todos.stream()
-                .filter(t -> "finalizado".equals(t.getStatus())
+                .filter(t -> t.getStatus() == StatusTurno.FINALIZADO
                         && t.getDataInicio() != null
                         && !t.getDataInicio().isBefore(inicioMesAnterior)
                         && t.getDataInicio().isBefore(inicioMes))
@@ -176,7 +177,7 @@ public class RelatorioService {
         long semCobertura = totalPublicados - comMotoboy;
 
         BigDecimal totalGasto = somaValores(doMes.stream()
-                .filter(t -> "finalizado".equals(t.getStatus()))
+                .filter(t -> t.getStatus() == StatusTurno.FINALIZADO)
                 .collect(Collectors.toList()));
         BigDecimal mediaPorTurno = totalPublicados > 0
                 ? totalGasto.divide(BigDecimal.valueOf(totalPublicados), 2, RoundingMode.HALF_UP)
@@ -200,12 +201,12 @@ public class RelatorioService {
 
         // Taxa de cancelamento por motoboys
         long canceladosComMotoboy = doMes.stream()
-                .filter(t -> t.getMotoboyId() != null && "cancelado".equals(t.getStatus())).count();
+                .filter(t -> t.getMotoboyId() != null && t.getStatus() == StatusTurno.CANCELADO).count();
         double taxaCancelamento = comMotoboy > 0 ? (canceladosComMotoboy * 100.0 / comMotoboy) : 0;
 
         // Avaliação média dos motoboys que finalizaram turnos no mês
         OptionalDouble avaliacaoOpt = doMes.stream()
-                .filter(t -> "finalizado".equals(t.getStatus()) && t.getMotoboyId() != null)
+                .filter(t -> t.getStatus() == StatusTurno.FINALIZADO && t.getMotoboyId() != null)
                 .map(t -> usuarioRepo.findById(t.getMotoboyId()))
                 .filter(Optional::isPresent)
                 .mapToDouble(opt -> opt.get().getScore() != null ? opt.get().getScore() : 5.0)

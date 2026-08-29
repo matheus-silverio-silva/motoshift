@@ -1,5 +1,6 @@
 package com.motoshift.service;
 
+import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
 import com.motoshift.repository.TurnoRepository;
 import org.springframework.http.HttpStatus;
@@ -38,9 +39,9 @@ public class SugestaoService {
         LocalDateTime desde = LocalDateTime.now().minusDays(DIAS_DE_HISTORICO);
 
         List<Turno> historico = turnoRepo.findByMotoboyIdAndStatusAndDataInicioAfter(
-                motoboyId, "finalizado", desde);
+                motoboyId, StatusTurno.FINALIZADO, desde);
 
-        List<Turno> disponiveis = turnoRepo.findByStatus("aberto");
+        List<Turno> disponiveis = turnoRepo.findByStatus(StatusTurno.ABERTO);
 
         try {
             return Map.of("sugestoes", anthropic.sugerirTurnos(

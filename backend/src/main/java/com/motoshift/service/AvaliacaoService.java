@@ -1,6 +1,8 @@
 package com.motoshift.service;
 
 import com.motoshift.dto.AvaliacaoRequest;
+import com.motoshift.entity.StatusInscricao;
+import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Avaliacao;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.TurnoInscricao;
@@ -56,7 +58,7 @@ public class AvaliacaoService {
         Long avaliadoId = req.getAvaliadoId();
 
         Turno turno = carregarTurno(turnoId);
-        if (!"finalizado".equals(turno.getStatus())) {
+        if (turno.getStatus() != StatusTurno.FINALIZADO) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Só é possível avaliar turnos finalizados.");
         }
@@ -154,7 +156,7 @@ public class AvaliacaoService {
         Turno turno = carregarTurno(turnoId);
 
         List<Map<String, Object>> pendentes = new ArrayList<>();
-        if (participou(turno, usuarioId) && "finalizado".equals(turno.getStatus())) {
+        if (participou(turno, usuarioId) && turno.getStatus() == StatusTurno.FINALIZADO) {
             for (Long alvo : alvosDeAvaliacao(turno, usuarioId)) {
                 if (avaliacaoRepo.existsByTurnoIdAndAvaliadorIdAndAvaliadoId(turnoId, usuarioId, alvo)) {
                     continue;
@@ -190,7 +192,7 @@ public class AvaliacaoService {
         if (usuarioId.equals(turno.getLojistId())) return true;
         if (usuarioId.equals(turno.getMotoboyId())) return true;
         return inscricaoRepo.findByTurnoIdAndMotoboyId(turno.getId(), usuarioId)
-                .filter(i -> !"cancelado".equals(i.getStatus()))
+                .filter(i -> i.getStatus() != StatusInscricao.CANCELADO)
                 .isPresent();
     }
 
@@ -200,7 +202,7 @@ public class AvaliacaoService {
             return turno.getLojistId() == null ? List.of() : List.of(turno.getLojistId());
         }
         List<Long> ids = inscricaoRepo.findByTurnoId(turno.getId()).stream()
-                .filter(i -> !"cancelado".equals(i.getStatus()))
+                .filter(i -> i.getStatus() != StatusInscricao.CANCELADO)
                 .map(TurnoInscricao::getMotoboyId)
                 .distinct()
                 .collect(Collectors.toList());

@@ -65,20 +65,21 @@ public class Turno {
     // ocorre sem erro; linhas antigas ficam NULL e o getter devolve 1 (default).
     private Integer vagas;
 
-    // aberto | aceito | em_andamento | finalizado | cancelado | expirado
+    // Valores no banco: aberto | aceito | em_andamento | finalizado | cancelado
+    // | expirado. A traducao de e para minusculo e do StatusTurnoConverter.
     @Column(nullable = false)
-    private String status = "aberto";
+    private StatusTurno status = StatusTurno.ABERTO;
 
-    // Preenchido pelo job de vencimento quando o turno passa a "expirado" (SCRUM-19).
+    // Preenchido pelo job de vencimento quando o turno passa a EXPIRADO (SCRUM-19).
     private LocalDateTime expiradoEm;
 
     // Dupla confirmação de pagamento
     private LocalDateTime lojistaConfirmouEm;
     private LocalDateTime motoboyConfirmouEm;
 
-    // null (não finalizado) | pendente | pago
-    // "pago" só quando AMBOS confirmaram (lojista pagou + motoboy recebeu)
-    private String pagamentoStatus;
+    // null (nao finalizado) | pendente | pago
+    // PAGO so quando AMBOS confirmaram (lojista pagou + motoboy recebeu)
+    private StatusPagamento pagamentoStatus;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime criadoEm;
@@ -89,7 +90,7 @@ public class Turno {
     private void prePersist() {
         criadoEm = LocalDateTime.now();
         atualizadoEm = LocalDateTime.now();
-        if (status == null) status = "aberto";
+        if (status == null) status = StatusTurno.ABERTO;
         if (vagas == null || vagas < 1) vagas = 1;
     }
 
@@ -142,11 +143,11 @@ public class Turno {
     public Integer getVagas() { return vagas == null ? 1 : vagas; }
     public void setVagas(Integer vagas) { this.vagas = vagas; }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public StatusTurno getStatus() { return status; }
+    public void setStatus(StatusTurno status) { this.status = status; }
 
-    public String getPagamentoStatus() { return pagamentoStatus; }
-    public void setPagamentoStatus(String pagamentoStatus) { this.pagamentoStatus = pagamentoStatus; }
+    public StatusPagamento getPagamentoStatus() { return pagamentoStatus; }
+    public void setPagamentoStatus(StatusPagamento pagamentoStatus) { this.pagamentoStatus = pagamentoStatus; }
 
     public LocalDateTime getLojistaConfirmouEm() { return lojistaConfirmouEm; }
     public void setLojistaConfirmouEm(LocalDateTime t) { this.lojistaConfirmouEm = t; }

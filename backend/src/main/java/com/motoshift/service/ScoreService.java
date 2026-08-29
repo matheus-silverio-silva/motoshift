@@ -1,5 +1,6 @@
 package com.motoshift.service;
 
+import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.Usuario;
 import com.motoshift.repository.TurnoRepository;
@@ -69,7 +70,7 @@ public class ScoreService {
         // Cancelamentos tardios na janela: cancelou com menos de 1h de
         // antecedencia, que e o unico evento que mexe no score hoje.
         List<Turno> canceladosTardios30d = todosTurnos.stream()
-                .filter(t -> "cancelado".equals(t.getStatus()))
+                .filter(t -> t.getStatus() == StatusTurno.CANCELADO)
                 .filter(t -> dentroDaJanela(t, inicio30d))
                 .filter(this::cancelamentoTardio)
                 .collect(Collectors.toList());
@@ -82,12 +83,12 @@ public class ScoreService {
         String classificacao = classificar(scoreAtual);
 
         long finalizados30d = todosTurnos.stream()
-                .filter(t -> "finalizado".equals(t.getStatus()))
+                .filter(t -> t.getStatus() == StatusTurno.FINALIZADO)
                 .filter(t -> dentroDaJanela(t, inicio30d))
                 .count();
 
         long cancelados30d = todosTurnos.stream()
-                .filter(t -> "cancelado".equals(t.getStatus()))
+                .filter(t -> t.getStatus() == StatusTurno.CANCELADO)
                 .filter(t -> dentroDaJanela(t, inicio30d))
                 .count();
 
@@ -135,15 +136,19 @@ public class ScoreService {
     /** Ultimos 10 eventos (finalizados + cancelados), do mais recente ao mais antigo. */
     private List<Map<String, Object>> ultimosEventos(List<Turno> todosTurnos) {
         return todosTurnos.stream()
-                .filter(t -> "finalizado".equals(t.getStatus()) || "cancelado".equals(t.getStatus()))
+                .filter(t -> t.getStatus() == StatusTurno.FINALIZADO || t.getStatus() == StatusTurno.CANCELADO)
                 .filter(t -> t.getDataInicio() != null)
                 .sorted(Comparator.comparing(Turno::getDataInicio).reversed())
                 .limit(10)
                 .map(t -> {
-                    boolean tardio = "cancelado".equals(t.getStatus()) && cancelamentoTardio(t);
-                    String tipo = "finalizado".equals(t.getStatus())
-                            ? "finalizado"
-                            : (tardio ? "cancelado_tardio" : "cancelado");
+                    boolean tardio = t.getStatus() == StatusTurno.CANCELADO && cancelamentoTardio(t);
+                    // Rotulo de evento que o app desenha, nao o status da
+                    // entidade: "cancelado_tardio" nao existe como estado. Os
+                    // outros dois saem do proprio enum para nao virarem duas
+                    // verdades sobre a mesma palavra.
+                    String tipo = t.getStatus() == StatusTurno.FINALIZADO
+                            ? StatusTurno.FINALIZADO.getValor()
+                            : (tardio ? "cancelado_tardio" : StatusTurno.CANCELADO.getValor());
 
                     Map<String, Object> ev = new HashMap<>();
                     ev.put("tipo", tipo);

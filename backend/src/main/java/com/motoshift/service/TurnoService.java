@@ -2,6 +2,9 @@ package com.motoshift.service;
 
 import com.motoshift.dto.TurnoRequest;
 import com.motoshift.dto.TurnoResponse;
+import com.motoshift.entity.StatusInscricao;
+import com.motoshift.entity.StatusPagamento;
+import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.entity.Usuario;
@@ -103,19 +106,19 @@ public class TurnoService {
     public TurnoResponse aceitar(Long turnoId, Long motoboyId) {
         Turno turno = acesso.carregar(turnoId);
 
-        if (!"aberto".equals(turno.getStatus())) {
+        if (turno.getStatus() != StatusTurno.ABERTO) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Turno não está disponível para aceite.");
         }
 
         // Anti-duplicação: mesmo motoboy não pode aceitar o mesmo turno duas vezes.
-        if (inscricaoRepo.existsByTurnoIdAndMotoboyIdAndStatus(turnoId, motoboyId, "aceito")) {
+        if (inscricaoRepo.existsByTurnoIdAndMotoboyIdAndStatus(turnoId, motoboyId, StatusInscricao.ACEITO)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Você já aceitou este turno.");
         }
 
         // Capacidade: respeita o número de vagas do turno.
         int vagas = turno.getVagas();
-        long ocupadas = inscricaoRepo.countByTurnoIdAndStatus(turnoId, "aceito");
+        long ocupadas = inscricaoRepo.countByTurnoIdAndStatus(turnoId, StatusInscricao.ACEITO);
         if (ocupadas >= vagas) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Todas as vagas deste turno já foram preenchidas.");
@@ -131,7 +134,7 @@ public class TurnoService {
         TurnoInscricao ins = new TurnoInscricao();
         ins.setTurnoId(turnoId);
         ins.setMotoboyId(motoboyId);
-        ins.setStatus("aceito");
+        ins.setStatus(StatusInscricao.ACEITO);
         inscricaoRepo.save(ins);
         ocupadas++;
 
@@ -142,7 +145,7 @@ public class TurnoService {
         }
         // Fecha o turno quando todas as vagas forem preenchidas.
         if (ocupadas >= vagas) {
-            turno.setStatus("aceito");
+            turno.setStatus(StatusTurno.ACEITO);
         }
         turnoRepo.save(turno);
 
@@ -164,12 +167,12 @@ public class TurnoService {
      * turno de origem ainda está ABERTO (não pego pelo antigo findConflitos).
      */
     private boolean temConflitoDeAgenda(Long motoboyId, Turno alvo) {
-        List<TurnoInscricao> ativas = inscricaoRepo.findByMotoboyIdAndStatus(motoboyId, "aceito");
+        List<TurnoInscricao> ativas = inscricaoRepo.findByMotoboyIdAndStatus(motoboyId, StatusInscricao.ACEITO);
         for (TurnoInscricao ins : ativas) {
             Turno outro = turnoRepo.findById(ins.getTurnoId()).orElse(null);
             if (outro == null) continue;
             if (outro.getId().equals(alvo.getId())) continue;
-            if ("cancelado".equals(outro.getStatus())) continue;
+            if (outro.getStatus() == StatusTurno.CANCELADO) continue;
             boolean sobrepoe = outro.getDataInicio().isBefore(alvo.getDataFim())
                     && outro.getDataFim().isAfter(alvo.getDataInicio());
             if (sobrepoe) return true;
@@ -186,16 +189,16 @@ public class TurnoService {
         if (turno.getMotoboyId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Turno sem motoboy atribuído.");
         }
-        if ("finalizado".equals(turno.getStatus()) || "cancelado".equals(turno.getStatus())) {
+        if (turno.getStatus() == StatusTurno.FINALIZADO || turno.getStatus() == StatusTurno.CANCELADO) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Turno já encerrado.");
         }
 
-        turno.setStatus("finalizado");
-        turno.setPagamentoStatus("pendente");
+        turno.setStatus(StatusTurno.FINALIZADO);
+        turno.setPagamentoStatus(StatusPagamento.PENDENTE);
         turnoRepo.save(turno);
 
         List<TurnoInscricao> inscricoes =
-                inscricaoRepo.findByTurnoIdAndStatus(turno.getId(), "aceito");
+                inscricaoRepo.findByTurnoIdAndStatus(turno.getId(), StatusInscricao.ACEITO);
 
         if (inscricoes.isEmpty()) {
             // Legado: turno sem inscrições (aceito antes do sistema de vagas).
@@ -203,8 +206,8 @@ public class TurnoService {
         } else {
             // Cada entregador inscrito gera sua própria transação/pagamento.
             for (TurnoInscricao ins : inscricoes) {
-                ins.setStatus("finalizado");
-                ins.setPagamentoStatus("pendente");
+                ins.setStatus(StatusInscricao.FINALIZADO);
+                ins.setPagamentoStatus(StatusPagamento.PENDENTE);
                 inscricaoRepo.save(ins);
                 pagamentos.criarTransacaoPendente(turno, ins.getMotoboyId());
             }
@@ -227,7 +230,7 @@ public class TurnoService {
         Turno turno = acesso.carregar(turnoId);
         acesso.exigirParticipante(turno, usuarioId);
 
-        if ("finalizado".equals(turno.getStatus()) || "cancelado".equals(turno.getStatus())) {
+        if (turno.getStatus() == StatusTurno.FINALIZADO || turno.getStatus() == StatusTurno.CANCELADO) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Turno já encerrado.");
         }
 
@@ -243,12 +246,12 @@ public class TurnoService {
         }
 
         // Cancela também as inscrições ativas (libera as vagas ocupadas).
-        for (TurnoInscricao ins : inscricaoRepo.findByTurnoIdAndStatus(turnoId, "aceito")) {
-            ins.setStatus("cancelado");
+        for (TurnoInscricao ins : inscricaoRepo.findByTurnoIdAndStatus(turnoId, StatusInscricao.ACEITO)) {
+            ins.setStatus(StatusInscricao.CANCELADO);
             inscricaoRepo.save(ins);
         }
 
-        turno.setStatus("cancelado");
+        turno.setStatus(StatusTurno.CANCELADO);
         turnoRepo.save(turno);
 
         // SCRUM-20: todo mundo que estava no turno precisa saber.
