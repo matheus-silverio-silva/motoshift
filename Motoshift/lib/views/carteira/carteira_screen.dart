@@ -53,7 +53,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
       _erro = null;
     });
     try {
-      final c = await api.buscarCarteira(id);
+      final c = await api.carteira.buscarCarteira(id);
       if (mounted) setState(() => _carteira = c);
     } on ApiException catch (e) {
       if (mounted) setState(() => _erro = e.message);
@@ -120,7 +120,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     if (id == null) return;
 
     try {
-      await api.solicitarSaque(id, valor);
+      await api.carteira.solicitarSaque(id, valor);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Transferência solicitada com sucesso!'),

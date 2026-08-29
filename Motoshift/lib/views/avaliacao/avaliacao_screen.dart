@@ -75,7 +75,7 @@ class _AvaliacaoScreenState extends State<AvaliacaoScreen> {
     setState(() => _enviando = true);
     final api = context.read<ApiService>();
     try {
-      await api.registrarAvaliacao({
+      await api.avaliacoes.registrarAvaliacao({
         'turnoId': args.turnoId,
         'avaliadorId': args.avaliadorId,
         'avaliadoId': args.avaliadoId,

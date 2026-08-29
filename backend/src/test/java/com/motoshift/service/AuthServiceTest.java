@@ -4,14 +4,18 @@ import com.motoshift.dto.AuthResponse;
 import com.motoshift.dto.LoginRequest;
 import com.motoshift.dto.RegistroRequest;
 import com.motoshift.entity.Usuario;
+import com.motoshift.security.JwtService;
+import com.motoshift.security.UsuarioAutenticado;
 import com.motoshift.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -27,23 +31,28 @@ class AuthServiceTest {
     @Mock
     private UsuarioRepository repo;
 
-    // Cadastro passou a criar carteira para qualquer usuario; sem este mock o
-    // @InjectMocks injeta null e registrar() estoura.
+    // Cadastro cria carteira para qualquer usuario; sem este mock registrar()
+    // estoura com NullPointerException.
     @Mock
     private CarteiraService carteiras;
 
-    @InjectMocks
+    // Encoder e JWT entram de verdade, nao mockados: a regra que interessa
+    // testar aqui e justamente "a senha confere?" e "sai um token valido?".
+    private final PasswordEncoder encoder = new BCryptPasswordEncoder();
+
     private AuthService authService;
 
     private Usuario usuarioValido;
 
     @BeforeEach
     void setUp() {
+        authService = new AuthService(repo, carteiras, encoder, new JwtService("", 168));
+
         usuarioValido = new Usuario();
         // id é gerado pelo JPA (sem setter); simula um usuário já persistido
         ReflectionTestUtils.setField(usuarioValido, "id", 1L);
         usuarioValido.setEmail("motoboy@teste.com");
-        usuarioValido.setSenha("senha123");
+        usuarioValido.setSenha(encoder.encode("senha123"));
         usuarioValido.setNome("Carlos Mendes");
         usuarioValido.setTipo("motoboy");
     }
@@ -170,6 +179,69 @@ class AuthServiceTest {
         assertThatExceptionOfType(ResponseStatusException.class)
                 .isThrownBy(() -> authService.login(reqErrado))
                 .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(401));
+    }
+
+    @Test
+    @DisplayName("Cadastro grava a senha com hash BCrypt, nunca em texto puro")
+    void registrar_gravaSenhaComHash() {
+        RegistroRequest req = new RegistroRequest();
+        req.setNome("Carlos Mendes");
+        req.setEmail("novo@teste.com");
+        req.setTelefone("41988887777");
+        req.setTipo("motoboy");
+        req.setDocumentoFederal("12345678900");
+        req.setSenha("senha123");
+
+        when(repo.existsByEmail("novo@teste.com")).thenReturn(false);
+        when(repo.save(any(Usuario.class))).thenAnswer(inv -> {
+            Usuario u = inv.getArgument(0);
+            ReflectionTestUtils.setField(u, "id", 7L);
+            return u;
+        });
+
+        authService.registrar(req);
+
+        ArgumentCaptor<Usuario> captor = ArgumentCaptor.forClass(Usuario.class);
+        verify(repo).save(captor.capture());
+
+        String gravada = captor.getValue().getSenha();
+        assertThat(gravada).isNotEqualTo("senha123");
+        assertThat(gravada).startsWith("$2a$");
+        assertThat(encoder.matches("senha123", gravada)).isTrue();
+    }
+
+    @Test
+    @DisplayName("Conta legada em texto puro entra e tem a senha migrada para hash")
+    void login_senhaLegadaEmTextoPuro_migraParaHash() {
+        // O banco de producao foi semeado antes do BCrypt. Barrar essas contas
+        // trocaria um problema de seguranca por um de acesso.
+        Usuario legado = new Usuario();
+        ReflectionTestUtils.setField(legado, "id", 2L);
+        legado.setEmail("legado@teste.com");
+        legado.setSenha("senha123"); // texto puro, como esta no banco antigo
+        legado.setTipo("motoboy");
+
+        when(repo.findByEmail("legado@teste.com")).thenReturn(Optional.of(legado));
+
+        AuthResponse resp = authService.login(buildLoginRequest("legado@teste.com", "senha123"));
+
+        assertThat(resp.getToken()).isNotBlank();
+        assertThat(legado.getSenha()).startsWith("$2a$");
+        verify(repo).save(legado);
+    }
+
+    @Test
+    @DisplayName("O token emitido no login identifica o usuario que logou")
+    void login_tokenCarregaIdentidadeDoUsuario() {
+        when(repo.findByEmail("motoboy@teste.com")).thenReturn(Optional.of(usuarioValido));
+
+        AuthResponse resp = authService.login(buildLoginRequest("motoboy@teste.com", "senha123"));
+
+        UsuarioAutenticado lido = new JwtService("", 168).ler(resp.getToken());
+
+        assertThat(lido.id()).isEqualTo(1L);
+        assertThat(lido.email()).isEqualTo("motoboy@teste.com");
+        assertThat(lido.tipo()).isEqualTo("motoboy");
     }
 
     // --------------------------------------------------------

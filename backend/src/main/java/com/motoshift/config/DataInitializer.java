@@ -11,6 +11,8 @@ import com.motoshift.repository.TransacaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -18,7 +20,17 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
+/**
+ * Massa de demonstracao: 8 contas, turnos, transacoes e avaliacoes.
+ *
+ * O @Profile("!prod") e o ponto. Sao 447 linhas de seed com senha "senha123"
+ * que antes rodavam em qualquer ambiente; so nao poluiam a producao porque o
+ * "if (usuarioRepo.count() > 0) return" segurava — uma protecao que depende de
+ * o banco nunca estar vazio. Producao sobe com -Dspring.profiles.active=prod
+ * (ver Procfile e railway.json), entao la a classe nem e instanciada.
+ */
 @Component
+@Profile("!prod")
 public class DataInitializer implements CommandLineRunner {
 
     private final UsuarioRepository usuarioRepo;
@@ -26,17 +38,20 @@ public class DataInitializer implements CommandLineRunner {
     private final CarteiraRepository carteiraRepo;
     private final TransacaoRepository transacaoRepo;
     private final AvaliacaoRepository avaliacaoRepo;
+    private final PasswordEncoder encoder;
 
     public DataInitializer(UsuarioRepository usuarioRepo,
                            TurnoRepository turnoRepo,
                            CarteiraRepository carteiraRepo,
                            TransacaoRepository transacaoRepo,
-                           AvaliacaoRepository avaliacaoRepo) {
+                           AvaliacaoRepository avaliacaoRepo,
+                           PasswordEncoder encoder) {
         this.usuarioRepo = usuarioRepo;
         this.turnoRepo = turnoRepo;
         this.carteiraRepo = carteiraRepo;
         this.transacaoRepo = transacaoRepo;
         this.avaliacaoRepo = avaliacaoRepo;
+        this.encoder = encoder;
     }
 
     @Override
@@ -222,8 +237,8 @@ public class DataInitializer implements CommandLineRunner {
 
         // ── Transações da wallet ──────────────────────────────────────────────
         // Cada turno finalizado gera uma transação:
-        //   - pagamentoStatus "pago"      → tx "processado"
-        //   - pagamentoStatus "pendente"  → tx "pendente"
+        //   - pagamentoStatus PAGO      → tx "processado"
+        //   - pagamentoStatus PENDENTE  → tx "pendente"
 
         criarTransacao(ricardo.getId(), t8.getId(),  "turno", 120.00,
                 "Turno concluído - Hamburgueria da Cláudia", "processado");
@@ -288,7 +303,9 @@ public class DataInitializer implements CommandLineRunner {
         Usuario u = new Usuario();
         u.setNome(nome);
         u.setEmail(email);
-        u.setSenha(senha);
+        // Hash tambem no seed: o login so conhece BCrypt agora, e massa em texto
+        // puro voltaria a ensinar o formato errado.
+        u.setSenha(encoder.encode(senha));
         u.setTelefone(telefone);
         u.setTipo(tipo);
         u.setDocumentoFederal(doc);
@@ -389,7 +406,7 @@ public class DataInitializer implements CommandLineRunner {
                 valor, raio, "finalizado");
         t.setPagamentoStatus(pagamentoStatus);
         // Se pago, marca ambas confirmações (já efetivado historicamente)
-        if ("pago".equals(pagamentoStatus)) {
+        if (pagamentoStatus == "pago") {
             LocalDateTime fim = inicio.plusHours(duracaoHoras);
             t.setLojistaConfirmouEm(fim.plusHours(1));
             t.setMotoboyConfirmouEm(fim.plusHours(2));

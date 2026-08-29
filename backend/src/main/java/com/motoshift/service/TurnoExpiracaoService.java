@@ -17,10 +17,10 @@ import java.util.List;
  * Vencimento automático de turnos (SCRUM-19).
  *
  * Regras deliberadas:
- *  - Turno "aberto" que ninguém aceitou e cujo início já passou → "expirado".
- *  - Turno "aberto" parcialmente preenchido cujo início já passou → "aceito"
+ *  - Turno ABERTO que ninguém aceitou e cujo início já passou → EXPIRADO.
+ *  - Turno ABERTO parcialmente preenchido cujo início já passou → ACEITO
  *    (fecha as vagas remanescentes; quem já entrou continua valendo).
- *  - Turno "aceito"/"em_andamento" cujo fim já passou → NÃO muda de status.
+ *  - Turno ACEITO/EM_ANDAMENTO cujo fim já passou → NÃO muda de status.
  *    Finalizar dispara transação e pagamento; isso é decisão humana, o job só
  *    cobra o lojista via notificação.
  */

@@ -19,6 +19,7 @@ import 'package:moto_shift/models/usuario.dart';
 import 'package:moto_shift/presentation/providers/notificacao_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_selecionado_provider.dart';
+import 'package:moto_shift/services/api/turno_api.dart';
 import 'package:moto_shift/services/api_service.dart';
 import 'package:moto_shift/services/auth_service.dart';
 import 'package:moto_shift/theme/app_theme.dart';
@@ -46,7 +47,8 @@ Turno turnoExpirado() {
 }
 
 /// Mesma API fake da suíte, com um turno expirado a mais nas duas listagens.
-class _ApiComExpirado extends FakeApiService {
+/// Só o TurnoApi muda; o resto vem do FakeApiService.
+class _TurnosComExpirado extends FakeTurnoApi {
   @override
   Future<List<Turno>> listarMeusTurnos(int motoboyId) async =>
       [...fakeMeusTurnos(), turnoExpirado()];
@@ -54,6 +56,12 @@ class _ApiComExpirado extends FakeApiService {
   @override
   Future<List<Turno>> listarTurnosLojista(int lojistId) async =>
       [...fakeTurnosLojista(), turnoExpirado()];
+}
+
+class _ApiComExpirado extends FakeApiService {
+  @override
+  TurnoApi get turnos => _turnos;
+  final TurnoApi _turnos = _TurnosComExpirado();
 }
 
 Future<void> _montar(

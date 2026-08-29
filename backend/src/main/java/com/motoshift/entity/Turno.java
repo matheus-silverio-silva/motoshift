@@ -72,13 +72,13 @@ public class Turno {
     // Preenchido pelo job de vencimento quando o turno passa a "expirado" (SCRUM-19).
     private LocalDateTime expiradoEm;
 
-    // null (não finalizado) | pendente | pago
-    // "pago" só quando AMBOS confirmaram (lojista pagou + motoboy recebeu)
-    private String pagamentoStatus;
-
     // Dupla confirmação de pagamento
     private LocalDateTime lojistaConfirmouEm;
     private LocalDateTime motoboyConfirmouEm;
+
+    // null (não finalizado) | pendente | pago
+    // "pago" só quando AMBOS confirmaram (lojista pagou + motoboy recebeu)
+    private String pagamentoStatus;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime criadoEm;

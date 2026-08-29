@@ -74,7 +74,7 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
 
     setState(() => _salvando = true);
     try {
-      final novo = await api.atualizarPerfil(id, {
+      final novo = await api.auth.atualizarPerfil(id, {
         'nome': _nomeCtrl.text.trim(),
         'telefone': _telefoneCtrl.text.trim(),
         'cidade': _cidadeCtrl.text.trim(),

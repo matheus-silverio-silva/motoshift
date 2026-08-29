@@ -42,8 +42,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
     try {
       final data = usuario!.tipo == TipoUsuario.lojista
-          ? await api.dashboardLojista(usuario.id!)
-          : await api.dashboardMotoboy(usuario.id!);
+          ? await api.dashboard.dashboardLojista(usuario.id!)
+          : await api.dashboard.dashboardMotoboy(usuario.id!);
       if (mounted) setState(() => _dash = data);
     } catch (_) {
       // Estatística é informação secundária: falha vira "—", não erro de tela.

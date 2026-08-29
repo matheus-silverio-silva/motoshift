@@ -36,7 +36,7 @@ class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
     if (id == null) return;
 
     try {
-      final data = await api.buscarAvaliacoes(id);
+      final data = await api.avaliacoes.buscarAvaliacoes(id);
       if (mounted) {
         setState(() {
           _dados = data;

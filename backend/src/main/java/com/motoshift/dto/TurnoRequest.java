@@ -8,7 +8,8 @@ import java.time.LocalDateTime;
 
 public class TurnoRequest {
 
-    @NotNull
+    // Aceito por compatibilidade com o app, mas ignorado: o dono do turno e
+    // sempre o usuario do token (ver TurnoController.criar).
     private Long lojistId;
 
     @NotNull

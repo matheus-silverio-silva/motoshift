@@ -66,7 +66,7 @@ class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
 
     try {
       final api = context.read<ApiService>();
-      final usuario = await api.buscarUsuario(motoboyId);
+      final usuario = await api.auth.buscarUsuario(motoboyId);
       if (!mounted) return;
       setState(() {
         _motoboyUsuario = usuario;

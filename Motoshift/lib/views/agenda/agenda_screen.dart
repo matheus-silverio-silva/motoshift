@@ -56,7 +56,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
 
     setState(() => _carregando = true);
     try {
-      final data = await api.buscarAgendaMensal(
+      final data = await api.agenda.buscarAgendaMensal(
           id, _mesAtual.month, _mesAtual.year);
       final dias =
           (data['dias'] as List<dynamic>).cast<Map<String, dynamic>>();

@@ -4,15 +4,13 @@ import com.motoshift.dto.TurnoRequest;
 import com.motoshift.dto.TurnoResponse;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.TurnoInscricao;
-import com.motoshift.repository.CarteiraRepository;
-import com.motoshift.repository.TransacaoRepository;
 import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -32,16 +30,28 @@ class TurnoServiceTest {
 
     @Mock private TurnoRepository    turnoRepo;
     @Mock private UsuarioRepository  usuarioRepo;
-    @Mock private CarteiraRepository carteiraRepo;
-    @Mock private TransacaoRepository transacaoRepo;
     @Mock private TurnoInscricaoRepository inscricaoRepo;
     // Mesma classe de problema do inscricaoRepo: o P0 (SCRUM-20) passou a
     // notificar o lojista dentro de aceitar/finalizar/cancelar, e sem o mock
     // o @InjectMocks injeta null e o fluxo estoura antes da assercao.
     @Mock private NotificacaoService notificacoes;
 
-    @InjectMocks
+    // O dinheiro saiu daqui: confirmar pagamento e creditar carteira agora sao
+    // do PagamentoTurnoService. O TurnoService so o chama ao finalizar, entao
+    // aqui ele entra mockado.
+    @Mock private PagamentoTurnoService pagamentos;
+
     private TurnoService turnoService;
+
+    @BeforeEach
+    void setUp() {
+        // Mapper e acesso entram de verdade, montados sobre os mesmos mocks: sao
+        // finos, e mockar o mapper faria toda assercao sobre a resposta virar
+        // null.
+        turnoService = new TurnoService(
+                turnoRepo, usuarioRepo, inscricaoRepo, notificacoes, pagamentos,
+                new TurnoMapper(inscricaoRepo), new TurnoAcesso(turnoRepo, inscricaoRepo));
+    }
 
     // --------------------------------------------------------
     // RF04 — criar()
@@ -56,7 +66,7 @@ class TurnoServiceTest {
         Turno salvo = buildTurno(1L, inicio, fim, "aberto");
         when(turnoRepo.save(any(Turno.class))).thenReturn(salvo);
 
-        TurnoResponse resp = turnoService.criar(buildRequest(inicio, fim));
+        TurnoResponse resp = turnoService.criar(buildRequest(inicio, fim), 1L);
 
         assertThat(resp).isNotNull();
         assertThat(resp.getStatus()).isEqualTo("aberto");
@@ -70,7 +80,7 @@ class TurnoServiceTest {
         LocalDateTime fim    = inicio.plusHours(2);
 
         assertThatExceptionOfType(ResponseStatusException.class)
-                .isThrownBy(() -> turnoService.criar(buildRequest(inicio, fim)))
+                .isThrownBy(() -> turnoService.criar(buildRequest(inicio, fim), 1L))
                 .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(400));
 
         verify(turnoRepo, never()).save(any());
@@ -83,7 +93,7 @@ class TurnoServiceTest {
         LocalDateTime fim    = inicio.minusHours(1);
 
         assertThatExceptionOfType(ResponseStatusException.class)
-                .isThrownBy(() -> turnoService.criar(buildRequest(inicio, fim)))
+                .isThrownBy(() -> turnoService.criar(buildRequest(inicio, fim), 1L))
                 .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(400));
 
         verify(turnoRepo, never()).save(any());
@@ -97,7 +107,7 @@ class TurnoServiceTest {
         LocalDateTime fim    = inicio.plusHours(4);
 
         assertThatExceptionOfType(ResponseStatusException.class)
-                .isThrownBy(() -> turnoService.criar(buildRequest(inicio, fim)))
+                .isThrownBy(() -> turnoService.criar(buildRequest(inicio, fim), 1L))
                 .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(400));
     }
 
@@ -225,7 +235,7 @@ class TurnoServiceTest {
 
     private TurnoRequest buildRequest(LocalDateTime inicio, LocalDateTime fim) {
         TurnoRequest req = new TurnoRequest();
-        req.setLojistId(1L);
+        // O id do dono nao vem mais daqui — o service recebe o lojista do token.
         req.setTitulo("Turno Teste");
         req.setDataInicio(inicio);
         req.setDataFim(fim);

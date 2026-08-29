@@ -44,9 +44,9 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
     try {
       final isLojista = auth.usuario?.tipo == TipoUsuario.lojista;
       final lista = isLojista
-          ? await api.listarTurnosLojista(id)
-          : await api.listarMeusTurnos(id);
-      final avaliados = await api.buscarTurnosAvaliados(id);
+          ? await api.turnos.listarTurnosLojista(id)
+          : await api.turnos.listarMeusTurnos(id);
+      final avaliados = await api.avaliacoes.buscarTurnosAvaliados(id);
       if (!mounted) return;
       setState(() {
         // Tudo que não está mais em jogo entra no histórico — por negação,
@@ -136,9 +136,9 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
     try {
       final api = context.read<ApiService>();
       final atualizado = isLojista
-          ? await api.confirmarPagamentoLojista(t.id!, id,
+          ? await api.turnos.confirmarPagamentoLojista(t.id!, id,
               motoboyId: t.motoboyId)
-          : await api.confirmarRecebimentoMotoboy(t.id!, id);
+          : await api.turnos.confirmarRecebimentoMotoboy(t.id!, id);
       if (!mounted) return;
       final efetivado =
           atualizado.pagamentoStatus == PagamentoStatus.pago;
@@ -184,7 +184,7 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
         return StatefulBuilder(
           builder: (ctx, setSheet) {
             return FutureBuilder<List<Map<String, dynamic>>>(
-              future: api.listarInscritos(t.id!),
+              future: api.turnos.listarInscritos(t.id!),
               builder: (ctx, snap) {
                 final inscritos = snap.data ?? [];
                 return Padding(
@@ -295,7 +295,7 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
             GestureDetector(
               onTap: () async {
                 try {
-                  await api.confirmarPagamentoLojista(t.id!, lojistaId,
+                  await api.turnos.confirmarPagamentoLojista(t.id!, lojistaId,
                       motoboyId: motoboyId);
                   setSheet(() {});
                 } catch (e) {

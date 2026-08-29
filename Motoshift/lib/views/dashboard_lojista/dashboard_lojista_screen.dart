@@ -55,7 +55,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
 
     setState(() => _loadingDash = true);
     try {
-      final data = await api.dashboardLojista(id);
+      final data = await api.dashboard.dashboardLojista(id);
       if (mounted) setState(() => _dashData = data);
     } catch (_) {}
     if (mounted) setState(() => _loadingDash = false);

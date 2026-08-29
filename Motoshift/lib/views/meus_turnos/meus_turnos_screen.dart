@@ -82,7 +82,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
 
     if (_hasFilters || _porPerto) {
       try {
-        final lista = await api.listarTurnosDisponiveisComFiltros(
+        final lista = await api.turnos.listarTurnosDisponiveisComFiltros(
           horarioInicio: _fHorarioInicio,
           horarioFim: _fHorarioFim,
           diaSemana: _fDiaSemana,

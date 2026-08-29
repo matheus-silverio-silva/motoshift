@@ -64,7 +64,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
     context.read<NotificacaoProvider>().carregarContagem(id);
 
     try {
-      final data = await api.dashboardMotoboy(id);
+      final data = await api.dashboard.dashboardMotoboy(id);
       if (mounted) setState(() => _dashData = data);
     } catch (_) {}
   }

@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
-import 'data/repositories/historico_repository_impl.dart';
-import 'data/repositories/pedido_repository_impl.dart';
-import 'presentation/providers/historico_provider.dart';
-import 'presentation/providers/pedido_provider.dart';
 import 'presentation/providers/turno_provider.dart';
 import 'presentation/providers/turno_selecionado_provider.dart';
 import 'presentation/providers/notificacao_provider.dart';
@@ -51,24 +47,6 @@ class MotoShiftApp extends StatelessWidget {
         ChangeNotifierProxyProvider<ApiService, AuthService>(
           create: (ctx) => AuthService(ctx.read<ApiService>()),
           update: (_, api, prev) => prev ?? AuthService(api),
-        ),
-
-        // Pedidos (RF02 / RF03)
-        ChangeNotifierProxyProvider<ApiService, PedidoProvider>(
-          create: (ctx) => PedidoProvider(
-            repo: PedidoRepositoryImpl(ctx.read<ApiService>()),
-          ),
-          update: (_, api, prev) =>
-              prev ?? PedidoProvider(repo: PedidoRepositoryImpl(api)),
-        ),
-
-        // Histórico (RF04)
-        ChangeNotifierProxyProvider<ApiService, HistoricoProvider>(
-          create: (ctx) => HistoricoProvider(
-            repo: HistoricoRepositoryImpl(ctx.read<ApiService>()),
-          ),
-          update: (_, api, prev) =>
-              prev ?? HistoricoProvider(repo: HistoricoRepositoryImpl(api)),
         ),
 
         // Turnos (RF04/RF05/RF06/RF07)

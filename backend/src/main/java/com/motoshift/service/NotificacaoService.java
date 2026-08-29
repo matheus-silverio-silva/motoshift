@@ -65,8 +65,11 @@ public class NotificacaoService {
     }
 
     @Transactional
-    public void marcarComoLida(Long id) {
+    public void marcarComoLida(Long id, Long usuarioId) {
         repo.findById(id).ifPresent(n -> {
+            // Silencio de proposito quando a notificacao e de outra pessoa: um
+            // 403 aqui ja confirmaria que aquele id existe.
+            if (!usuarioId.equals(n.getUsuarioId())) return;
             if (!n.getLida()) {
                 n.setLida(true);
                 n.setLidaEm(LocalDateTime.now());

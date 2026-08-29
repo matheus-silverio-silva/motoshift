@@ -1,11 +1,13 @@
 package com.motoshift.controller;
 
 import com.motoshift.dto.CarteiraResponse;
+import com.motoshift.security.UsuarioAutenticado;
 import com.motoshift.service.CarteiraService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -14,7 +16,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/carteira")
-@CrossOrigin(origins = "*", allowedHeaders = "*")
 @Tag(name = "Carteira", description = "Saldo, saques e histórico financeiro do usuário")
 public class CarteiraController {
 
@@ -30,7 +31,9 @@ public class CarteiraController {
         @ApiResponse(responseCode = "404", description = "Motoboy não encontrado")
     })
     @GetMapping("/{usuarioId}")
-    public CarteiraResponse buscar(@PathVariable Long usuarioId) {
+    public CarteiraResponse buscar(@PathVariable Long usuarioId,
+                                  @AuthenticationPrincipal UsuarioAutenticado atual) {
+        atual.exigirMesmoUsuario(usuarioId);
         return service.buscar(usuarioId);
     }
 
@@ -41,7 +44,10 @@ public class CarteiraController {
         @ApiResponse(responseCode = "404", description = "Carteira não encontrada")
     })
     @PostMapping("/{usuarioId}/saque")
-    public Map<String, Object> saque(@PathVariable Long usuarioId, @RequestBody Map<String, BigDecimal> body) {
+    public Map<String, Object> saque(@PathVariable Long usuarioId,
+                                     @RequestBody Map<String, BigDecimal> body,
+                                     @AuthenticationPrincipal UsuarioAutenticado atual) {
+        atual.exigirMesmoUsuario(usuarioId);
         return service.saque(usuarioId, body.get("valor"));
     }
 
@@ -50,7 +56,9 @@ public class CarteiraController {
     @PutMapping("/{usuarioId}/pix")
     public Map<String, String> atualizarPix(
             @PathVariable Long usuarioId,
-            @RequestBody Map<String, String> body) {
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UsuarioAutenticado atual) {
+        atual.exigirMesmoUsuario(usuarioId);
         service.atualizarPix(usuarioId, body.get("chavePix"));
         return Map.of("mensagem", "Chave Pix atualizada com sucesso!");
     }
@@ -60,7 +68,9 @@ public class CarteiraController {
     @GetMapping("/{usuarioId}/grafico")
     public List<Map<String, Object>> grafico(
             @PathVariable Long usuarioId,
-            @RequestParam(defaultValue = "6") int meses) {
+            @RequestParam(defaultValue = "6") int meses,
+            @AuthenticationPrincipal UsuarioAutenticado atual) {
+        atual.exigirMesmoUsuario(usuarioId);
         return service.grafico(usuarioId, meses);
     }
 }
