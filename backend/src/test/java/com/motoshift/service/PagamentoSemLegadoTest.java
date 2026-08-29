@@ -29,8 +29,8 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
  * inscrição não era encontrada, o serviço mudava de rota em silêncio e creditava
  * dinheiro pelo outro lado. Este teste fixa as duas metades do que mudou:
  *
- *   1. o dinheiro anda inteiro pela inscrição, e as colunas do turno ficam
- *      intocadas;
+ *   1. o dinheiro anda inteiro pela inscrição — que depois da V6 é o único
+ *      lugar onde a dupla confirmação existe;
  *   2. turno sem inscrição não tem plano B — falha alto.
  *
  * Roda com o contexto de verdade porque o que se quer provar é a transação
@@ -71,21 +71,6 @@ class PagamentoSemLegadoTest {
     }
 
     @Test
-    @DisplayName("as colunas de confirmação do turno não são mais escritas")
-    void naoEscreveMaisNoTurno() {
-        Turno turno = turnoFinalizado(MOTOBOY);
-        inscricaoPendente(turno, MOTOBOY);
-
-        pagamentos.confirmarPagamentoLojista(turno.getId(), LOJISTA, MOTOBOY);
-        pagamentos.confirmarRecebimentoMotoboy(turno.getId(), MOTOBOY);
-
-        // É o que autoriza a V6 a derrubar as duas colunas: ninguém escreve nelas.
-        Turno relido = turnoRepo.findById(turno.getId()).orElseThrow();
-        assertThat(relido.getLojistaConfirmouEm()).isNull();
-        assertThat(relido.getMotoboyConfirmouEm()).isNull();
-    }
-
-    @Test
     @DisplayName("turno sem inscrição falha alto — não existe mais rota alternativa")
     void semInscricao_naoTemPlanoB() {
         Turno turno = turnoFinalizado(MOTOBOY); // sem inscrição nenhuma
@@ -100,7 +85,6 @@ class PagamentoSemLegadoTest {
         assertThat(saldoDe(MOTOBOY)).isEqualByComparingTo(saldoAntes);
         Turno relido = turnoRepo.findById(turno.getId()).orElseThrow();
         assertThat(relido.getPagamentoStatus()).isEqualTo(StatusPagamento.PENDENTE);
-        assertThat(relido.getLojistaConfirmouEm()).isNull();
     }
 
     @Test

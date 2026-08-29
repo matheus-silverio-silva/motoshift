@@ -49,8 +49,8 @@ class TurnoResponseJsonTest {
                 + "\"longitude\":-49.2733,\"endereco\":\"Rua Teste, 100\",\"distanciaKm\":null,"
                 + "\"expiradoEm\":null,\"vagas\":2,\"vagasPreenchidas\":0,"
                 + "\"status\":\"aceito\",\"pagamentoStatus\":\"pendente\","
-                + "\"lojistaConfirmouEm\":\"2026-07-01T23:00:00\","
-                + "\"motoboyConfirmouEm\":null,\"criadoEm\":null,\"atualizadoEm\":null}");
+                + "\"lojistaConfirmouEm\":null,\"motoboyConfirmouEm\":null,"
+                + "\"criadoEm\":null,\"atualizadoEm\":null}");
     }
 
     @Test
@@ -102,7 +102,6 @@ class TurnoResponseJsonTest {
         t.setVagas(2);
         t.setStatus(StatusTurno.ACEITO);
         t.setPagamentoStatus(StatusPagamento.PENDENTE);
-        t.setLojistaConfirmouEm(LocalDateTime.of(2026, 7, 1, 23, 0));
         return t;
     }
 }

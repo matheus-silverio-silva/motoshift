@@ -73,12 +73,6 @@ public class Turno {
     // Preenchido pelo job de vencimento quando o turno passa a EXPIRADO (SCRUM-19).
     private LocalDateTime expiradoEm;
 
-    // Dupla confirmação de pagamento.
-    // A V5 copiou estes dois campos para a inscrição e ninguem mais os escreve;
-    // eles continuam aqui, e no banco, ate a V6 (deploy seguinte) derruba-los.
-    private LocalDateTime lojistaConfirmouEm;
-    private LocalDateTime motoboyConfirmouEm;
-
     // null (nao finalizado) | pendente | pago
     // PAGO so quando AMBOS confirmaram (lojista pagou + motoboy recebeu)
     private StatusPagamento pagamentoStatus;
@@ -150,12 +144,6 @@ public class Turno {
 
     public StatusPagamento getPagamentoStatus() { return pagamentoStatus; }
     public void setPagamentoStatus(StatusPagamento pagamentoStatus) { this.pagamentoStatus = pagamentoStatus; }
-
-    public LocalDateTime getLojistaConfirmouEm() { return lojistaConfirmouEm; }
-    public void setLojistaConfirmouEm(LocalDateTime t) { this.lojistaConfirmouEm = t; }
-
-    public LocalDateTime getMotoboyConfirmouEm() { return motoboyConfirmouEm; }
-    public void setMotoboyConfirmouEm(LocalDateTime t) { this.motoboyConfirmouEm = t; }
 
     public LocalDateTime getCriadoEm() { return criadoEm; }
     public LocalDateTime getAtualizadoEm() { return atualizadoEm; }

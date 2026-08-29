@@ -6,6 +6,7 @@ import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.TurnoInscricao;
 import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +46,22 @@ class BackfillV5Test {
     @Autowired private TurnoRepository turnoRepo;
     @Autowired private TurnoInscricaoRepository inscricaoRepo;
     @Autowired private EntityManager em;
+
+    /**
+     * Reconstroi o mundo PRE-V6.
+     *
+     * O schema de teste nasce das entidades, e a V6 ja tirou
+     * lojista_confirmou_em/motoboy_confirmou_em do Turno — mas a V5 roda num
+     * deploy anterior, quando as colunas ainda existem, e le exatamente elas.
+     * Sem isto o teste exercitaria uma V5 que nao e a que vai rodar.
+     */
+    @BeforeEach
+    void recriarColunasLegadas() {
+        em.createNativeQuery("ALTER TABLE turnos ADD COLUMN IF NOT EXISTS "
+                + "lojista_confirmou_em TIMESTAMP").executeUpdate();
+        em.createNativeQuery("ALTER TABLE turnos ADD COLUMN IF NOT EXISTS "
+                + "motoboy_confirmou_em TIMESTAMP").executeUpdate();
+    }
 
     @Test
     @DisplayName("cria uma inscrição para cada turno legado, copiando pagamento e confirmações")
@@ -184,8 +201,8 @@ class BackfillV5Test {
         t.setPagamentoStatus(pagamento);
         Turno salvo = turnoRepo.saveAndFlush(t);
 
-        // Confirmacao por SQL direto: e a linha antiga do banco que se quer
-        // simular, e nao um turno criado pelo fluxo atual.
+        // Confirmacao entra por SQL direto: a entidade nao tem mais o campo, e o
+        // que se quer simular aqui e justamente a linha antiga do banco.
         if (lojistaConfirmou != null) {
             em.createNativeQuery(
                             "UPDATE turnos SET lojista_confirmou_em = :quando WHERE id = :id")

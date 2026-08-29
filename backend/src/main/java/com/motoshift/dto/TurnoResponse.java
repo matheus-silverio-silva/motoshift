@@ -33,6 +33,12 @@ public class TurnoResponse {
     // preso ao enum em vez de a uma String que qualquer atribuição altera.
     private StatusTurno status;
     private StatusPagamento pagamentoStatus;
+    // Mantidos no JSON, sempre nulos, e sem origem no Turno: a V6 derrubou as
+    // colunas e a dupla confirmação passou a viver na inscrição
+    // (GET /api/turnos/{id}/inscritos devolve lojistaConfirmou/motoboyConfirmou
+    // por entregador). Ficam aqui para não sumir uma chave que o app já lê —
+    // para ele, ausente e nulo dão no mesmo, mas remover é mudança de contrato
+    // e merece um deploy só dela.
     private LocalDateTime lojistaConfirmouEm;
     private LocalDateTime motoboyConfirmouEm;
     private LocalDateTime criadoEm;
@@ -58,8 +64,6 @@ public class TurnoResponse {
         r.vagasPreenchidas = 0; // atualizado pelo serviço via setVagasPreenchidas
         r.status = t.getStatus();
         r.pagamentoStatus = t.getPagamentoStatus();
-        r.lojistaConfirmouEm = t.getLojistaConfirmouEm();
-        r.motoboyConfirmouEm = t.getMotoboyConfirmouEm();
         r.criadoEm = t.getCriadoEm();
         r.atualizadoEm = t.getAtualizadoEm();
         return r;
