@@ -11,6 +11,8 @@ import com.motoshift.repository.CarteiraRepository;
 import com.motoshift.repository.TransacaoRepository;
 import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,14 +32,19 @@ import java.util.stream.Collectors;
  * — ou defender em banca por que ela e segura — precisa conseguir ler o arquivo
  * inteiro de uma vez.
  *
- * Continua havendo dois caminhos para a mesma regra, o de {@link TurnoInscricao}
- * e o "fallback legado" no proprio Turno, para os turnos aceitos antes do
- * sistema de vagas. A analise aponta isso como divida a pagar com um backfill;
- * enquanto o backfill nao acontece, os dois convivem aqui, lado a lado e
- * visiveis, em vez de espalhados.
+ * Ha um caminho so: {@link TurnoInscricao}. Ate a V5 convivia aqui um "fallback
+ * legado" que gravava a dupla confirmacao no proprio Turno, para os turnos
+ * aceitos antes do sistema de vagas — toda regra de dinheiro escrita duas
+ * vezes. A V5 fez o backfill (uma inscricao para cada turno com entregador) e
+ * este servico passou a exigir a inscricao: sem ela e erro, nao rota alternativa.
+ *
+ * As colunas lojista_confirmou_em/motoboy_confirmou_em do Turno ainda existem,
+ * mas ninguem mais as escreve; a V6 as remove num deploy posterior.
  */
 @Service
 public class PagamentoTurnoService {
+
+    private static final Logger log = LoggerFactory.getLogger(PagamentoTurnoService.class);
 
     private final TurnoRepository turnoRepo;
     private final CarteiraRepository carteiraRepo;
@@ -74,28 +81,16 @@ public class PagamentoTurnoService {
         }
 
         Long alvo = motoboyId != null ? motoboyId : turno.getMotoboyId();
-        TurnoInscricao ins = alvo == null ? null
-                : inscricaoRepo.findByTurnoIdAndMotoboyId(turnoId, alvo).orElse(null);
+        TurnoInscricao ins = exigirInscricao(turnoId, alvo);
 
-        if (ins != null) {
-            if (ins.getLojistaConfirmouEm() != null) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Você já confirmou o pagamento deste entregador. Aguardando a confirmação dele.");
-            }
-            ins.setLojistaConfirmouEm(LocalDateTime.now());
-            inscricaoRepo.save(ins);
-            liquidarInscricao(turno, ins);
-            atualizarPagamentoTurno(turno);
-            return mapper.toResponse(turnoRepo.save(turno));
-        }
-
-        // Fallback legado (turno sem inscrições).
-        if (turno.getLojistaConfirmouEm() != null) {
+        if (ins.getLojistaConfirmouEm() != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Você já confirmou o pagamento. Aguardando confirmação do motoboy.");
+                    "Você já confirmou o pagamento deste entregador. Aguardando a confirmação dele.");
         }
-        turno.setLojistaConfirmouEm(LocalDateTime.now());
-        tentarEfetivarPagamento(turno);
+        ins.setLojistaConfirmouEm(LocalDateTime.now());
+        inscricaoRepo.save(ins);
+        liquidarInscricao(turno, ins);
+        atualizarPagamentoTurno(turno);
         return mapper.toResponse(turnoRepo.save(turno));
     }
 
@@ -104,32 +99,25 @@ public class PagamentoTurnoService {
     public TurnoResponse confirmarRecebimentoMotoboy(Long turnoId, Long motoboyId) {
         Turno turno = carregarParaConfirmacao(turnoId);
 
-        TurnoInscricao ins =
-                inscricaoRepo.findByTurnoIdAndMotoboyId(turnoId, motoboyId).orElse(null);
-
-        if (ins != null) {
-            if (ins.getMotoboyConfirmouEm() != null) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Você já confirmou o recebimento. Aguardando confirmação do lojista.");
-            }
-            ins.setMotoboyConfirmouEm(LocalDateTime.now());
-            inscricaoRepo.save(ins);
-            liquidarInscricao(turno, ins);
-            atualizarPagamentoTurno(turno);
-            return mapper.toResponse(turnoRepo.save(turno));
-        }
-
-        // Fallback legado (turno sem inscrições).
+        // Quem nao participa do turno leva 403 antes de qualquer coisa — nao e
+        // inconsistencia de dados, e gente pedindo o que nao e dela.
         if (turno.getMotoboyId() == null || !turno.getMotoboyId().equals(motoboyId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Apenas o motoboy do turno pode confirmar o recebimento.");
+            if (inscricaoRepo.findByTurnoIdAndMotoboyId(turnoId, motoboyId).isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Apenas o motoboy do turno pode confirmar o recebimento.");
+            }
         }
-        if (turno.getMotoboyConfirmouEm() != null) {
+
+        TurnoInscricao ins = exigirInscricao(turnoId, motoboyId);
+
+        if (ins.getMotoboyConfirmouEm() != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Você já confirmou o recebimento. Aguardando confirmação do lojista.");
         }
-        turno.setMotoboyConfirmouEm(LocalDateTime.now());
-        tentarEfetivarPagamento(turno);
+        ins.setMotoboyConfirmouEm(LocalDateTime.now());
+        inscricaoRepo.save(ins);
+        liquidarInscricao(turno, ins);
+        atualizarPagamentoTurno(turno);
         return mapper.toResponse(turnoRepo.save(turno));
     }
 
@@ -197,15 +185,26 @@ public class PagamentoTurnoService {
         return turno;
     }
 
-    // Legado: efetiva pagamento no nível do turno (motoboy único, sem inscrições).
-    private void tentarEfetivarPagamento(Turno turno) {
-        if (turno.getLojistaConfirmouEm() == null
-                || turno.getMotoboyConfirmouEm() == null) {
-            return; // ainda aguardando a outra parte
+    /**
+     * A inscricao do entregador naquele turno, que depois da V5 sempre existe.
+     *
+     * Nao ha caminho alternativo: se cair aqui sem inscricao, o backfill nao
+     * cobriu esta linha, e seguir adiante significaria creditar dinheiro por um
+     * caminho que ninguem mais mantem. Melhor 500 alto e com log do que um
+     * fluxo paralelo silencioso — que era exatamente o problema anterior.
+     */
+    private TurnoInscricao exigirInscricao(Long turnoId, Long motoboyId) {
+        TurnoInscricao ins = motoboyId == null ? null
+                : inscricaoRepo.findByTurnoIdAndMotoboyId(turnoId, motoboyId).orElse(null);
+
+        if (ins == null) {
+            log.error("[pagamento] turno {} sem inscricao para o motoboy {}. "
+                    + "A V5 (backfill) nao cobriu esta linha; o pagamento nao pode "
+                    + "ser liquidado sem inscricao.", turnoId, motoboyId);
+            throw new IllegalStateException(
+                    "Turno " + turnoId + " sem inscricao para o motoboy " + motoboyId);
         }
-        turno.setPagamentoStatus(StatusPagamento.PAGO);
-        creditarCarteira(turno.getMotoboyId(), turno.getValorEstimado());
-        marcarTransacaoProcessada(turno.getMotoboyId(), turno.getId());
+        return ins;
     }
 
     // Credita saldo na carteira do motoboy.

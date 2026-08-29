@@ -73,7 +73,9 @@ public class Turno {
     // Preenchido pelo job de vencimento quando o turno passa a EXPIRADO (SCRUM-19).
     private LocalDateTime expiradoEm;
 
-    // Dupla confirmação de pagamento
+    // Dupla confirmação de pagamento.
+    // A V5 copiou estes dois campos para a inscrição e ninguem mais os escreve;
+    // eles continuam aqui, e no banco, ate a V6 (deploy seguinte) derruba-los.
     private LocalDateTime lojistaConfirmouEm;
     private LocalDateTime motoboyConfirmouEm;
 

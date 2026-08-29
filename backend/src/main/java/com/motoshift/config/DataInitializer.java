@@ -1,15 +1,18 @@
 package com.motoshift.config;
 
+import com.motoshift.entity.StatusInscricao;
 import com.motoshift.entity.StatusPagamento;
 import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Avaliacao;
 import com.motoshift.entity.Carteira;
 import com.motoshift.entity.Transacao;
 import com.motoshift.entity.Turno;
+import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.entity.Usuario;
 import com.motoshift.repository.AvaliacaoRepository;
 import com.motoshift.repository.CarteiraRepository;
 import com.motoshift.repository.TransacaoRepository;
+import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
 import org.springframework.boot.CommandLineRunner;
@@ -40,6 +43,7 @@ public class DataInitializer implements CommandLineRunner {
     private final CarteiraRepository carteiraRepo;
     private final TransacaoRepository transacaoRepo;
     private final AvaliacaoRepository avaliacaoRepo;
+    private final TurnoInscricaoRepository inscricaoRepo;
     private final PasswordEncoder encoder;
 
     public DataInitializer(UsuarioRepository usuarioRepo,
@@ -47,12 +51,14 @@ public class DataInitializer implements CommandLineRunner {
                            CarteiraRepository carteiraRepo,
                            TransacaoRepository transacaoRepo,
                            AvaliacaoRepository avaliacaoRepo,
+                           TurnoInscricaoRepository inscricaoRepo,
                            PasswordEncoder encoder) {
         this.usuarioRepo = usuarioRepo;
         this.turnoRepo = turnoRepo;
         this.carteiraRepo = carteiraRepo;
         this.transacaoRepo = transacaoRepo;
         this.avaliacaoRepo = avaliacaoRepo;
+        this.inscricaoRepo = inscricaoRepo;
         this.encoder = encoder;
     }
 
@@ -375,7 +381,9 @@ public class DataInitializer implements CommandLineRunner {
         t.setEndereco(regiao);
 
         t.setStatus(status);
-        return turnoRepo.save(t);
+        Turno salvo = turnoRepo.save(t);
+        garantirInscricao(salvo, statusDaInscricao(status), null, null, null);
+        return salvo;
     }
 
     /**
@@ -407,13 +415,16 @@ public class DataInitializer implements CommandLineRunner {
                 inicio, inicio.plusHours(duracaoHoras),
                 valor, raio, StatusTurno.FINALIZADO);
         t.setPagamentoStatus(pagamentoStatus);
-        // Se pago, marca ambas confirmações (já efetivado historicamente)
-        if (pagamentoStatus == StatusPagamento.PAGO) {
-            LocalDateTime fim = inicio.plusHours(duracaoHoras);
-            t.setLojistaConfirmouEm(fim.plusHours(1));
-            t.setMotoboyConfirmouEm(fim.plusHours(2));
-        }
-        return turnoRepo.save(t);
+        Turno salvo = turnoRepo.save(t);
+
+        // Se pago, ambas as confirmações já aconteceram — e agora elas moram na
+        // inscrição, não no turno.
+        LocalDateTime fim = inicio.plusHours(duracaoHoras);
+        boolean pago = pagamentoStatus == StatusPagamento.PAGO;
+        garantirInscricao(salvo, StatusInscricao.FINALIZADO, pagamentoStatus,
+                pago ? fim.plusHours(1) : null,
+                pago ? fim.plusHours(2) : null);
+        return salvo;
     }
 
     // Variante que permite controlar quem já confirmou (cenários de teste)
@@ -428,10 +439,48 @@ public class DataInitializer implements CommandLineRunner {
                 inicio, inicio.plusHours(duracaoHoras),
                 valor, raio, StatusTurno.FINALIZADO);
         t.setPagamentoStatus(StatusPagamento.PENDENTE);
+        Turno salvo = turnoRepo.save(t);
+
         LocalDateTime fim = inicio.plusHours(duracaoHoras);
-        if (lojistaConfirmou) t.setLojistaConfirmouEm(fim.plusHours(1));
-        if (motoboyConfirmou) t.setMotoboyConfirmouEm(fim.plusHours(2));
-        return turnoRepo.save(t);
+        garantirInscricao(salvo, StatusInscricao.FINALIZADO, StatusPagamento.PENDENTE,
+                lojistaConfirmou ? fim.plusHours(1) : null,
+                motoboyConfirmou ? fim.plusHours(2) : null);
+        return salvo;
+    }
+
+    /**
+     * Inscricao do entregador no turno — o que a V5 fez de uma vez no banco de
+     * producao, o seed passa a fazer desde o inicio.
+     *
+     * Sem isto a massa de dev nasceria no formato legado (turno com motoboy e
+     * sem inscricao), que e exatamente o estado que o PagamentoTurnoService
+     * agora recusa: confirmar pagamento em dev estouraria 500.
+     */
+    private void garantirInscricao(Turno t, StatusInscricao status,
+                                   StatusPagamento pagamentoStatus,
+                                   LocalDateTime lojistaConfirmou,
+                                   LocalDateTime motoboyConfirmou) {
+        if (t.getMotoboyId() == null) return;
+
+        TurnoInscricao ins = inscricaoRepo
+                .findByTurnoIdAndMotoboyId(t.getId(), t.getMotoboyId())
+                .orElseGet(TurnoInscricao::new);
+        ins.setTurnoId(t.getId());
+        ins.setMotoboyId(t.getMotoboyId());
+        ins.setStatus(status);
+        ins.setPagamentoStatus(pagamentoStatus);
+        ins.setLojistaConfirmouEm(lojistaConfirmou);
+        ins.setMotoboyConfirmouEm(motoboyConfirmou);
+        inscricaoRepo.save(ins);
+    }
+
+    /** O mesmo mapeamento da V5: so os estados terminais tem correspondencia. */
+    private StatusInscricao statusDaInscricao(StatusTurno status) {
+        return switch (status) {
+            case FINALIZADO -> StatusInscricao.FINALIZADO;
+            case CANCELADO  -> StatusInscricao.CANCELADO;
+            default         -> StatusInscricao.ACEITO;
+        };
     }
 
     private Turno criarTurnoCancelado(Long lojistId, Long motoboyId, String titulo,
