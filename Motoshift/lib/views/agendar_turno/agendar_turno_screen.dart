@@ -179,7 +179,7 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
     );
 
     try {
-      await api.criarTurno(turno);
+      await api.turnos.criarTurno(turno);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

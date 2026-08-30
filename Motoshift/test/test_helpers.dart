@@ -18,17 +18,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
-import 'package:moto_shift/data/repositories/historico_repository_impl.dart';
-import 'package:moto_shift/data/repositories/pedido_repository_impl.dart';
 import 'package:moto_shift/models/carteira.dart';
 import 'package:moto_shift/models/transacao.dart';
 import 'package:moto_shift/models/turno.dart';
 import 'package:moto_shift/models/usuario.dart';
-import 'package:moto_shift/presentation/providers/historico_provider.dart';
-import 'package:moto_shift/presentation/providers/pedido_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_selecionado_provider.dart';
 import 'package:moto_shift/presentation/providers/notificacao_provider.dart';
+import 'package:moto_shift/services/api/agenda_api.dart';
+import 'package:moto_shift/services/api/api_client.dart';
+import 'package:moto_shift/services/api/auth_api.dart';
+import 'package:moto_shift/services/api/avaliacao_api.dart';
+import 'package:moto_shift/services/api/carteira_api.dart';
+import 'package:moto_shift/services/api/dashboard_api.dart';
+import 'package:moto_shift/services/api/notificacao_api.dart';
+import 'package:moto_shift/services/api/turno_api.dart';
 import 'package:moto_shift/services/api_service.dart';
 import 'package:moto_shift/services/auth_service.dart';
 import 'package:moto_shift/theme/app_theme.dart';
@@ -387,28 +391,6 @@ Carteira fakeCarteira() {
   );
 }
 
-List<Transacao> fakeTransacoes() => [
-      Transacao(
-        id: 1,
-        motoboyId: 1,
-        turnoId: 202,
-        tipo: TipoTransacao.turno,
-        valor: 120,
-        descricao: 'Turno concluído - Hamburgueria',
-        status: StatusTransacao.processado,
-        criadoEm: clock.now().subtract(const Duration(days: 7)),
-      ),
-      Transacao(
-        id: 2,
-        motoboyId: 1,
-        tipo: TipoTransacao.saque,
-        valor: 200,
-        descricao: 'Transferência Pix — ricardo@pix.com',
-        status: StatusTransacao.concluido,
-        criadoEm: clock.now().subtract(const Duration(days: 5)),
-      ),
-    ];
-
 Map<String, dynamic> fakeAvaliacoes() => {
       'mediaGeral': 4.8,
       'totalAvaliacoes': 12,
@@ -493,11 +475,16 @@ Map<String, dynamic> fakeAgendaSemanal() => {
     };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FakeApiService — sobrescreve todos os métodos com dados mockados
+// Fakes das APIs — um por domínio, espelhando services/api/
+//
+// Antes havia um FakeApiService só, com 30 métodos sobrescritos, porque do
+// outro lado havia um ApiService só com 45. Com a API quebrada por domínio, o
+// teste passa a poder trocar apenas a parte que exercita: o golden do
+// histórico troca o TurnoApi e herda o resto.
 // ─────────────────────────────────────────────────────────────────────────────
 
-class FakeApiService extends ApiService {
-  FakeApiService();
+class FakeAuthApi extends AuthApi {
+  FakeAuthApi() : super(ApiClient());
 
   @override
   Future<Usuario> buscarUsuario(int id) async => fakeMotoboy();
@@ -508,6 +495,10 @@ class FakeApiService extends ApiService {
   @override
   Future<Usuario> atualizarPerfil(int id, Map<String, dynamic> campos) async =>
       fakeMotoboy();
+}
+
+class FakeTurnoApi extends TurnoApi {
+  FakeTurnoApi() : super(ApiClient());
 
   @override
   Future<List<Turno>> listarTurnosDisponiveis({DateTime? data}) async =>
@@ -518,8 +509,7 @@ class FakeApiService extends ApiService {
       fakeTurnosLojista();
 
   @override
-  Future<List<Turno>> listarMeusTurnos(int motoboyId) async =>
-      fakeMeusTurnos();
+  Future<List<Turno>> listarMeusTurnos(int motoboyId) async => fakeMeusTurnos();
 
   @override
   Future<List<Turno>> listarTurnosDisponiveisComFiltros({
@@ -535,14 +525,13 @@ class FakeApiService extends ApiService {
     double? raioKm,
   }) async =>
       fakeTurnosDisponiveis();
+}
+
+class FakeCarteiraApi extends CarteiraApi {
+  FakeCarteiraApi() : super(ApiClient());
 
   @override
   Future<Carteira> buscarCarteira(int motoboyId) async => fakeCarteira();
-
-  @override
-  Future<List<Transacao>> listarTransacoes(int motoboyId,
-          {int limit = 20}) async =>
-      fakeTransacoes();
 
   @override
   Future<List<Map<String, dynamic>>> buscarGrafico(int motoboyId,
@@ -555,6 +544,10 @@ class FakeApiService extends ApiService {
         {'mes': 'Mai', 'valor': 1750.0},
         {'mes': 'Jun', 'valor': 1850.0},
       ];
+}
+
+class FakeDashboardApi extends DashboardApi {
+  FakeDashboardApi() : super(ApiClient());
 
   @override
   Future<Map<String, dynamic>> dashboardMotoboy(int motoboyId) async =>
@@ -563,6 +556,10 @@ class FakeApiService extends ApiService {
   @override
   Future<Map<String, dynamic>> dashboardLojista(int lojistId) async =>
       fakeDashboardLojista();
+}
+
+class FakeAgendaApi extends AgendaApi {
+  FakeAgendaApi() : super(ApiClient());
 
   @override
   Future<Map<String, dynamic>> buscarAgendaMensal(
@@ -573,6 +570,10 @@ class FakeApiService extends ApiService {
   Future<Map<String, dynamic>> buscarAgendaSemanal(
           int usuarioId, String data) async =>
       fakeAgendaSemanal();
+}
+
+class FakeAvaliacaoApi extends AvaliacaoApi {
+  FakeAvaliacaoApi() : super(ApiClient());
 
   @override
   Future<Map<String, dynamic>> buscarAvaliacoes(int usuarioId) async =>
@@ -583,6 +584,15 @@ class FakeApiService extends ApiService {
 
   @override
   Future<bool> verificarPendente(int turnoId, int usuarioId) async => false;
+
+  @override
+  Future<({bool precisaAvaliar, List<Map<String, dynamic>> pendentes})>
+      buscarAvaliacoesPendentes(int turnoId, int usuarioId) async =>
+          (precisaAvaliar: false, pendentes: <Map<String, dynamic>>[]);
+}
+
+class FakeNotificacaoApi extends NotificacaoApi {
+  FakeNotificacaoApi() : super(ApiClient());
 
   @override
   Future<int> contarNotificacoesNaoLidas(int usuarioId) async =>
@@ -597,11 +607,40 @@ class FakeApiService extends ApiService {
     if (!apenasNaoLidas) return todas;
     return todas.where((n) => n['lida'] == false).toList();
   }
+}
+
+/// O ApiService dos testes: mesma montagem do de produção, com cada domínio
+/// trocado pelo seu fake.
+class FakeApiService extends ApiService {
+  FakeApiService();
 
   @override
-  Future<({bool precisaAvaliar, List<Map<String, dynamic>> pendentes})>
-      buscarAvaliacoesPendentes(int turnoId, int usuarioId) async =>
-          (precisaAvaliar: false, pendentes: <Map<String, dynamic>>[]);
+  AuthApi get auth => _auth;
+  final AuthApi _auth = FakeAuthApi();
+
+  @override
+  TurnoApi get turnos => _turnos;
+  final TurnoApi _turnos = FakeTurnoApi();
+
+  @override
+  CarteiraApi get carteira => _carteira;
+  final CarteiraApi _carteira = FakeCarteiraApi();
+
+  @override
+  DashboardApi get dashboard => _dashboard;
+  final DashboardApi _dashboard = FakeDashboardApi();
+
+  @override
+  AgendaApi get agenda => _agenda;
+  final AgendaApi _agenda = FakeAgendaApi();
+
+  @override
+  AvaliacaoApi get avaliacoes => _avaliacoes;
+  final AvaliacaoApi _avaliacoes = FakeAvaliacaoApi();
+
+  @override
+  NotificacaoApi get notificacoes => _notificacoes;
+  final NotificacaoApi _notificacoes = FakeNotificacaoApi();
 }
 
 /// Turnos encerrados com data ABSOLUTA, para as telas de histórico.
@@ -657,7 +696,10 @@ List<Turno> fakeTurnosEncerradosFixos() {
 }
 
 /// Fake para os goldens do histórico: só turnos encerrados, com data absoluta.
-class FakeApiHistorico extends FakeApiService {
+///
+/// Com a API quebrada por domínio, a variante troca só o TurnoApi — os outros
+/// sete domínios continuam vindo do [FakeApiService].
+class FakeTurnoApiHistorico extends FakeTurnoApi {
   @override
   Future<List<Turno>> listarMeusTurnos(int motoboyId) async =>
       fakeTurnosEncerradosFixos();
@@ -667,13 +709,19 @@ class FakeApiHistorico extends FakeApiService {
       fakeTurnosEncerradosFixos();
 }
 
+class FakeApiHistorico extends FakeApiService {
+  @override
+  TurnoApi get turnos => _turnosHistorico;
+  final TurnoApi _turnosHistorico = FakeTurnoApiHistorico();
+}
+
 /// Fake para os goldens de dashboard: a mesma lista de sempre, só que ancorada
 /// no [dataAncoraGolden] em vez de em hoje.
 ///
 /// O dashboard desenha os ganhos dos últimos sete dias com o dia da semana em
 /// cada barra. Com fixture relativa a hoje, esses rótulos giram todo dia e o
 /// golden amanhece vermelho — foi o que aconteceu na virada de 27 para 28/08.
-class FakeApiDatasFixas extends FakeApiService {
+class FakeTurnoApiDatasFixas extends FakeTurnoApi {
   /// Meia-noite do dia da âncora. Os fakes usam a âncora como início do turno
   /// e somam 23h59 para o "dia inteiro"; com a hora do [dataAncoraGolden] o
   /// card exibiria "14:10 - 14:09" em vez de "00:00 - 23:59".
@@ -687,6 +735,12 @@ class FakeApiDatasFixas extends FakeApiService {
   @override
   Future<List<Turno>> listarTurnosLojista(int lojistId) async =>
       fakeTurnosLojista(ancora: _dia);
+}
+
+class FakeApiDatasFixas extends FakeApiService {
+  @override
+  TurnoApi get turnos => _turnosDatasFixas;
+  final TurnoApi _turnosDatasFixas = FakeTurnoApiDatasFixas();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -737,13 +791,6 @@ Future<void> pumpGolden(
           value: selecaoProv),
       ChangeNotifierProvider<NotificacaoProvider>(
         create: (_) => NotificacaoProvider(api),
-      ),
-      ChangeNotifierProvider<PedidoProvider>(
-        create: (_) => PedidoProvider(repo: PedidoRepositoryImpl(api)),
-      ),
-      ChangeNotifierProvider<HistoricoProvider>(
-        create: (_) =>
-            HistoricoProvider(repo: HistoricoRepositoryImpl(api)),
       ),
     ],
     child: MaterialApp(

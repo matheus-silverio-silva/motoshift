@@ -1,23 +1,41 @@
 package com.motoshift.config;
 
+import com.motoshift.entity.StatusInscricao;
+import com.motoshift.entity.StatusPagamento;
+import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Avaliacao;
 import com.motoshift.entity.Carteira;
 import com.motoshift.entity.Transacao;
 import com.motoshift.entity.Turno;
+import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.entity.Usuario;
 import com.motoshift.repository.AvaliacaoRepository;
 import com.motoshift.repository.CarteiraRepository;
 import com.motoshift.repository.TransacaoRepository;
+import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
+/**
+ * Massa de demonstracao: 8 contas, turnos, transacoes e avaliacoes.
+ *
+ * O @Profile("!prod") e o ponto. Sao 447 linhas de seed com senha "senha123"
+ * que antes rodavam em qualquer ambiente; so nao poluiam a producao porque o
+ * "if (usuarioRepo.count() > 0) return" segurava — uma protecao que depende de
+ * o banco nunca estar vazio. Producao sobe com -Dspring.profiles.active=prod
+ * (ver Procfile e railway.json), entao la a classe nem e instanciada.
+ */
 @Component
+@Profile("!prod")
 public class DataInitializer implements CommandLineRunner {
 
     private final UsuarioRepository usuarioRepo;
@@ -25,17 +43,23 @@ public class DataInitializer implements CommandLineRunner {
     private final CarteiraRepository carteiraRepo;
     private final TransacaoRepository transacaoRepo;
     private final AvaliacaoRepository avaliacaoRepo;
+    private final TurnoInscricaoRepository inscricaoRepo;
+    private final PasswordEncoder encoder;
 
     public DataInitializer(UsuarioRepository usuarioRepo,
                            TurnoRepository turnoRepo,
                            CarteiraRepository carteiraRepo,
                            TransacaoRepository transacaoRepo,
-                           AvaliacaoRepository avaliacaoRepo) {
+                           AvaliacaoRepository avaliacaoRepo,
+                           TurnoInscricaoRepository inscricaoRepo,
+                           PasswordEncoder encoder) {
         this.usuarioRepo = usuarioRepo;
         this.turnoRepo = turnoRepo;
         this.carteiraRepo = carteiraRepo;
         this.transacaoRepo = transacaoRepo;
         this.avaliacaoRepo = avaliacaoRepo;
+        this.inscricaoRepo = inscricaoRepo;
+        this.encoder = encoder;
     }
 
     @Override
@@ -95,10 +119,10 @@ public class DataInitializer implements CommandLineRunner {
 
         // ── Carteiras ────────────────────────────────────────────────────────
 
-        criarCarteira(ricardo.getId(), 320.00, 220.00, "ricardo@pix.com");
-        criarCarteira(lucas.getId(), 150.00, 110.00, "lucas@pix.com");
-        criarCarteira(thiago.getId(), 80.00, 120.00, null);
-        criarCarteira(motoboyOriginal.getId(), 0.00, 0.00, null);
+        criarCarteira(ricardo.getId(), 320.00, "ricardo@pix.com");
+        criarCarteira(lucas.getId(), 150.00, "lucas@pix.com");
+        criarCarteira(thiago.getId(), 80.00, null);
+        criarCarteira(motoboyOriginal.getId(), 0.00, null);
 
         // ── Datas auxiliares ─────────────────────────────────────────────────
 
@@ -122,35 +146,35 @@ public class DataInitializer implements CommandLineRunner {
 
         criarTurno(claudia.getId(), null, "Turno Tarde — Hamburgueria da Cláudia",
                 "Entregas na região do Água Verde", "Água Verde, Curitiba",
-                hoje3h, hoje7h, 120.00, 8.0, "aberto");
+                hoje3h, hoje7h, 120.00, 8.0, StatusTurno.ABERTO);
 
         criarTurno(fernando.getId(), null, "Turno Tarde — Pizzaria do Fernando",
                 "Entregas zona Batel e adjacências", "Batel, Curitiba",
-                hoje5h, hoje9h, 100.00, 5.0, "aberto");
+                hoje5h, hoje9h, 100.00, 5.0, StatusTurno.ABERTO);
 
         criarTurno(ana.getId(), null, "Turno Manhã — Farmácia Ana",
                 "Entregas de medicamentos", "Centro Cívico, Curitiba",
-                amanha8, amanha12, 110.00, 6.0, "aberto");
+                amanha8, amanha12, 110.00, 6.0, StatusTurno.ABERTO);
 
         criarTurno(claudia.getId(), null, "Turno Noite — Hamburgueria da Cláudia",
                 "Entregas noturnas", "Água Verde, Curitiba",
-                amanha18, amanha22, 130.00, 10.0, "aberto");
+                amanha18, amanha22, 130.00, 10.0, StatusTurno.ABERTO);
 
         criarTurno(fernando.getId(), null, "Turno Manhã — Pizzaria do Fernando",
                 "Preparação e entregas", "Batel, Curitiba",
-                depoisAmanha10, depoisAmanha14, 105.00, 7.0, "aberto");
+                depoisAmanha10, depoisAmanha14, 105.00, 7.0, StatusTurno.ABERTO);
 
         // ── Turnos CONFIRMADOS (aceitos) ──────────────────────────────────────
 
         Turno t6 = criarTurno(claudia.getId(), ricardo.getId(),
                 "Turno Ativo — Hamburgueria da Cláudia",
                 "Entregas em andamento", "Água Verde, Curitiba",
-                hoje1h, hoje5h, 120.00, 8.0, "aceito");
+                hoje1h, hoje5h, 120.00, 8.0, StatusTurno.ACEITO);
 
         Turno t7 = criarTurno(ana.getId(), lucas.getId(),
                 "Turno Confirmado — Farmácia Ana",
                 "Entregas de medicamentos tarde", "Centro Cívico, Curitiba",
-                amanha14, amanha18, 110.00, 6.0, "aceito");
+                amanha14, amanha18, 110.00, 6.0, StatusTurno.ACEITO);
 
         // ── Turnos CONCLUÍDOS (histórico) ─────────────────────────────────────
         //
@@ -164,29 +188,29 @@ public class DataInitializer implements CommandLineRunner {
         // Concluídos completos (pago + ambos avaliaram)
         Turno t8 = criarTurnoHistorico(claudia.getId(), ricardo.getId(),
                 "Turno Concluído — Hamburgueria da Cláudia",
-                "Água Verde, Curitiba", agora.minusDays(7), 4, 120.00, 8.0, "pago");
+                "Água Verde, Curitiba", agora.minusDays(7), 4, 120.00, 8.0, StatusPagamento.PAGO);
         Turno t9 = criarTurnoHistorico(fernando.getId(), ricardo.getId(),
                 "Turno Concluído — Pizzaria do Fernando",
-                "Batel, Curitiba", agora.minusDays(15), 4, 100.00, 5.0, "pago");
+                "Batel, Curitiba", agora.minusDays(15), 4, 100.00, 5.0, StatusPagamento.PAGO);
         Turno t10 = criarTurnoHistorico(ana.getId(), lucas.getId(),
                 "Turno Concluído — Farmácia Ana",
-                "Centro Cívico, Curitiba", agora.minusDays(3), 4, 110.00, 6.0, "pago");
+                "Centro Cívico, Curitiba", agora.minusDays(3), 4, 110.00, 6.0, StatusPagamento.PAGO);
 
         // Concluídos com avaliação só do lojista (motoboy ainda deve avaliar)
         Turno t11 = criarTurnoHistorico(claudia.getId(), thiago.getId(),
                 "Turno Concluído — Hamburgueria da Cláudia",
-                "Água Verde, Curitiba", agora.minusDays(20), 4, 120.00, 8.0, "pago");
+                "Água Verde, Curitiba", agora.minusDays(20), 4, 120.00, 8.0, StatusPagamento.PAGO);
         Turno t12 = criarTurnoHistorico(fernando.getId(), lucas.getId(),
                 "Turno Concluído — Pizzaria do Fernando",
-                "Batel, Curitiba", agora.minusDays(10), 4, 100.00, 5.0, "pago");
+                "Batel, Curitiba", agora.minusDays(10), 4, 100.00, 5.0, StatusPagamento.PAGO);
 
         // Concluídos sem nenhuma avaliação ainda (ambos veem em "A avaliar")
         Turno t13 = criarTurnoHistorico(ana.getId(), ricardo.getId(),
                 "Turno Manhã — Farmácia Ana",
-                "Centro Cívico, Curitiba", agora.minusDays(2), 4, 95.00, 5.0, "pago");
+                "Centro Cívico, Curitiba", agora.minusDays(2), 4, 95.00, 5.0, StatusPagamento.PAGO);
         Turno t14 = criarTurnoHistorico(claudia.getId(), lucas.getId(),
                 "Turno Noite — Hamburgueria da Cláudia",
-                "Água Verde, Curitiba", agora.minusDays(1), 4, 130.00, 8.0, "pago");
+                "Água Verde, Curitiba", agora.minusDays(1), 4, 130.00, 8.0, StatusPagamento.PAGO);
 
         // Finalizados PENDENTES de pagamento — combinações de quem já confirmou
         //   t15: ninguém confirmou (ambos veem "Confirmar")
@@ -221,8 +245,8 @@ public class DataInitializer implements CommandLineRunner {
 
         // ── Transações da wallet ──────────────────────────────────────────────
         // Cada turno finalizado gera uma transação:
-        //   - pagamentoStatus "pago"      → tx "processado"
-        //   - pagamentoStatus "pendente"  → tx "pendente"
+        //   - pagamentoStatus PAGO      → tx "processado"
+        //   - pagamentoStatus PENDENTE  → tx "pendente"
 
         criarTransacao(ricardo.getId(), t8.getId(),  "turno", 120.00,
                 "Turno concluído - Hamburgueria da Cláudia", "processado");
@@ -287,7 +311,9 @@ public class DataInitializer implements CommandLineRunner {
         Usuario u = new Usuario();
         u.setNome(nome);
         u.setEmail(email);
-        u.setSenha(senha);
+        // Hash tambem no seed: o login so conhece BCrypt agora, e massa em texto
+        // puro voltaria a ensinar o formato errado.
+        u.setSenha(encoder.encode(senha));
         u.setTelefone(telefone);
         u.setTipo(tipo);
         u.setDocumentoFederal(doc);
@@ -323,11 +349,12 @@ public class DataInitializer implements CommandLineRunner {
         usuarioRepo.save(u);
     }
 
-    private void criarCarteira(Long motoboyId, double saldo, double ganhos, String pix) {
+    // O parametro "ganhos" nao e mais gravado: ganho do mes passou a ser
+    // derivado das transacoes de seed, nao de um contador na carteira.
+    private void criarCarteira(Long usuarioId, double saldo, String pix) {
         Carteira c = new Carteira();
-        c.setMotoboyId(motoboyId);
-        c.setSaldoAtual(saldo);
-        c.setGanhosMensais(ganhos);
+        c.setUsuarioId(usuarioId);
+        c.setSaldoDisponivel(BigDecimal.valueOf(saldo));
         c.setChavePix(pix);
         carteiraRepo.save(c);
     }
@@ -335,7 +362,7 @@ public class DataInitializer implements CommandLineRunner {
     private Turno criarTurno(Long lojistId, Long motoboyId, String titulo,
                               String descricao, String regiao,
                               LocalDateTime inicio, LocalDateTime fim,
-                              double valor, double raio, String status) {
+                              double valor, double raio, StatusTurno status) {
         Turno t = new Turno();
         t.setLojistId(lojistId);
         t.setMotoboyId(motoboyId);
@@ -344,7 +371,7 @@ public class DataInitializer implements CommandLineRunner {
         t.setRegiao(regiao);
         t.setDataInicio(inicio);
         t.setDataFim(fim);
-        t.setValorEstimado(valor);
+        t.setValorEstimado(BigDecimal.valueOf(valor));
         t.setRaioEntregaKm(raio);
         // SCRUM-18: sem coordenada os turnos de exemplo nao aparecem no filtro
         // por raio e a tela parece quebrada em desenvolvimento.
@@ -354,7 +381,9 @@ public class DataInitializer implements CommandLineRunner {
         t.setEndereco(regiao);
 
         t.setStatus(status);
-        return turnoRepo.save(t);
+        Turno salvo = turnoRepo.save(t);
+        garantirInscricao(salvo, statusDaInscricao(status), null, null, null);
+        return salvo;
     }
 
     /**
@@ -380,19 +409,22 @@ public class DataInitializer implements CommandLineRunner {
     private Turno criarTurnoHistorico(Long lojistId, Long motoboyId, String titulo,
                                        String regiao, LocalDateTime inicio,
                                        int duracaoHoras, double valor, double raio,
-                                       String pagamentoStatus) {
+                                       StatusPagamento pagamentoStatus) {
         Turno t = criarTurno(lojistId, motoboyId, titulo,
                 "Turno concluído", regiao,
                 inicio, inicio.plusHours(duracaoHoras),
-                valor, raio, "finalizado");
+                valor, raio, StatusTurno.FINALIZADO);
         t.setPagamentoStatus(pagamentoStatus);
-        // Se pago, marca ambas confirmações (já efetivado historicamente)
-        if ("pago".equals(pagamentoStatus)) {
-            LocalDateTime fim = inicio.plusHours(duracaoHoras);
-            t.setLojistaConfirmouEm(fim.plusHours(1));
-            t.setMotoboyConfirmouEm(fim.plusHours(2));
-        }
-        return turnoRepo.save(t);
+        Turno salvo = turnoRepo.save(t);
+
+        // Se pago, ambas as confirmações já aconteceram — e agora elas moram na
+        // inscrição, não no turno.
+        LocalDateTime fim = inicio.plusHours(duracaoHoras);
+        boolean pago = pagamentoStatus == StatusPagamento.PAGO;
+        garantirInscricao(salvo, StatusInscricao.FINALIZADO, pagamentoStatus,
+                pago ? fim.plusHours(1) : null,
+                pago ? fim.plusHours(2) : null);
+        return salvo;
     }
 
     // Variante que permite controlar quem já confirmou (cenários de teste)
@@ -405,12 +437,50 @@ public class DataInitializer implements CommandLineRunner {
         Turno t = criarTurno(lojistId, motoboyId, titulo,
                 "Turno concluído", regiao,
                 inicio, inicio.plusHours(duracaoHoras),
-                valor, raio, "finalizado");
-        t.setPagamentoStatus("pendente");
+                valor, raio, StatusTurno.FINALIZADO);
+        t.setPagamentoStatus(StatusPagamento.PENDENTE);
+        Turno salvo = turnoRepo.save(t);
+
         LocalDateTime fim = inicio.plusHours(duracaoHoras);
-        if (lojistaConfirmou) t.setLojistaConfirmouEm(fim.plusHours(1));
-        if (motoboyConfirmou) t.setMotoboyConfirmouEm(fim.plusHours(2));
-        return turnoRepo.save(t);
+        garantirInscricao(salvo, StatusInscricao.FINALIZADO, StatusPagamento.PENDENTE,
+                lojistaConfirmou ? fim.plusHours(1) : null,
+                motoboyConfirmou ? fim.plusHours(2) : null);
+        return salvo;
+    }
+
+    /**
+     * Inscricao do entregador no turno — o que a V5 fez de uma vez no banco de
+     * producao, o seed passa a fazer desde o inicio.
+     *
+     * Sem isto a massa de dev nasceria no formato legado (turno com motoboy e
+     * sem inscricao), que e exatamente o estado que o PagamentoTurnoService
+     * agora recusa: confirmar pagamento em dev estouraria 500.
+     */
+    private void garantirInscricao(Turno t, StatusInscricao status,
+                                   StatusPagamento pagamentoStatus,
+                                   LocalDateTime lojistaConfirmou,
+                                   LocalDateTime motoboyConfirmou) {
+        if (t.getMotoboyId() == null) return;
+
+        TurnoInscricao ins = inscricaoRepo
+                .findByTurnoIdAndMotoboyId(t.getId(), t.getMotoboyId())
+                .orElseGet(TurnoInscricao::new);
+        ins.setTurnoId(t.getId());
+        ins.setMotoboyId(t.getMotoboyId());
+        ins.setStatus(status);
+        ins.setPagamentoStatus(pagamentoStatus);
+        ins.setLojistaConfirmouEm(lojistaConfirmou);
+        ins.setMotoboyConfirmouEm(motoboyConfirmou);
+        inscricaoRepo.save(ins);
+    }
+
+    /** O mesmo mapeamento da V5: so os estados terminais tem correspondencia. */
+    private StatusInscricao statusDaInscricao(StatusTurno status) {
+        return switch (status) {
+            case FINALIZADO -> StatusInscricao.FINALIZADO;
+            case CANCELADO  -> StatusInscricao.CANCELADO;
+            default         -> StatusInscricao.ACEITO;
+        };
     }
 
     private Turno criarTurnoCancelado(Long lojistId, Long motoboyId, String titulo,
@@ -419,16 +489,16 @@ public class DataInitializer implements CommandLineRunner {
         return criarTurno(lojistId, motoboyId, titulo,
                 "Turno cancelado", regiao,
                 inicio, inicio.plusHours(duracaoHoras),
-                valor, raio, "cancelado");
+                valor, raio, StatusTurno.CANCELADO);
     }
 
-    private void criarTransacao(Long motoboyId, Long turnoId, String tipo,
+    private void criarTransacao(Long usuarioId, Long turnoId, String tipo,
                                  double valor, String descricao, String status) {
         Transacao tx = new Transacao();
-        tx.setMotoboyId(motoboyId);
+        tx.setUsuarioId(usuarioId);
         tx.setTurnoId(turnoId);
         tx.setTipo(tipo);
-        tx.setValor(valor);
+        tx.setValor(BigDecimal.valueOf(valor));
         tx.setDescricao(descricao);
         tx.setStatus(status);
         transacaoRepo.save(tx);

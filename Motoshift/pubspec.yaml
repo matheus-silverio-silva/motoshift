@@ -16,8 +16,10 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   # HTTP & API
+  # Nao ha dio aqui: ele estava declarado e nunca foi importado em nenhum
+  # arquivo. Dependencia que nao se usa e download, licenca e superficie de
+  # atualizacao de graca.
   http: ^1.2.2
-  dio: ^5.7.0
 
   # State Management
   provider: ^6.1.2

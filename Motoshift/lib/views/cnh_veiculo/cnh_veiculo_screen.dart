@@ -80,7 +80,7 @@ class _CnhVeiculoScreenState extends State<CnhVeiculoScreen> {
                 'veiculoAno': int.tryParse(_anoCtrl.text.trim()),
               'veiculoCor': _corCtrl.text.trim(),
             };
-      final novo = await api.atualizarPerfil(id, body);
+      final novo = await api.auth.atualizarPerfil(id, body);
       auth.atualizarUsuarioLocal(novo);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

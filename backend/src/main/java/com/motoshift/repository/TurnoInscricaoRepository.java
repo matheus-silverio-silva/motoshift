@@ -1,5 +1,6 @@
 package com.motoshift.repository;
 
+import com.motoshift.entity.StatusInscricao;
 import com.motoshift.entity.TurnoInscricao;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -10,13 +11,13 @@ public interface TurnoInscricaoRepository extends JpaRepository<TurnoInscricao, 
 
     List<TurnoInscricao> findByTurnoId(Long turnoId);
 
-    List<TurnoInscricao> findByTurnoIdAndStatus(Long turnoId, String status);
+    List<TurnoInscricao> findByTurnoIdAndStatus(Long turnoId, StatusInscricao status);
 
-    List<TurnoInscricao> findByMotoboyIdAndStatus(Long motoboyId, String status);
+    List<TurnoInscricao> findByMotoboyIdAndStatus(Long motoboyId, StatusInscricao status);
 
-    long countByTurnoIdAndStatus(Long turnoId, String status);
+    long countByTurnoIdAndStatus(Long turnoId, StatusInscricao status);
 
-    boolean existsByTurnoIdAndMotoboyIdAndStatus(Long turnoId, Long motoboyId, String status);
+    boolean existsByTurnoIdAndMotoboyIdAndStatus(Long turnoId, Long motoboyId, StatusInscricao status);
 
     Optional<TurnoInscricao> findByTurnoIdAndMotoboyId(Long turnoId, Long motoboyId);
 }

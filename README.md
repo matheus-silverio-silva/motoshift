@@ -24,13 +24,63 @@ estabilidade financeira para ambos os lados.
 |--------|-----------|
 | Front-end | Flutter (Android/iOS/Web) |
 | Back-end | Java 17 + Spring Boot 3.3.6 |
-| Banco de dados | H2 (desenvolvimento) / MySQL (produção) |
+| Segurança | Spring Security + JWT (HS256) + BCrypt |
+| Banco de dados | H2 (desenvolvimento) / PostgreSQL + Flyway (produção) |
 | IA | Claude Sonnet 4 (Anthropic API) |
 | Documentação | Springdoc OpenAPI / Swagger UI |
 | Deploy | Railway (back-end + front-end web via Docker/nginx) |
 | Versionamento | Git + GitHub |
 
 ---
+
+## 🗂️ Organização do Repositório
+
+```
+.
+├── backend/                  # API Spring Boot (Java 17)
+│   └── src/main/java/com/motoshift/
+│       ├── config/           # Boot: seed de dev, OpenAPI, handler de erro da API
+│       ├── controller/       # HTTP e só: recebe, autoriza, delega, devolve
+│       ├── dto/              # Contratos de entrada e saída (inclui ErroResponse)
+│       ├── entity/           # Entidades JPA
+│       ├── repository/       # Spring Data
+│       ├── security/         # Spring Security, filtro JWT e o usuário do token
+│       ├── service/          # Regra de negócio
+│       └── util/             # Geo (Haversine, bounding box)
+│
+├── Motoshift/                # App Flutter (Android, iOS e Web)
+│   ├── lib/
+│   │   ├── models/           # Modelos que as telas consomem
+│   │   ├── presentation/     # Providers (estado compartilhado)
+│   │   ├── routes/           # Nomes de rota
+│   │   ├── services/
+│   │   │   ├── api/          # ApiClient (transporte) + uma API por domínio
+│   │   │   ├── api_service   # Monta as APIs de domínio sobre um cliente só
+│   │   │   └── auth_service  # Sessão: login, logout, restauração
+│   │   ├── theme/  utils/  widgets/
+│   │   └── views/            # Uma pasta por tela
+│   └── test/                 # Unidade, widget, acessibilidade e goldens
+│
+├── design/
+│   ├── prototipos/           # Protótipos navegáveis (identidade atual)
+│   └── stitch/               # Exports do Stitch da 1ª iteração — referência
+│
+├── docs/                     # Auditoria, guia de defesa, planos e requisitos
+├── scripts/                  # Utilitários de linha de comando
+└── .github/workflows/        # CI: mvn test, flutter analyze, flutter test
+```
+
+Duas notas sobre o que **não** está mais aqui, porque a pergunta costuma
+aparecer na revisão:
+
+- **Não há `lib/domain` nem `lib/data`.** Existiam entidades e repositórios de
+  uma tentativa anterior de Clean Architecture, com dois providers registrados
+  no boot e nenhuma tela os consumindo. Conviver com duas arquiteturas é pior
+  do que ter uma: o app segue o padrão `views` + `providers` + `services`.
+- **A identidade do usuário nunca vem do corpo da requisição.** Ela sai do JWT,
+  no `security/`. Os `lojistId`/`motoboyId` que o app ainda envia são ignorados
+  pelo backend.
+
 
 ## ⚙️ Como Rodar Localmente
 
@@ -107,16 +157,17 @@ Variável de ambiente necessária no serviço front-end:
 
 ### Back-end (Spring Boot)
 
-Roda com o perfil `prod` (MySQL). Variáveis principais:
+Roda com o perfil `prod` (PostgreSQL). Variáveis principais:
 
-| Variável | Descrição |
-|----------|-----------|
-| `SPRING_PROFILES_ACTIVE` | Defina como `prod` |
-| `DATABASE_URL` | URL JDBC do MySQL de produção |
-| `DB_USER` | Usuário do banco |
-| `DB_PASSWORD` | Senha do banco |
-| `ANTHROPIC_API_KEY` | Chave da API Anthropic para as funcionalidades de IA |
-| `PORT` | Porta do servidor (injetada automaticamente pelo Railway) |
+| Variável | Obrigatória | Descrição |
+|----------|-------------|-----------|
+| `SPRING_PROFILES_ACTIVE` | sim | Defina como `prod` |
+| `JWT_SECRET` | **sim** | Segredo de assinatura dos tokens, mínimo 32 caracteres. Sem ele o boot falha de propósito — melhor não subir do que assinar token com a chave de exemplo do repositório. Trocar o valor invalida os tokens emitidos, ou seja, desloga todo mundo |
+| `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | sim | Conexão com o PostgreSQL (o plugin do Railway já as injeta) |
+| `ANTHROPIC_API_KEY` | sim | Chave da API Anthropic para as funcionalidades de IA |
+| `MOTOSHIFT_CORS_ORIGINS` | não | Origens liberadas no CORS, separadas por vírgula (ex.: `https://motoshift.up.railway.app`). O padrão `*` libera qualquer origem |
+| `JWT_EXPIRACAO_HORAS` | não | Validade do token; padrão 168 (7 dias) |
+| `PORT` | não | Porta do servidor (injetada automaticamente pelo Railway) |
 
 ---
 

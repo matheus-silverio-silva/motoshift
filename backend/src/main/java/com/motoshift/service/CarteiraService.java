@@ -11,12 +11,37 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 public class CarteiraService {
+
+    /** Valor minimo de saque (RF: R$ 20,00). */
+    private static final BigDecimal SAQUE_MINIMO = new BigDecimal("20.00");
+
+    /**
+     * Tipos de lancamento que contam como ganho do entregador.
+     * "turno" e o legado, anterior a liquidacao automatica; "pagamento_recebido"
+     * e o que passa a ser gerado. Somar os dois mantem o extrato coerente para
+     * quem tem historico das duas epocas.
+     */
+    public static final List<String> TIPOS_GANHO = List.of("turno", "pagamento_recebido");
+
+    /**
+     * Status que valem como dinheiro que o usuario ja tem.
+     *
+     * "processado" e o legado, "concluido" e o atual. O que fica de fora e o
+     * que importa: a Transacao de tipo "turno" nasce PENDENTE na finalizacao
+     * do turno, muito antes do pagamento ser confirmado. Somar pendente em
+     * "ganhos do mes" mostra ao entregador dinheiro que ele ainda nao recebeu
+     * — o dashboard diria R$ 120 com o saldo em R$ 0.
+     */
+    public static final List<String> STATUS_LIQUIDADO = List.of("processado", "concluido");
 
     private final CarteiraRepository carteiraRepo;
     private final TransacaoRepository transacaoRepo;
@@ -26,17 +51,26 @@ public class CarteiraService {
         this.transacaoRepo = transacaoRepo;
     }
 
-    public CarteiraResponse buscar(Long motoboyId) {
-        Carteira carteira = carteiraRepo.findByMotoboyId(motoboyId)
+    /** Carteira do usuario, criada na hora se ainda nao existir. */
+    @Transactional
+    public Carteira obterOuCriar(Long usuarioId) {
+        return carteiraRepo.findByUsuarioId(usuarioId)
                 .orElseGet(() -> {
                     Carteira c = new Carteira();
-                    c.setMotoboyId(motoboyId);
+                    c.setUsuarioId(usuarioId);
                     return carteiraRepo.save(c);
                 });
+    }
+
+    @Transactional
+    public CarteiraResponse buscar(Long usuarioId) {
+        Carteira carteira = obterOuCriar(usuarioId);
 
         CarteiraResponse resp = CarteiraResponse.from(carteira);
+        resp.setGanhosMensais(ganhosDoMes(usuarioId));
+
         List<TransacaoResponse> transacoes = transacaoRepo
-                .findByMotoboyIdOrderByCriadoEmDesc(motoboyId)
+                .findByUsuarioIdOrderByCriadoEmDesc(usuarioId)
                 .stream()
                 .map(TransacaoResponse::from)
                 .collect(Collectors.toList());
@@ -44,14 +78,33 @@ public class CarteiraService {
         return resp;
     }
 
+    /**
+     * Ganhos do mes corrente, somados das transacoes.
+     *
+     * Substitui o antigo campo Carteira.ganhosMensais, que so incrementava e
+     * nunca era resetado — ou seja, mostrava o acumulado de sempre rotulado
+     * como "do mes".
+     */
+    public BigDecimal ganhosDoMes(Long usuarioId) {
+        LocalDateTime inicioMes = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        BigDecimal total = transacaoRepo.somarPorTipoDesde(
+                usuarioId, TIPOS_GANHO, STATUS_LIQUIDADO, inicioMes);
+        return (total == null ? BigDecimal.ZERO : total).setScale(2, RoundingMode.HALF_UP);
+    }
+
     @Transactional
-    public Map<String, Object> saque(Long motoboyId, double valor) {
-        if (valor < 20.0) {
+    public Map<String, Object> saque(Long usuarioId, BigDecimal valor) {
+        if (valor == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe o valor do saque.");
+        }
+        // compareTo, nunca equals: equals considera a escala, entao
+        // new BigDecimal("20.0").equals(new BigDecimal("20.00")) e false.
+        if (valor.compareTo(SAQUE_MINIMO) < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Valor mínimo para saque é R$ 20,00.");
         }
 
-        Carteira carteira = carteiraRepo.findByMotoboyId(motoboyId)
+        Carteira carteira = carteiraRepo.findByUsuarioId(usuarioId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Carteira não encontrada"));
 
         if (carteira.getChavePix() == null || carteira.getChavePix().isBlank()) {
@@ -59,15 +112,16 @@ public class CarteiraService {
                     "Cadastre uma chave Pix antes de solicitar saque.");
         }
 
-        if (carteira.getSaldoAtual() < valor) {
+        // Saque sai do disponivel: o bloqueado esta comprometido com turnos.
+        if (carteira.getSaldoDisponivel().compareTo(valor) < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Saldo insuficiente para saque.");
         }
 
-        carteira.setSaldoAtual(carteira.getSaldoAtual() - valor);
+        carteira.setSaldoDisponivel(carteira.getSaldoDisponivel().subtract(valor));
         carteiraRepo.save(carteira);
 
         Transacao tx = new Transacao();
-        tx.setMotoboyId(motoboyId);
+        tx.setUsuarioId(usuarioId);
         tx.setTipo("saque");
         tx.setValor(valor);
         tx.setDescricao("Transferência Pix — " + carteira.getChavePix());
@@ -76,25 +130,27 @@ public class CarteiraService {
 
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("mensagem", "Saque realizado com sucesso!");
-        resp.put("novoSaldo", carteira.getSaldoAtual());
+        resp.put("novoSaldo", carteira.getSaldoDisponivel().setScale(2, RoundingMode.HALF_UP));
         return resp;
     }
 
     @Transactional
-    public void atualizarPix(Long motoboyId, String chavePix) {
-        Carteira carteira = carteiraRepo.findByMotoboyId(motoboyId)
-                .orElseGet(() -> {
-                    Carteira c = new Carteira();
-                    c.setMotoboyId(motoboyId);
-                    return c;
-                });
+    public void atualizarPix(Long usuarioId, String chavePix) {
+        Carteira carteira = obterOuCriar(usuarioId);
         carteira.setChavePix(chavePix);
         carteiraRepo.save(carteira);
     }
 
-    public List<Map<String, Object>> grafico(Long motoboyId, int meses) {
+    /**
+     * Ganhos por mes, para o grafico da carteira.
+     *
+     * Mesmo filtro de status do {@link #ganhosDoMes}: o grafico e a serie
+     * historica do mesmo numero, e as duas leituras nao podem discordar.
+     */
+    public List<Map<String, Object>> grafico(Long usuarioId, int meses) {
         List<Transacao> txs = transacaoRepo
-                .findByMotoboyIdAndTipoOrderByCriadoEmDesc(motoboyId, "turno");
+                .findByUsuarioIdAndTipoInAndStatusInOrderByCriadoEmDesc(
+                        usuarioId, TIPOS_GANHO, STATUS_LIQUIDADO);
 
         LocalDate hoje = LocalDate.now();
         List<Map<String, Object>> result = new ArrayList<>();
@@ -104,15 +160,16 @@ public class CarteiraService {
             int ano = mesRef.getYear();
             int mes = mesRef.getMonthValue();
 
-            double total = txs.stream()
+            BigDecimal total = txs.stream()
                     .filter(tx -> tx.getCriadoEm().getYear() == ano
                             && tx.getCriadoEm().getMonthValue() == mes)
-                    .mapToDouble(Transacao::getValor)
-                    .sum();
+                    .map(Transacao::getValor)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
 
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("mes", String.format("%02d/%d", mes, ano));
-            item.put("ganhos", Math.round(total * 100.0) / 100.0);
+            item.put("ganhos", total.setScale(2, RoundingMode.HALF_UP));
             result.add(item);
         }
 

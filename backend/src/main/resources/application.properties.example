@@ -18,9 +18,13 @@ spring.jpa.show-sql=true
 spring.h2.console.enabled=true
 spring.h2.console.path=/h2-console
 
-# JWT
-jwt.secret=SUA_CHAVE_SECRETA_AQUI
-jwt.expiration=86400000
+# JWT — em dev pode ficar vazio (o JwtService usa um segredo local e avisa no
+# log). Em producao a variavel JWT_SECRET e obrigatoria e precisa de 32+ chars.
+motoshift.jwt.secret=${JWT_SECRET:}
+motoshift.jwt.expiracao-horas=168
+
+# CORS — origens liberadas, separadas por virgula. Curinga so em dev.
+motoshift.cors.origins=*
 
 # Anthropic API
 anthropic.api.key=SUA_CHAVE_ANTHROPIC_AQUI

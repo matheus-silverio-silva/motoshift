@@ -53,7 +53,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
       _erro = null;
     });
     try {
-      final c = await api.buscarCarteira(id);
+      final c = await api.carteira.buscarCarteira(id);
       if (mounted) setState(() => _carteira = c);
     } on ApiException catch (e) {
       if (mounted) setState(() => _erro = e.message);
@@ -120,7 +120,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     if (id == null) return;
 
     try {
-      await api.solicitarSaque(id, valor);
+      await api.carteira.solicitarSaque(id, valor);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Transferência solicitada com sucesso!'),
@@ -351,12 +351,19 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
       children: [
         for (var i = 0; i < transacoes.length; i++) ...[
           if (i > 0) const Divider(height: 1),
+          // Mesmo critério do extrato do celular, logo abaixo: o sinal vem do
+          // tipo e não de "é saque ou não". O merge deixou os dois extratos
+          // discordando — este ainda rotularia `reserva` e
+          // `pagamento_enviado` como entrada.
           LedgerRow(
             title: transacoes[i].descricao,
             date: _formatarData(transacoes[i].criadoEm),
-            amount:
-                '${transacoes[i].tipo == TipoTransacao.saque ? '−' : '+'} R\$ ${transacoes[i].valor.toStringAsFixed(2).replaceAll('.', ',')}',
-            isCredit: transacoes[i].tipo != TipoTransacao.saque,
+            amount: '${switch (transacoes[i].credito) {
+              true => '+ ',
+              false => '− ',
+              null => '',
+            }}R\$ ${transacoes[i].valor.toStringAsFixed(2).replaceAll('.', ',')}',
+            isCredit: transacoes[i].credito,
           ),
         ],
       ],
@@ -426,9 +433,15 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
                 .map((t) => LedgerRow(
                       title: t.descricao,
                       date: _formatarData(t.criadoEm),
-                      amount:
-                          '${t.tipo == TipoTransacao.saque ? '-' : '+'} R\$ ${t.valor.toStringAsFixed(2).replaceAll('.', ',')}',
-                      isCredit: t.tipo != TipoTransacao.saque,
+                      // O sinal vem do tipo, não de "é saque ou não": reserva e
+                      // pagamento enviado também saem da carteira. Tipo que o
+                      // app não conhece vai sem sinal.
+                      amount: '${switch (t.credito) {
+                        true => '+ ',
+                        false => '- ',
+                        null => '',
+                      }}R\$ ${t.valor.toStringAsFixed(2).replaceAll('.', ',')}',
+                      isCredit: t.credito,
                     ))
                 .toList(),
           ),

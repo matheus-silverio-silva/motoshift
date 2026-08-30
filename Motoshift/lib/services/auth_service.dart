@@ -12,7 +12,17 @@ class AuthService extends ChangeNotifier {
   String? _erro;
   bool _inicializado = false;
 
-  AuthService(this._api);
+  AuthService(this._api) {
+    // Token expirado nao e erro de tela: derruba a sessao e o AuthGuard leva
+    // de volta ao login.
+    _api.onSessaoExpirada = _sessaoExpirou;
+  }
+
+  Future<void> _sessaoExpirou() async {
+    if (_usuario == null) return;
+    await _logout();
+    notifyListeners();
+  }
 
   Usuario? get usuario => _usuario;
   bool get carregando => _carregando;
@@ -31,7 +41,7 @@ class AuthService extends ChangeNotifier {
     if (token != null && userId != null) {
       _api.setAuthToken(token);
       try {
-        _usuario = await _api.buscarUsuario(userId);
+        _usuario = await _api.auth.buscarUsuario(userId);
       } catch (_) {
         await _logout();
       }
@@ -45,7 +55,7 @@ class AuthService extends ChangeNotifier {
     _erro = null;
     notifyListeners();
     try {
-      final resp = await _api.login(email: email, senha: senha, tipo: tipo);
+      final resp = await _api.auth.login(email: email, senha: senha, tipo: tipo);
       final token = resp['token'] as String;
       final userData = resp['usuario'] as Map<String, dynamic>;
       _usuario = Usuario.fromJson(userData);
@@ -71,7 +81,7 @@ class AuthService extends ChangeNotifier {
     _erro = null;
     notifyListeners();
     try {
-      final resp = await _api.registrar(usuario, senha);
+      final resp = await _api.auth.registrar(usuario, senha);
       final token = resp['token'] as String;
       final userData = resp['usuario'] as Map<String, dynamic>;
       _usuario = Usuario.fromJson(userData);

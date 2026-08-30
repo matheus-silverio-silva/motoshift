@@ -105,7 +105,7 @@ class _AvaliarEntregadoresScreenState
     try {
       final api = context.read<ApiService>();
       final resp =
-          await api.buscarAvaliacoesPendentes(args.turnoId, usuarioId);
+          await api.avaliacoes.buscarAvaliacoesPendentes(args.turnoId, usuarioId);
       if (!mounted) return;
       setState(() {
         _pendentes = resp.pendentes
@@ -137,7 +137,7 @@ class _AvaliarEntregadoresScreenState
     setState(() => p.enviando = true);
     try {
       final api = context.read<ApiService>();
-      await api.registrarAvaliacao({
+      await api.avaliacoes.registrarAvaliacao({
         'turnoId': args.turnoId,
         'avaliadorId': avaliadorId,
         // Cada envio carrega o id do entregador daquele card — é o ponto

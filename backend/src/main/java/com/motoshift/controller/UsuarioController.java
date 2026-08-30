@@ -1,19 +1,20 @@
 package com.motoshift.controller;
 
 import com.motoshift.dto.UsuarioResponse;
+import com.motoshift.security.UsuarioAutenticado;
 import com.motoshift.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/usuarios")
-@CrossOrigin(origins = "*", allowedHeaders = "*")
 @Tag(name = "Usuários", description = "Consulta e atualização de perfis")
 public class UsuarioController {
 
@@ -41,7 +42,11 @@ public class UsuarioController {
     @PutMapping("/{id}")
     public ResponseEntity<UsuarioResponse> atualizar(
             @PathVariable Long id,
-            @RequestBody Map<String, Object> body) {
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal UsuarioAutenticado atual) {
+        // Perfil alheio se le (o lojista precisa ver quem aceitou o turno),
+        // mas so o dono edita.
+        atual.exigirMesmoUsuario(id);
         return ResponseEntity.ok(service.atualizar(id, body));
     }
 }

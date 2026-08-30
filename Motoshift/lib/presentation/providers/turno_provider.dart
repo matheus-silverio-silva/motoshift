@@ -36,7 +36,7 @@ class TurnoProvider extends ChangeNotifier {
     _erro = null;
     notifyListeners();
     try {
-      _turnosDisponiveis = await _api.listarTurnosDisponiveis();
+      _turnosDisponiveis = await _api.turnos.listarTurnosDisponiveis();
     } on ApiException catch (e) {
       _erro = e.message;
     } catch (e) {
@@ -52,7 +52,7 @@ class TurnoProvider extends ChangeNotifier {
     _erro = null;
     notifyListeners();
     try {
-      _meusTurnos = await _api.listarMeusTurnos(motoboyId);
+      _meusTurnos = await _api.turnos.listarMeusTurnos(motoboyId);
     } on ApiException catch (e) {
       _erro = e.message;
     } catch (e) {
@@ -68,7 +68,7 @@ class TurnoProvider extends ChangeNotifier {
     _erro = null;
     notifyListeners();
     try {
-      _turnosLojista = await _api.listarTurnosLojista(lojistId);
+      _turnosLojista = await _api.turnos.listarTurnosLojista(lojistId);
     } on ApiException catch (e) {
       _erro = e.message;
     } catch (e) {
@@ -95,7 +95,7 @@ class TurnoProvider extends ChangeNotifier {
     }
 
     try {
-      final turnoAtualizado = await _api.aceitarTurno(turnoId, motoboyId);
+      final turnoAtualizado = await _api.turnos.aceitarTurno(turnoId, motoboyId);
       _turnosDisponiveis.removeWhere((t) => t.id == turnoId);
       _meusTurnos.add(turnoAtualizado);
       notifyListeners();
@@ -113,7 +113,7 @@ class TurnoProvider extends ChangeNotifier {
 
   Future<bool> finalizarTurno(int turnoId) async {
     try {
-      final atualizado = await _api.finalizarTurno(turnoId);
+      final atualizado = await _api.turnos.finalizarTurno(turnoId);
       final idx = _meusTurnos.indexWhere((t) => t.id == turnoId);
       if (idx != -1) _meusTurnos[idx] = atualizado;
       notifyListeners();
@@ -131,7 +131,7 @@ class TurnoProvider extends ChangeNotifier {
 
   Future<bool> cancelarTurno(int turnoId) async {
     try {
-      final atualizado = await _api.cancelarTurno(turnoId);
+      final atualizado = await _api.turnos.cancelarTurno(turnoId);
       final idx = _meusTurnos.indexWhere((t) => t.id == turnoId);
       if (idx != -1) _meusTurnos[idx] = atualizado;
       final idxL = _turnosLojista.indexWhere((t) => t.id == turnoId);

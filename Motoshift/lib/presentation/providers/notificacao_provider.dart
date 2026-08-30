@@ -32,7 +32,7 @@ class NotificacaoProvider extends ChangeNotifier {
 
   Future<void> carregarContagem(int usuarioId) async {
     try {
-      _naoLidas = await _api.contarNotificacoesNaoLidas(usuarioId);
+      _naoLidas = await _api.notificacoes.contarNotificacoesNaoLidas(usuarioId);
       notifyListeners();
     } catch (_) {
       // O badge é informação secundária: falhar aqui não pode quebrar a tela
@@ -45,7 +45,7 @@ class NotificacaoProvider extends ChangeNotifier {
     _erro = null;
     notifyListeners();
     try {
-      final lista = await _api.listarNotificacoes(usuarioId);
+      final lista = await _api.notificacoes.listarNotificacoes(usuarioId);
       _notificacoes = lista.map(Notificacao.fromJson).toList()
         ..sort((a, b) => b.criadoEm.compareTo(a.criadoEm));
       _naoLidas = _notificacoes.where((n) => !n.lida).length;
@@ -63,7 +63,7 @@ class NotificacaoProvider extends ChangeNotifier {
     final i = _notificacoes.indexWhere((n) => n.id == id);
     if (i == -1 || _notificacoes[i].lida) return;
     try {
-      await _api.marcarNotificacaoLida(id);
+      await _api.notificacoes.marcarNotificacaoLida(id);
       _notificacoes[i] = Notificacao(
         id: _notificacoes[i].id,
         tipo: _notificacoes[i].tipo,
@@ -83,7 +83,7 @@ class NotificacaoProvider extends ChangeNotifier {
 
   Future<void> marcarTodasLidas(int usuarioId) async {
     try {
-      await _api.marcarTodasNotificacoesLidas(usuarioId);
+      await _api.notificacoes.marcarTodasNotificacoesLidas(usuarioId);
       await carregar(usuarioId);
     } catch (_) {
       _erro = 'Não foi possível marcar todas como lidas.';

@@ -1,6 +1,7 @@
 package com.motoshift.entity;
 
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -40,8 +41,8 @@ public class Turno {
     @Column(nullable = false)
     private LocalDateTime dataFim;
 
-    @Column(nullable = false)
-    private Double valorEstimado;
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal valorEstimado;
 
     // Raio de atuação declarado pelo lojista (quão longe o entregador vai rodar).
     // NÃO é a distância até o motoboy — para isso existem latitude/longitude abaixo.
@@ -64,20 +65,17 @@ public class Turno {
     // ocorre sem erro; linhas antigas ficam NULL e o getter devolve 1 (default).
     private Integer vagas;
 
-    // aberto | aceito | em_andamento | finalizado | cancelado | expirado
+    // Valores no banco: aberto | aceito | em_andamento | finalizado | cancelado
+    // | expirado. A traducao de e para minusculo e do StatusTurnoConverter.
     @Column(nullable = false)
-    private String status = "aberto";
+    private StatusTurno status = StatusTurno.ABERTO;
 
-    // Preenchido pelo job de vencimento quando o turno passa a "expirado" (SCRUM-19).
+    // Preenchido pelo job de vencimento quando o turno passa a EXPIRADO (SCRUM-19).
     private LocalDateTime expiradoEm;
 
-    // null (não finalizado) | pendente | pago
-    // "pago" só quando AMBOS confirmaram (lojista pagou + motoboy recebeu)
-    private String pagamentoStatus;
-
-    // Dupla confirmação de pagamento
-    private LocalDateTime lojistaConfirmouEm;
-    private LocalDateTime motoboyConfirmouEm;
+    // null (nao finalizado) | pendente | pago
+    // PAGO so quando AMBOS confirmaram (lojista pagou + motoboy recebeu)
+    private StatusPagamento pagamentoStatus;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime criadoEm;
@@ -88,7 +86,7 @@ public class Turno {
     private void prePersist() {
         criadoEm = LocalDateTime.now();
         atualizadoEm = LocalDateTime.now();
-        if (status == null) status = "aberto";
+        if (status == null) status = StatusTurno.ABERTO;
         if (vagas == null || vagas < 1) vagas = 1;
     }
 
@@ -120,8 +118,8 @@ public class Turno {
     public LocalDateTime getDataFim() { return dataFim; }
     public void setDataFim(LocalDateTime dataFim) { this.dataFim = dataFim; }
 
-    public Double getValorEstimado() { return valorEstimado; }
-    public void setValorEstimado(Double valorEstimado) { this.valorEstimado = valorEstimado; }
+    public BigDecimal getValorEstimado() { return valorEstimado; }
+    public void setValorEstimado(BigDecimal valorEstimado) { this.valorEstimado = valorEstimado; }
 
     public Double getRaioEntregaKm() { return raioEntregaKm; }
     public void setRaioEntregaKm(Double raioEntregaKm) { this.raioEntregaKm = raioEntregaKm; }
@@ -141,17 +139,11 @@ public class Turno {
     public Integer getVagas() { return vagas == null ? 1 : vagas; }
     public void setVagas(Integer vagas) { this.vagas = vagas; }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public StatusTurno getStatus() { return status; }
+    public void setStatus(StatusTurno status) { this.status = status; }
 
-    public String getPagamentoStatus() { return pagamentoStatus; }
-    public void setPagamentoStatus(String pagamentoStatus) { this.pagamentoStatus = pagamentoStatus; }
-
-    public LocalDateTime getLojistaConfirmouEm() { return lojistaConfirmouEm; }
-    public void setLojistaConfirmouEm(LocalDateTime t) { this.lojistaConfirmouEm = t; }
-
-    public LocalDateTime getMotoboyConfirmouEm() { return motoboyConfirmouEm; }
-    public void setMotoboyConfirmouEm(LocalDateTime t) { this.motoboyConfirmouEm = t; }
+    public StatusPagamento getPagamentoStatus() { return pagamentoStatus; }
+    public void setPagamentoStatus(StatusPagamento pagamentoStatus) { this.pagamentoStatus = pagamentoStatus; }
 
     public LocalDateTime getCriadoEm() { return criadoEm; }
     public LocalDateTime getAtualizadoEm() { return atualizadoEm; }

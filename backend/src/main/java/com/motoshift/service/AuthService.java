@@ -6,13 +6,15 @@ import com.motoshift.dto.RegistroRequest;
 import com.motoshift.dto.UsuarioResponse;
 import com.motoshift.entity.Usuario;
 import com.motoshift.repository.UsuarioRepository;
+import com.motoshift.security.JwtService;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -22,22 +24,35 @@ public class AuthService {
     private static final int BLOQUEIO_MINUTOS = 15;
 
     private final UsuarioRepository repo;
+    private final CarteiraService carteiras;
+    private final PasswordEncoder encoder;
+    private final JwtService jwt;
 
     // RF01: rastreamento de tentativas em memória (suficiente para H2 dev)
     private final ConcurrentHashMap<String, AttemptInfo> tentativas = new ConcurrentHashMap<>();
-
-    // Mapa token → userId (sessão em memória — resets com reinício do servidor)
-    private final ConcurrentHashMap<String, Long> tokens = new ConcurrentHashMap<>();
 
     private static class AttemptInfo {
         int contador = 0;
         LocalDateTime bloqueadoAte = null;
     }
 
-    public AuthService(UsuarioRepository repo) {
+    public AuthService(UsuarioRepository repo,
+                       CarteiraService carteiras,
+                       PasswordEncoder encoder,
+                       JwtService jwt) {
         this.repo = repo;
+        this.carteiras = carteiras;
+        this.encoder = encoder;
+        this.jwt = jwt;
     }
 
+    /**
+     * Cadastro. Transacional porque grava duas coisas: o usuario e a carteira
+     * dele. Sem isso, uma falha na criacao da carteira deixava o usuario
+     * gravado e sem carteira — e o retry do cadastro respondia "E-mail ja
+     * cadastrado", com a pessoa presa sem conseguir nem entrar nem repetir.
+     */
+    @Transactional
     public AuthResponse registrar(RegistroRequest req) {
         if (repo.existsByEmail(req.getEmail())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "E-mail já cadastrado");
@@ -77,12 +92,16 @@ public class AuthService {
         u.setTelefone(req.getTelefone());
         u.setTipo(req.getTipo().toLowerCase());
         u.setDocumentoFederal(req.getDocumentoFederal());
-        u.setSenha(req.getSenha()); // plain-text apenas em dev
+        u.setSenha(encoder.encode(req.getSenha()));
 
         Usuario salvo = repo.save(u);
-        String token = UUID.randomUUID().toString();
-        tokens.put(token, salvo.getId());
-        return new AuthResponse(token, UsuarioResponse.from(salvo));
+
+        // Carteira para QUALQUER usuario, nao so entregador: o lojista precisa
+        // dela para reservar o valor do turno ao publicar. Criada zerada aqui
+        // para que nenhum fluxo posterior precise lidar com carteira ausente.
+        carteiras.obterOuCriar(salvo.getId());
+
+        return new AuthResponse(tokenPara(salvo), UsuarioResponse.from(salvo));
     }
 
     public AuthResponse login(LoginRequest req) {
@@ -97,7 +116,7 @@ public class AuthService {
         }
 
         boolean credenciaisOk = repo.findByEmail(req.getEmail())
-                .map(u -> u.getSenha().equals(req.getSenha()))
+                .map(u -> senhaConfere(u, req.getSenha()))
                 .orElse(false);
 
         if (!credenciaisOk) {
@@ -118,9 +137,7 @@ public class AuthService {
         info.bloqueadoAte = null;
 
         Usuario u = repo.findByEmail(req.getEmail()).orElseThrow();
-        String token = UUID.randomUUID().toString();
-        tokens.put(token, u.getId());
-        return new AuthResponse(token, UsuarioResponse.from(u));
+        return new AuthResponse(tokenPara(u), UsuarioResponse.from(u));
     }
 
     public UsuarioResponse buscarPorId(Long id) {
@@ -161,15 +178,33 @@ public class AuthService {
         return UsuarioResponse.from(repo.save(u));
     }
 
+    private String tokenPara(Usuario u) {
+        return jwt.gerar(u.getId(), u.getEmail(), u.getTipo());
+    }
+
     /**
-     * Valida o token Bearer e retorna o userId associado.
-     * Lança 401 se o token for inválido ou não existir.
+     * Confere a senha aceitando as duas formas que existem no banco.
+     *
+     * O hash é o caminho normal. O ramo de texto puro existe porque o banco de
+     * produção já tem contas gravadas antes do BCrypt: barrar essas pessoas no
+     * login seria trocar um problema de segurança por um de acesso. Na primeira
+     * entrada correta a senha é regravada com hash e a conta nunca mais passa
+     * por aqui — a migração acontece sozinha, uma conta por vez.
      */
-    public Long validarToken(String token) {
-        Long userId = tokens.get(token);
-        if (userId == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token inválido ou sessão expirada. Faça login novamente.");
+    private boolean senhaConfere(Usuario u, String informada) {
+        String armazenada = u.getSenha();
+        if (armazenada == null || informada == null) return false;
+
+        if (armazenada.startsWith("$2a$") || armazenada.startsWith("$2b$")
+                || armazenada.startsWith("$2y$")) {
+            return encoder.matches(informada, armazenada);
         }
-        return userId;
+
+        // Legado em texto puro: confere e migra.
+        if (!armazenada.equals(informada)) return false;
+
+        u.setSenha(encoder.encode(informada));
+        repo.save(u);
+        return true;
     }
 }

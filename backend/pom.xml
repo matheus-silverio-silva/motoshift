@@ -42,6 +42,32 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Security — autenticacao/autorizacao de toda a API (P0 da analise) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- JWT (HS256) — substitui o mapa de sessao em memoria do AuthService.
+             jjwt-api entra na compilacao; impl e jackson so em runtime. -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.12.6</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- Validation -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -68,6 +94,19 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Flyway — migrações versionadas do schema (produção PostgreSQL).
+             Versões gerenciadas pelo spring-boot-starter-parent. O artefato
+             flyway-database-postgresql é obrigatório a partir do Flyway 10:
+             o suporte a cada banco saiu do core para módulos separados. -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
         <!-- Actuator — health check para Railway -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -78,6 +117,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

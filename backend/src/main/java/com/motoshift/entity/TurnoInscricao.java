@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
  * (o turno mantém {@code motoboyId} apontando para o primeiro inscrito, por
  * compatibilidade com os fluxos atuais de finalização/pagamento).
  *
- * status: aceito | finalizado | cancelado
+ * status: aceito | finalizado | cancelado (ver StatusInscricao)
  */
 @Entity
 @Table(
@@ -35,11 +35,11 @@ public class TurnoInscricao {
     private Long motoboyId;
 
     @Column(nullable = false)
-    private String status = "aceito";
+    private StatusInscricao status = StatusInscricao.ACEITO;
 
     // Pagamento por entregador (dupla confirmação, igual ao fluxo do turno):
     // null (turno não finalizado) | pendente | pago
-    private String pagamentoStatus;
+    private StatusPagamento pagamentoStatus;
     private LocalDateTime lojistaConfirmouEm;
     private LocalDateTime motoboyConfirmouEm;
 
@@ -49,7 +49,7 @@ public class TurnoInscricao {
     @PrePersist
     private void prePersist() {
         criadoEm = LocalDateTime.now();
-        if (status == null) status = "aceito";
+        if (status == null) status = StatusInscricao.ACEITO;
     }
 
     public Long getId() { return id; }
@@ -60,11 +60,11 @@ public class TurnoInscricao {
     public Long getMotoboyId() { return motoboyId; }
     public void setMotoboyId(Long motoboyId) { this.motoboyId = motoboyId; }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public StatusInscricao getStatus() { return status; }
+    public void setStatus(StatusInscricao status) { this.status = status; }
 
-    public String getPagamentoStatus() { return pagamentoStatus; }
-    public void setPagamentoStatus(String p) { this.pagamentoStatus = p; }
+    public StatusPagamento getPagamentoStatus() { return pagamentoStatus; }
+    public void setPagamentoStatus(StatusPagamento p) { this.pagamentoStatus = p; }
 
     public LocalDateTime getLojistaConfirmouEm() { return lojistaConfirmouEm; }
     public void setLojistaConfirmouEm(LocalDateTime t) { this.lojistaConfirmouEm = t; }

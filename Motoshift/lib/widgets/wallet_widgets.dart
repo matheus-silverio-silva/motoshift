@@ -125,14 +125,28 @@ class LedgerRow extends StatelessWidget {
   final String title;
   final String date;
   final String amount;
-  final bool isCredit;
+
+  /// `true` entrada, `false` saída, `null` direção desconhecida — o backend
+  /// mandou um tipo de lançamento que o app não conhece, e chutar a seta e a
+  /// cor seria mentir sobre para que lado o dinheiro foi.
+  final bool? isCredit;
 
   @override
   Widget build(BuildContext context) {
-    final iconColor =
-        isCredit ? AppColors.good : AppColors.onTertiaryContainer;
+    // Os dois lados do merge: os três estados vieram da branch de pagamentos
+    // (`bool?` — entra, sai, ou não dá para afirmar), e o token no lugar do
+    // literal 0xFF9A6206 veio da main.
+    final iconColor = switch (isCredit) {
+      true => AppColors.good,
+      false => AppColors.onTertiaryContainer,
+      null => AppColors.muted,
+    };
     final amountColor = iconColor;
-    final iconBg = isCredit ? AppColors.goodSoft : AppColors.amberSoft;
+    final iconBg = switch (isCredit) {
+      true => AppColors.goodSoft,
+      false => AppColors.amberSoft,
+      null => AppColors.surface3,
+    };
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 9),
@@ -146,7 +160,11 @@ class LedgerRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(9),
             ),
             child: Icon(
-              isCredit ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+              switch (isCredit) {
+                true => Icons.arrow_upward_rounded,
+                false => Icons.arrow_downward_rounded,
+                null => Icons.swap_vert_rounded,
+              },
               size: 15,
               color: iconColor,
             ),
