@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../models/turno.dart';
+import '../../models/usuario.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../routes/app_routes.dart';
@@ -9,7 +11,15 @@ import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/desktop/panel_card.dart';
+import '../avaliacao/avaliacao_screen.dart';
+import '../avaliar_entregadores/avaliar_entregadores_screen.dart';
 
+/// Central de avaliações — as recebidas e as que ainda faltam dar.
+///
+/// Antes esta tela só listava as notas recebidas, e dar uma avaliação
+/// dependia de achar o turno no histórico. Para o lojista era pior: não havia
+/// entrada nenhuma no menu, e a tela `/avaliar-entregadores` existia sem que
+/// nada no aplicativo navegasse até ela.
 class MinhasAvaliacoesScreen extends StatefulWidget {
   const MinhasAvaliacoesScreen({super.key});
 
@@ -20,8 +30,15 @@ class MinhasAvaliacoesScreen extends StatefulWidget {
 
 class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
   Map<String, dynamic>? _dados;
+
+  /// Turnos concluídos em que este usuário ainda não avaliou ninguém.
+  List<Turno> _pendentes = const [];
+
   bool _carregando = true;
   String? _erro;
+
+  bool get _ehLojista =>
+      context.read<AuthService>().usuario?.tipo == TipoUsuario.lojista;
 
   @override
   void initState() {
@@ -32,14 +49,17 @@ class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
   Future<void> _carregar() async {
     final auth = context.read<AuthService>();
     final api = context.read<ApiService>();
-    final id = auth.usuario?.id;
+    final usuario = auth.usuario;
+    final id = usuario?.id;
     if (id == null) return;
 
     try {
       final data = await api.avaliacoes.buscarAvaliacoes(id);
+      final pendentes = await _carregarPendentes(api, usuario!, id);
       if (mounted) {
         setState(() {
           _dados = data;
+          _pendentes = pendentes;
           _carregando = false;
         });
       }
@@ -53,20 +73,68 @@ class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
     }
   }
 
+  /// Mesma regra do histórico: turno finalizado cuja avaliação este usuário
+  /// ainda não registrou. Cancelado e expirado ficam de fora — não houve
+  /// serviço para avaliar.
+  Future<List<Turno>> _carregarPendentes(
+      ApiService api, Usuario usuario, int id) async {
+    final lojista = usuario.tipo == TipoUsuario.lojista;
+    final turnos = lojista
+        ? await api.turnos.listarTurnosLojista(id)
+        : await api.turnos.listarMeusTurnos(id);
+    final avaliados = (await api.avaliacoes.buscarTurnosAvaliados(id)).toSet();
+
+    final lista = turnos
+        .where((t) =>
+            t.status == StatusTurno.finalizado &&
+            t.id != null &&
+            !avaliados.contains(t.id) &&
+            (lojista || t.lojistId > 0))
+        .toList()
+      ..sort((a, b) => b.dataInicio.compareTo(a.dataInicio));
+    return lista;
+  }
+
+  /// O lojista de um turno multi-vaga avalia um entregador por vez, então vai
+  /// para a tela dedicada; o entregador avalia uma loja só.
+  Future<void> _avaliar(Turno turno) async {
+    final auth = context.read<AuthService>();
+    final avaliadorId = auth.usuario?.id;
+    if (avaliadorId == null || turno.id == null) return;
+
+    if (_ehLojista) {
+      await Navigator.pushNamed(
+        context,
+        AppRoutes.avaliarEntregadores,
+        arguments: AvaliarEntregadoresArgs(
+          turnoId: turno.id!,
+          tituloTurno: turno.titulo,
+        ),
+      );
+    } else {
+      await Navigator.pushNamed(
+        context,
+        AppRoutes.avaliacao,
+        arguments: AvaliacaoArgs(
+          turnoId: turno.id!,
+          avaliadorId: avaliadorId,
+          avaliadoId: turno.lojistId,
+          nomeAvaliado: turno.titulo,
+        ),
+      );
+    }
+    if (mounted) _carregar();
+  }
+
   @override
   Widget build(BuildContext context) {
     final media = (_dados?['mediaGeral'] as num?)?.toDouble() ?? 0.0;
     final total = (_dados?['totalAvaliacoes'] as num?)?.toInt() ?? 0;
 
     return AdaptiveScaffold(
-      header: AppHeader.back(title: 'Minhas avaliações'),
-      desktopTitle: 'Minhas avaliações',
-      desktopSubtitle: _carregando
-          ? 'Carregando…'
-          : total == 0
-              ? 'Nenhuma avaliação recebida ainda'
-              : '$total ${total == 1 ? 'avaliação' : 'avaliações'} · '
-                  'média ${media.toStringAsFixed(1)}',
+      header: AppHeader.back(title: 'Avaliações'),
+      desktopTitle: 'Avaliações',
+      desktopSubtitle: _carregando ? 'Carregando…' : _subtitulo(total, media),
       desktopSelectedRoute: AppRoutes.minhasAvaliacoes,
       desktopBody: _carregando
           ? const Center(
@@ -85,6 +153,24 @@ class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
     );
   }
 
+  /// Subtítulo que junta as duas metades da tela: quantas notas eu recebi e
+  /// quantas eu ainda devo. A pendência vem primeiro — é a que pede ação.
+  String _subtitulo(int total, double media) {
+    final partes = <String>[
+      if (_pendentes.isNotEmpty)
+        _pendentes.length == 1
+            ? '1 turno a avaliar'
+            : '${_pendentes.length} turnos a avaliar',
+      if (total == 0)
+        'nenhuma avaliação recebida'
+      else
+        '$total ${total == 1 ? 'avaliação recebida' : 'avaliações recebidas'} · '
+            'média ${media.toStringAsFixed(1)}',
+    ];
+    final texto = partes.join(' · ');
+    return texto[0].toUpperCase() + texto.substring(1);
+  }
+
   // ── Desktop — resumo à esquerda, comentários à direita ───────────────────
 
   Widget _buildDesktop() {
@@ -98,6 +184,8 @@ class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
 
     return ContentGrid(
       children: [
+        if (_pendentes.isNotEmpty)
+          GridCol(span: 12, child: _buildPendentes()),
         GridCol(
           span: 4,
           child: Column(
@@ -174,7 +262,10 @@ class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
     final avaliacoes =
         (_dados?['avaliacoes'] as List?) ?? const [];
 
-    if (total == 0) {
+    // Sem nota recebida e sem pendência: aí sim a tela está vazia de verdade.
+    // Antes bastava `total == 0` para cair aqui, e as avaliações que o usuário
+    // devia sumiam junto com as que ele não tinha recebido.
+    if (total == 0 && _pendentes.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -184,7 +275,7 @@ class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
               Container(
                 width: 64,
                 height: 64,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.tealSoft,
                   shape: BoxShape.circle,
                 ),
@@ -211,17 +302,110 @@ class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 40),
       children: [
-        _buildResumo(media, total),
-        const SizedBox(height: 16),
-        _buildDistribuicao(dist, total),
-        const SizedBox(height: 22),
-        Text('Comentários recentes',
-            style:
-                tsBricolage(14, FontWeight.w800, color: AppColors.ink)),
-        const SizedBox(height: 12),
-        ...avaliacoes.map((a) => _buildAvaliacaoCard(
-            Map<String, dynamic>.from(a as Map))),
+        if (_pendentes.isNotEmpty) ...[
+          _buildPendentes(),
+          const SizedBox(height: 20),
+        ],
+        if (total > 0) ...[
+          _buildResumo(media, total),
+          const SizedBox(height: 16),
+          _buildDistribuicao(dist, total),
+          const SizedBox(height: 22),
+          Text('Comentários recentes',
+              style: tsBricolage(14, FontWeight.w800, color: AppColors.ink)),
+          const SizedBox(height: 12),
+          ...avaliacoes.map((a) =>
+              _buildAvaliacaoCard(Map<String, dynamic>.from(a as Map))),
+        ],
       ],
+    );
+  }
+
+  /// Bloco "a avaliar". Fica no topo porque é a única parte da tela que pede
+  /// uma ação; o resto é leitura.
+  Widget _buildPendentes() {
+    final alvo = _ehLojista ? 'entregador' : 'lojista';
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.amber, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.rate_review_outlined,
+                  size: 17, color: AppColors.amber),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  _pendentes.length == 1
+                      ? '1 turno esperando sua avaliação'
+                      : '${_pendentes.length} turnos esperando sua avaliação',
+                  style:
+                      tsBricolage(14, FontWeight.w800, color: AppColors.ink),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            'Avalie o $alvo de cada turno concluído — a nota entra na '
+            'reputação dos dois lados.',
+            style: tsJakarta(11.5, FontWeight.w400, color: AppColors.muted),
+          ),
+          const SizedBox(height: 12),
+          for (final turno in _pendentes) _buildPendenteRow(turno),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendenteRow(Turno turno) {
+    final data = DateFormat('dd/MM', 'pt_BR').format(turno.dataInicio);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(turno.titulo,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tsJakarta(12.5, FontWeight.w700,
+                        color: AppColors.ink)),
+                const SizedBox(height: 2),
+                Text('$data · ${turno.regiao}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tsJakarta(10.5, FontWeight.w400,
+                        color: AppColors.muted)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          TextButton(
+            onPressed: () => _avaliar(turno),
+            style: TextButton.styleFrom(
+              backgroundColor: AppColors.tealSoft,
+              foregroundColor: AppColors.tealDeep,
+              minimumSize: const Size(0, 44),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text('Avaliar',
+                style: tsJakarta(12.5, FontWeight.w700,
+                    color: AppColors.tealDeep)),
+          ),
+        ],
+      ),
     );
   }
 

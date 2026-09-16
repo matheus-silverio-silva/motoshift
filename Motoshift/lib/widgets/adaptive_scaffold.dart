@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/breakpoints.dart';
+import 'app_nav_drawer.dart';
 import 'app_scaffold.dart';
 import 'desktop/desktop_shell.dart';
 
@@ -73,6 +74,12 @@ class AdaptiveScaffold extends StatelessWidget {
       body: body,
       bottomNav: bottomNav,
       floatingActionButton: floatingActionButton,
+      // No celular, o menu completo da barra lateral vira gaveta. Só faz
+      // sentido nas telas de raiz, que são as que têm barra inferior: numa
+      // tela empilhada o gesto de arrastar da borda concorreria com o voltar.
+      drawer: bottomNav == null
+          ? null
+          : AppNavDrawer(selectedRoute: desktopSelectedRoute),
     );
   }
 }

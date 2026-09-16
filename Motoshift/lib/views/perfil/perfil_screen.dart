@@ -272,9 +272,17 @@ class _PerfilScreenState extends State<PerfilScreen> {
           MenuGroup(children: [
             MenuRow(
               icon: Icons.star_outline_rounded,
-              label: 'Minhas avaliações',
+              label: 'Avaliações',
+              subtitle: 'Recebidas e pendentes',
               onTap: () => Navigator.pushNamed(
                   context, AppRoutes.minhasAvaliacoes),
+            ),
+            MenuRow(
+              icon: Icons.receipt_long_outlined,
+              label: 'Notas fiscais',
+              subtitle: 'NFS-e dos turnos concluídos',
+              onTap: () =>
+                  Navigator.pushNamed(context, AppRoutes.notasFiscais),
             ),
             MenuRow(
               icon: Icons.history_rounded,

@@ -220,6 +220,10 @@ desde que o banco esteja vazio.
 | GET | /api/relatorio/motoboy/{id} | Relatório financeiro por IA |
 | GET | /api/relatorio/lojista/{id} | Relatório operacional por IA |
 | GET | /api/score/{id}/analise | Análise de score por IA |
+| GET | /api/notas-fiscais | Notas fiscais do usuário (como prestador ou tomador) |
+| GET | /api/notas-fiscais/pendentes | Turnos concluídos ainda sem nota |
+| POST | /api/notas-fiscais | Emitir NFS-e do turno (lojista ou motoboy) |
+| PUT | /api/notas-fiscais/{id}/cancelar | Cancelar a nota (só o prestador) |
 
 Documentação completa: `http://localhost:8080/swagger-ui.html`
 
@@ -249,6 +253,39 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | RF07 | Cancelamento com menos de 1h de antecedência penaliza o score |
 | RF08 | Sugestão inteligente de turnos via IA |
 | RF09 | Relatório financeiro/operacional mensal via IA |
+| RF10 | Turno publicado guarda o ponto de partida (lat/lng), que alimenta o filtro por distância e o mapa das duas pontas |
+| RF11 | Turno finalizado gera NFS-e — entregador é o prestador, lojista é o tomador, e qualquer um dos dois pode emitir |
+
+---
+
+## 🧾 Nota Fiscal de Serviço (NFS-e)
+
+Todo turno **finalizado** pode virar uma nota fiscal de serviço. O documento é
+um só e sempre na mesma direção — **o entregador presta, o lojista toma** —,
+mas os dois lados veem a mesma tela, os dois podem disparar a emissão e a nota
+aparece na lista de ambos. Não existe "nota do lojista" separada: uma segunda
+nota, em sentido contrário, documentaria um serviço que não houve.
+
+Um turno com várias vagas gera **uma nota por entregador** (a unicidade no
+banco é do par `turno + prestador`). A emissão é idempotente: pedir de novo
+devolve a nota que já existe, em vez de criar outra.
+
+### Tributos
+
+Dois, de propósito — o suficiente para mostrar a mecânica de base de cálculo,
+retenção e valor líquido:
+
+| Tributo | Alíquota padrão | Propriedade |
+|---------|-----------------|-------------|
+| ISS | 5% | `motoshift.nf.iss-aliquota` |
+| IRRF | 1,5% | `motoshift.nf.irrf-aliquota` |
+
+> ⚠️ **Escopo.** É um documento interno da plataforma, com a *estrutura* de uma
+> NFS-e (numeração por prestador, série, código de verificação, discriminação
+> de tributos). Não há transmissão à prefeitura, RPS nem certificado digital, e
+> as alíquotas são de exemplo. Uma emissão real trocaria o
+> `NotaFiscalService` por um cliente do provedor municipal — o modelo de dados
+> já é o que ele precisaria.
 
 ---
 

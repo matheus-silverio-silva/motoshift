@@ -9,6 +9,15 @@
         "cd /d Motoshift && flutter run -d web-server --web-port=8123 -t lib/dev/shell_preview_main.dart"
       ],
       "port": 8123
+    },
+    {
+      "name": "app-web",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d Motoshift && flutter run -d web-server --web-port=8124 --dart-define=API_URL=http://localhost:8080"
+      ],
+      "port": 8124
     }
   ]
 }

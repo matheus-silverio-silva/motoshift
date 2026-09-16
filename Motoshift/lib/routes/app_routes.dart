@@ -23,6 +23,7 @@ class AppRoutes {
 
   // ── Compartilhadas ───────────────────────────────────────────────────────
   static const String agenda            = '/agenda';              // tela 8
+  static const String notasFiscais      = '/notas-fiscais';       // NFS-e
   static const String avaliacao         = '/avaliacao';           // tela 7
   static const String perfil            = '/perfil';              // tela 9
   static const String notificacoes      = '/notificacoes';        // tela 17

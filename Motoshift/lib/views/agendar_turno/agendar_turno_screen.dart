@@ -4,8 +4,11 @@ import 'package:intl/intl.dart' show DateFormat;
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../../models/turno.dart';
+import '../../models/usuario.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/geo_referencia.dart';
+import '../../services/localizacao_service.dart';
 import '../../services/preco_recomendado.dart';
 import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
@@ -27,21 +30,80 @@ class AgendarTurnoScreen extends StatefulWidget {
 class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  static const _centro = LatLng(-23.4273, -51.9375); // Maringá-PR
-
   DateTime? _data;
   TimeOfDay? _horaInicio;
   TimeOfDay? _horaFim;
   double _raio = 15;
   int _vagas = 1;
   final _valorCtrl = TextEditingController();
+  final _regiaoCtrl = TextEditingController();
   bool _publicando = false;
+
+  /// Ponto de partida do turno. Começa no centro da cidade do lojista, tenta
+  /// subir para o GPS e termina onde ele tocar no mapa.
+  ///
+  /// Era uma constante fixa em Maringá-PR, enquanto o turno era gravado com
+  /// `regiao: 'São Paulo'` e sem coordenada nenhuma — o mapa mostrava um lugar,
+  /// o turno dizia outro, e o filtro "perto de mim" não achava nenhum dos dois.
+  LatLng _centro = GeoReferencia.padrao;
+
+  /// Origem do ponto atual — muda o texto de apoio abaixo do mapa.
+  _OrigemDoPonto _origem = _OrigemDoPonto.padrao;
+
+  bool _buscandoGps = false;
 
   @override
   void initState() {
     super.initState();
     // A pré-visualização do desktop mostra o valor enquanto ele é digitado.
     _valorCtrl.addListener(_aoDigitarValor);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _definirPontoInicial());
+  }
+
+  /// Ordem de preferência para o ponto inicial: cidade do cadastro (imediato)
+  /// e, se o aparelho deixar, a posição real do GPS.
+  Future<void> _definirPontoInicial() async {
+    if (!mounted) return;
+    final usuario = context.read<AuthService>().usuario;
+
+    _regiaoCtrl.text = _regiaoDoCadastro(usuario);
+    if (GeoReferencia.conhece(usuario?.cidade)) {
+      setState(() {
+        _centro = GeoReferencia.daCidade(usuario?.cidade);
+        _origem = _OrigemDoPonto.cidade;
+      });
+    }
+
+    setState(() => _buscandoGps = true);
+    final pos = await const LocalizacaoService().posicaoAtual();
+    if (!mounted) return;
+    setState(() {
+      _buscandoGps = false;
+      if (pos.temPosicao) {
+        _centro = LatLng(pos.latitude!, pos.longitude!);
+        _origem = _OrigemDoPonto.gps;
+      }
+    });
+  }
+
+  /// Região sugerida a partir do cadastro do lojista: endereço comercial
+  /// quando houver, senão cidade/UF. Antes era a string fixa "São Paulo".
+  String _regiaoDoCadastro(Usuario? usuario) {
+    final endereco = usuario?.enderecoComercial?.trim();
+    if (endereco != null && endereco.isNotEmpty) return endereco;
+    final cidade = usuario?.cidade?.trim();
+    final estado = usuario?.estado?.trim();
+    if (cidade != null && cidade.isNotEmpty) {
+      return estado != null && estado.isNotEmpty ? '$cidade/$estado' : cidade;
+    }
+    return '';
+  }
+
+  void _escolherPonto(LatLng ponto) {
+    setState(() {
+      _centro = ponto;
+      _origem = _OrigemDoPonto.escolhido;
+    });
   }
 
   void _aoDigitarValor() {
@@ -52,6 +114,7 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
   void dispose() {
     _valorCtrl.removeListener(_aoDigitarValor);
     _valorCtrl.dispose();
+    _regiaoCtrl.dispose();
     super.dispose();
   }
 
@@ -166,15 +229,25 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       return;
     }
 
+    final regiao = _regiaoCtrl.text.trim().isEmpty
+        ? 'Região não informada'
+        : _regiaoCtrl.text.trim();
+
     final turno = Turno(
       lojistId: auth.usuario!.id!,
       titulo: 'Turno ${DateFormat('dd/MM').format(inicio)}',
-      regiao: 'São Paulo',
+      regiao: regiao,
       dataInicio: inicio,
       dataFim: fim,
       valorEstimado:
           double.tryParse(_valorCtrl.text.replaceAll(',', '.')) ?? 0.0,
       raioEntregaKm: _raio,
+      // Sem estas duas o turno nascia sem ponto de partida e nunca aparecia no
+      // filtro por raio do entregador — o backend aceita desde o SCRUM-18,
+      // era o app que não mandava.
+      latitude: _centro.latitude,
+      longitude: _centro.longitude,
+      endereco: regiao,
       vagas: _vagas,
     );
 
@@ -187,7 +260,15 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
           backgroundColor: AppColors.teal,
         ),
       );
-      Navigator.pop(context);
+      // Voltar só existe se houver para onde: publicar virou item de menu, e
+      // pela barra lateral esta tela é a única da pilha — um `pop` seco ali
+      // deixaria o Navigator vazio. Sem pilha, segue para a lista de turnos,
+      // que é onde o turno recém-publicado aparece.
+      if (Navigator.of(context).canPop()) {
+        Navigator.pop(context);
+      } else {
+        Navigator.pushReplacementNamed(context, AppRoutes.turnosLojista);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -210,7 +291,7 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       ),
       desktopTitle: 'Publicar turno',
       desktopSubtitle: 'Defina data, horário e valor para sua operação',
-      desktopSelectedRoute: AppRoutes.turnosLojista,
+      desktopSelectedRoute: AppRoutes.publicarTurno,
       desktopBody: _buildDesktop(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
@@ -258,11 +339,8 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
-              MapaRaio(
-                centro: _centro,
-                raioKm: _raio,
-              ),
+              const SizedBox(height: 14),
+              _buildPontoDePartida(),
               const SizedBox(height: 24),
               PrimaryButton(
                 label: 'Publicar Turno',
@@ -429,7 +507,15 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
           const SizedBox(height: 14),
           SizedBox(
             height: 200,
-            child: MapaRaio(centro: _centro, raioKm: _raio),
+            child: MapaRaio(
+              centro: _centro,
+              raioKm: _raio,
+              height: 200,
+              onTapMapa: _escolherPonto,
+              rodape: _regiaoCtrl.text.trim().isEmpty
+                  ? null
+                  : _regiaoCtrl.text.trim(),
+            ),
           ),
           const SizedBox(height: 14),
           const Divider(height: 1),
@@ -568,6 +654,96 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
         textAlign: TextAlign.center,
         style: tsJakarta(13, FontWeight.w600,
             color: t != null ? AppColors.ink : AppColors.muted),
+      ),
+    );
+  }
+
+  /// De onde o turno parte: a região em texto e o ponto no mapa.
+  ///
+  /// O mapa é tocável de propósito — é a única forma honesta de o lojista
+  /// corrigir o ponto sem uma geocodificação de endereço, que este MVP não
+  /// tem. O que ele confirmar aqui é o que vai para o banco e o que o filtro
+  /// por distância do entregador usa.
+  Widget _buildPontoDePartida() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.line, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.place_outlined, color: AppColors.teal, size: 14),
+              const SizedBox(width: 5),
+              Text('PONTO DE PARTIDA',
+                  style: tsJakarta(9, FontWeight.w700, color: AppColors.muted)
+                      .copyWith(letterSpacing: 0.9)),
+              const Spacer(),
+              if (_buscandoGps)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: AppColors.teal),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _regiaoCtrl,
+            onChanged: (_) => setState(() {}),
+            style: tsJakarta(13, FontWeight.w600, color: AppColors.ink),
+            decoration: InputDecoration(
+              hintText: 'Bairro ou endereço de partida',
+              hintStyle:
+                  tsJakarta(12.5, FontWeight.w400, color: AppColors.muted),
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              filled: true,
+              fillColor: AppColors.surface2,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.line, width: 1.5),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.teal, width: 1.5),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          MapaRaio(
+            centro: _centro,
+            raioKm: _raio,
+            height: 180,
+            onTapMapa: _escolherPonto,
+            rodape:
+                _regiaoCtrl.text.trim().isEmpty ? null : _regiaoCtrl.text.trim(),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(_origem.icone, size: 13, color: AppColors.muted),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  _origem.explicacao,
+                  style:
+                      tsJakarta(10.5, FontWeight.w400, color: AppColors.muted),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -835,4 +1011,30 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       ],
     );
   }
+}
+
+/// De onde veio o ponto que está no mapa. O lojista precisa saber se aquilo é
+/// um chute pela cidade do cadastro ou a posição real do aparelho — sem isso,
+/// um centro aproximado passa por preciso e o turno nasce no lugar errado.
+enum _OrigemDoPonto {
+  padrao,
+  cidade,
+  gps,
+  escolhido;
+
+  IconData get icone => switch (this) {
+        _OrigemDoPonto.gps => Icons.my_location_rounded,
+        _OrigemDoPonto.escolhido => Icons.touch_app_outlined,
+        _ => Icons.info_outline_rounded,
+      };
+
+  String get explicacao => switch (this) {
+        _OrigemDoPonto.gps =>
+          'Posição atual do aparelho. Toque no mapa para ajustar.',
+        _OrigemDoPonto.escolhido => 'Ponto escolhido por você no mapa.',
+        _OrigemDoPonto.cidade =>
+          'Centro aproximado da sua cidade. Toque no mapa para marcar o ponto exato.',
+        _OrigemDoPonto.padrao =>
+          'Ponto ainda não confirmado. Toque no mapa para marcar de onde o turno parte.',
+      };
 }

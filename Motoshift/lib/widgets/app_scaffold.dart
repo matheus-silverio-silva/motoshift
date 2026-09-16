@@ -9,6 +9,7 @@ class AppScaffold extends StatelessWidget {
     required this.body,
     this.bottomNav,
     this.floatingActionButton,
+    this.drawer,
     super.key,
   });
 
@@ -16,6 +17,10 @@ class AppScaffold extends StatelessWidget {
   final Widget body;
   final Widget? bottomNav;
   final Widget? floatingActionButton;
+
+  /// Menu lateral. Quando informado, o [AppHeader] mostra sozinho o botão que
+  /// o abre — as telas não precisam saber que ele existe.
+  final Widget? drawer;
 
   /// Largura máxima do conteúdo. App é mobile-first: em telas largas (web/desktop)
   /// o conteúdo fica centralizado nesta largura em vez de esticar por toda a tela.
@@ -25,6 +30,7 @@ class AppScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.tealDeep,
+      drawer: drawer,
       body: _centralizar(
         Column(
           children: [

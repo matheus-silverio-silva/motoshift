@@ -20,6 +20,7 @@ import '../../widgets/desktop/panel_card.dart';
 import '../../widgets/desktop/shift_row.dart';
 import '../../widgets/desktop/weekly_bar_chart_card.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/painel_pendencias.dart';
 import '../../widgets/section_title.dart';
 import '../../widgets/shift_card.dart';
 import '../../widgets/stat_card.dart';
@@ -150,6 +151,8 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
         children: [
           _buildStats(),
           const SizedBox(height: 14),
+          // Só ocupa espaço quando há algo a resolver; sem pendência, some.
+          const PainelPendencias(),
           _buildPublicarBtn(),
           SectionTitle(
             title: 'Próximos turnos',
@@ -253,11 +256,18 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
             ),
             GridCol(
               span: 4,
-              child: PanelCard(
-                title: 'Próximos turnos',
-                actionLabel: 'Ver agenda',
-                onAction: () => Navigator.pushNamed(context, AppRoutes.agenda),
-                child: _buildProximosDesktop(provider, proximos),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const PainelPendencias(),
+                  PanelCard(
+                    title: 'Próximos turnos',
+                    actionLabel: 'Ver agenda',
+                    onAction: () =>
+                        Navigator.pushNamed(context, AppRoutes.agenda),
+                    child: _buildProximosDesktop(provider, proximos),
+                  ),
+                ],
               ),
             ),
           ],

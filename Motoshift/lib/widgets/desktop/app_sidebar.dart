@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
 
-/// Item de navegação da sidebar desktop.
+/// Item de navegação da barra lateral.
 class SidebarItem {
   const SidebarItem({
     required this.icon,
@@ -17,68 +17,138 @@ class SidebarItem {
   final String? badge;
 }
 
-/// Conjuntos de itens por papel, conforme o protótipo v2.
+/// Um grupo de itens sob um rótulo ("OPERAÇÃO", "FINANCEIRO"…).
+class SidebarSection {
+  const SidebarSection({required this.label, required this.items});
+
+  final String label;
+  final List<SidebarItem> items;
+}
+
+/// O menu do aplicativo, por papel — a lista completa, não um resumo.
 ///
-/// Lojista : Início · Agenda · Turnos · Carteira · Perfil
-/// Motoboy : Início · Turnos · Carteira · Avaliações · Perfil
+/// A versão anterior tinha cinco itens por papel e tudo o mais vivia dentro do
+/// Perfil: as avaliações do lojista, por exemplo, estavam a três toques de
+/// distância e sem nenhuma entrada no menu. Quem não soubesse que a tela
+/// existia não a encontrava.
+///
+/// Agora toda tela alcançável sem argumento de rota tem uma entrada aqui, em
+/// quatro grupos: o que o usuário faz (operação), o dinheiro, a reputação e a
+/// conta. Telas que precisam de um turno específico (avaliar um entregador,
+/// detalhe do turno) continuam de fora — não há como abri-las do menu sem
+/// escolher o turno antes.
 class SidebarItems {
   SidebarItems._();
 
-  static List<SidebarItem> lojista({String? badgeTurnos}) => [
-        const SidebarItem(
-            icon: Icons.home_outlined,
-            label: 'Início',
-            route: AppRoutes.dashboardLojista),
-        const SidebarItem(
-            icon: Icons.calendar_month_outlined,
-            label: 'Agenda',
-            route: AppRoutes.agenda),
-        SidebarItem(
-            icon: Icons.local_shipping_outlined,
-            label: 'Turnos',
-            route: AppRoutes.turnosLojista,
-            badge: badgeTurnos),
-        const SidebarItem(
-            icon: Icons.account_balance_wallet_outlined,
-            label: 'Carteira',
-            route: AppRoutes.carteira),
-        const SidebarItem(
-            icon: Icons.person_outline_rounded,
-            label: 'Perfil',
-            route: AppRoutes.perfil),
+  static List<SidebarSection> lojista({String? badgeNotificacoes}) => [
+        SidebarSection(label: 'OPERAÇÃO', items: [
+          const SidebarItem(
+              icon: Icons.home_outlined,
+              label: 'Início',
+              route: AppRoutes.dashboardLojista),
+          const SidebarItem(
+              icon: Icons.calendar_month_outlined,
+              label: 'Agenda',
+              route: AppRoutes.agenda),
+          const SidebarItem(
+              icon: Icons.local_shipping_outlined,
+              label: 'Turnos',
+              route: AppRoutes.turnosLojista),
+          const SidebarItem(
+              icon: Icons.add_box_outlined,
+              label: 'Publicar turno',
+              route: AppRoutes.publicarTurno),
+        ]),
+        const SidebarSection(label: 'FINANCEIRO', items: [
+          SidebarItem(
+              icon: Icons.account_balance_wallet_outlined,
+              label: 'Saldo',
+              route: AppRoutes.saldoLojista),
+          SidebarItem(
+              icon: Icons.receipt_long_outlined,
+              label: 'Notas fiscais',
+              route: AppRoutes.notasFiscais),
+        ]),
+        const SidebarSection(label: 'REPUTAÇÃO', items: [
+          SidebarItem(
+              icon: Icons.star_outline_rounded,
+              label: 'Avaliações',
+              route: AppRoutes.minhasAvaliacoes),
+        ]),
+        SidebarSection(label: 'CONTA', items: [
+          SidebarItem(
+              icon: Icons.notifications_outlined,
+              label: 'Notificações',
+              route: AppRoutes.notificacoes,
+              badge: badgeNotificacoes),
+          const SidebarItem(
+              icon: Icons.history_rounded,
+              label: 'Histórico',
+              route: AppRoutes.historicoTurnos),
+          const SidebarItem(
+              icon: Icons.person_outline_rounded,
+              label: 'Perfil',
+              route: AppRoutes.perfil),
+        ]),
       ];
 
-  static List<SidebarItem> motoboy({String? badgeTurnos}) => [
-        const SidebarItem(
-            icon: Icons.home_outlined,
-            label: 'Início',
-            route: AppRoutes.dashboardMotoboy),
-        SidebarItem(
-            icon: Icons.two_wheeler_outlined,
-            label: 'Turnos',
-            route: AppRoutes.turnosDisponiveis,
-            badge: badgeTurnos),
-        const SidebarItem(
-            icon: Icons.account_balance_wallet_outlined,
-            label: 'Carteira',
-            route: AppRoutes.carteira),
-        const SidebarItem(
-            icon: Icons.star_half_outlined,
-            label: 'Avaliações',
-            route: AppRoutes.minhasAvaliacoes),
-        const SidebarItem(
-            icon: Icons.person_outline_rounded,
-            label: 'Perfil',
-            route: AppRoutes.perfil),
+  static List<SidebarSection> motoboy({String? badgeNotificacoes}) => [
+        SidebarSection(label: 'OPERAÇÃO', items: [
+          const SidebarItem(
+              icon: Icons.home_outlined,
+              label: 'Início',
+              route: AppRoutes.dashboardMotoboy),
+          const SidebarItem(
+              icon: Icons.two_wheeler_outlined,
+              label: 'Turnos',
+              route: AppRoutes.turnosDisponiveis),
+          const SidebarItem(
+              icon: Icons.calendar_month_outlined,
+              label: 'Agenda',
+              route: AppRoutes.agenda),
+        ]),
+        const SidebarSection(label: 'FINANCEIRO', items: [
+          SidebarItem(
+              icon: Icons.account_balance_wallet_outlined,
+              label: 'Carteira',
+              route: AppRoutes.carteira),
+          SidebarItem(
+              icon: Icons.receipt_long_outlined,
+              label: 'Notas fiscais',
+              route: AppRoutes.notasFiscais),
+        ]),
+        const SidebarSection(label: 'REPUTAÇÃO', items: [
+          SidebarItem(
+              icon: Icons.star_outline_rounded,
+              label: 'Avaliações',
+              route: AppRoutes.minhasAvaliacoes),
+        ]),
+        SidebarSection(label: 'CONTA', items: [
+          SidebarItem(
+              icon: Icons.notifications_outlined,
+              label: 'Notificações',
+              route: AppRoutes.notificacoes,
+              badge: badgeNotificacoes),
+          const SidebarItem(
+              icon: Icons.history_rounded,
+              label: 'Histórico',
+              route: AppRoutes.historicoTurnos),
+          const SidebarItem(
+              icon: Icons.person_outline_rounded,
+              label: 'Perfil',
+              route: AppRoutes.perfil),
+        ]),
       ];
 }
 
-/// Sidebar desktop de 240px com gradiente teal → tealDeep (135°).
-/// Estrutura fiel ao canvas: logo, rótulo NAVEGAÇÃO, itens com badge opcional,
-/// e no rodapé o bloco do usuário e "Sair".
+/// Barra lateral de 240px com gradiente teal → tealDeep (135°).
+/// Logo, grupos de navegação e, no rodapé, o bloco do usuário e "Sair".
+///
+/// O miolo rola: com o menu completo os itens passam de dez, e em janela
+/// baixa (ou no menu lateral do celular) a lista precisa caber sem estourar.
 class AppSidebar extends StatelessWidget {
   const AppSidebar({
-    required this.items,
+    required this.sections,
     required this.userName,
     required this.userSubtitle,
     required this.userInitials,
@@ -90,7 +160,7 @@ class AppSidebar extends StatelessWidget {
 
   static const double width = 240;
 
-  final List<SidebarItem> items;
+  final List<SidebarSection> sections;
   final String userName;
   final String userSubtitle;
   final String userInitials;
@@ -121,30 +191,39 @@ class AppSidebar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildLogo(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 20, 12, 6),
-            child: Text(
-              'NAVEGAÇÃO',
-              style: tsJakarta(9.5, FontWeight.w700, color: _navLabel)
-                  .copyWith(letterSpacing: 9.5 * .12),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Column(
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(top: 8, bottom: 8),
               children: [
-                for (final item in items) ...[
-                  _SidebarTile(
-                    item: item,
-                    selected: item.route == selectedRoute,
-                    onTap: () => _handleTap(context, item),
+                for (final section in sections) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+                    child: Text(
+                      section.label,
+                      style: tsJakarta(9.5, FontWeight.w700, color: _navLabel)
+                          .copyWith(letterSpacing: 9.5 * .12),
+                    ),
                   ),
-                  if (item != items.last) const SizedBox(height: 4),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Column(
+                      children: [
+                        for (final item in section.items) ...[
+                          _SidebarTile(
+                            item: item,
+                            selected: item.route == selectedRoute,
+                            onTap: () => _handleTap(context, item),
+                          ),
+                          if (item != section.items.last)
+                            const SizedBox(height: 4),
+                        ],
+                      ],
+                    ),
+                  ),
                 ],
               ],
             ),
           ),
-          const Spacer(),
           _buildFooter(context),
         ],
       ),

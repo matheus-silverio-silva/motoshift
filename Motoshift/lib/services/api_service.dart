@@ -5,6 +5,7 @@ import 'api/avaliacao_api.dart';
 import 'api/carteira_api.dart';
 import 'api/dashboard_api.dart';
 import 'api/ia_api.dart';
+import 'api/nota_fiscal_api.dart';
 import 'api/notificacao_api.dart';
 import 'api/turno_api.dart';
 
@@ -34,6 +35,7 @@ class ApiService {
   late final TurnoApi turnos = TurnoApi(client);
   late final CarteiraApi carteira = CarteiraApi(client);
   late final AvaliacaoApi avaliacoes = AvaliacaoApi(client);
+  late final NotaFiscalApi notasFiscais = NotaFiscalApi(client);
   late final NotificacaoApi notificacoes = NotificacaoApi(client);
   late final AgendaApi agenda = AgendaApi(client);
   late final DashboardApi dashboard = DashboardApi(client);

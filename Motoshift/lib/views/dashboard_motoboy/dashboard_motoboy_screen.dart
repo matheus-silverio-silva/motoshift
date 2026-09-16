@@ -21,6 +21,7 @@ import '../../widgets/desktop/shift_row.dart';
 import '../../widgets/desktop/wallet_kpi_card.dart';
 import '../../widgets/desktop/weekly_bar_chart_card.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/painel_pendencias.dart';
 import '../../widgets/mini_bar_chart.dart';
 import '../../widgets/section_title.dart';
 import '../../widgets/shift_card.dart';
@@ -125,6 +126,8 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
           const SizedBox(height: 12),
           _buildStats(),
           const SizedBox(height: 16),
+          // Só ocupa espaço quando há algo a resolver; sem pendência, some.
+          const PainelPendencias(),
           SectionTitle(title: 'Ganhos dos últimos dias'),
           Container(
             padding: const EdgeInsets.fromLTRB(14, 16, 14, 24),
@@ -268,12 +271,18 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
             ),
             GridCol(
               span: 4,
-              child: PanelCard(
-                title: 'Turnos aceitos',
-                actionLabel: 'Ver todos',
-                onAction: () => Navigator.pushNamed(
-                    context, AppRoutes.turnosDisponiveis),
-                child: _buildAceitosDesktop(provider, aceitos),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const PainelPendencias(),
+                  PanelCard(
+                    title: 'Turnos aceitos',
+                    actionLabel: 'Ver todos',
+                    onAction: () => Navigator.pushNamed(
+                        context, AppRoutes.turnosDisponiveis),
+                    child: _buildAceitosDesktop(provider, aceitos),
+                  ),
+                ],
               ),
             ),
           ],

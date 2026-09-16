@@ -7,6 +7,7 @@ import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/desktop/info_tile_grid.dart';
+import '../../widgets/mapa_turno.dart';
 import '../../widgets/timeline_stepper.dart';
 
 /// Conteúdo do turno visto pelo lojista (tela 8), sem scaffold em volta.
@@ -138,6 +139,10 @@ class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
         InfoTileGrid(itens: _infoDoTurno(turno))
       else
         _GridInfo(turno: turno),
+      SizedBox(height: widget.desktop ? 16 : 12),
+      // O lojista via a região só como texto: nada mostrava de onde o turno
+      // que ele publicou realmente parte, nem a área que o entregador cobre.
+      MapaTurno(turno: turno, altura: widget.desktop ? 220 : 170),
       SizedBox(height: widget.desktop ? 16 : 12),
       _StatusTimeline(status: turno.status),
       if (turno.motoboyId != null) ...[

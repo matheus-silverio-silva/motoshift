@@ -60,16 +60,26 @@ class AppHeader extends StatelessWidget {
           // ao chegar nos 44px de alvo de toque: a altura total do header
           // continua a mesma, e nada abaixo dele se desloca.
           padding: EdgeInsets.fromLTRB(18, 4, 18, _isGreeting ? 28 : 8),
-          child: _isGreeting ? _buildGreeting() : _buildBack(context),
+          child: _isGreeting ? _buildGreeting(context) : _buildBack(context),
         ),
       ),
     );
   }
 
   Widget _buildBack(BuildContext context) {
+    // Tela de raiz alcançada pela barra inferior não tem para onde voltar: a
+    // seta ficava ali sem função. Quando é esse o caso e existe menu lateral,
+    // o mesmo canto passa a abri-lo — é o equivalente mobile do que a topbar
+    // do desktop já fazia com `canPop()`.
+    final temMenu = Scaffold.maybeOf(context)?.hasDrawer ?? false;
+    final podeVoltar = _onBack != null || Navigator.of(context).canPop();
+
     return Row(
       children: [
-        _BackButton(onTap: _onBack),
+        if (!podeVoltar && temMenu)
+          _MenuButton(onTap: () => Scaffold.of(context).openDrawer())
+        else
+          _BackButton(onTap: _onBack),
         Expanded(
           child: Text(
             _title ?? '',
@@ -86,10 +96,18 @@ class AppHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildGreeting() {
+  Widget _buildGreeting(BuildContext context) {
+    // O botão só nasce quando a tela tem gaveta — é o AppScaffold que decide
+    // isso, não cada tela. Onde não há menu lateral, o header fica como era.
+    final temMenu = Scaffold.maybeOf(context)?.hasDrawer ?? false;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
+        if (temMenu) ...[
+          _MenuButton(onTap: () => Scaffold.of(context).openDrawer()),
+          const SizedBox(width: 8),
+        ],
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,6 +136,43 @@ class AppHeader extends StatelessWidget {
         ],
         _HeaderAvatar(initials: _avatarInitials ?? ''),
       ],
+    );
+  }
+}
+
+/// Abre o menu lateral no celular. Mesmo alvo de 44px do sino ao lado.
+class _MenuButton extends StatelessWidget {
+  const _MenuButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Abrir menu',
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: const Color(0x29FFFFFF),
+                borderRadius: BorderRadius.circular(12),
+                border:
+                    Border.all(color: const Color(0x38FFFFFF), width: 1.5),
+              ),
+              child: const Icon(Icons.menu_rounded,
+                  size: 19, color: Color(0xFFEAFFFD)),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

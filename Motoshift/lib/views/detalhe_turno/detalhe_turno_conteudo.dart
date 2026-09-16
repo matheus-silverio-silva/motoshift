@@ -6,6 +6,7 @@ import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/desktop/info_tile_grid.dart';
+import '../../widgets/mapa_turno.dart';
 
 /// Conteúdo do detalhe do turno (tela 6), sem nenhum scaffold em volta.
 ///
@@ -84,7 +85,7 @@ class _DetalheTurnoConteudoState extends State<DetalheTurnoConteudo> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
             children: [
-              MapaPlaceholder(regiao: turno.regiao, altura: 160),
+              MapaTurno(turno: turno, altura: 160),
               const SizedBox(height: 14),
               _InfoCard(turno: turno),
               const SizedBox(height: 12),
@@ -118,7 +119,14 @@ class _DetalheTurnoConteudoState extends State<DetalheTurnoConteudo> {
           const SizedBox(height: 16),
           InfoTileGrid(itens: _infoDoTurno(turno)),
           const SizedBox(height: 16),
-          Expanded(child: MapaPlaceholder(regiao: turno.regiao)),
+          Expanded(
+            // O mapa ocupa a altura que sobrar do painel; o LayoutBuilder
+            // repassa esse número para o widget, que precisa de altura
+            // concreta para enquadrar o círculo do raio.
+            child: LayoutBuilder(
+              builder: (_, c) => MapaTurno(turno: turno, altura: c.maxHeight),
+            ),
+          ),
           if (turno.descricao != null && turno.descricao!.isNotEmpty) ...[
             const SizedBox(height: 16),
             RequisitosCard(descricao: turno.descricao!),
@@ -128,70 +136,6 @@ class _DetalheTurnoConteudoState extends State<DetalheTurnoConteudo> {
             turno: turno,
             aceitando: _aceitando,
             onAceitar: _aceitar,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Placeholder do mapa ──────────────────────────────────────────────────────
-
-/// Área do mapa. Continua placeholder: a tela 18 (filtro por raio) é quem traz
-/// o mapa de verdade, reaproveitando o MapaRaio que já existe.
-class MapaPlaceholder extends StatelessWidget {
-  const MapaPlaceholder({required this.regiao, this.altura, super.key});
-
-  final String regiao;
-
-  /// Altura fixa. Nulo deixa o widget preencher o espaço disponível.
-  final double? altura;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: altura,
-      decoration: BoxDecoration(
-        color: AppColors.surface2,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.line, width: 1.5),
-      ),
-      child: Stack(
-        children: [
-          Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.map_outlined, size: 40, color: AppColors.muted),
-                const SizedBox(height: 6),
-                Text(
-                  'Mapa indisponível',
-                  style: tsJakarta(10, FontWeight.w400, color: AppColors.muted),
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            bottom: 10,
-            left: 10,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppColors.ink.withOpacity(0.75),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.location_on_rounded,
-                      size: 11, color: Colors.white),
-                  const SizedBox(width: 4),
-                  Text(regiao,
-                      style:
-                          tsJakarta(10, FontWeight.w700, color: Colors.white)),
-                ],
-              ),
-            ),
           ),
         ],
       ),
