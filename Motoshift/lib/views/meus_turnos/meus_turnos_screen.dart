@@ -213,7 +213,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
   }
 
   /// Controle de raio: liga/desliga o "perto de mim" e ajusta a distância.
-  Widget _buildControleRaio() {
+  Widget _buildControleRaio(List<Turno> turnos) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -290,12 +290,50 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
             MapaRaio(
               centro: LatLng(_lat!, _lng!),
               raioKm: _raioKm,
-              height: 150,
+              height: 170,
+              iconeCentro: Icons.person_pin_circle_rounded,
+              // O mapa mostrava só o círculo: dava para ver a área da busca,
+              // nunca o resultado dela. Agora cada turno filtrado vira um pino
+              // com o valor — é o que torna o mapa parte do filtro em vez de
+              // enfeite ao lado dele.
+              pontos: _pinosDosTurnos(turnos),
+              rodape: _rodapeDoMapa(turnos),
             ),
           ],
         ],
       ),
     );
+  }
+
+  void _abrirDetalhe(Turno turno) {
+    Navigator.pushNamed(context, AppRoutes.detalheTurno, arguments: turno);
+  }
+
+  /// Um pino por turno que tenha coordenada, com o valor no rótulo. Turno
+  /// legado (sem lat/lng) fica de fora do mapa, mas continua na lista abaixo —
+  /// some do desenho, não do resultado.
+  List<MapaPonto> _pinosDosTurnos(List<Turno> turnos) {
+    return [
+      for (final t in turnos)
+        if (t.temCoordenada)
+          MapaPonto(
+            posicao: LatLng(t.latitude!, t.longitude!),
+            rotulo: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
+            icone: Icons.storefront_rounded,
+            onTap: () => _abrirDetalhe(t),
+          ),
+    ];
+  }
+
+  /// Texto da etiqueta do mapa. Diz quantos turnos estão plotados e, quando é
+  /// o caso, quantos ficaram de fora por não ter coordenada — senão a
+  /// diferença entre a lista e o mapa parece defeito.
+  String _rodapeDoMapa(List<Turno> turnos) {
+    final comMapa = turnos.where((t) => t.temCoordenada).length;
+    final semMapa = turnos.length - comMapa;
+    if (turnos.isEmpty) return 'Nenhum turno neste raio';
+    final base = comMapa == 1 ? '1 turno no mapa' : '$comMapa turnos no mapa';
+    return semMapa == 0 ? base : '$base · $semMapa sem localização';
   }
 
   void _limparFiltros() {
@@ -353,7 +391,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
             children: [
-              _buildControleRaio(),
+              _buildControleRaio(provider.turnosDisponiveis),
               if (_falhaLocalizacao != null) ...[
                 const SizedBox(height: 12),
                 _buildFalhaLocalizacao(),
@@ -385,7 +423,12 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
       // O controle de raio e o aviso de localização são montados aqui porque
       // o estado de localização é da tela; o layout do desktop só os hospeda.
       desktopBody: TurnosConteudoDesktop(
-        controleRaio: _buildControleRaio(),
+        // Mesmo cuidado do `desktopSubtitle` acima: o `watch` só entra quando
+        // a tela é desktop. Solto aqui, o celular — que descarta este corpo —
+        // passaria a rebuildar tudo a cada notifyListeners() do provider.
+        controleRaio: _buildControleRaio(context.isDesktop
+            ? context.watch<TurnoProvider>().turnosDisponiveis
+            : const <Turno>[]),
         avisoLocalizacao:
             _falhaLocalizacao != null ? _buildFalhaLocalizacao() : null,
         porPerto: _porPerto,

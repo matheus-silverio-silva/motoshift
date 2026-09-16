@@ -54,6 +54,15 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Versao fixa, e a mesma com que os goldens foram gravados. Com so
+          # "channel: stable" o CI pegava o stable do dia (3.47.4 quando isto
+          # quebrou) e cada release muda o antialiasing em alguns pixels: 5 a
+          # 140px de diferenca em telas que ninguem tinha tocado, o suficiente
+          # para derrubar todo golden. Tolerancia na comparacao resolveria o
+          # sintoma, mas esconderia o que o relogio_deslocado_test existe para
+          # pegar — um digito de data trocado tambem sao poucas dezenas de px.
+          # Subir esta versao exige regravar os goldens na mesma versao.
+          flutter-version: 3.41.5
           cache: true
 
       - name: Dependencias

@@ -922,12 +922,13 @@ class _SelectiveHttpClient implements HttpClient {
   }
 
   @override
-  Future<HttpClientRequest> getUrl(Uri url) =>
-      _allow(url) ? _real.getUrl(url) : Future.value(_MockHttpClientRequest());
+  Future<HttpClientRequest> getUrl(Uri url) => _allow(url)
+      ? _real.getUrl(url)
+      : Future.value(_MockHttpClientRequest(url));
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) => _allow(url)
       ? _real.openUrl(method, url)
-      : Future.value(_MockHttpClientRequest());
+      : Future.value(_MockHttpClientRequest(url));
 
   // Delegação para os demais métodos
   @override
@@ -1041,15 +1042,37 @@ class _SelectiveHttpClient implements HttpClient {
 
 
 class _MockHttpClientRequest implements HttpClientRequest {
+  _MockHttpClientRequest([Uri? url]) {
+    if (url != null) uri = url;
+  }
+
+  /// Requisição de imagem recebe um PNG de verdade; o resto, corpo vazio.
+  ///
+  /// Corpo vazio para tudo era o comportamento anterior, e funcionava enquanto
+  /// o único cliente era o google_fonts (que trata a fonte vazia como falha e
+  /// cai no fallback). Para um tile do mapa, porém, zero byte vira "Invalid
+  /// image data" — uma exceção por tile, que o `flutter_test` conta como falha
+  /// do teste. Devolver 1x1 transparente mantém a rede bloqueada e deixa o
+  /// decodificador terminar em paz.
+  bool get _pedeImagem {
+    final path = uri.path.toLowerCase();
+    return path.endsWith('.png') ||
+        path.endsWith('.jpg') ||
+        path.endsWith('.jpeg') ||
+        path.endsWith('.webp');
+  }
+
   @override
-  Future<HttpClientResponse> close() async => _MockHttpClientResponse();
+  Future<HttpClientResponse> close() async =>
+      _MockHttpClientResponse(imagem: _pedeImagem);
 
   @override
   HttpHeaders get headers => _MockHeaders();
   @override
   List<Cookie> get cookies => [];
   @override
-  Future<HttpClientResponse> get done async => _MockHttpClientResponse();
+  Future<HttpClientResponse> get done async =>
+      _MockHttpClientResponse(imagem: _pedeImagem);
   @override
   bool followRedirects = true;
   @override
@@ -1091,14 +1114,21 @@ class _MockHttpClientRequest implements HttpClientRequest {
 
 class _MockHttpClientResponse extends Stream<List<int>>
     implements HttpClientResponse {
-  // 200 OK com body vazio: faz google_fonts achar que carregou e cair em
-  // fallback Roboto sem lançar exception. Tiles OSM idem (renderiza placeholder).
+  _MockHttpClientResponse({this.imagem = false});
+
+  /// Devolve um PNG 1x1 em vez de corpo vazio — ver [_MockHttpClientRequest].
+  final bool imagem;
+
+  List<int> get _corpo => imagem ? _pngTransparente1x1 : const <int>[];
+
+  // 200 OK: faz google_fonts achar que carregou e cair em fallback Roboto sem
+  // lançar exception.
   @override
   int get statusCode => 200;
   @override
   String get reasonPhrase => 'OK';
   @override
-  int get contentLength => 0;
+  int get contentLength => _corpo.length;
   @override
   HttpHeaders get headers => _MockHeaders();
   @override
@@ -1124,7 +1154,7 @@ class _MockHttpClientResponse extends Stream<List<int>>
     void Function()? onDone,
     bool? cancelOnError,
   }) =>
-      Stream<List<int>>.value(Uint8List(0)).listen(
+      Stream<List<int>>.value(Uint8List.fromList(_corpo)).listen(
         onData,
         onError: onError,
         onDone: onDone,
@@ -1179,3 +1209,23 @@ class _MockHeaders implements HttpHeaders {
   @override
   String? value(String name) => null;
 }
+
+/// PNG 1x1 totalmente transparente.
+///
+/// É o corpo que o cliente HTTP falso devolve para qualquer requisição de
+/// imagem — tile de mapa, principalmente. Precisa ser um PNG válido de
+/// verdade: bytes arbitrários (ou nenhum) fazem o decodificador lançar
+/// "Invalid image data", e o `flutter_test` trata cada uma dessas exceções
+/// como falha do teste que estava rodando.
+const List<int> _pngTransparente1x1 = <int>[
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // assinatura PNG
+  0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR (13 bytes)
+  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, // 1x1
+  0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+  0x89,
+  0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, // IDAT (10 bytes)
+  0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05,
+  0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4,
+  0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, // IEND
+  0xAE, 0x42, 0x60, 0x82,
+];

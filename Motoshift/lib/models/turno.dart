@@ -25,6 +25,17 @@ class Turno {
   final DateTime dataFim;
   final double valorEstimado;
   final double raioEntregaKm;
+
+  /// Ponto de partida do turno. O backend devolve estes campos desde o
+  /// SCRUM-18 e o app simplesmente os descartava — por isso nenhuma tela
+  /// conseguia desenhar o turno onde ele realmente é. Nulos nos turnos
+  /// publicados antes da coordenada existir.
+  final double? latitude;
+  final double? longitude;
+
+  /// Endereço textual do ponto de partida, quando o lojista informou.
+  final String? endereco;
+
   final int vagas;             // total de vagas de entregador no turno
   final int vagasPreenchidas;  // quantas já foram aceitas
   final StatusTurno status;
@@ -53,6 +64,9 @@ class Turno {
     required this.dataFim,
     required this.valorEstimado,
     required this.raioEntregaKm,
+    this.latitude,
+    this.longitude,
+    this.endereco,
     this.vagas = 1,
     this.vagasPreenchidas = 0,
     this.status = StatusTurno.aberto,
@@ -81,6 +95,9 @@ class Turno {
       dataFim: DateTime.parse(json['dataFim'] as String),
       valorEstimado: (json['valorEstimado'] as num).toDouble(),
       raioEntregaKm: (json['raioEntregaKm'] as num).toDouble(),
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      endereco: json['endereco'] as String?,
       vagas: (json['vagas'] as num?)?.toInt() ?? 1,
       vagasPreenchidas: (json['vagasPreenchidas'] as num?)?.toInt() ?? 0,
       status: _parseStatus(json['status'] as String),
@@ -117,6 +134,12 @@ class Turno {
       'dataFim': dataFim.toIso8601String(),
       'valorEstimado': valorEstimado,
       'raioEntregaKm': raioEntregaKm,
+      // Sem estas três chaves o turno nascia sem coordenada e ficava invisível
+      // para o filtro "perto de mim" — publicar pelo app dava um turno que o
+      // entregador nunca encontrava.
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (endereco != null) 'endereco': endereco,
       'vagas': vagas,
       'status': status.name.toUpperCase(),
     };
@@ -136,6 +159,11 @@ class Turno {
 
   /// Turno que comporta mais de um entregador.
   bool get multiVaga => vagas > 1;
+
+  /// Dá para plotar este turno no mapa? A tela precisa saber disso para
+  /// mostrar o aviso certo em vez de um mapa centrado em (0, 0) — que fica no
+  /// Atlântico, na costa da África.
+  bool get temCoordenada => latitude != null && longitude != null;
 }
 
 enum StatusTurno {

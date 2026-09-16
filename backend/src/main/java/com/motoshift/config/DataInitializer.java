@@ -15,6 +15,7 @@ import com.motoshift.repository.TransacaoRepository;
 import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
+import com.motoshift.service.NotaFiscalService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -44,6 +45,7 @@ public class DataInitializer implements CommandLineRunner {
     private final TransacaoRepository transacaoRepo;
     private final AvaliacaoRepository avaliacaoRepo;
     private final TurnoInscricaoRepository inscricaoRepo;
+    private final NotaFiscalService notasFiscais;
     private final PasswordEncoder encoder;
 
     public DataInitializer(UsuarioRepository usuarioRepo,
@@ -52,6 +54,7 @@ public class DataInitializer implements CommandLineRunner {
                            TransacaoRepository transacaoRepo,
                            AvaliacaoRepository avaliacaoRepo,
                            TurnoInscricaoRepository inscricaoRepo,
+                           NotaFiscalService notasFiscais,
                            PasswordEncoder encoder) {
         this.usuarioRepo = usuarioRepo;
         this.turnoRepo = turnoRepo;
@@ -59,6 +62,7 @@ public class DataInitializer implements CommandLineRunner {
         this.transacaoRepo = transacaoRepo;
         this.avaliacaoRepo = avaliacaoRepo;
         this.inscricaoRepo = inscricaoRepo;
+        this.notasFiscais = notasFiscais;
         this.encoder = encoder;
     }
 
@@ -301,6 +305,35 @@ public class DataInitializer implements CommandLineRunner {
         // t18 → pendente pagamento + sem avaliações (combo)
         // t19 → cancelado, sem avaliação (mas evitar warning de unused)
         if (t19.getId() == null) throw new IllegalStateException("t19 não salvo");
+
+        // ── Notas fiscais ─────────────────────────────────────────────────────
+        //
+        // Só para os três primeiros concluídos. Os demais turnos finalizados
+        // ficam sem nota de propósito: é o que faz a tela "Notas fiscais" abrir
+        // com as duas metades preenchidas — o que já foi emitido e o que ainda
+        // dá para emitir — em vez de só uma delas.
+        //
+        // Passa pelo serviço, e não por um INSERT direto, para que a massa de
+        // exemplo use a mesma conta de tributos do app de verdade.
+        emitirNota(t8,  ricardo.getId());
+        emitirNota(t9,  ricardo.getId());
+        emitirNota(t10, lucas.getId());
+    }
+
+    /**
+     * Nota de um turno da massa de demonstração, emitida pelo entregador.
+     *
+     * Falha do seed não pode derrubar o boot de desenvolvimento: se a regra do
+     * serviço mudar e algum destes turnos deixar de ser elegível, o app sobe
+     * sem as notas de exemplo em vez de não subir.
+     */
+    private void emitirNota(Turno turno, Long motoboyId) {
+        try {
+            notasFiscais.emitir(turno.getId(), motoboyId, motoboyId);
+        } catch (RuntimeException e) {
+            System.out.println("[seed] nota fiscal do turno " + turno.getId()
+                    + " nao emitida: " + e.getMessage());
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

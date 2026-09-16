@@ -5,6 +5,7 @@ import '../../presentation/providers/notificacao_provider.dart';
 import '../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/iniciais.dart';
 import 'app_sidebar.dart';
 import 'app_topbar.dart';
 
@@ -49,8 +50,12 @@ class DesktopShell extends StatelessWidget {
     final usuario = auth.usuario;
     final ehLojista = usuario?.tipo == TipoUsuario.lojista;
 
-    final items =
-        ehLojista ? SidebarItems.lojista() : SidebarItems.motoboy();
+    final naoLidas = context.watch<NotificacaoProvider>().naoLidas;
+    final badge = naoLidas == 0 ? null : (naoLidas > 9 ? '9+' : '$naoLidas');
+
+    final sections = ehLojista
+        ? SidebarItems.lojista(badgeNotificacoes: badge)
+        : SidebarItems.motoboy(badgeNotificacoes: badge);
     final rotaAtual =
         selectedRoute ?? ModalRoute.of(context)?.settings.name;
 
@@ -61,11 +66,11 @@ class DesktopShell extends StatelessWidget {
       body: Row(
         children: [
           AppSidebar(
-            items: items,
+            sections: sections,
             selectedRoute: rotaAtual,
             userName: usuario?.nome ?? '',
             userSubtitle: _subtitleDoUsuario(usuario),
-            userInitials: _iniciais(usuario?.nome),
+            userInitials: iniciaisDe(usuario?.nome),
             onLogout: () => _confirmarSaida(context),
           ),
           Expanded(
@@ -86,7 +91,7 @@ class DesktopShell extends StatelessWidget {
                   onNotificationsTap: onNotificationsTap ??
                       () => Navigator.pushNamed(
                           context, AppRoutes.notificacoes),
-                  avatarInitials: _iniciais(usuario?.nome),
+                  avatarInitials: iniciaisDe(usuario?.nome),
                 ),
                 Expanded(child: body),
               ],
@@ -109,16 +114,6 @@ class DesktopShell extends StatelessWidget {
       if (usuario.veiculoModelo != null) usuario.veiculoModelo!,
     ];
     return partes.isEmpty ? usuario.email : partes.join(' · ');
-  }
-
-  /// Duas primeiras letras do primeiro nome ("CL", "RI"), como no canvas e
-  /// no avatar do header mobile.
-  String _iniciais(String? nome) {
-    final primeiro = (nome ?? '').trim().split(RegExp(r'\s+')).first;
-    if (primeiro.isEmpty) return '·';
-    return primeiro.length >= 2
-        ? primeiro.substring(0, 2).toUpperCase()
-        : primeiro.toUpperCase();
   }
 
   Future<void> _confirmarSaida(BuildContext context) async {

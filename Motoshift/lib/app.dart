@@ -26,6 +26,7 @@ import 'views/dados_pessoais/dados_pessoais_screen.dart';
 import 'views/cnh_veiculo/cnh_veiculo_screen.dart';
 import 'views/minhas_avaliacoes/minhas_avaliacoes_screen.dart';
 import 'views/historico_turnos/historico_turnos_screen.dart';
+import 'views/notas_fiscais/notas_fiscais_screen.dart';
 import 'views/notificacoes/notificacoes_screen.dart';
 import 'views/saldo_lojista/saldo_lojista_screen.dart';
 import 'views/avaliar_entregadores/avaliar_entregadores_screen.dart';
@@ -128,6 +129,10 @@ class MotoShiftApp extends StatelessWidget {
           AppRoutes.perfil:    (_) => const AuthGuard(child: PerfilScreen()),
           AppRoutes.notificacoes:
               (_) => const AuthGuard(child: NotificacoesScreen()),
+          // Sem papel: a nota tem dois lados, e cada um vê a mesma tela do
+          // seu. O backend recorta pelo usuário do token.
+          AppRoutes.notasFiscais:
+              (_) => const AuthGuard(child: NotasFiscaisScreen()),
           AppRoutes.saldoLojista: (_) => const AuthGuard(
                 papel: TipoUsuario.lojista,
                 child: SaldoLojistaScreen(),

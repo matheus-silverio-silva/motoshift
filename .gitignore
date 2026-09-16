@@ -31,7 +31,10 @@
 **/*.logs
 **/hs_err_pid*
 **/.mvn/wrapper/maven-wrapper.jar
-**/mvnw
+# mvnw NAO entra aqui: e o script que o CI (ubuntu) executa. Ignorado, so o
+# mvnw.cmd chegava ao repositorio e o job do backend morria em
+# "chmod: cannot access './mvnw'" antes de compilar. O .gitattributes ja
+# fixa eol=lf para ele.
 **/gradlew
 
 # Arquivos de ambiente com credenciais reais
