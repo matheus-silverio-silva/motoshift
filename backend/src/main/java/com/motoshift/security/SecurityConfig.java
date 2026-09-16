@@ -54,9 +54,11 @@ public class SecurityConfig {
 
     /**
      * Origens permitidas no CORS. Em dev o curinga é conveniente; em produção
-     * defina MOTOSHIFT_CORS_ORIGINS com a URL do front no Railway.
+     * MOTOSHIFT_CORS_ORIGINS é obrigatória (ver application-prod.properties).
+     * Sem default aqui também: um "*" escondido na anotação desfaria a trava
+     * do arquivo de propriedades.
      */
-    @Value("${motoshift.cors.origins:*}")
+    @Value("${motoshift.cors.origins}")
     private String origens;
 
     public SecurityConfig(JwtAuthFilter jwtFilter, RespostaDeErro erros) {

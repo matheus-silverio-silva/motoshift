@@ -165,7 +165,7 @@ Roda com o perfil `prod` (PostgreSQL). Variáveis principais:
 | `JWT_SECRET` | **sim** | Segredo de assinatura dos tokens, mínimo 32 caracteres. Sem ele o boot falha de propósito — melhor não subir do que assinar token com a chave de exemplo do repositório. Trocar o valor invalida os tokens emitidos, ou seja, desloga todo mundo |
 | `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | sim | Conexão com o PostgreSQL (o plugin do Railway já as injeta) |
 | `ANTHROPIC_API_KEY` | sim | Chave da API Anthropic para as funcionalidades de IA |
-| `MOTOSHIFT_CORS_ORIGINS` | não | Origens liberadas no CORS, separadas por vírgula (ex.: `https://motoshift.up.railway.app`). O padrão `*` libera qualquer origem |
+| `MOTOSHIFT_CORS_ORIGINS` | **sim** | Origens liberadas no CORS, separadas por vírgula (ex.: `https://motoshift.up.railway.app`). Sem default: o antigo `*` liberava qualquer origem quando a variável era esquecida. Agora o boot falha, o healthcheck do Railway recusa o deploy e a versão anterior continua no ar |
 | `JWT_EXPIRACAO_HORAS` | não | Validade do token; padrão 168 (7 dias) |
 | `PORT` | não | Porta do servidor (injetada automaticamente pelo Railway) |
 

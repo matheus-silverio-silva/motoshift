@@ -23,6 +23,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -55,6 +56,24 @@ class AuthServiceTest {
         usuarioValido.setSenha(encoder.encode("senha123"));
         usuarioValido.setNome("Carlos Mendes");
         usuarioValido.setTipo("motoboy");
+
+        // O contador do RF01 mora no banco e e escrito por UPDATE direto. Com o
+        // repositorio mockado, estes stubs fazem o papel do banco: aplicam o
+        // UPDATE na mesma instancia que o findByEmail devolve.
+        lenient().doAnswer(inv -> {
+            usuarioValido.setTentativasLogin(usuarioValido.getTentativasLogin() + 1);
+            return 1;
+        }).when(repo).registrarFalhaDeLogin(1L);
+        lenient().doAnswer(inv -> {
+            usuarioValido.setTentativasLogin(0);
+            usuarioValido.setBloqueadoAte(inv.getArgument(1));
+            return 1;
+        }).when(repo).bloquearLogin(eq(1L), any());
+        lenient().doAnswer(inv -> {
+            usuarioValido.setTentativasLogin(0);
+            usuarioValido.setBloqueadoAte(null);
+            return 1;
+        }).when(repo).liberarLogin(1L);
     }
 
     @Test
@@ -211,23 +230,62 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("Conta legada em texto puro entra e tem a senha migrada para hash")
-    void login_senhaLegadaEmTextoPuro_migraParaHash() {
-        // O banco de producao foi semeado antes do BCrypt. Barrar essas contas
-        // trocaria um problema de seguranca por um de acesso.
+    @DisplayName("Senha em texto puro no banco nao entra mais — o login so conhece BCrypt")
+    void login_senhaEmTextoPuro_naoConfere() {
+        // Havia um ramo que comparava a senha em claro e a migrava. A V9
+        // converteu as contas antigas no banco e o ramo saiu: se sobrar uma
+        // linha assim, ela nao autentica, e nada e regravado pelo login.
         Usuario legado = new Usuario();
         ReflectionTestUtils.setField(legado, "id", 2L);
         legado.setEmail("legado@teste.com");
-        legado.setSenha("senha123"); // texto puro, como esta no banco antigo
+        legado.setSenha("senha123");
         legado.setTipo("motoboy");
 
         when(repo.findByEmail("legado@teste.com")).thenReturn(Optional.of(legado));
 
-        AuthResponse resp = authService.login(buildLoginRequest("legado@teste.com", "senha123"));
+        assertThatExceptionOfType(ResponseStatusException.class)
+                .isThrownBy(() -> authService.login(buildLoginRequest("legado@teste.com", "senha123")))
+                .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(401));
 
-        assertThat(resp.getToken()).isNotBlank();
-        assertThat(legado.getSenha()).startsWith("$2a$");
-        verify(repo).save(legado);
+        assertThat(legado.getSenha()).isEqualTo("senha123");
+        verify(repo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("RF01 — e-mail sem conta nao gera contador nem bloqueio")
+    void login_emailInexistente_naoGuardaEstado() {
+        when(repo.findByEmail(anyString())).thenReturn(Optional.empty());
+
+        // O mapa antigo criava uma entrada por e-mail digitado. Agora, sem
+        // conta, nao ha onde (nem por que) contar.
+        for (int i = 0; i < 10; i++) {
+            assertThatExceptionOfType(ResponseStatusException.class)
+                    .isThrownBy(() -> authService.login(buildLoginRequest("inventado@x.com", "a")))
+                    .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(401));
+        }
+
+        verify(repo, never()).registrarFalhaDeLogin(any());
+        verify(repo, never()).bloquearLogin(any(), any());
+    }
+
+    @Test
+    @DisplayName("RF01 — o bloqueio vem do banco: outra instancia do servico tambem barra")
+    void login_bloqueioSobreviveANovaInstancia() {
+        when(repo.findByEmail("motoboy@teste.com")).thenReturn(Optional.of(usuarioValido));
+        LoginRequest errado = buildLoginRequest("motoboy@teste.com", "senhaErrada");
+
+        for (int i = 0; i < 5; i++) {
+            try { authService.login(errado); } catch (ResponseStatusException ignored) {}
+        }
+
+        // "Restart": um AuthService novo, sem nenhum estado em memoria. Com o
+        // mapa antigo este login passaria; o bloqueio estava so no objeto velho.
+        AuthService depoisDoDeploy = new AuthService(repo, carteiras, encoder, new JwtService("", 168));
+        LoginRequest certo = buildLoginRequest("motoboy@teste.com", "senha123");
+
+        assertThatExceptionOfType(ResponseStatusException.class)
+                .isThrownBy(() -> depoisDoDeploy.login(certo))
+                .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(429));
     }
 
     @Test

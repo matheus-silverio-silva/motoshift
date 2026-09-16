@@ -124,7 +124,30 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- PostgreSQL de verdade nos testes, sem Docker: baixa o binario como
+             artefato Maven e sobe um servidor local por execucao. E o que
+             permite rodar as migracoes Flyway (SQL PostgreSQL, que o H2 nao
+             executa) e o ddl-auto=validate antes do deploy, e nao no deploy. -->
+        <dependency>
+            <groupId>io.zonky.test</groupId>
+            <artifactId>embedded-postgres</artifactId>
+            <version>2.0.7</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Versao do PostgreSQL dos testes. Acompanhar a major do Railway. -->
+            <dependency>
+                <groupId>io.zonky.test.postgres</groupId>
+                <artifactId>embedded-postgres-binaries-bom</artifactId>
+                <version>16.4.0</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
         <plugins>

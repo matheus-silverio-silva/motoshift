@@ -66,8 +66,12 @@ class Usuario {
     return Usuario(
       id: json['id'] as int?,
       nome: json['nome'] as String,
-      email: json['email'] as String,
-      telefone: json['telefone'] as String,
+      // Perfil de OUTRA conta chega reduzido (PerfilPublicoResponse no
+      // backend): sem e-mail, telefone, documento, CNH nem endereço. Com
+      // `as String` direto, `null as String` lançava TypeError e a tela do
+      // turno caía no "Motoboy #id" em vez de mostrar o nome.
+      email: json['email'] as String? ?? '',
+      telefone: json['telefone'] as String? ?? '',
       tipo: TipoUsuario.values.byName((json['tipo'] as String).toLowerCase()),
       documentoFederal: json['documentoFederal'] as String?,
       fotoPerfil: json['fotoPerfil'] as String?,
