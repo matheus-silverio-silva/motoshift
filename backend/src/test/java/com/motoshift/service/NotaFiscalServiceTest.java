@@ -214,7 +214,8 @@ class NotaFiscalServiceTest {
         u.setNome(nome);
         // E-mail único por execução: a coluna tem restrição de unicidade e o
         // @BeforeEach roda uma vez por teste.
-        u.setEmail("nf-" + System.nanoTime() + "@teste.com");
+        // Fora do sufixo da massa de demonstracao, que o reset apagaria.
+        u.setEmail("nf-" + System.nanoTime() + "@notafiscal.test");
         u.setSenha("nao-usado-neste-teste");
         u.setTelefone("41999990000");
         u.setTipo(tipo);

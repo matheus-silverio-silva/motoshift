@@ -49,7 +49,7 @@ Pacote raiz: `com.motoshift`. Arquitetura em camadas clássica:
 | **Repository** | `repository/` | Acesso a dados (Spring Data JPA) |
 | **Entity** | `entity/` | Tabelas do banco (`Usuario`, `Turno`, `Carteira`, `Transacao`, `Avaliacao`) |
 | **DTO** | `dto/` | Objetos de transferência (separa API do modelo interno) |
-| **Config** | `config/` | `DataInitializer` (seed de dados de teste) |
+| **Config** | `config/` | `MassaDemonstracao` (massa de teste: `popular()` e `resetar()`), `DataInitializer` (gatilho em dev) e `ResetDaMassaNoBoot` (reset com trava em qualquer ambiente) |
 
 **Fluxo de uma requisição** (ex: aceitar turno):
 `PUT /api/turnos/{id}/aceitar` → `TurnoController` → `TurnoService.aceitar()`
