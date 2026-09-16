@@ -2,8 +2,11 @@ package com.motoshift.service;
 
 import com.motoshift.dto.CarteiraResponse;
 import com.motoshift.entity.Carteira;
+import com.motoshift.entity.StatusTransacao;
+import com.motoshift.entity.TipoTransacao;
 import com.motoshift.entity.Transacao;
 import com.motoshift.repository.CarteiraRepository;
+import com.motoshift.repository.GanhoMensal;
 import com.motoshift.repository.TransacaoRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,8 +19,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -51,38 +54,24 @@ class CarteiraServiceTest {
         return c;
     }
 
-    private Transacao transacao(String tipo, String status, String valor,
-                                LocalDateTime quando) {
-        Transacao t = new Transacao();
-        t.setUsuarioId(7L);
-        t.setTipo(tipo);
-        t.setStatus(status);
-        t.setValor(new BigDecimal(valor));
-        // criadoEm so e preenchido no @PrePersist; nos testes vai na mao.
-        org.springframework.test.util.ReflectionTestUtils
-                .setField(t, "criadoEm", quando);
-        return t;
-    }
-
     // ── ganhosDoMes ──────────────────────────────────────────────────────────
 
     @Test
     @DisplayName("ganhosDoMes so soma o que ja foi liquidado — pendente nao e ganho")
     void ganhosDoMes_filtraPorStatus() {
-        ArgumentCaptor<Collection<String>> status = statusCaptor();
+        ArgumentCaptor<StatusTransacao> status = ArgumentCaptor.forClass(StatusTransacao.class);
 
-        when(transacaoRepo.somarPorTipoDesde(eq(7L), any(), status.capture(), any()))
+        when(transacaoRepo.somarPorTipoDesde(eq(7L), eq(TipoTransacao.PAGAMENTO_RECEBIDO),
+                status.capture(), any()))
                 .thenReturn(new BigDecimal("220.00"));
 
         BigDecimal ganhos = service.ganhosDoMes(7L);
 
-        // O bug: a transacao de tipo "turno" nasce PENDENTE na finalizacao do
-        // turno, muito antes do pagamento. Somar sem filtrar status mostrava ao
+        // O bug: o pagamento de turno nasce PENDENTE na finalizacao do turno,
+        // muito antes de ser pago. Somar sem filtrar status mostrava ao
         // entregador dinheiro que ele ainda nao recebeu — R$ 120 de "ganhos do
         // mes" com o saldo em R$ 0.
-        assertThat(status.getValue())
-                .containsExactlyInAnyOrder("processado", "concluido")
-                .doesNotContain("pendente");
+        assertThat(status.getValue()).isEqualTo(StatusTransacao.CONCLUIDO);
         assertThat(ganhos).isEqualByComparingTo("220.00");
     }
 
@@ -125,16 +114,35 @@ class CarteiraServiceTest {
         Carteira c = carteiraCom(new BigDecimal("320.00"), "ricardo@pix.com");
         when(carteiraRepo.findByUsuarioId(7L)).thenReturn(Optional.of(c));
 
-        Map<String, Object> resp = service.saque(7L, new BigDecimal("100.00"));
+        Map<String, Object> resp = service.saque(7L, new BigDecimal("100.00"), null);
 
         assertThat(c.getSaldoDisponivel()).isEqualByComparingTo("220.00");
         assertThat(resp.get("novoSaldo")).isEqualTo(new BigDecimal("220.00"));
 
         ArgumentCaptor<Transacao> tx = ArgumentCaptor.forClass(Transacao.class);
-        verify(transacaoRepo).save(tx.capture());
-        assertThat(tx.getValue().getTipo()).isEqualTo("saque");
-        assertThat(tx.getValue().getStatus()).isEqualTo("concluido");
+        verify(transacaoRepo).saveAndFlush(tx.capture());
+        assertThat(tx.getValue().getTipo()).isEqualTo(TipoTransacao.SAQUE);
+        assertThat(tx.getValue().getStatus()).isEqualTo(StatusTransacao.CONCLUIDO);
         assertThat(tx.getValue().getUsuarioId()).isEqualTo(7L);
+        // Sem header do cliente a chave e aleatoria — mas nunca vazia.
+        assertThat(tx.getValue().getIdempotencyKey()).startsWith("saque:");
+    }
+
+    @Test
+    @DisplayName("saque repetido com a mesma Idempotency-Key nao debita de novo")
+    void saque_mesmaChave_naoDebitaDuasVezes() {
+        Carteira c = carteiraCom(new BigDecimal("320.00"), "ricardo@pix.com");
+        when(carteiraRepo.findByUsuarioId(7L)).thenReturn(Optional.of(c));
+        when(transacaoRepo.existsByIdempotencyKey("saque:7:toque-1"))
+                .thenReturn(false)   // primeiro pedido
+                .thenReturn(true);   // o duplo toque chega depois
+
+        service.saque(7L, new BigDecimal("100.00"), "toque-1");
+        Map<String, Object> repetido = service.saque(7L, new BigDecimal("100.00"), "toque-1");
+
+        assertThat(c.getSaldoDisponivel()).isEqualByComparingTo("220.00");
+        assertThat(repetido.get("novoSaldo")).isEqualTo(new BigDecimal("220.00"));
+        verify(transacaoRepo, times(1)).saveAndFlush(any());
     }
 
     @Test
@@ -147,13 +155,13 @@ class CarteiraServiceTest {
         when(carteiraRepo.findByUsuarioId(7L)).thenReturn(Optional.of(c));
 
         assertThatNoException()
-                .isThrownBy(() -> service.saque(7L, new BigDecimal("20.000")));
+                .isThrownBy(() -> service.saque(7L, new BigDecimal("20.000"), null));
     }
 
     @Test
     @DisplayName("saque abaixo do minimo e recusado")
     void saque_abaixoDoMinimo() {
-        assertThatThrownBy(() -> service.saque(7L, new BigDecimal("19.99")))
+        assertThatThrownBy(() -> service.saque(7L, new BigDecimal("19.99"), null))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("mínimo");
 
@@ -166,12 +174,12 @@ class CarteiraServiceTest {
         Carteira c = carteiraCom(new BigDecimal("500.00"), null);
         when(carteiraRepo.findByUsuarioId(7L)).thenReturn(Optional.of(c));
 
-        assertThatThrownBy(() -> service.saque(7L, new BigDecimal("100.00")))
+        assertThatThrownBy(() -> service.saque(7L, new BigDecimal("100.00"), null))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Pix");
 
         assertThat(c.getSaldoDisponivel()).isEqualByComparingTo("500.00");
-        verify(transacaoRepo, never()).save(any());
+        verify(transacaoRepo, never()).saveAndFlush(any());
     }
 
     @Test
@@ -182,12 +190,12 @@ class CarteiraServiceTest {
         when(carteiraRepo.findByUsuarioId(7L)).thenReturn(Optional.of(c));
 
         // Patrimonio total 550, disponivel 50: sacar 100 tem que falhar.
-        assertThatThrownBy(() -> service.saque(7L, new BigDecimal("100.00")))
+        assertThatThrownBy(() -> service.saque(7L, new BigDecimal("100.00"), null))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("insuficiente");
 
         assertThat(c.getSaldoBloqueado()).isEqualByComparingTo("500.00");
-        verify(transacaoRepo, never()).save(any());
+        verify(transacaoRepo, never()).saveAndFlush(any());
     }
 
     @Test
@@ -195,7 +203,7 @@ class CarteiraServiceTest {
     void saque_carteiraInexistente() {
         when(carteiraRepo.findByUsuarioId(7L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.saque(7L, new BigDecimal("100.00")))
+        assertThatThrownBy(() -> service.saque(7L, new BigDecimal("100.00"), null))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
@@ -204,7 +212,7 @@ class CarteiraServiceTest {
     @Test
     @DisplayName("saque sem valor da 400")
     void saque_valorNulo() {
-        assertThatThrownBy(() -> service.saque(7L, null))
+        assertThatThrownBy(() -> service.saque(7L, null, null))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
@@ -213,38 +221,36 @@ class CarteiraServiceTest {
     // ── grafico ──────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("grafico agrupa por mes e devolve uma entrada por mes pedido")
-    void grafico_agrupaPorMes() {
-        LocalDateTime agora = LocalDateTime.now();
-        when(transacaoRepo.findByUsuarioIdAndTipoInAndStatusInOrderByCriadoEmDesc(
-                eq(7L), any(), any()))
-                .thenReturn(List.of(
-                        transacao("turno", "concluido", "120.00", agora),
-                        transacao("turno", "concluido", "100.00", agora)));
+    @DisplayName("grafico devolve uma entrada por mes pedido, com zero onde o banco nao somou nada")
+    void grafico_preencheOsMeses() {
+        LocalDate hoje = LocalDate.now();
+        when(transacaoRepo.somarPorMesDesde(eq(7L), any(), any(), any()))
+                .thenReturn(List.of(new GanhoMensal(
+                        hoje.getYear(), hoje.getMonthValue(), new BigDecimal("220.00"))));
 
         List<Map<String, Object>> serie = service.grafico(7L, 3);
 
         assertThat(serie).hasSize(3);
-        // O ultimo item e o mes corrente, onde estao as duas transacoes.
+        // O ultimo item e o mes corrente, o unico que o banco devolveu.
         assertThat(serie.get(2).get("ganhos")).isEqualTo(new BigDecimal("220.00"));
         assertThat((BigDecimal) serie.get(0).get("ganhos"))
                 .isEqualByComparingTo(BigDecimal.ZERO);
     }
 
     @Test
-    @DisplayName("grafico usa o mesmo corte de status do ganhosDoMes")
-    void grafico_filtraPorStatus() {
-        ArgumentCaptor<Collection<String>> status = statusCaptor();
-        when(transacaoRepo.findByUsuarioIdAndTipoInAndStatusInOrderByCriadoEmDesc(
-                eq(7L), any(), status.capture()))
+    @DisplayName("grafico usa o mesmo corte de tipo e status do ganhosDoMes, desde o 1o mes pedido")
+    void grafico_mesmoCorte() {
+        ArgumentCaptor<LocalDateTime> desde = ArgumentCaptor.forClass(LocalDateTime.class);
+        when(transacaoRepo.somarPorMesDesde(eq(7L), eq(CarteiraService.TIPO_GANHO),
+                eq(CarteiraService.STATUS_LIQUIDADO), desde.capture()))
                 .thenReturn(List.of());
 
         service.grafico(7L, 6);
 
         // O grafico e a serie historica do mesmo numero do dashboard: se um
         // filtrar pendente e o outro nao, as duas leituras discordam.
-        assertThat(status.getValue())
-                .containsExactlyInAnyOrderElementsOf(CarteiraService.STATUS_LIQUIDADO);
+        LocalDate esperado = LocalDate.now().minusMonths(5).withDayOfMonth(1);
+        assertThat(desde.getValue()).isEqualTo(esperado.atStartOfDay());
     }
 
     // ── obterOuCriar / buscar ────────────────────────────────────────────────
@@ -282,10 +288,5 @@ class CarteiraServiceTest {
         assertThat(resp.getMotoboyId()).isEqualTo(7L);
         assertThat(resp.getUsuarioId()).isEqualTo(7L);
         assertThat(resp.getSaldoAtual()).isEqualByComparingTo("10.00");
-    }
-
-    @SuppressWarnings("unchecked")
-    private ArgumentCaptor<Collection<String>> statusCaptor() {
-        return ArgumentCaptor.forClass((Class<Collection<String>>) (Class<?>) Collection.class);
     }
 }

@@ -2,7 +2,9 @@ package com.motoshift.config;
 
 import com.motoshift.entity.StatusInscricao;
 import com.motoshift.entity.StatusPagamento;
+import com.motoshift.entity.StatusTransacao;
 import com.motoshift.entity.StatusTurno;
+import com.motoshift.entity.TipoTransacao;
 import com.motoshift.entity.Avaliacao;
 import com.motoshift.entity.Carteira;
 import com.motoshift.entity.Transacao;
@@ -16,6 +18,7 @@ import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
 import com.motoshift.service.NotaFiscalService;
+import com.motoshift.service.PagamentoTurnoService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -252,32 +255,32 @@ public class DataInitializer implements CommandLineRunner {
         //   - pagamentoStatus PAGO      → tx "processado"
         //   - pagamentoStatus PENDENTE  → tx "pendente"
 
-        criarTransacao(ricardo.getId(), t8.getId(),  "turno", 120.00,
-                "Turno concluído - Hamburgueria da Cláudia", "processado");
-        criarTransacao(ricardo.getId(), t9.getId(),  "turno", 100.00,
-                "Turno concluído - Pizzaria do Fernando", "processado");
-        criarTransacao(ricardo.getId(), t13.getId(), "turno",  95.00,
-                "Turno concluído - Farmácia Ana", "processado");
-        criarTransacao(ricardo.getId(), t15.getId(), "turno", 125.00,
-                "Turno aguardando pagamento - Hamburgueria da Cláudia", "pendente");
-        criarTransacao(ricardo.getId(), null,        "saque", 200.00,
-                "Transferência Pix — ricardo@pix.com", "concluido");
+        criarTransacao(ricardo.getId(), t8.getId(),  TipoTransacao.PAGAMENTO_RECEBIDO, 120.00,
+                "Turno concluído - Hamburgueria da Cláudia", StatusTransacao.CONCLUIDO);
+        criarTransacao(ricardo.getId(), t9.getId(),  TipoTransacao.PAGAMENTO_RECEBIDO, 100.00,
+                "Turno concluído - Pizzaria do Fernando", StatusTransacao.CONCLUIDO);
+        criarTransacao(ricardo.getId(), t13.getId(), TipoTransacao.PAGAMENTO_RECEBIDO,  95.00,
+                "Turno concluído - Farmácia Ana", StatusTransacao.CONCLUIDO);
+        criarTransacao(ricardo.getId(), t15.getId(), TipoTransacao.PAGAMENTO_RECEBIDO, 125.00,
+                "Turno aguardando pagamento - Hamburgueria da Cláudia", StatusTransacao.PENDENTE);
+        criarTransacao(ricardo.getId(), null,        TipoTransacao.SAQUE, 200.00,
+                "Transferência Pix — ricardo@pix.com", StatusTransacao.CONCLUIDO);
 
-        criarTransacao(lucas.getId(),  t10.getId(), "turno", 110.00,
-                "Turno concluído - Farmácia Ana", "processado");
-        criarTransacao(lucas.getId(),  t12.getId(), "turno", 100.00,
-                "Turno concluído - Pizzaria do Fernando", "processado");
-        criarTransacao(lucas.getId(),  t14.getId(), "turno", 130.00,
-                "Turno concluído - Hamburgueria da Cláudia", "processado");
-        criarTransacao(lucas.getId(),  t17.getId(), "turno", 110.00,
-                "Turno aguardando pagamento - Farmácia Ana", "pendente");
+        criarTransacao(lucas.getId(),  t10.getId(), TipoTransacao.PAGAMENTO_RECEBIDO, 110.00,
+                "Turno concluído - Farmácia Ana", StatusTransacao.CONCLUIDO);
+        criarTransacao(lucas.getId(),  t12.getId(), TipoTransacao.PAGAMENTO_RECEBIDO, 100.00,
+                "Turno concluído - Pizzaria do Fernando", StatusTransacao.CONCLUIDO);
+        criarTransacao(lucas.getId(),  t14.getId(), TipoTransacao.PAGAMENTO_RECEBIDO, 130.00,
+                "Turno concluído - Hamburgueria da Cláudia", StatusTransacao.CONCLUIDO);
+        criarTransacao(lucas.getId(),  t17.getId(), TipoTransacao.PAGAMENTO_RECEBIDO, 110.00,
+                "Turno aguardando pagamento - Farmácia Ana", StatusTransacao.PENDENTE);
 
-        criarTransacao(thiago.getId(), t11.getId(), "turno", 120.00,
-                "Turno concluído - Hamburgueria da Cláudia", "processado");
-        criarTransacao(thiago.getId(), t16.getId(), "turno",  95.00,
-                "Turno aguardando pagamento - Pizzaria do Fernando", "pendente");
-        criarTransacao(thiago.getId(), t18.getId(), "turno", 140.00,
-                "Turno aguardando pagamento - Hamburgueria da Cláudia", "pendente");
+        criarTransacao(thiago.getId(), t11.getId(), TipoTransacao.PAGAMENTO_RECEBIDO, 120.00,
+                "Turno concluído - Hamburgueria da Cláudia", StatusTransacao.CONCLUIDO);
+        criarTransacao(thiago.getId(), t16.getId(), TipoTransacao.PAGAMENTO_RECEBIDO,  95.00,
+                "Turno aguardando pagamento - Pizzaria do Fernando", StatusTransacao.PENDENTE);
+        criarTransacao(thiago.getId(), t18.getId(), TipoTransacao.PAGAMENTO_RECEBIDO, 140.00,
+                "Turno aguardando pagamento - Hamburgueria da Cláudia", StatusTransacao.PENDENTE);
 
         // ── Avaliações ────────────────────────────────────────────────────────
 
@@ -525,8 +528,8 @@ public class DataInitializer implements CommandLineRunner {
                 valor, raio, StatusTurno.CANCELADO);
     }
 
-    private void criarTransacao(Long usuarioId, Long turnoId, String tipo,
-                                 double valor, String descricao, String status) {
+    private void criarTransacao(Long usuarioId, Long turnoId, TipoTransacao tipo,
+                                 double valor, String descricao, StatusTransacao status) {
         Transacao tx = new Transacao();
         tx.setUsuarioId(usuarioId);
         tx.setTurnoId(turnoId);
@@ -534,6 +537,9 @@ public class DataInitializer implements CommandLineRunner {
         tx.setValor(BigDecimal.valueOf(valor));
         tx.setDescricao(descricao);
         tx.setStatus(status);
+        tx.setIdempotencyKey(turnoId != null
+                ? PagamentoTurnoService.chaveDoPagamento(turnoId, usuarioId)
+                : "saque:" + java.util.UUID.randomUUID());
         transacaoRepo.save(tx);
     }
 

@@ -2,8 +2,10 @@ package com.motoshift.service;
 
 import com.motoshift.dto.TurnoResponse;
 import com.motoshift.entity.StatusPagamento;
+import com.motoshift.entity.StatusTransacao;
 import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Carteira;
+import com.motoshift.entity.TipoTransacao;
 import com.motoshift.entity.Transacao;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.TurnoInscricao;
@@ -37,9 +39,7 @@ import java.util.stream.Collectors;
  * aceitos antes do sistema de vagas — toda regra de dinheiro escrita duas
  * vezes. A V5 fez o backfill (uma inscricao para cada turno com entregador) e
  * este servico passou a exigir a inscricao: sem ela e erro, nao rota alternativa.
- *
- * As colunas lojista_confirmou_em/motoboy_confirmou_em do Turno ainda existem,
- * mas ninguem mais as escreve; a V6 as remove num deploy posterior.
+ * A V6 removeu do Turno as colunas de confirmacao que o fallback usava.
  */
 @Service
 public class PagamentoTurnoService {
@@ -122,6 +122,18 @@ public class PagamentoTurnoService {
     }
 
     /**
+     * Chave de idempotencia do pagamento de um entregador num turno.
+     *
+     * Deterministica de proposito: e a mesma divida sempre que o par turno +
+     * entregador se repete, entao uma segunda finalizacao nao cria uma segunda
+     * divida, e a liquidacao encontra o lancamento pela chave em vez de varrer
+     * o extrato. A V10 usou este mesmo formato no backfill das linhas antigas.
+     */
+    public static String chaveDoPagamento(Long turnoId, Long motoboyId) {
+        return "pagamento_turno:" + turnoId + ":" + motoboyId;
+    }
+
+    /**
      * Transacao pendente do entregador naquele turno.
      *
      * Publico porque quem finaliza o turno e o {@link TurnoService}, e a
@@ -129,16 +141,18 @@ public class PagamentoTurnoService {
      */
     public void criarTransacaoPendente(Turno turno, Long motoboyId) {
         if (motoboyId == null) return;
+        String chave = chaveDoPagamento(turno.getId(), motoboyId);
+        if (transacaoRepo.existsByIdempotencyKey(chave)) return;
+
         Transacao tx = new Transacao();
         tx.setUsuarioId(motoboyId);
         tx.setContraparteId(turno.getLojistId());
         tx.setTurnoId(turno.getId());
-        tx.setTipo("turno");
+        tx.setTipo(TipoTransacao.PAGAMENTO_RECEBIDO);
         tx.setValor(turno.getValorEstimado());
         tx.setDescricao("Turno finalizado: " + turno.getTitulo());
-        // Transacao.status e outro dominio (pendente|processado|concluido) e
-        // segue como String — nao confundir com StatusPagamento.
-        tx.setStatus("pendente");
+        tx.setStatus(StatusTransacao.PENDENTE);
+        tx.setIdempotencyKey(chave);
         transacaoRepo.save(tx);
     }
 
@@ -152,7 +166,7 @@ public class PagamentoTurnoService {
         ins.setPagamentoStatus(StatusPagamento.PAGO);
         inscricaoRepo.save(ins);
         creditarCarteira(ins.getMotoboyId(), turno.getValorEstimado());
-        marcarTransacaoProcessada(ins.getMotoboyId(), turno.getId());
+        concluirTransacao(turno, ins.getMotoboyId());
 
         notificacoes.criar(ins.getMotoboyId(), "pagamento_confirmado",
                 "Pagamento confirmado",
@@ -223,16 +237,30 @@ public class PagamentoTurnoService {
         carteiraRepo.save(carteira);
     }
 
-    // Marca a transação pendente daquele motoboy/turno como processada.
-    private void marcarTransacaoProcessada(Long motoboyId, Long turnoId) {
+    /**
+     * Conclui a divida daquele entregador naquele turno.
+     *
+     * Antes carregava o extrato inteiro do entregador e procurava a pendente
+     * comparando strings. Agora vai direto pela chave. Se a pendente nao
+     * existir — linha antiga que o backfill da V10 nao conseguiu chavear —, o
+     * lancamento e criado ja concluido: o saldo acabou de ser creditado, e todo
+     * credito precisa aparecer no extrato.
+     */
+    private void concluirTransacao(Turno turno, Long motoboyId) {
         if (motoboyId == null) return;
-        transacaoRepo.findByUsuarioIdOrderByCriadoEmDesc(motoboyId)
-                .stream()
-                .filter(t -> turnoId.equals(t.getTurnoId()) && "pendente".equals(t.getStatus()))
-                .findFirst()
-                .ifPresent(tx -> {
-                    tx.setStatus("processado");
-                    transacaoRepo.save(tx);
-                });
+        Transacao tx = transacaoRepo.findByIdempotencyKey(chaveDoPagamento(turno.getId(), motoboyId))
+                .orElse(null);
+
+        if (tx == null) {
+            log.warn("[pagamento] turno {} sem lancamento pendente para o motoboy {}; "
+                    + "registrando o credito ja concluido", turno.getId(), motoboyId);
+            criarTransacaoPendente(turno, motoboyId);
+            tx = transacaoRepo.findByIdempotencyKey(chaveDoPagamento(turno.getId(), motoboyId))
+                    .orElseThrow();
+        }
+        if (tx.getStatus() == StatusTransacao.PENDENTE) {
+            tx.setStatus(StatusTransacao.CONCLUIDO);
+            transacaoRepo.save(tx);
+        }
     }
 }

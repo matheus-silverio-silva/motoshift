@@ -3,10 +3,14 @@ package com.motoshift.service;
 import com.motoshift.entity.Carteira;
 import com.motoshift.entity.StatusInscricao;
 import com.motoshift.entity.StatusPagamento;
+import com.motoshift.entity.StatusTransacao;
 import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
+import com.motoshift.entity.TipoTransacao;
+import com.motoshift.entity.Transacao;
 import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.repository.CarteiraRepository;
+import com.motoshift.repository.TransacaoRepository;
 import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -48,6 +52,7 @@ class PagamentoSemLegadoTest {
     @Autowired private TurnoRepository turnoRepo;
     @Autowired private TurnoInscricaoRepository inscricaoRepo;
     @Autowired private CarteiraRepository carteiraRepo;
+    @Autowired private TransacaoRepository transacaoRepo;
 
     @Test
     @DisplayName("as duas confirmações liquidam a inscrição e creditam a carteira")
@@ -68,6 +73,31 @@ class PagamentoSemLegadoTest {
         assertThat(turnoRelido.getPagamentoStatus()).isEqualTo(StatusPagamento.PAGO);
 
         assertThat(saldoDe(MOTOBOY)).isEqualByComparingTo(saldoAntes.add(new BigDecimal("120.00")));
+    }
+
+    @Test
+    @DisplayName("finalizar gera a dívida com chave; liquidar conclui a MESMA transação, sem duplicar")
+    void dividaEncontradaPelaChave() {
+        Turno turno = turnoFinalizado(MOTOBOY);
+        inscricaoPendente(turno, MOTOBOY);
+        String chave = PagamentoTurnoService.chaveDoPagamento(turno.getId(), MOTOBOY);
+
+        pagamentos.criarTransacaoPendente(turno, MOTOBOY);
+        // Uma segunda finalização do mesmo par não cria segunda dívida.
+        pagamentos.criarTransacaoPendente(turno, MOTOBOY);
+
+        Transacao pendente = transacaoRepo.findByIdempotencyKey(chave).orElseThrow();
+        assertThat(pendente.getStatus()).isEqualTo(StatusTransacao.PENDENTE);
+        assertThat(pendente.getTipo()).isEqualTo(TipoTransacao.PAGAMENTO_RECEBIDO);
+
+        pagamentos.confirmarPagamentoLojista(turno.getId(), LOJISTA, MOTOBOY);
+        pagamentos.confirmarRecebimentoMotoboy(turno.getId(), MOTOBOY);
+
+        Transacao concluida = transacaoRepo.findById(pendente.getId()).orElseThrow();
+        assertThat(concluida.getStatus()).isEqualTo(StatusTransacao.CONCLUIDO);
+        assertThat(transacaoRepo.findByUsuarioIdOrderByCriadoEmDesc(MOTOBOY))
+                .filteredOn(t -> turno.getId().equals(t.getTurnoId()))
+                .hasSize(1);
     }
 
     @Test

@@ -9,8 +9,10 @@ import java.time.LocalDateTime;
  * Um turno pode ter várias vagas (campo {@code vagas} em {@link Turno}); cada
  * motoboy que aceita gera uma inscrição. Isso permite que o lojista tenha
  * vários entregadores no mesmo horário, sem quebrar a modelagem existente
- * (o turno mantém {@code motoboyId} apontando para o primeiro inscrito, por
- * compatibilidade com os fluxos atuais de finalização/pagamento).
+ * (o turno mantém {@code motoboyId} apontando para o primeiro inscrito).
+ *
+ * Desde a V5/V6 é aqui — e só aqui — que mora a dupla confirmação do
+ * pagamento: cada entregador é pago pela própria inscrição.
  *
  * status: aceito | finalizado | cancelado (ver StatusInscricao)
  */
@@ -20,7 +22,12 @@ import java.time.LocalDateTime;
     uniqueConstraints = @UniqueConstraint(
         name = "uk_turno_motoboy",
         columnNames = {"turnoId", "motoboyId"}
-    )
+    ),
+    indexes = {
+        // "Turnos deste entregador": a unicidade acima começa por turnoId e
+        // não serve para buscar por motoboy (V11).
+        @Index(name = "ix_inscricao_motoboy", columnList = "motoboyId, status")
+    }
 )
 public class TurnoInscricao {
 
@@ -37,8 +44,8 @@ public class TurnoInscricao {
     @Column(nullable = false)
     private StatusInscricao status = StatusInscricao.ACEITO;
 
-    // Pagamento por entregador (dupla confirmação, igual ao fluxo do turno):
-    // null (turno não finalizado) | pendente | pago
+    // Pagamento deste entregador, com a dupla confirmação (lojista pagou +
+    // entregador recebeu): null (turno não finalizado) | pendente | pago
     private StatusPagamento pagamentoStatus;
     private LocalDateTime lojistaConfirmouEm;
     private LocalDateTime motoboyConfirmouEm;

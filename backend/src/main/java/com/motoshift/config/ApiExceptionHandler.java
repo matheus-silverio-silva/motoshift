@@ -74,11 +74,11 @@ public class ApiExceptionHandler {
      * Aqui nao quebrou nada — duas pessoas mexeram no mesmo saldo ao mesmo
      * tempo, uma perdeu a corrida, e refazer a operacao funciona. Isso e 409.
      *
-     * A escolha e por mapear em vez de {@code @Retryable}: repetir sozinho uma
-     * operacao que mexe em dinheiro exige idempotencia de ponta a ponta (a
-     * chave ja existe em Transacao, mas nem todo caminho a preenche). Devolver
-     * 409 e deixar o cliente reenviar e o passo honesto enquanto isso nao esta
-     * fechado.
+     * A escolha e por mapear em vez de {@code @Retryable}. Desde a V10 todo
+     * lancamento tem chave de idempotencia, mas repetir sozinho no servidor so
+     * e seguro quando a chave vem do CLIENTE — e o caso do saque com o header
+     * Idempotency-Key. Devolver 409 e deixar o cliente reenviar com a mesma
+     * chave mantem a decisao de repetir com quem sabe se o pedido e o mesmo.
      */
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     public ResponseEntity<ErroResponse> conflitoDeVersao(ObjectOptimisticLockingFailureException e) {

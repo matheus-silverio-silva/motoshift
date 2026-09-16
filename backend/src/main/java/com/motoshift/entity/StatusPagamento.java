@@ -12,12 +12,11 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * <p><b>null é um terceiro estado com significado.</b> A coluna é anulável e
  * "sem valor" quer dizer "o turno ainda não foi finalizado, então não há o que
  * pagar" — diferente de PENDENTE, que é "finalizado e devendo". Por isso não há
- * uma constante NAO_APLICAVEL: inventá-la exigiria um UPDATE para preencher as
- * linhas existentes, e esta rodada é sem migração.
+ * uma constante NAO_APLICAVEL: inventá-la exigiria um UPDATE em todas as linhas
+ * de turnos ainda não finalizados só para trocar null por um nome.
  *
- * Não confundir com {@code Transacao.status}
- * (pendente | processado | concluido), que é outro campo, de outra entidade, e
- * segue como String.
+ * Não confundir com {@link StatusTransacao}, que é o status do lançamento no
+ * extrato — outro campo, de outra entidade.
  */
 public enum StatusPagamento {
 

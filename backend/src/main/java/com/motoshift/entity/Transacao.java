@@ -45,34 +45,31 @@ public class Transacao {
 
     private Long turnoId;
 
-    /**
-     * recarga | reserva | liberacao_reserva | pagamento_enviado
-     * | pagamento_recebido | saque | bonus | estorno
-     *
-     * ("turno" e o tipo legado dos creditos anteriores a liquidacao
-     * automatica; equivale a pagamento_recebido.)
-     */
+    /** Valores no banco em minusculo; a traducao e do TipoTransacaoConverter. */
     @Column(nullable = false)
-    private String tipo;
+    private TipoTransacao tipo;
 
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal valor;
 
     private String descricao;
 
-    // pendente | concluido | falhou | estornado
-    // ("processado" e o status legado, equivalente a concluido.)
     @Column(nullable = false)
-    private String status = "concluido";
+    private StatusTransacao status = StatusTransacao.CONCLUIDO;
 
     /**
      * Chave de idempotencia da operacao que gerou este lancamento.
      *
-     * Unica: e ela que impede que a mesma operacao mova dinheiro duas vezes
-     * quando um webhook chega repetido ou um job roda de novo. Nullable
-     * porque as transacoes legadas nao tem chave.
+     * Unica: e ela que impede que a mesma operacao mova dinheiro duas vezes.
+     * Obrigatoria desde a V10 — ate ali so alguns caminhos a preenchiam, e um
+     * campo de garantia que depende de quem lembrou de preencher nao garante
+     * nada. Formato por caminho:
+     *   pagamento_turno:{turnoId}:{motoboyId}  pagamento de um entregador num turno
+     *   saque:{usuarioId}:{chave do cliente}    saque com Idempotency-Key
+     *   saque:{uuid}                            saque sem chave do cliente
+     *   legado:{id}                             linha anterior a V10
      */
-    @Column(unique = true)
+    @Column(nullable = false, unique = true)
     private String idempotencyKey;
 
     @Column(nullable = false, updatable = false)
@@ -80,8 +77,11 @@ public class Transacao {
 
     @PrePersist
     private void prePersist() {
-        criadoEm = LocalDateTime.now();
-        if (status == null) status = "concluido";
+        // So a massa de demonstracao data um lancamento no passado (para o
+        // grafico mensal ter mais de uma barra). O fluxo normal deixa null e o
+        // carimbo e sempre "agora".
+        if (criadoEm == null) criadoEm = LocalDateTime.now();
+        if (status == null) status = StatusTransacao.CONCLUIDO;
     }
 
     public Long getId() { return id; }
@@ -103,8 +103,8 @@ public class Transacao {
     public Long getTurnoId() { return turnoId; }
     public void setTurnoId(Long turnoId) { this.turnoId = turnoId; }
 
-    public String getTipo() { return tipo; }
-    public void setTipo(String tipo) { this.tipo = tipo; }
+    public TipoTransacao getTipo() { return tipo; }
+    public void setTipo(TipoTransacao tipo) { this.tipo = tipo; }
 
     public BigDecimal getValor() { return valor; }
     public void setValor(BigDecimal valor) { this.valor = valor; }
@@ -112,11 +112,14 @@ public class Transacao {
     public String getDescricao() { return descricao; }
     public void setDescricao(String descricao) { this.descricao = descricao; }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public StatusTransacao getStatus() { return status; }
+    public void setStatus(StatusTransacao status) { this.status = status; }
 
     public String getIdempotencyKey() { return idempotencyKey; }
     public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
 
     public LocalDateTime getCriadoEm() { return criadoEm; }
+
+    /** Ver o comentario do @PrePersist: uso restrito a massa de demonstracao. */
+    public void setCriadoEm(LocalDateTime criadoEm) { this.criadoEm = criadoEm; }
 }

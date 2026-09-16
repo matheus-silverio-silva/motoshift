@@ -1,5 +1,7 @@
 package com.motoshift.dto;
 
+import com.motoshift.entity.StatusTransacao;
+import com.motoshift.entity.TipoTransacao;
 import com.motoshift.entity.Transacao;
 
 import java.math.BigDecimal;
@@ -11,10 +13,10 @@ public class TransacaoResponse {
     private Long usuarioId;
     private Long contraparteId;
     private Long turnoId;
-    private String tipo;
+    private TipoTransacao tipo;
     private BigDecimal valor;
     private String descricao;
-    private String status;
+    private StatusTransacao status;
     private LocalDateTime criadoEm;
 
     /**
@@ -46,10 +48,10 @@ public class TransacaoResponse {
     public Long getUsuarioId() { return usuarioId; }
     public Long getContraparteId() { return contraparteId; }
     public Long getTurnoId() { return turnoId; }
-    public String getTipo() { return tipo; }
+    public TipoTransacao getTipo() { return tipo; }
     public BigDecimal getValor() { return valor; }
     public String getDescricao() { return descricao; }
-    public String getStatus() { return status; }
+    public StatusTransacao getStatus() { return status; }
     public LocalDateTime getCriadoEm() { return criadoEm; }
 
     /** @deprecated use {@link #getUsuarioId()}. */

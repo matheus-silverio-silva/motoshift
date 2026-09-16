@@ -108,6 +108,10 @@ public class SecurityConfig {
         cfg.setAllowedOriginPatterns(lista);
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
+        // O navegador esconde do JavaScript qualquer header de resposta que não
+        // esteja aqui — sem isto o app web não leria o total das listagens
+        // paginadas.
+        cfg.setExposedHeaders(List.of("X-Total-Count"));
         cfg.setAllowCredentials(false);
         cfg.setMaxAge(3600L);
 
