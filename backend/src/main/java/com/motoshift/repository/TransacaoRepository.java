@@ -18,6 +18,9 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
 
     List<Transacao> findByUsuarioIdOrderByCriadoEmDesc(Long usuarioId);
 
+    /** Todos os lancamentos de um turno — os dois lados da liquidacao inclusive. */
+    List<Transacao> findByTurnoId(Long turnoId);
+
     /** Extrato paginado — mesma ordem da versao sem pagina. */
     Page<Transacao> findByUsuarioIdOrderByCriadoEmDesc(Long usuarioId, Pageable pagina);
 

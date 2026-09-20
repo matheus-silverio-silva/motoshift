@@ -2,6 +2,7 @@ package com.motoshift.service;
 
 import com.motoshift.dto.TurnoRequest;
 import com.motoshift.dto.TurnoResponse;
+import com.motoshift.entity.Carteira;
 import com.motoshift.entity.StatusInscricao;
 import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
@@ -38,10 +39,13 @@ class TurnoServiceTest {
     // o @InjectMocks injeta null e o fluxo estoura antes da assercao.
     @Mock private NotificacaoService notificacoes;
 
-    // O dinheiro saiu daqui: confirmar pagamento e creditar carteira agora sao
-    // do PagamentoTurnoService. O TurnoService so o chama ao finalizar, entao
-    // aqui ele entra mockado.
+    // O dinheiro saiu daqui: reserva, liquidacao e liberacao sao do
+    // PagamentoTurnoService, e o saldo e do LedgerService. Este teste cobre o
+    // CICLO DE VIDA do turno — as regras de antecedencia, conflito de agenda e
+    // capacidade de vagas —, entao o dinheiro entra mockado. Quem cobre o
+    // dinheiro de verdade, contra um banco, e o ReservaELiquidacaoTest.
     @Mock private PagamentoTurnoService pagamentos;
+    @Mock private CarteiraService carteiras;
 
     private TurnoService turnoService;
 
@@ -51,7 +55,7 @@ class TurnoServiceTest {
         // finos, e mockar o mapper faria toda assercao sobre a resposta virar
         // null.
         turnoService = new TurnoService(
-                turnoRepo, usuarioRepo, inscricaoRepo, notificacoes, pagamentos,
+                turnoRepo, usuarioRepo, inscricaoRepo, notificacoes, pagamentos, carteiras,
                 new TurnoMapper(inscricaoRepo), new TurnoAcesso(turnoRepo, inscricaoRepo));
     }
 
@@ -67,12 +71,51 @@ class TurnoServiceTest {
 
         Turno salvo = buildTurno(1L, inicio, fim, StatusTurno.ABERTO);
         when(turnoRepo.save(any(Turno.class))).thenReturn(salvo);
+        comSaldo("10000.00");
 
         TurnoResponse resp = turnoService.criar(buildRequest(inicio, fim), 1L);
 
         assertThat(resp).isNotNull();
         assertThat(resp.getStatus().getValor()).isEqualTo("aberto");
         verify(turnoRepo, times(1)).save(any(Turno.class));
+        // Publicar sem reservar seria publicar sem lastro — o defeito que este
+        // trabalho veio corrigir.
+        verify(pagamentos).reservar(salvo);
+    }
+
+    @Test
+    @DisplayName("RF04 — publicar sem saldo lança 422 dizendo quanto falta, e não reserva nada")
+    void criar_semSaldo_lanca422ComOQueFalta() {
+        LocalDateTime inicio = LocalDateTime.now().plusHours(3);
+        LocalDateTime fim    = inicio.plusHours(4);
+
+        Turno salvo = buildTurno(1L, inicio, fim, StatusTurno.ABERTO);
+        salvo.setValorEstimado(new BigDecimal("120.00"));
+        salvo.setVagas(3);
+        when(turnoRepo.save(any(Turno.class))).thenReturn(salvo);
+        comSaldo("200.00");
+
+        assertThatExceptionOfType(ResponseStatusException.class)
+                .isThrownBy(() -> turnoService.criar(buildRequest(inicio, fim), 1L))
+                .satisfies(e -> {
+                    assertThat(e.getStatusCode().value()).isEqualTo(422);
+                    // O custo, o que existe e a diferenca: o lojista precisa
+                    // saber quanto recarregar, nao so que "faltou".
+                    assertThat(e.getReason())
+                            .contains("360,00")
+                            .contains("200,00")
+                            .contains("160,00");
+                });
+
+        verify(pagamentos, never()).reservar(any());
+    }
+
+    /** Carteira do lojista com o saldo pedido. */
+    private void comSaldo(String disponivel) {
+        Carteira c = new Carteira();
+        c.setUsuarioId(1L);
+        c.setSaldoDisponivel(new BigDecimal(disponivel));
+        when(carteiras.obterOuCriar(1L)).thenReturn(c);
     }
 
     @Test

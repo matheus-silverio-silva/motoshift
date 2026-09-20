@@ -48,19 +48,28 @@ class BackfillV5Test {
     @Autowired private EntityManager em;
 
     /**
-     * Reconstroi o mundo PRE-V6.
+     * Reconstroi o mundo PRE-V6 e PRE-V13.
      *
-     * O schema de teste nasce das entidades, e a V6 ja tirou
-     * lojista_confirmou_em/motoboy_confirmou_em do Turno — mas a V5 roda num
-     * deploy anterior, quando as colunas ainda existem, e le exatamente elas.
-     * Sem isto o teste exercitaria uma V5 que nao e a que vai rodar.
+     * <p>O schema de teste nasce das entidades, ou seja, do presente — e a V5
+     * roda no passado. Duas migracoes posteriores ja apagaram o que ela le e
+     * escreve: a V6 tirou lojista_confirmou_em/motoboy_confirmou_em de
+     * {@code turnos} (origem da copia) e a V13 as tirou de
+     * {@code turno_inscricoes} (destino), quando a dupla confirmacao deixou de
+     * existir.
+     *
+     * <p>Recriar as quatro colunas aqui nao e contornar o teste: e o que faz
+     * ele exercitar a V5 que vai rodar de verdade, contra o schema que existia
+     * quando ela roda. Sem isso, so restaria uma copia do SQL — que envelhece
+     * em silencio — ou nenhum teste.
      */
     @BeforeEach
     void recriarColunasLegadas() {
-        em.createNativeQuery("ALTER TABLE turnos ADD COLUMN IF NOT EXISTS "
-                + "lojista_confirmou_em TIMESTAMP").executeUpdate();
-        em.createNativeQuery("ALTER TABLE turnos ADD COLUMN IF NOT EXISTS "
-                + "motoboy_confirmou_em TIMESTAMP").executeUpdate();
+        for (String tabela : List.of("turnos", "turno_inscricoes")) {
+            em.createNativeQuery("ALTER TABLE " + tabela + " ADD COLUMN IF NOT EXISTS "
+                    + "lojista_confirmou_em TIMESTAMP").executeUpdate();
+            em.createNativeQuery("ALTER TABLE " + tabela + " ADD COLUMN IF NOT EXISTS "
+                    + "motoboy_confirmou_em TIMESTAMP").executeUpdate();
+        }
     }
 
     @Test
@@ -80,8 +89,17 @@ class BackfillV5Test {
         assertThat(ins.getMotoboyId()).isEqualTo(970_001L);
         assertThat(ins.getStatus()).isEqualTo(StatusInscricao.FINALIZADO);
         assertThat(ins.getPagamentoStatus()).isEqualTo(StatusPagamento.PENDENTE);
-        assertThat(ins.getLojistaConfirmouEm()).isEqualTo(confirmado);
-        assertThat(ins.getMotoboyConfirmouEm()).isNull();
+
+        // As confirmacoes sao lidas por consulta nativa: a V13 tirou as colunas
+        // da entidade, e o que se confere aqui e o que a V5 gravou no banco
+        // daquela epoca, nao o que a entidade de hoje sabe ler.
+        Object[] confirmacoes = (Object[]) em.createNativeQuery(
+                        "SELECT lojista_confirmou_em, motoboy_confirmou_em "
+                        + "FROM turno_inscricoes WHERE id = :id")
+                .setParameter("id", ins.getId())
+                .getSingleResult();
+        assertThat(confirmacoes[0]).isEqualTo(java.sql.Timestamp.valueOf(confirmado));
+        assertThat(confirmacoes[1]).isNull();
 
         // Turno sem entregador não gera inscrição: não há quem inscrever.
         assertThat(inscricaoRepo.findByTurnoId(semMotoboy.getId())).isEmpty();

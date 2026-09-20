@@ -11,12 +11,15 @@ import com.motoshift.entity.Usuario;
 import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
+import com.motoshift.service.ledger.LedgerService;
+import com.motoshift.service.ledger.Movimento.MotivoLiberacao;
 import com.motoshift.util.GeoUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -37,6 +40,7 @@ public class TurnoService {
     private final TurnoInscricaoRepository inscricaoRepo;
     private final NotificacaoService notificacoes;
     private final PagamentoTurnoService pagamentos;
+    private final CarteiraService carteiras;
     private final TurnoMapper mapper;
     private final TurnoAcesso acesso;
 
@@ -45,6 +49,7 @@ public class TurnoService {
                         TurnoInscricaoRepository inscricaoRepo,
                         NotificacaoService notificacoes,
                         PagamentoTurnoService pagamentos,
+                        CarteiraService carteiras,
                         TurnoMapper mapper,
                         TurnoAcesso acesso) {
         this.turnoRepo = turnoRepo;
@@ -52,6 +57,7 @@ public class TurnoService {
         this.inscricaoRepo = inscricaoRepo;
         this.notificacoes = notificacoes;
         this.pagamentos = pagamentos;
+        this.carteiras = carteiras;
         this.mapper = mapper;
         this.acesso = acesso;
     }
@@ -97,7 +103,43 @@ public class TurnoService {
         if (vagas > 20) vagas = 20; // teto de segurança
         t.setVagas(vagas);
 
-        return mapper.toResponse(turnoRepo.save(t));
+        // O turno precisa existir antes da reserva: a chave de idempotencia do
+        // lancamento e "reserva:turno:{id}", e o id so existe depois do save.
+        Turno salvo = turnoRepo.save(t);
+        exigirSaldoParaPublicar(salvo, lojistaId);
+        pagamentos.reservar(salvo);
+
+        return mapper.toResponse(salvo);
+    }
+
+    /**
+     * Barra a publicacao sem lastro, dizendo quanto falta.
+     *
+     * <p>O {@link com.motoshift.service.ledger.LedgerService} ja recusaria o
+     * movimento — mas com a mensagem generica de quem so ve um saldo e um
+     * delta. Aqui ha contexto: o custo, o quanto o lojista tem e a conta entre
+     * os dois. "Faltam R$ 160,00" e acionavel; "saldo insuficiente" manda a
+     * pessoa adivinhar quanto recarregar.
+     *
+     * <p>422 e nao 400: o pedido esta bem formado e foi entendido: o que
+     * impede e o estado da carteira.
+     */
+    private void exigirSaldoParaPublicar(Turno turno, Long lojistaId) {
+        BigDecimal custo = PagamentoTurnoService.custoTotal(turno);
+        BigDecimal disponivel = carteiras.obterOuCriar(lojistaId).getSaldoDisponivel();
+        if (disponivel.compareTo(custo) >= 0) return;
+
+        String detalhe = turno.getVagas() > 1
+                ? " (" + LedgerService.emReais(turno.getValorEstimado())
+                        + " × " + turno.getVagas() + " vagas)"
+                : "";
+
+        throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                "Saldo insuficiente para publicar o turno. Ele custa "
+                        + LedgerService.emReais(custo) + detalhe
+                        + ", você tem " + LedgerService.emReais(disponivel)
+                        + " disponível. Faltam " + LedgerService.emReais(custo.subtract(disponivel))
+                        + " — adicione saldo para publicar.");
     }
 
     // RF05 — Aceitar turno (com vagas): cada motoboy que aceita vira uma inscrição.
@@ -164,7 +206,19 @@ public class TurnoService {
         return mapper.toResponse(turno);
     }
 
-    // RF06 — Finalizar turno: gera a dívida com cada entregador do turno.
+    /**
+     * RF06 — Finalizar turno: paga cada entregador ali mesmo.
+     *
+     * <p>A liquidacao acontece nesta transacao, nao depois: ou o turno fica
+     * FINALIZADO e todo mundo esta pago, ou nada disso aconteceu. O estado
+     * intermediario — "finalizado, aguardando pagamento" — deixou de existir, e
+     * com ele a dupla confirmacao que o sustentava.
+     *
+     * <p><b>Os dois participantes continuam podendo finalizar</b>, e isso agora
+     * e seguro: o dinheiro ja estava reservado desde a publicacao, entao
+     * finalizar nao cria compromisso nenhum — so transfere o que o lojista
+     * comprometeu. Nem o valor nem o destinatario dependem de quem clicou.
+     */
     @Transactional
     public TurnoResponse finalizar(Long turnoId, Long usuarioId) {
         Turno turno = acesso.carregar(turnoId);
@@ -178,33 +232,28 @@ public class TurnoService {
         }
 
         turno.setStatus(StatusTurno.FINALIZADO);
-        turno.setPagamentoStatus(StatusPagamento.PENDENTE);
-        turnoRepo.save(turno);
 
-        List<TurnoInscricao> inscricoes =
-                inscricaoRepo.findByTurnoIdAndStatus(turno.getId(), StatusInscricao.ACEITO);
-
-        if (inscricoes.isEmpty()) {
-            // Turno aceito antes do sistema de vagas e que a V5 não alcançou.
-            // A dívida ainda precisa existir; quem paga é o PagamentoTurnoService,
-            // e lá a inscrição é obrigatória — este caminho termina em erro alto
-            // na confirmação, que é o que se quer: barulho, não rota paralela.
-            pagamentos.criarTransacaoPendente(turno, turno.getMotoboyId());
-        } else {
-            // Cada entregador inscrito gera sua própria transação/pagamento.
-            for (TurnoInscricao ins : inscricoes) {
-                ins.setStatus(StatusInscricao.FINALIZADO);
-                ins.setPagamentoStatus(StatusPagamento.PENDENTE);
-                inscricaoRepo.save(ins);
-                pagamentos.criarTransacaoPendente(turno, ins.getMotoboyId());
-            }
+        List<TurnoInscricao> finalizadas = pagamentos.finalizarInscricoes(turno);
+        if (finalizadas.isEmpty()) {
+            // Turno aceito antes do sistema de vagas e que a V5 nao alcancou:
+            // ha entregador no turno e nenhuma inscricao. Ele trabalhou e
+            // precisa receber, entao a inscricao e criada em vez de o fluxo
+            // parar — ver inscricaoDeCompatibilidade.
+            finalizadas = List.of(pagamentos.inscricaoDeCompatibilidade(turno));
         }
+
+        pagamentos.liquidar(turno, finalizadas);
+
+        // PAGO, e nao PENDENTE: quando esta linha roda, o dinheiro ja mudou de
+        // carteira dentro desta mesma transacao.
+        turno.setPagamentoStatus(StatusPagamento.PAGO);
+        turnoRepo.save(turno);
 
         for (Long destinatario : acesso.participantes(turno)) {
             notificacoes.criar(destinatario, "avaliacao_pendente",
                     "Turno finalizado",
-                    "O turno \"" + turno.getTitulo() + "\" foi finalizado. "
-                            + "Confirme o pagamento e avalie a outra parte.",
+                    "O turno \"" + turno.getTitulo() + "\" foi finalizado e o pagamento "
+                            + "foi liquidado. Avalie a outra parte.",
                     "turno", turno.getId());
         }
 
@@ -237,6 +286,11 @@ public class TurnoService {
             ins.setStatus(StatusInscricao.CANCELADO);
             inscricaoRepo.save(ins);
         }
+
+        // O dinheiro reservado volta inteiro ao disponivel do lojista. Sem
+        // multa: a penalidade do cancelamento tardio e de score, logo acima, e
+        // continua sendo a unica.
+        pagamentos.liberarReserva(turno, MotivoLiberacao.CANCELAMENTO);
 
         turno.setStatus(StatusTurno.CANCELADO);
         turnoRepo.save(turno);

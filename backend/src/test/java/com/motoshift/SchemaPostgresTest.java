@@ -63,7 +63,7 @@ class SchemaPostgresTest {
         String versao = jdbc.queryForObject(
                 "SELECT max(version::int)::text FROM flyway_schema_history WHERE success",
                 String.class);
-        assertThat(versao).isEqualTo("12");
+        assertThat(versao).isEqualTo("13");
     }
 
     @Test

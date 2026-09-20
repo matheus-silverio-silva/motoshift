@@ -197,8 +197,10 @@ public class TurnoConsultaService {
                     m.put("nome", nomes.getOrDefault(i.getMotoboyId(), "Entregador"));
                     m.put("status", i.getStatus());
                     m.put("pagamentoStatus", i.getPagamentoStatus());
-                    m.put("lojistaConfirmou", i.getLojistaConfirmouEm() != null);
-                    m.put("motoboyConfirmou", i.getMotoboyConfirmouEm() != null);
+                    // lojistaConfirmou/motoboyConfirmou sairam com a V13: a
+                    // dupla confirmacao deixou de existir, e devolver dois
+                    // booleanos sempre falsos so daria trabalho ao app para
+                    // desenhar um estado inalcancavel.
                     return m;
                 })
                 .collect(Collectors.toList());

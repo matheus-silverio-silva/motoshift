@@ -37,10 +37,13 @@ class TurnoResponseJsonTest {
     private ObjectMapper json;
 
     @Test
-    @DisplayName("o JSON de TurnoResponse é exatamente o de antes dos enums")
+    @DisplayName("o JSON de TurnoResponse é o de antes dos enums, menos as confirmações")
     void serializacao_naoMudou() throws Exception {
         String saida = json.writeValueAsString(TurnoResponse.from(turnoCompleto()));
 
+        // lojistaConfirmouEm e motoboyConfirmouEm saíram com a V13. Eram duas
+        // chaves sempre nulas, mantidas só para não mudar o contrato enquanto a
+        // dupla confirmação ainda existia em algum lugar. Ela não existe mais.
         assertThat(saida).isEqualTo(
                 "{\"id\":42,\"lojistId\":7,\"motoboyId\":9,\"titulo\":\"Turno Tarde\","
                 + "\"descricao\":\"Entregas na regiao\",\"regiao\":\"Agua Verde\","
@@ -49,7 +52,6 @@ class TurnoResponseJsonTest {
                 + "\"longitude\":-49.2733,\"endereco\":\"Rua Teste, 100\",\"distanciaKm\":null,"
                 + "\"expiradoEm\":null,\"vagas\":2,\"vagasPreenchidas\":0,"
                 + "\"status\":\"aceito\",\"pagamentoStatus\":\"pendente\","
-                + "\"lojistaConfirmouEm\":null,\"motoboyConfirmouEm\":null,"
                 + "\"criadoEm\":null,\"atualizadoEm\":null}");
     }
 

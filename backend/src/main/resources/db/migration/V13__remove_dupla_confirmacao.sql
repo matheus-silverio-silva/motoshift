@@ -1,0 +1,45 @@
+-- ============================================================================
+--  V13 — CONTRACT: derruba a dupla confirmacao de pagamento.
+--
+--  ⚠️  NAO APLIQUE ESTA MIGRACAO NO MESMO DEPLOY DA V12.
+--
+--  Esta e a segunda metade do expand/contract, no mesmo padrao das V5/V6. A V12
+--  (deploy anterior) trouxe o ledger: o lojista passa a RESERVAR o valor ao
+--  publicar e a finalizacao TRANSFERE o que ja estava reservado, na mesma
+--  transacao. A partir dali ninguem mais le nem escreve
+--  lojista_confirmou_em / motoboy_confirmou_em — sao colunas de um fluxo que
+--  deixou de existir. Esta migracao remove a origem.
+--
+--  POR QUE DUAS MIGRACOES, E NAO UMA. Enquanto a V12 sobe, ainda ha instancias
+--  rodando a versao ANTERIOR do codigo, que le e escreve essas duas colunas. Se
+--  o DROP viesse junto, elas comecariam a falhar no meio do deploy — e o
+--  Hibernate roda com ddl-auto=validate em producao, entao a instancia antiga
+--  nem sobe com o schema novo. Separando, cada deploy e compativel com o codigo
+--  dos dois lados.
+--
+--  ANTES DE APLICAR, confira que nao ha divida pendurada no fluxo antigo:
+--
+--      SELECT count(*) FROM turno_inscricoes
+--       WHERE pagamento_status = 'pendente'
+--         AND (lojista_confirmou_em IS NOT NULL OR motoboy_confirmou_em IS NOT NULL);
+--
+--  Uma linha aqui e um turno em que uma das partes confirmou e a outra nunca
+--  confirmou — pagamento que o fluxo antigo deixou no meio do caminho. Com a
+--  liquidacao automatica ele nao anda sozinho: finalize o turno pela API (a
+--  finalizacao e idempotente e liquida o que faltava) antes de perder o
+--  registro de quem tinha confirmado.
+--
+--  SOBRE OS LANCAMENTOS 'pendente' ANTIGOS. transacoes com status 'pendente'
+--  criadas pelo fluxo anterior continuam onde estao, e de proposito. Marca-las
+--  como concluidas creditaria o entregador sem debitar lojista nenhum — o
+--  defeito exato que a V12 veio corrigir. Elas nao entram em nenhuma soma de
+--  saldo (o ledger so conta 'concluido'), entao sao historico inerte, nao
+--  dinheiro perdido de vista.
+--
+--  ROLLBACK: um ALTER TABLE ADD COLUMN traz as colunas de volta, mas VAZIAS —
+--  e nao havera codigo que as preencha. Por isso a conferencia antes, e nao
+--  depois.
+-- ============================================================================
+
+ALTER TABLE turno_inscricoes DROP COLUMN IF EXISTS lojista_confirmou_em;
+ALTER TABLE turno_inscricoes DROP COLUMN IF EXISTS motoboy_confirmou_em;

@@ -11,8 +11,9 @@ import java.time.LocalDateTime;
  * vários entregadores no mesmo horário, sem quebrar a modelagem existente
  * (o turno mantém {@code motoboyId} apontando para o primeiro inscrito).
  *
- * Desde a V5/V6 é aqui — e só aqui — que mora a dupla confirmação do
- * pagamento: cada entregador é pago pela própria inscrição.
+ * Desde a V5/V6 é aqui — e só aqui — que mora o pagamento de cada entregador:
+ * a inscrição é a identidade de "esta pessoa neste turno", e é por ela que a
+ * liquidação é chaveada ({@code liquidacao:inscricao:{id}:debito|credito}).
  *
  * status: aceito | finalizado | cancelado (ver StatusInscricao)
  */
@@ -44,11 +45,22 @@ public class TurnoInscricao {
     @Column(nullable = false)
     private StatusInscricao status = StatusInscricao.ACEITO;
 
-    // Pagamento deste entregador, com a dupla confirmação (lojista pagou +
-    // entregador recebeu): null (turno não finalizado) | pendente | pago
+    /**
+     * Pagamento deste entregador: null (turno não finalizado) | pendente | pago.
+     *
+     * <p>Na prática PENDENTE é um instante: a finalização marca pendente,
+     * liquida e marca pago dentro da mesma transação. O estado continua
+     * existindo porque é ele que distingue "ainda não finalizou" (null) de
+     * "finalizou" — e porque linhas antigas, de quando o pagamento dependia de
+     * confirmação humana, ficaram paradas em pendente.
+     */
     private StatusPagamento pagamentoStatus;
-    private LocalDateTime lojistaConfirmouEm;
-    private LocalDateTime motoboyConfirmouEm;
+
+    // As colunas lojista_confirmou_em e motoboy_confirmou_em foram removidas
+    // pela V13. Elas guardavam a dupla confirmação — cada parte declarando que
+    // o dinheiro tinha mudado de mãos fora do app —, que deixou de existir
+    // quando a liquidação passou a ser automática: o lojista compromete o valor
+    // ao publicar e a finalização transfere o que já estava reservado.
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime criadoEm;
@@ -72,12 +84,6 @@ public class TurnoInscricao {
 
     public StatusPagamento getPagamentoStatus() { return pagamentoStatus; }
     public void setPagamentoStatus(StatusPagamento p) { this.pagamentoStatus = p; }
-
-    public LocalDateTime getLojistaConfirmouEm() { return lojistaConfirmouEm; }
-    public void setLojistaConfirmouEm(LocalDateTime t) { this.lojistaConfirmouEm = t; }
-
-    public LocalDateTime getMotoboyConfirmouEm() { return motoboyConfirmouEm; }
-    public void setMotoboyConfirmouEm(LocalDateTime t) { this.motoboyConfirmouEm = t; }
 
     public LocalDateTime getCriadoEm() { return criadoEm; }
 }

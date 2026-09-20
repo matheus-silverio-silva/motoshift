@@ -44,6 +44,14 @@ class SegurancaDaApiTest {
     @Autowired
     private ObjectMapper json;
 
+    // O ledger exige uma transação aberta (propagação MANDATORY): fora de uma
+    // requisição, quem a abre é este template.
+    @Autowired
+    private com.motoshift.service.ledger.LedgerService ledger;
+
+    @Autowired
+    private org.springframework.transaction.support.TransactionTemplate transacoes;
+
     @Test
     @DisplayName("rota privada sem token responde 401")
     void semToken_401() throws Exception {
@@ -191,6 +199,13 @@ class SegurancaDaApiTest {
 
     // ── Helpers ──────────────────────────────────────────────
 
+    /** Recarga direta pelo ledger — o caminho HTTP é assunto de outro teste. */
+    private void comSaldo(Conta conta) {
+        transacoes.executeWithoutResult(status ->
+                ledger.aplicar(com.motoshift.service.ledger.Movimento.recarga(
+                        conta.id(), new java.math.BigDecimal("5000.00"), conta.id())));
+    }
+
     private record Conta(long id, String token) {}
 
     private Conta registrarMotoboy(String apelido) throws Exception {
@@ -221,7 +236,17 @@ class SegurancaDaApiTest {
                          node.get("token").asText());
     }
 
+    /**
+     * Publica um turno, garantindo antes que o lojista tem com que pagá-lo.
+     *
+     * <p>Publicar passou a reservar valor × vagas, então uma conta recém-criada
+     * é recusada com 422 — corretamente. Este teste é sobre autorização, não
+     * sobre saldo: a recarga aqui é o equivalente a "dado o lojista com dinheiro
+     * em caixa". Quem cobre a regra de saldo é o {@code ReservaELiquidacaoTest}.
+     */
     private long publicarTurno(Conta lojista, Map<String, Object> corpo) throws Exception {
+        comSaldo(lojista);
+
         String criado = mvc.perform(post("/api/turnos")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + lojista.token())
                         .contentType(MediaType.APPLICATION_JSON)

@@ -262,7 +262,7 @@ class MigracoesPostgresTest {
     }
 
     static String ultimaVersao() {
-        return "12";
+        return "13";
     }
 
     static Connection conectar(String url) throws SQLException {
