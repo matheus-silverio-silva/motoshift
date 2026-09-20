@@ -43,6 +43,22 @@ public class RetentativaOtimista {
 
     static final int TENTATIVAS = 3;
 
+    /**
+     * Espera base entre tentativas, em milissegundos.
+     *
+     * <p><b>Repetir na hora não resolve nada.</b> Quando várias operações
+     * disputam a mesma carteira, todas falham no mesmo instante e, sem espera,
+     * todas tentam de novo no mesmo instante — colidindo em bloco outra vez. O
+     * teste de concorrência mostrou isso: oito liquidações simultâneas
+     * esgotavam as três tentativas em ~70 ms, sem que nenhuma tivesse chance de
+     * passar sozinha.
+     *
+     * <p>A espera cresce a cada tentativa e leva um componente aleatório, que é
+     * o que de fato desempata: com atrasos iguais, as threads voltariam a
+     * marchar juntas.
+     */
+    private static final long ESPERA_BASE_MS = 15;
+
     public <T> T executar(String operacao, Supplier<T> acao) {
         ObjectOptimisticLockingFailureException ultima = null;
 
@@ -53,12 +69,37 @@ public class RetentativaOtimista {
                 ultima = e;
                 log.warn("[ledger] {} perdeu a corrida pela carteira (tentativa {}/{})",
                         operacao, tentativa, TENTATIVAS);
+                if (tentativa < TENTATIVAS) {
+                    esperar(tentativa);
+                }
             }
         }
 
         log.error("[ledger] {} falhou em {} tentativas por concorrencia na carteira",
                 operacao, TENTATIVAS);
         throw ultima;
+    }
+
+    /**
+     * Recuo com jitter antes da próxima tentativa.
+     *
+     * <p>Três tentativas cobrem a disputa que acontece de verdade: duas ou três
+     * operações caindo na mesma carteira no mesmo momento. Uma carteira sob
+     * dezenas de escritas simultâneas é outro problema — pressão sustentada,
+     * não colisão pontual — e insistir ali só empurra a fila para a frente. Quem
+     * chamou recebe a exceção, e o usuário, um 409.
+     */
+    private static void esperar(int tentativa) {
+        long espera = ESPERA_BASE_MS * tentativa
+                + java.util.concurrent.ThreadLocalRandom.current().nextLong(ESPERA_BASE_MS);
+        try {
+            Thread.sleep(espera);
+        } catch (InterruptedException e) {
+            // Alguém pediu para parar: propaga o sinal e desiste do retry em
+            // vez de engolir a interrupção e continuar trabalhando.
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Retry do ledger interrompido", e);
+        }
     }
 
     /** Mesma garantia, para operacao que nao devolve nada. */
