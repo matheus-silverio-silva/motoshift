@@ -5,6 +5,8 @@ import com.motoshift.entity.Turno;
 import com.motoshift.entity.Usuario;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -31,6 +33,8 @@ import java.util.stream.Collectors;
  */
 @Service
 public class ScoreService {
+
+    private static final Logger log = LoggerFactory.getLogger(ScoreService.class);
 
     private static final int JANELA_DIAS = 30;
 
@@ -75,7 +79,12 @@ public class ScoreService {
                 .filter(this::cancelamentoTardio)
                 .collect(Collectors.toList());
 
-        // Estima o score de 30 dias atras revertendo as penalizacoes recentes.
+        // ESTIMATIVA, nao medicao: nao existe historico de score no banco, entao
+        // o valor de 30 dias atras e reconstruido revertendo as penalizacoes da
+        // janela. Sai rotulado como estimado na resposta (scoreAnteriorEstimado)
+        // para a tela nao apresentar conta como registro. Medir de verdade pede
+        // uma tabela de eventos de score — e ela daria substancia a esta mesma
+        // tela, hoje montada a partir dos turnos.
         double scoreAnterior = Math.min(5.0,
                 scoreAtual + canceladosTardios30d.size() * PENALIDADE_CANCELAMENTO_TARDIO);
         double variacao = Math.round((scoreAtual - scoreAnterior) * 10.0) / 10.0;
@@ -92,25 +101,32 @@ public class ScoreService {
                 .filter(t -> dentroDaJanela(t, inicio30d))
                 .count();
 
-        String analise;
+        // O endpoint inteiro caia com 503 quando a IA falhava — mesmo com todas
+        // as metricas ja calculadas aqui, sem depender dela. Agora a IA e o que
+        // ela sempre foi: um complemento. Se falhar, a tela mostra os numeros e
+        // "analise indisponivel" no lugar do texto.
+        String analise = null;
         try {
             analise = anthropic.chamarClaude(
                     AnthropicService.SYSTEM_PROMPT_SCORE,
                     montarPrompt(motoboy.getNome(), scoreAtual, scoreAnterior, variacao,
                             classificacao, finalizados30d, cancelados30d,
                             canceladosTardios30d.size()));
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "Serviço de análise de score temporariamente indisponível. Tente novamente.");
+        } catch (RuntimeException e) {
+            log.warn("[score] analise da IA indisponivel para o motoboy {}: {}",
+                    motoboyId, e.getMessage());
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("scoreAtual", scoreAtual);
         result.put("scoreAnterior", scoreAnterior);
+        // O app precisa saber que este numero e conta, nao medicao.
+        result.put("scoreAnteriorEstimado", true);
         result.put("variacao", variacao);
         result.put("tendencia", tendencia);
         result.put("classificacao", classificacao);
         result.put("analise", analise);
+        result.put("analiseDisponivel", analise != null);
         result.put("ultimaAtualizacao", LocalDate.now().format(DIA_MES_ANO));
         result.put("eventos", ultimosEventos(todosTurnos));
         return result;

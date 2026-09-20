@@ -113,6 +113,14 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- Caffeine — cache em memoria com TTL e tamanho maximo, usado nas
+             respostas da API da Anthropic (cada F5 era uma chamada paga).
+             Versao gerenciada pelo spring-boot-starter-parent. -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
         <!-- Testes -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
