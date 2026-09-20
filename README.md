@@ -66,6 +66,8 @@ estabilidade financeira para ambos os lados.
 │   └── stitch/               # Exports do Stitch da 1ª iteração — referência
 │
 ├── docs/                     # Auditoria, guia de defesa, planos e requisitos
+│   ├── DER/                  # Modelo de dados e rastreabilidade das migrações
+│   └── financeiro/           # Ciclo do dinheiro: recarga → reserva → liquidação → saque
 ├── scripts/                  # Utilitários de linha de comando
 └── .github/workflows/        # CI: mvn test, flutter analyze, flutter test
 ```
@@ -244,7 +246,15 @@ nova. Para testar o reset localmente, suba com `MOTOSHIFT_SEED_RESET=confirmo`.
 | PUT | /api/turnos/{id}/cancelar | Cancelar turno |
 | GET | /api/dashboard/motoboy/{id} | Métricas do Motoboy |
 | GET | /api/dashboard/lojista/{id} | Métricas do Lojista |
-| GET | /api/carteira/{id} | Saldo e ganhos |
+| GET | /api/carteira/{id} | Saldo, ganhos e a primeira página do extrato |
+| GET | /api/carteira/extrato | Extrato filtrado e paginado (período, tipo, natureza, turno, contraparte, valor, busca) |
+| GET | /api/carteira/extrato/exportar | O mesmo extrato em CSV, sem paginação |
+| GET | /api/carteira/resumo | Entradas, saídas, líquido, disponível, bloqueado, a receber e comprometido |
+| GET | /api/carteira/fluxo | Série de fluxo de caixa por dia, semana ou mês |
+| POST | /api/carteira/recargas | Abre uma cobrança Pix simulada (não credita) |
+| POST | /api/carteira/recargas/{id}/confirmar | Simula o webhook e credita o saldo (idempotente) |
+| POST | /api/carteira/saques | Saque via Pix — estorna sozinho se o gateway recusar |
+| GET | /api/carteira/cobrancas | Recargas e saques do usuário |
 | GET | /api/sugestoes/turnos/{id} | Sugestões por IA |
 | GET | /api/relatorio/motoboy/{id} | Relatório financeiro por IA |
 | GET | /api/relatorio/lojista/{id} | Relatório operacional por IA |
@@ -276,10 +286,11 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | RF01 | Conta bloqueada por 15 min após 5 tentativas de login falhas |
 | RF02 | Dashboard com métricas em tempo real |
 | RF03 | Lojista exige CNPJ; Motoboy exige CNH no cadastro |
-| RF04 | Turno deve ser agendado com mínimo 2h de antecedência |
+| RF04 | Turno deve ser agendado com mínimo 2h de antecedência, e **publicar reserva** `valor × vagas` do saldo do lojista — sem lastro, 422 dizendo quanto falta |
 | RF05 | Motoboy não pode aceitar turno com conflito de horário |
-| RF06 | Finalização do turno credita automaticamente na carteira |
-| RF07 | Cancelamento com menos de 1h de antecedência penaliza o score |
+| RF06 | Finalização do turno **transfere** o valor reservado: sai do bloqueado do lojista, entra no disponível do entregador, na mesma transação. A sobra das vagas vazias volta |
+| RF07 | Cancelamento com menos de 1h de antecedência penaliza o score. A reserva volta inteira ao lojista, sem multa financeira |
+| RF12 | O dinheiro entra por recarga (Pix simulado) e sai por saque; a plataforma não cria nem destrói saldo — ver [`docs/financeiro/FLUXO-FINANCEIRO.md`](docs/financeiro/FLUXO-FINANCEIRO.md) |
 | RF08 | Sugestão inteligente de turnos via IA |
 | RF09 | Relatório financeiro/operacional mensal via IA |
 | RF10 | Turno publicado guarda o ponto de partida (lat/lng), que alimenta o filtro por distância e o mapa das duas pontas |

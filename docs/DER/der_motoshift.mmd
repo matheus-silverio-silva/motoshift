@@ -6,6 +6,7 @@ erDiagram
     USUARIOS ||--o{ AVALIACOES : "avalia (avaliador_id)"
     USUARIOS ||--o{ AVALIACOES : "e avaliado (avaliado_id)"
     USUARIOS ||--o{ TRANSACOES : "movimenta"
+    USUARIOS ||--o{ COBRANCAS : "recarrega e saca"
     USUARIOS ||--o{ NOTIFICACOES : "recebe"
     USUARIOS ||--o{ NOTAS_FISCAIS : "presta (prestador_id)"
     USUARIOS ||--o{ NOTAS_FISCAIS : "toma (tomador_id)"
@@ -69,9 +70,7 @@ erDiagram
         BIGINT turno_id FK "NOT NULL - turnos.id"
         BIGINT motoboy_id FK "NOT NULL - usuarios.id"
         VARCHAR status "NOT NULL - aceito|finalizado|cancelado"
-        VARCHAR pagamento_status "null|pendente|pago"
-        TIMESTAMP lojista_confirmou_em "dupla confirmacao"
-        TIMESTAMP motoboy_confirmou_em "dupla confirmacao"
+        VARCHAR pagamento_status "null|pendente|pago - pago na finalizacao"
         TIMESTAMP criado_em "NOT NULL"
         UNIQUE uk_turno_motoboy UK "(turno_id, motoboy_id)"
     }
@@ -108,9 +107,25 @@ erDiagram
         VARCHAR tipo "NOT NULL - CHECK: recarga|reserva|liberacao_reserva|pagamento_enviado|pagamento_recebido|saque|bonus|estorno"
         NUMERIC valor "NOT NULL - 12,2"
         VARCHAR descricao ""
+        VARCHAR natureza "NOT NULL V12 - CHECK: credito|debito - sinal da tela"
         VARCHAR status "NOT NULL - CHECK: pendente|concluido|falhou|estornado"
-        VARCHAR idempotency_key UK "NOT NULL desde a V10 - anti-duplicacao"
+        UUID operacao_id "V12 - une os dois lados de uma transferencia"
+        NUMERIC saldo_disponivel_apos "V12 - foto do saldo 12,2"
+        NUMERIC saldo_bloqueado_apos "V12 - foto do bloqueado 12,2"
+        VARCHAR idempotency_key UK "NOT NULL V10, deterministica V12"
         TIMESTAMP criado_em "NOT NULL"
+    }
+
+    COBRANCAS {
+        BIGINT id PK "IDENTITY"
+        BIGINT usuario_id FK "NOT NULL - usuarios.id"
+        VARCHAR tipo "NOT NULL - CHECK: recarga|saque"
+        NUMERIC valor "NOT NULL - CHECK maior que zero - 12,2"
+        VARCHAR status "NOT NULL - CHECK: pendente|concluido|falhou"
+        VARCHAR codigo_pix "copia-e-cola na recarga, chave no saque"
+        TIMESTAMP criada_em "NOT NULL"
+        TIMESTAMP concluida_em "quando o gateway respondeu"
+        VARCHAR idempotency_key UK "NOT NULL - idempotencia do pedido"
     }
 
     NOTIFICACOES {
