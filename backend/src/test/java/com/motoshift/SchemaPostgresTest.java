@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * migracao criar a coluna com tipo diferente —, o Hibernate recusa o schema e
  * este teste falha no CI, em vez de o boot falhar no Railway.
  *
- * O perfil continua "test", entao o DataInitializer roda: a massa de
+ * O perfil continua "test", entao o gatilho de dev roda: a massa de
  * demonstracao inteira e gravada por cima das chaves estrangeiras da V11, o que
  * prova que o seed respeita a integridade que o banco de producao exige.
  */

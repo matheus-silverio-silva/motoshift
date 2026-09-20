@@ -185,7 +185,10 @@ public class TurnoService {
                 inscricaoRepo.findByTurnoIdAndStatus(turno.getId(), StatusInscricao.ACEITO);
 
         if (inscricoes.isEmpty()) {
-            // Legado: turno sem inscrições (aceito antes do sistema de vagas).
+            // Turno aceito antes do sistema de vagas e que a V5 não alcançou.
+            // A dívida ainda precisa existir; quem paga é o PagamentoTurnoService,
+            // e lá a inscrição é obrigatória — este caminho termina em erro alto
+            // na confirmação, que é o que se quer: barulho, não rota paralela.
             pagamentos.criarTransacaoPendente(turno, turno.getMotoboyId());
         } else {
             // Cada entregador inscrito gera sua própria transação/pagamento.

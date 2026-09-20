@@ -11,6 +11,7 @@ import '../../services/geo_referencia.dart';
 import '../../services/localizacao_service.dart';
 import '../../services/preco_recomendado.dart';
 import '../../routes/app_routes.dart';
+import 'agendar_turno_campos.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_buttons.dart';
@@ -315,9 +316,9 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
               // Data + Horário
               Row(
                 children: [
-                  Expanded(child: _buildDataCard()),
+                  Expanded(child: CardData(data: _data, onEscolher: _pickDate)),
                   const SizedBox(width: 10),
-                  Expanded(child: _buildHorarioCard()),
+                  Expanded(child: CardHorario(inicio: _horaInicio, fim: _horaFim, onEscolherInicio: () => _pickTime(true), onEscolherFim: () => _pickTime(false))),
                 ],
               ),
               const SizedBox(height: 14),
@@ -331,9 +332,9 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
                 ),
                 child: Column(
                   children: [
-                    _buildRaioSection(),
+                    SecaoRaio(raioKm: _raio, onMudar: (v) => setState(() => _raio = v)),
                     const SizedBox(height: 22),
-                    _buildVagasSection(),
+                    SecaoVagas(vagas: _vagas, onMudar: (v) => setState(() => _vagas = v)),
                     const SizedBox(height: 22),
                     _buildValorSection(),
                   ],
@@ -379,9 +380,9 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(child: _buildDataCard()),
+                      Expanded(child: CardData(data: _data, onEscolher: _pickDate)),
                       const SizedBox(width: 16),
-                      Expanded(child: _buildHorarioCard()),
+                      Expanded(child: CardHorario(inicio: _horaInicio, fim: _horaFim, onEscolherInicio: () => _pickTime(true), onEscolherFim: () => _pickTime(false))),
                     ],
                   ),
                 ),
@@ -395,9 +396,9 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
                   ),
                   child: Column(
                     children: [
-                      _buildRaioSection(),
+                      SecaoRaio(raioKm: _raio, onMudar: (v) => setState(() => _raio = v)),
                       const SizedBox(height: 24),
-                      _buildVagasSection(),
+                      SecaoVagas(vagas: _vagas, onMudar: (v) => setState(() => _vagas = v)),
                       const SizedBox(height: 24),
                       _buildValorSection(),
                     ],
@@ -556,108 +557,6 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
   String _fmtHora(TimeOfDay t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
-  Widget _buildDataCard() {
-    return GestureDetector(
-      onTap: _pickDate,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.line, width: 1.5),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              const Icon(Icons.calendar_today_outlined,
-                  color: AppColors.teal, size: 14),
-              const SizedBox(width: 5),
-              Text('DATA',
-                  style: tsJakarta(9, FontWeight.w700,
-                      color: AppColors.teal)),
-            ]),
-            const SizedBox(height: 10),
-            Text(
-              _data != null
-                  ? DateFormat('dd/MM/yyyy', 'pt_BR').format(_data!)
-                  : 'Selecionar',
-              style: tsJakarta(13, FontWeight.w600,
-                  color: _data != null
-                      ? AppColors.ink
-                      : AppColors.muted),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHorarioCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.line, width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            const Icon(Icons.schedule_outlined,
-                color: AppColors.teal, size: 14),
-            const SizedBox(width: 5),
-            Text('HORÁRIO',
-                style: tsJakarta(9, FontWeight.w700,
-                    color: AppColors.teal)),
-          ]),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _pickTime(true),
-                  child: _timeChip(_horaInicio),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                child: Text('—',
-                    style: tsJakarta(12, FontWeight.w400,
-                        color: AppColors.muted)),
-              ),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _pickTime(false),
-                  child: _timeChip(_horaFim),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _timeChip(TimeOfDay? t) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      decoration: BoxDecoration(
-        color: AppColors.surface2,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        t != null
-            ? '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}'
-            : '--:--',
-        textAlign: TextAlign.center,
-        style: tsJakarta(13, FontWeight.w600,
-            color: t != null ? AppColors.ink : AppColors.muted),
-      ),
-    );
-  }
-
   /// De onde o turno parte: a região em texto e o ponto no mapa.
   ///
   /// O mapa é tocável de propósito — é a única forma honesta de o lojista
@@ -748,209 +647,12 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
     );
   }
 
-  Widget _buildRaioSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Row(children: [
-              const Icon(Icons.straighten_outlined,
-                  color: AppColors.teal, size: 14),
-              const SizedBox(width: 5),
-              Text('RAIO DE ENTREGA',
-                  style: tsJakarta(9, FontWeight.w700,
-                      color: AppColors.teal)),
-            ]),
-            const Spacer(),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-              decoration: BoxDecoration(
-                color: AppColors.tealSoft,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                'Até ${_raio.toStringAsFixed(0)} km',
-                style: tsJakarta(9.5, FontWeight.w700,
-                    color: AppColors.tealDeep),
-              ),
-            ),
-          ],
-        ),
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            activeTrackColor: AppColors.teal,
-            inactiveTrackColor: AppColors.surface3,
-            thumbColor: AppColors.teal,
-            overlayColor: AppColors.teal.withOpacity(0.15),
-            trackHeight: 3,
-          ),
-          child: Slider(
-            value: _raio,
-            min: 1,
-            max: 20,
-            divisions: 19,
-            onChanged: (v) => setState(() => _raio = v),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: ['1km', '5km', '10km', '15km', '20km+']
-                .map((s) => Text(s,
-                    style: tsJakarta(9, FontWeight.w700,
-                        color: AppColors.muted)))
-                .toList(),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildVagasSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          const Icon(Icons.groups_outlined, color: AppColors.teal, size: 14),
-          const SizedBox(width: 5),
-          Text('VAGAS DE ENTREGADOR',
-              style: tsJakarta(9, FontWeight.w700, color: AppColors.teal)),
-          const Spacer(),
-          Text(
-            _vagas == 1 ? '1 entregador' : '$_vagas entregadores',
-            style: tsJakarta(10, FontWeight.w600, color: AppColors.muted),
-          ),
-        ]),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            _vagaBtn(Icons.remove_rounded,
-                enabled: _vagas > 1,
-                onTap: () => setState(() => _vagas--)),
-            Expanded(
-              child: Center(
-                child: Text('$_vagas',
-                    style: tsBricolage(22, FontWeight.w800,
-                        color: AppColors.ink)),
-              ),
-            ),
-            _vagaBtn(Icons.add_rounded,
-                enabled: _vagas < 20,
-                onTap: () => setState(() => _vagas++)),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Quantos entregadores você precisa neste mesmo turno.',
-          style: tsJakarta(10.5, FontWeight.w400, color: AppColors.muted),
-        ),
-      ],
-    );
-  }
-
-  Widget _vagaBtn(IconData icon,
-      {required bool enabled, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: enabled ? AppColors.tealSoft : AppColors.surface2,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.line, width: 1.5),
-        ),
-        child: Icon(icon,
-            size: 20,
-            color: enabled ? AppColors.tealDeep : AppColors.line),
-      ),
-    );
-  }
-
-  Widget _buildRecomendacao() {
-    final rec = _recomendacao;
-    if (rec == null) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Text(
-          'Defina data e horário para ver o valor recomendado.',
-          style: tsJakarta(10.5, FontWeight.w400, color: AppColors.muted),
-        ),
-      );
-    }
-    final valorFmt = rec.valor.toStringAsFixed(0);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.tealSoft,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.teal.withOpacity(0.35), width: 1.2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.auto_awesome_rounded,
-                  color: AppColors.tealDeep, size: 15),
-              const SizedBox(width: 6),
-              Text('Valor recomendado',
-                  style: tsJakarta(10.5, FontWeight.w700,
-                      color: AppColors.tealDeep)),
-              const Spacer(),
-              Text('R\$ $valorFmt',
-                  style: tsBricolage(18, FontWeight.w800,
-                      color: AppColors.tealDeep)),
-            ],
-          ),
-          if (rec.fatores.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: rec.fatores
-                  .map((f) => Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text('${f.rotulo} ${f.ajuste}',
-                            style: tsJakarta(9, FontWeight.w600,
-                                color: AppColors.muted)),
-                      ))
-                  .toList(),
-            ),
-          ],
-          const SizedBox(height: 10),
-          GestureDetector(
-            onTap: () {
-              setState(() =>
-                  _valorCtrl.text = rec.valor.toStringAsFixed(2).replaceAll('.', ','));
-              _formKey.currentState?.validate();
-            },
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 9),
-              decoration: BoxDecoration(
-                color: AppColors.teal,
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Text(
-                'Usar valor recomendado',
-                textAlign: TextAlign.center,
-                style: tsJakarta(11.5, FontWeight.w700, color: Colors.white),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  /// Copia o valor recomendado para o campo e revalida o formulário — o campo
+  /// tem regra própria de mínimo, e ela precisa rodar sobre o valor novo.
+  void _usarValorRecomendado(double valor) {
+    setState(() =>
+        _valorCtrl.text = valor.toStringAsFixed(2).replaceAll('.', ','));
+    _formKey.currentState?.validate();
   }
 
   Widget _buildValorSection() {
@@ -966,7 +668,7 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
                   color: AppColors.teal)),
         ]),
         const SizedBox(height: 10),
-        _buildRecomendacao(),
+        CardRecomendacao(recomendacao: _recomendacao, onUsarValor: _usarValorRecomendado),
         TextFormField(
           controller: _valorCtrl,
           keyboardType:

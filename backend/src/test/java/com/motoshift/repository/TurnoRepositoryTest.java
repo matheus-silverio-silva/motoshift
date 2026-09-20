@@ -18,16 +18,15 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * As tres consultas escritas a mao do TurnoRepository, contra um banco de
- * verdade.
+ * As consultas escritas a mao do TurnoRepository, contra um banco de verdade.
  *
  * Nao havia nenhum {@code @DataJpaTest} no projeto. O contexto do Spring so
  * garante que a JPQL compila: se o BETWEEN da bounding box invertesse latitude
  * com longitude, ou se o OR da agenda esquecesse o lojista, tudo continuaria
  * subindo — e a lista sairia errada em producao, calada.
  *
- * Os ids sao altos de proposito para nao colidirem com a massa do
- * DataInitializer.
+ * Os ids sao altos de proposito para nao colidirem com a
+ * massa de demonstracao.
  */
 @DataJpaTest
 @ActiveProfiles("test")
@@ -91,22 +90,26 @@ class TurnoRepositoryTest {
     }
 
     @Test
-    @DisplayName("findConflitos ignora turno aberto e pega o que se sobrepoe quando aceito")
-    void findConflitos_soStatusAtivo() {
+    @DisplayName("existeConflitoDeAgenda ignora turno cancelado e enxerga o aceito que se sobrepoe")
+    void existeConflito_ignoraCancelado() {
         LocalDateTime inicio = LocalDateTime.of(2026, 6, 1, 18, 0);
         LocalDateTime fim    = inicio.plusHours(4);
+        Long motoboy = 900_021L;
 
-        Turno aceito = salvarComDatas("Sobrepoe e aceito", 900_020L, 900_021L, inicio.plusHours(1));
+        Turno cancelado = salvarComDatas("Sobrepoe mas cancelado", 900_020L, motoboy, inicio.plusHours(1));
+        cancelado.setStatus(StatusTurno.CANCELADO);
+        repo.save(cancelado);
+        inscrever(cancelado.getId(), motoboy, StatusInscricao.ACEITO);
+
+        Turno alvo = salvarComDatas("Alvo", 900_020L, null, inicio);
+        assertThat(repo.existeConflitoDeAgenda(motoboy, alvo.getId(), inicio, fim)).isFalse();
+
+        Turno aceito = salvarComDatas("Sobrepoe e aceito", 900_020L, motoboy, inicio.plusHours(2));
         aceito.setStatus(StatusTurno.ACEITO);
         repo.save(aceito);
+        inscrever(aceito.getId(), motoboy, StatusInscricao.ACEITO);
 
-        Turno aberto = salvarComDatas("Sobrepoe mas aberto", 900_020L, 900_021L, inicio.plusHours(2));
-        aberto.setStatus(StatusTurno.ABERTO);
-        repo.save(aberto);
-
-        List<Turno> conflitos = repo.findConflitos(900_021L, inicio, fim);
-
-        assertThat(conflitos).extracting(Turno::getId).containsExactly(aceito.getId());
+        assertThat(repo.existeConflitoDeAgenda(motoboy, alvo.getId(), inicio, fim)).isTrue();
     }
 
     @Test

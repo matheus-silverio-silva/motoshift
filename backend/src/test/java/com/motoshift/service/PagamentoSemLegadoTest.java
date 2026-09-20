@@ -44,7 +44,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 @ActiveProfiles("test")
 class PagamentoSemLegadoTest {
 
-    // Ids altos para não colidirem com a massa do DataInitializer.
+    // Ids altos para não colidirem com a massa de demonstração.
     private static final Long LOJISTA = 950_001L;
     private static final Long MOTOBOY = 950_002L;
 

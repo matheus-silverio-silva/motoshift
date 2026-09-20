@@ -48,10 +48,16 @@ public interface TurnoRepository extends JpaRepository<Turno, Long> {
                                  Pageable pagina);
 
     /**
-     * O entregador ja tem inscricao ativa num turno que se sobrepoe ao alvo?
+     * RF05 — o entregador ja tem inscricao ativa num turno que se sobrepoe ao
+     * alvo?
      *
-     * Cobre o multi-vaga, em que o turno de origem pode continuar ABERTO. Era
-     * um laco com findById por inscricao; agora e uma pergunta so ao banco.
+     * Substitui o findConflitos, que olhava turnos.motoboy_id e so status
+     * ACEITO/EM_ANDAMENTO: num turno multi-vaga o entregador entra pela
+     * inscricao e o turno continua ABERTO, entao o conflito escapava. Tambem
+     * substitui o laco com um findById por inscricao ativa que veio depois.
+     *
+     * Literal de enum qualificado, e nao string: assim o valor passa pelos
+     * converters na hora de montar o SQL.
      */
     @Query("select case when count(t) > 0 then true else false end from Turno t "
          + "where t.id <> :alvoId "
@@ -64,19 +70,6 @@ public interface TurnoRepository extends JpaRepository<Turno, Long> {
                                    @Param("alvoId") Long alvoId,
                                    @Param("inicio") LocalDateTime inicio,
                                    @Param("fim") LocalDateTime fim);
-
-    // RF05: verifica conflito de horário para o motoboy
-    @Query("SELECT t FROM Turno t WHERE t.motoboyId = :motoboyId " +
-           // Literal de enum qualificado, e nao a string: assim o valor passa
-           // pelo StatusTurnoConverter na hora de montar o SQL. String crua
-           // aqui deixaria a comparacao ao acaso da caixa que o dialeto usar.
-           "AND t.status IN (com.motoshift.entity.StatusTurno.ACEITO, "
-         + "                 com.motoshift.entity.StatusTurno.EM_ANDAMENTO) " +
-           "AND t.dataInicio < :fim AND t.dataFim > :inicio")
-    List<Turno> findConflitos(
-            @Param("motoboyId") Long motoboyId,
-            @Param("inicio") LocalDateTime inicio,
-            @Param("fim") LocalDateTime fim);
 
     long countByLojistIdAndStatusIn(Long lojistId, List<StatusTurno> statuses);
 
