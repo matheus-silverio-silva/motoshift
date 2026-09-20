@@ -26,17 +26,19 @@ class HistoricoResumo {
   bool precisaAvaliar(Turno t) =>
       t.status == StatusTurno.finalizado && !avaliados.contains(t.id);
 
+  /// Turno finalizado cujo pagamento não liquidou.
+  ///
+  /// Com a liquidação automática este estado não é mais alcançável: finalizar
+  /// transfere o dinheiro na mesma transação, e o turno sai de lá já PAGO. O
+  /// predicado continua porque o histórico tem turnos da época em que o
+  /// pagamento dependia de dois cliques e alguém não clicou — eles precisam
+  /// aparecer em algum lugar, ainda que ninguém possa mais resolvê-los pelo app.
+  ///
+  /// As funções `lojistaPrecisaConfirmar` e `motoboyPrecisaConfirmar` saíram
+  /// junto com os botões que elas habilitavam.
   bool aguardandoPagamento(Turno t) =>
       t.status == StatusTurno.finalizado &&
       t.pagamentoStatus == PagamentoStatus.pendente;
-
-  /// Lojista precisa confirmar que enviou o pagamento.
-  bool lojistaPrecisaConfirmar(Turno t) =>
-      aguardandoPagamento(t) && !t.lojistaJaConfirmou;
-
-  /// Motoboy precisa confirmar que recebeu o pagamento.
-  bool motoboyPrecisaConfirmar(Turno t) =>
-      aguardandoPagamento(t) && !t.motoboyJaConfirmou;
 
   bool _pago(Turno t) =>
       t.status == StatusTurno.finalizado &&

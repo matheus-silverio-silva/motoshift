@@ -19,6 +19,9 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
 import 'package:moto_shift/models/carteira.dart';
+import 'package:moto_shift/models/cobranca.dart';
+import 'package:moto_shift/models/extrato_filtro.dart';
+import 'package:moto_shift/models/resumo_financeiro.dart';
 import 'package:moto_shift/models/transacao.dart';
 import 'package:moto_shift/models/turno.dart';
 import 'package:moto_shift/models/usuario.dart';
@@ -219,8 +222,6 @@ List<Turno> fakeMeusTurnos({DateTime? ancora}) {
       raioEntregaKm: 8,
       status: StatusTurno.finalizado,
       pagamentoStatus: PagamentoStatus.pago,
-      lojistaConfirmouEm: hoje.subtract(const Duration(days: 7)),
-      motoboyConfirmouEm: hoje.subtract(const Duration(days: 7)),
     ),
     Turno(
       id: 203,
@@ -307,8 +308,6 @@ List<Turno> fakeTurnosLojista({DateTime? ancora}) {
       raioEntregaKm: 8,
       status: StatusTurno.finalizado,
       pagamentoStatus: PagamentoStatus.pago,
-      lojistaConfirmouEm: hoje.subtract(const Duration(days: 5)),
-      motoboyConfirmouEm: hoje.subtract(const Duration(days: 5)),
     ),
   ];
 }
@@ -337,6 +336,114 @@ Map<String, dynamic> fakeDashboardLojista() => {
 /// Antes vinha sem transações, e o golden da carteira mostrava só o estado
 /// vazio — ou seja, `_formatarData` ("Hoje, 14:30" / "Ontem, ..." / "12/08,
 /// ...") não era exercitado por teste nenhum. Não quebrava, e viraria falha no
+/// Um extrato variado, com os tipos que o filtro oferece.
+///
+/// Cobre os dois lados do dinheiro e os dois casos do sinal: lançamentos com
+/// `natureza` gravada (o fluxo novo) e um sem ela (linha anterior à V12), que
+/// é o que prova que a tela mostra valor neutro em vez de chutar um lado.
+List<Transacao> fakeExtrato() {
+  final dia = DateTime(
+      dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
+  return [
+    Transacao(
+      id: 91,
+      motoboyId: 1,
+      tipo: TipoTransacao.recarga,
+      natureza: NaturezaTransacao.credito,
+      valor: 500,
+      descricao: 'Recarga via Pix',
+      criadoEm: dia.add(const Duration(hours: 9)),
+      saldoDisponivelApos: 820,
+    ),
+    Transacao(
+      id: 92,
+      motoboyId: 1,
+      contraparteId: 2,
+      turnoId: 202,
+      tipo: TipoTransacao.pagamentoRecebido,
+      natureza: NaturezaTransacao.credito,
+      valor: 120,
+      descricao: 'Turno finalizado: Hamburgueria da Cláudia',
+      criadoEm: dia.subtract(const Duration(days: 1, hours: 4)),
+      operacaoId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      saldoDisponivelApos: 320,
+    ),
+    Transacao(
+      id: 93,
+      motoboyId: 1,
+      tipo: TipoTransacao.saque,
+      natureza: NaturezaTransacao.debito,
+      valor: 200,
+      descricao: 'Transferência Pix — ricardo@pix.com',
+      criadoEm: dia.subtract(const Duration(days: 2, hours: 3)),
+      saldoDisponivelApos: 200,
+    ),
+    // Sem natureza: linha do histórico, anterior à coluna existir.
+    Transacao(
+      id: 94,
+      motoboyId: 1,
+      turnoId: 201,
+      tipo: TipoTransacao.desconhecido,
+      valor: 45,
+      descricao: 'Lançamento antigo sem natureza',
+      criadoEm: dia.subtract(const Duration(days: 3, hours: 2)),
+    ),
+  ];
+}
+
+ResumoFinanceiro fakeResumoFinanceiro() {
+  final dia = DateTime(
+      dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
+  return ResumoFinanceiro(
+    dataInicio: dia.subtract(const Duration(days: 29)),
+    dataFim: dia,
+    entradas: 620,
+    saidas: 200,
+    liquido: 420,
+    disponivel: 820,
+    bloqueado: 360,
+    aReceber: 240,
+    comprometido: 360,
+    reservasAbertas: const [
+      ReservaAberta(turnoId: 301, titulo: 'Turno Noite — Hamburgueria', valor: 240),
+      ReservaAberta(turnoId: 302, titulo: 'Turno Manhã — Farmácia Ana', valor: 120),
+    ],
+    porTipo: const [
+      TotalPorTipo(
+          tipo: TipoTransacao.recarga,
+          natureza: NaturezaTransacao.credito,
+          total: 500,
+          quantidade: 1),
+      TotalPorTipo(
+          tipo: TipoTransacao.saque,
+          natureza: NaturezaTransacao.debito,
+          total: 200,
+          quantidade: 1),
+    ],
+  );
+}
+
+List<PontoDeFluxo> fakeFluxo() {
+  final dia = DateTime(
+      dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
+  return [
+    PontoDeFluxo(
+        inicio: dia.subtract(const Duration(days: 2)),
+        rotulo: '10/08',
+        entradas: 0,
+        saidas: 200,
+        liquido: -200),
+    PontoDeFluxo(
+        inicio: dia.subtract(const Duration(days: 1)),
+        rotulo: '11/08',
+        entradas: 120,
+        saidas: 0,
+        liquido: 120),
+    PontoDeFluxo(
+        inicio: dia, rotulo: '12/08', entradas: 500, saidas: 0, liquido: 500),
+  ];
+}
+
 /// dia em que alguém acrescentasse dados aqui.
 ///
 /// Os três lançamentos cobrem os três ramos do formatador, de propósito. As
@@ -347,7 +454,7 @@ Carteira fakeCarteira() {
       dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
   return Carteira(
     motoboyId: 1,
-    saldoAtual: 320,
+    saldoDisponivel: 320,
     ganhosMensais: 1850,
     atualizadoEm: dia.add(const Duration(hours: 14, minutes: 30)),
     transacoes: [
@@ -527,11 +634,119 @@ class FakeTurnoApi extends TurnoApi {
       fakeTurnosDisponiveis();
 }
 
+/// Carteira falsa, com o extrato filtrado no próprio fake.
+///
+/// O filtro é aplicado aqui, e não ignorado, porque é exatamente o que o teste
+/// de extrato precisa verificar: que a tela manda o filtro certo e desenha o
+/// que voltou. Um fake que devolvesse tudo faria o teste passar mesmo se a tela
+/// parasse de filtrar.
 class FakeCarteiraApi extends CarteiraApi {
   FakeCarteiraApi() : super(ApiClient());
 
+  /// Registro do que a tela pediu — para o teste conferir o filtro enviado.
+  final List<ExtratoFiltro> filtrosRecebidos = [];
+
+  /// Cobranças criadas, para o teste de recarga acompanhar o fluxo.
+  final List<Cobranca> recargasCriadas = [];
+  final List<int> confirmacoes = [];
+
+  int _proximaCobranca = 900;
+
   @override
   Future<Carteira> buscarCarteira(int motoboyId) async => fakeCarteira();
+
+  @override
+  Future<PaginaDoExtrato> buscarExtrato({
+    ExtratoFiltro filtro = const ExtratoFiltro(),
+    int pagina = 0,
+    int tamanho = 20,
+  }) async {
+    filtrosRecebidos.add(filtro);
+
+    final todos = fakeExtrato();
+    final filtrados = todos.where((t) {
+      if (filtro.tipos.isNotEmpty && !filtro.tipos.contains(t.tipo)) {
+        return false;
+      }
+      if (filtro.natureza != null && t.natureza != filtro.natureza) {
+        return false;
+      }
+      if (filtro.busca != null && filtro.busca!.isNotEmpty) {
+        if (!t.descricao.toLowerCase().contains(filtro.busca!.toLowerCase())) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+
+    final de = pagina * tamanho;
+    final ate = (de + tamanho).clamp(0, filtrados.length);
+    return (
+      itens: de >= filtrados.length ? <Transacao>[] : filtrados.sublist(de, ate),
+      total: filtrados.length,
+    );
+  }
+
+  @override
+  Future<ResumoFinanceiro> buscarResumo({
+    DateTime? dataInicio,
+    DateTime? dataFim,
+  }) async =>
+      fakeResumoFinanceiro();
+
+  @override
+  Future<List<PontoDeFluxo>> buscarFluxo({
+    String agrupamento = 'dia',
+    DateTime? dataInicio,
+    DateTime? dataFim,
+  }) async =>
+      fakeFluxo();
+
+  @override
+  Future<String> exportarExtratoCsv({
+    ExtratoFiltro filtro = const ExtratoFiltro(),
+  }) async =>
+      'data;tipo;valor\n01/09/2026 12:00;recarga;500.00\n';
+
+  @override
+  Future<Cobranca> criarRecarga(double valor) async {
+    final c = Cobranca(
+      id: _proximaCobranca++,
+      tipo: TipoCobranca.recarga,
+      valor: valor,
+      status: StatusCobranca.pendente,
+      codigoPix: '00020126580014BR.GOV.BCB.PIX0136motoshift-demo-fake',
+      criadaEm: dataAncoraGolden,
+    );
+    recargasCriadas.add(c);
+    return c;
+  }
+
+  @override
+  Future<Cobranca> confirmarRecarga(int cobrancaId) async {
+    confirmacoes.add(cobrancaId);
+    final pendente = recargasCriadas.firstWhere((c) => c.id == cobrancaId);
+    return Cobranca(
+      id: pendente.id,
+      tipo: pendente.tipo,
+      valor: pendente.valor,
+      status: StatusCobranca.concluido,
+      codigoPix: pendente.codigoPix,
+      criadaEm: pendente.criadaEm,
+      concluidaEm: dataAncoraGolden,
+    );
+  }
+
+  @override
+  Future<Cobranca> solicitarSaque(double valor) async => Cobranca(
+        id: _proximaCobranca++,
+        tipo: TipoCobranca.saque,
+        valor: valor,
+        status: StatusCobranca.concluido,
+        codigoPix: 'entregador@pix.com',
+        criadaEm: dataAncoraGolden,
+        concluidaEm: dataAncoraGolden,
+      );
 
   @override
   Future<List<Map<String, dynamic>>> buscarGrafico(int motoboyId,
@@ -678,8 +893,6 @@ List<Turno> fakeTurnosEncerradosFixos() {
       raioEntregaKm: 8,
       status: StatusTurno.finalizado,
       pagamentoStatus: PagamentoStatus.pago,
-      lojistaConfirmouEm: base.subtract(const Duration(days: 7)),
-      motoboyConfirmouEm: base.subtract(const Duration(days: 7)),
     ),
     Turno(
       id: 403,

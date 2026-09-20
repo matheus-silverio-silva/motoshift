@@ -180,6 +180,140 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
     }
   }
 
+  /// Mostra o custo e o saldo antes de publicar; sem saldo, oferece recarga.
+  ///
+  /// O backend recusa a publicação sem lastro com 422, e a mensagem dele já
+  /// diz quanto falta. Mas descobrir isso só depois de preencher o formulário
+  /// inteiro é descobrir tarde: aqui o lojista vê a conta antes de confirmar,
+  /// e quando o saldo não dá, o caminho para resolver está no mesmo diálogo.
+  ///
+  /// Isto NÃO substitui a checagem do servidor. O saldo pode mudar entre esta
+  /// leitura e a publicação — outro turno liquidando, um saque — e quem decide
+  /// continua sendo o backend, dentro da transação.
+  Future<bool> _confirmarCusto(Turno turno) async {
+    final api = context.read<ApiService>();
+
+    double? disponivel;
+    try {
+      disponivel = (await api.carteira.buscarResumo()).disponivel;
+    } catch (_) {
+      // Sem saldo em mãos, seguir em frente é melhor do que barrar: quem
+      // decide é o servidor, e ele responde com o número certo.
+      disponivel = null;
+    }
+    if (!mounted) return false;
+
+    final custo = turno.valorEstimado * turno.vagas;
+    final falta = disponivel == null ? 0.0 : custo - disponivel;
+    final semSaldo = disponivel != null && falta > 0;
+
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Confirmar publicação',
+            style: tsBricolage(17, FontWeight.w800, color: AppColors.ink)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _linhaDoCusto(
+              'Custo do turno',
+              _moeda(custo),
+              detalhe: turno.vagas > 1
+                  ? '${_moeda(turno.valorEstimado)} × ${turno.vagas} vagas'
+                  : null,
+              destaque: true,
+            ),
+            const SizedBox(height: 10),
+            _linhaDoCusto(
+              'Saldo disponível',
+              disponivel == null ? '—' : _moeda(disponivel),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              semSaldo
+                  ? 'Faltam ${_moeda(falta)} para publicar este turno.'
+                  : 'Este valor fica reservado na sua carteira até o turno ser '
+                      'finalizado, cancelado ou vencer.',
+              key: const Key('publicar-aviso-custo'),
+              style: tsJakarta(12, FontWeight.w500,
+                  color: semSaldo ? AppColors.error : AppColors.muted,
+                  height: 1.45),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancelar',
+                style:
+                    tsJakarta(13, FontWeight.w600, color: AppColors.muted)),
+          ),
+          if (semSaldo)
+            FilledButton(
+              key: const Key('publicar-adicionar-saldo'),
+              onPressed: () => Navigator.pop(ctx, null),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.amber),
+              child: Text('Adicionar saldo',
+                  style: tsJakarta(13, FontWeight.w700,
+                      color: AppColors.onTertiary)),
+            )
+          else
+            FilledButton(
+              key: const Key('publicar-confirmar'),
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.teal),
+              child: const Text('Publicar'),
+            ),
+        ],
+      ),
+    );
+
+    if (!mounted) return false;
+
+    // `null` é o "Adicionar saldo": leva para a recarga já com o que falta
+    // preenchido e, se o crédito entrar, tenta de novo sem refazer o formulário.
+    if (confirmado == null && semSaldo) {
+      final creditou = await Navigator.of(context)
+          .pushNamed(AppRoutes.recarga, arguments: falta);
+      if (creditou == true && mounted) return _confirmarCusto(turno);
+      return false;
+    }
+    return confirmado ?? false;
+  }
+
+  Widget _linhaDoCusto(String rotulo, String valor,
+      {String? detalhe, bool destaque = false}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(rotulo,
+                  style: tsJakarta(12.5, FontWeight.w600,
+                      color: AppColors.text)),
+              if (detalhe != null)
+                Text(detalhe,
+                    style: tsJakarta(10.5, FontWeight.w400,
+                        color: AppColors.muted)),
+            ],
+          ),
+        ),
+        Text(valor,
+            style: tsBricolage(destaque ? 16 : 14, FontWeight.w800,
+                color: destaque ? AppColors.ink : AppColors.text)),
+      ],
+    );
+  }
+
+  static String _moeda(double v) =>
+      'R\$ ${v.toStringAsFixed(2).replaceAll('.', ',')}';
+
   Future<void> _publicar() async {
     if (!_formKey.currentState!.validate()) return;
     if (_data == null || _horaInicio == null || _horaFim == null) {
@@ -251,6 +385,16 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       endereco: regiao,
       vagas: _vagas,
     );
+
+    // Publicar compromete dinheiro: o custo total sai do saldo disponível e
+    // fica bloqueado até o turno encerrar. A confirmação mostra os dois
+    // números antes de o lojista decidir — publicar deixou de ser um ato
+    // gratuito, e a tela precisa dizer isso.
+    if (!await _confirmarCusto(turno)) {
+      if (mounted) setState(() => _publicando = false);
+      return;
+    }
+    if (!mounted) return;
 
     try {
       await api.turnos.criarTurno(turno);

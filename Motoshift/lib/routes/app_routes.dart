@@ -31,6 +31,14 @@ class AppRoutes {
   static const String avaliarEntregadores =
       '/avaliar-entregadores';                                     // tela 19
 
+  // ── Financeiro ───────────────────────────────────────────────────────────
+  // Servem aos dois perfis: a pergunta "quanto entrou, quanto saiu, o que está
+  // comprometido" é a mesma para lojista e entregador, só muda o sinal.
+  static const String extrato           = '/extrato';
+  static const String lancamento        = '/extrato/lancamento';
+  static const String recarga           = '/recarga';
+  static const String relatorioFinanceiro = '/relatorio-financeiro';
+
   // ── Legadas (mantidas para compatibilidade até remoção) ──────────────────
   static const String meusTurnos        = '/meus-turnos';
   static const String agendarTurno      = '/agendar-turno';

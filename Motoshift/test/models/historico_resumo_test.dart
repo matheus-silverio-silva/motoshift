@@ -12,8 +12,6 @@ Turno _turno({
   PagamentoStatus pagamento = PagamentoStatus.naoAplicavel,
   double valor = 100,
   Duration duracao = const Duration(hours: 4),
-  bool lojistaConfirmou = false,
-  bool motoboyConfirmou = false,
 }) {
   final inicio = DateTime(2026, 8, 19, 8);
   return Turno(
@@ -27,8 +25,6 @@ Turno _turno({
     raioEntregaKm: 5,
     status: status,
     pagamentoStatus: pagamento,
-    lojistaConfirmouEm: lojistaConfirmou ? inicio : null,
-    motoboyConfirmouEm: motoboyConfirmou ? inicio : null,
   );
 }
 
@@ -119,23 +115,25 @@ void main() {
       expect(r.totalGanho, 100);
     });
 
-    test('quem já confirmou sai da lista de quem precisa confirmar', () {
+    // O teste 'quem ja confirmou sai da lista de quem precisa confirmar' saiu
+    // daqui junto com lojistaPrecisaConfirmar e motoboyPrecisaConfirmar: a
+    // dupla confirmacao deixou de existir. O que restou de 'aguardando
+    // pagamento' e historico do modelo antigo, coberto pelo teste abaixo.
+    test('turno finalizado e pendente continua visivel como historico', () {
       final pendente = _turno(
         id: 1,
         status: StatusTurno.finalizado,
         pagamento: PagamentoStatus.pendente,
       );
-      final lojistaJa = _turno(
+      final pago = _turno(
         id: 2,
         status: StatusTurno.finalizado,
-        pagamento: PagamentoStatus.pendente,
-        lojistaConfirmou: true,
+        pagamento: PagamentoStatus.pago,
       );
-      final r = _resumo([pendente, lojistaJa]);
+      final r = _resumo([pendente, pago]);
 
-      expect(r.lojistaPrecisaConfirmar(pendente), isTrue);
-      expect(r.lojistaPrecisaConfirmar(lojistaJa), isFalse);
-      expect(r.motoboyPrecisaConfirmar(lojistaJa), isTrue);
+      expect(r.aguardandoPagamento(pendente), isTrue);
+      expect(r.aguardandoPagamento(pago), isFalse);
     });
   });
 

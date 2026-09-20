@@ -30,9 +30,15 @@ import 'views/notas_fiscais/notas_fiscais_screen.dart';
 import 'views/notificacoes/notificacoes_screen.dart';
 import 'views/saldo_lojista/saldo_lojista_screen.dart';
 import 'views/avaliar_entregadores/avaliar_entregadores_screen.dart';
+import 'views/extrato/extrato_screen.dart';
+import 'views/extrato/lancamento_detalhe_screen.dart';
+import 'views/recarga/recarga_screen.dart';
+import 'views/relatorios_financeiros/relatorios_financeiros_screen.dart';
 import 'views/stubs/stub_screens.dart';
 import 'widgets/auth_guard.dart';
 import 'models/usuario.dart';
+import 'models/extrato_filtro.dart';
+import 'models/transacao.dart';
 
 class MotoShiftApp extends StatelessWidget {
   const MotoShiftApp({super.key});
@@ -139,6 +145,39 @@ class MotoShiftApp extends StatelessWidget {
               ),
           AppRoutes.avaliarEntregadores:
               (_) => const AuthGuard(child: AvaliarEntregadoresScreen()),
+
+          // ── Financeiro (qualquer autenticado) ─────────────────────────────
+          // Sem papel: a pergunta "o que entrou e o que saiu" é a mesma para os
+          // dois perfis, e o backend recorta pelo usuário do token. O lojista
+          // recarrega para publicar; o entregador, para nada — mas nada impede,
+          // e uma regra a mais aqui seria regra sem motivo.
+          AppRoutes.extrato: (context) {
+            final args = ModalRoute.of(context)?.settings.arguments;
+            return AuthGuard(
+              child: ExtratoScreen(
+                filtroInicial: args is ExtratoFiltro ? args : null,
+              ),
+            );
+          },
+          AppRoutes.lancamento: (context) {
+            final args = ModalRoute.of(context)?.settings.arguments;
+            if (args is! Transacao) {
+              // Rota aberta sem o lançamento (deep link, por exemplo): o
+              // extrato é o lugar de onde ela deveria ter vindo.
+              return const AuthGuard(child: ExtratoScreen());
+            }
+            return AuthGuard(child: LancamentoDetalheScreen(lancamento: args));
+          },
+          AppRoutes.recarga: (context) {
+            final args = ModalRoute.of(context)?.settings.arguments;
+            return AuthGuard(
+              child: RecargaScreen(
+                valorSugerido: args is double ? args : null,
+              ),
+            );
+          },
+          AppRoutes.relatorioFinanceiro:
+              (_) => const AuthGuard(child: RelatoriosFinanceirosScreen()),
 
           // ── Perfil — sub-páginas (qualquer autenticado) ───────────────────
           AppRoutes.dadosPessoais:    (_) => const AuthGuard(child: DadosPessoaisScreen()),

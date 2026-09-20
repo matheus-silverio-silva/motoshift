@@ -120,7 +120,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     if (id == null) return;
 
     try {
-      await api.carteira.solicitarSaque(id, valor);
+      await api.carteira.solicitarSaque(valor);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Transferência solicitada com sucesso!'),
