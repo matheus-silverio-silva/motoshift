@@ -16,6 +16,14 @@ import '../widgets/desktop/content_grid.dart';
 import '../widgets/stat_card.dart';
 
 /// Preview do shell responsivo (Fase 0) — NÃO faz parte do app.
+///
+/// É um segundo ponto de entrada: nada em `main.dart` chega até aqui, e o
+/// compilador só inclui no bundle o que é alcançável a partir do entrypoint
+/// usado no build. Ou seja, este arquivo não vai para o app publicado mesmo
+/// morando em `lib/` — ele precisa estar aqui para ser importável, e quem o
+/// importa é `test/dev_capture/shell_capture_test.dart`, que gera as imagens
+/// do shell.
+///
 /// Rodar com: flutter run -t lib/dev/shell_preview_main.dart -d chrome
 void main() {
   runApp(const _ShellPreviewApp());

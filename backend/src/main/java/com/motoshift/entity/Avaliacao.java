@@ -13,8 +13,9 @@ import java.time.LocalDateTime;
         columnNames = {"turnoId", "avaliadorId", "avaliadoId"}
     ),
     indexes = {
-        @Index(name = "ix_avaliacao_avaliado", columnList = "avaliadoId"),
-        @Index(name = "ix_avaliacao_turno",    columnList = "turnoId")
+        @Index(name = "ix_avaliacao_avaliado",  columnList = "avaliadoId"),
+        @Index(name = "ix_avaliacao_turno",     columnList = "turnoId"),
+        @Index(name = "ix_avaliacao_avaliador", columnList = "avaliadorId")
     }
 )
 public class Avaliacao {

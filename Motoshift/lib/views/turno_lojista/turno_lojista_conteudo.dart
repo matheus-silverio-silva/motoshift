@@ -451,7 +451,9 @@ class _MotoboyCard extends StatelessWidget {
   final int motoboyId;
   final String? nome;
   final double? nota;
-  // TODO: endpoint GET /usuarios/{id} não retorna veículo — adicionar quando disponível
+  // GET /usuarios/{id} de outra conta já traz veiculoModelo e veiculoCor no
+  // perfil público; mostrá-los aqui é mudança de layout (e de golden), não de
+  // contrato.
 
   @override
   Widget build(BuildContext context) {

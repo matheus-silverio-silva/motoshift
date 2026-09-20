@@ -18,9 +18,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * {@link #getValor()} anotado com {@code @JsonValue} para a API.
  *
  * <p><b>EM_ANDAMENTO é lido, nunca escrito.</b> Nenhum ponto do backend chama
- * {@code setStatus} com ele; o estado é consultado pelo conflito de agenda
- * ({@code TurnoRepository.findConflitos}), pela contagem de turnos ativos do
- * lojista e pelo job de vencimento, e o app já sabe desenhá-lo. Ele espera o
+ * {@code setStatus} com ele; o estado é consultado pela contagem de turnos
+ * ativos do lojista e pelo job de vencimento, e o app já sabe desenhá-lo. Ele espera o
  * check-in do entregador, que ainda não existe. Mantido no enum para que uma
  * linha legada com esse valor seja lida sem estourar.
  */

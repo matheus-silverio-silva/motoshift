@@ -2,6 +2,8 @@ package com.motoshift;
 
 import com.motoshift.dto.CarteiraResponse;
 import com.motoshift.entity.Carteira;
+import com.motoshift.entity.StatusTransacao;
+import com.motoshift.entity.TipoTransacao;
 import com.motoshift.entity.Transacao;
 import com.motoshift.repository.CarteiraRepository;
 import com.motoshift.repository.TransacaoRepository;
@@ -16,11 +18,12 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
 
 /**
- * O unico teste que sobe o contexto inteiro do Spring.
+ * O contexto inteiro do Spring sobre o H2 do dia a dia.
  *
  * Cobre o que teste de unidade com mock nao alcanca:
  *   - todos os beans se conectam (inclusive o @RestControllerAdvice novo);
@@ -30,19 +33,14 @@ import static org.assertj.core.api.Assertions.*;
  *   - o filtro de status do ganhosDoMes funciona contra um banco de verdade,
  *     nao contra um mock que devolve o que mandaram.
  *
- * O QUE ESTE TESTE **NAO** COBRE, e continua sendo o buraco apontado na
- * auditoria: as migracoes Flyway. As migracoes V1..V4 sao SQL PostgreSQL
- * (blocos `DO $$`, consultas a `pg_constraint`, `ALTER COLUMN ... SET NOT
- * NULL`) e o H2 nao as executa nem em modo de compatibilidade. Rodar Flyway de
- * verdade contra o schema exige um PostgreSQL — Testcontainers (precisa de
- * Docker) ou um banco de CI. Enquanto isso nao existir, a primeira validacao
- * do `ddl-auto=validate` contra o SQL continua sendo o boot de producao.
+ * As migracoes Flyway e o ddl-auto=validate, que o H2 nao executa, rodam num
+ * PostgreSQL de verdade em SchemaPostgresTest e MigracoesPostgresTest.
  */
 @SpringBootTest
 @ActiveProfiles("test")
 class ContextoESchemaTest {
 
-    /// Id alto de proposito: o DataInitializer semeia ids baixos.
+    /// Id alto de proposito: a massa de demonstracao semeia ids baixos.
     private static final Long USUARIO = 999_001L;
 
     @Autowired
@@ -59,17 +57,18 @@ class ContextoESchemaTest {
     void contextoSobe() {
         assertThat(carteiraService).isNotNull();
 
-        // Executa as duas consultas que mudaram. Nao interessa o resultado:
-        // interessa que o JPQL e o nome derivado compilam contra o schema.
+        // Executa as consultas do extrato. Nao interessa o resultado: interessa
+        // que o JPQL — inclusive o GROUP BY por mes — compila contra o schema.
         assertThat(transacaoRepo.somarPorTipoDesde(
                 USUARIO,
-                CarteiraService.TIPOS_GANHO,
+                CarteiraService.TIPO_GANHO,
                 CarteiraService.STATUS_LIQUIDADO,
                 LocalDateTime.now().minusYears(1)))
                 .isNotNull();
 
-        assertThat(transacaoRepo.findByUsuarioIdAndTipoInAndStatusInOrderByCriadoEmDesc(
-                USUARIO, CarteiraService.TIPOS_GANHO, CarteiraService.STATUS_LIQUIDADO))
+        assertThat(transacaoRepo.somarPorMesDesde(
+                USUARIO, CarteiraService.TIPO_GANHO, CarteiraService.STATUS_LIQUIDADO,
+                LocalDateTime.now().minusYears(1)))
                 .isNotNull();
     }
 
@@ -79,8 +78,8 @@ class ContextoESchemaTest {
         Long usuario = USUARIO + 1;
         carteiraService.obterOuCriar(usuario);
 
-        salvar(usuario, "turno", "concluido", "100.00");
-        salvar(usuario, "turno", "pendente", "125.00");
+        salvar(usuario, TipoTransacao.PAGAMENTO_RECEBIDO, StatusTransacao.CONCLUIDO, "100.00");
+        salvar(usuario, TipoTransacao.PAGAMENTO_RECEBIDO, StatusTransacao.PENDENTE, "125.00");
 
         // O turno pendente foi finalizado mas ainda nao foi pago. Antes do
         // filtro de status ele entrava na conta, e o entregador via R$ 225 de
@@ -90,18 +89,20 @@ class ContextoESchemaTest {
     }
 
     @Test
-    @DisplayName("o grafico usa o mesmo corte — as duas leituras nao podem discordar")
+    @DisplayName("o grafico agrupado no banco concorda com ganhos do mes")
     void graficoConcordaComGanhosDoMes() {
         Long usuario = USUARIO + 2;
         carteiraService.obterOuCriar(usuario);
 
-        salvar(usuario, "pagamento_recebido", "concluido", "90.00");
-        salvar(usuario, "pagamento_recebido", "pendente", "40.00");
+        salvar(usuario, TipoTransacao.PAGAMENTO_RECEBIDO, StatusTransacao.CONCLUIDO, "90.00");
+        salvar(usuario, TipoTransacao.PAGAMENTO_RECEBIDO, StatusTransacao.CONCLUIDO, "30.00");
+        salvar(usuario, TipoTransacao.PAGAMENTO_RECEBIDO, StatusTransacao.PENDENTE, "40.00");
+        salvar(usuario, TipoTransacao.SAQUE, StatusTransacao.CONCLUIDO, "50.00");
 
         BigDecimal doMes = carteiraService.ganhosDoMes(usuario);
         List<java.util.Map<String, Object>> serie = carteiraService.grafico(usuario, 1);
 
-        assertThat(doMes).isEqualByComparingTo("90.00");
+        assertThat(doMes).isEqualByComparingTo("120.00");
         assertThat((BigDecimal) serie.get(0).get("ganhos")).isEqualByComparingTo(doMes);
     }
 
@@ -125,12 +126,13 @@ class ContextoESchemaTest {
         assertThat(resp.getGanhosMensais()).isNotNull();
     }
 
-    private void salvar(Long usuario, String tipo, String status, String valor) {
+    private void salvar(Long usuario, TipoTransacao tipo, StatusTransacao status, String valor) {
         Transacao t = new Transacao();
         t.setUsuarioId(usuario);
         t.setTipo(tipo);
         t.setStatus(status);
         t.setValor(new BigDecimal(valor));
+        t.setIdempotencyKey("teste:" + UUID.randomUUID());
         transacaoRepo.save(t);
 
         // criadoEm vem do @PrePersist (agora). Se o teste rodar no dia 1 antes

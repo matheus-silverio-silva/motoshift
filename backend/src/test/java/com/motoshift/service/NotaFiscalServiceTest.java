@@ -162,6 +162,30 @@ class NotaFiscalServiceTest {
     }
 
     @Test
+    @DisplayName("entregador de vaga extra vê a própria pendência depois que o turno é finalizado")
+    void pendenciaDeVagaExtraDepoisDeFinalizar() {
+        Turno turno = turnoFinalizado(new BigDecimal("100.00"));
+        // Ao finalizar, TODAS as inscrições viram FINALIZADO. O filtro antigo
+        // só olhava ACEITO: o lojista voltava a ver um entregador só, e quem
+        // entrou por vaga extra não via pendência nenhuma.
+        finalizarInscricoes(turno);
+        inscrever(turno, estranho, StatusInscricao.FINALIZADO);
+
+        assertThat(idsPendentes(estranho, false)).contains(turno.getId());
+        assertThat(notas.pendentes(lojista, true))
+                .extracting(NotaFiscalPendenteResponse::getPrestadorId)
+                .containsExactlyInAnyOrder(motoboy, estranho);
+
+        notas.emitir(turno.getId(), estranho, estranho);
+
+        assertThat(idsPendentes(estranho, false)).doesNotContain(turno.getId());
+        // A nota de um entregador não apaga a pendência do outro.
+        assertThat(notas.pendentes(lojista, true))
+                .extracting(NotaFiscalPendenteResponse::getPrestadorId)
+                .containsExactly(motoboy);
+    }
+
+    @Test
     @DisplayName("a nota aparece na lista dos dois participantes, e só deles")
     void listaDosDoisLados() {
         Turno turno = turnoFinalizado(new BigDecimal("130.00"));
@@ -176,6 +200,22 @@ class NotaFiscalServiceTest {
     }
 
     // ── Apoio ───────────────────────────────────────────────────────────────
+
+    /** O que finalizar() faz com as inscrições: todas viram FINALIZADO. */
+    private void finalizarInscricoes(Turno turno) {
+        inscricaoRepo.findByTurnoId(turno.getId()).forEach(i -> {
+            i.setStatus(StatusInscricao.FINALIZADO);
+            inscricaoRepo.save(i);
+        });
+    }
+
+    private void inscrever(Turno turno, Long motoboyId, StatusInscricao status) {
+        TurnoInscricao ins = new TurnoInscricao();
+        ins.setTurnoId(turno.getId());
+        ins.setMotoboyId(motoboyId);
+        ins.setStatus(status);
+        inscricaoRepo.save(ins);
+    }
 
     private List<Long> idsPendentes(Long usuarioId, boolean ehLojista) {
         return notas.pendentes(usuarioId, ehLojista).stream()
@@ -214,7 +254,8 @@ class NotaFiscalServiceTest {
         u.setNome(nome);
         // E-mail único por execução: a coluna tem restrição de unicidade e o
         // @BeforeEach roda uma vez por teste.
-        u.setEmail("nf-" + System.nanoTime() + "@teste.com");
+        // Fora do sufixo da massa de demonstracao, que o reset apagaria.
+        u.setEmail("nf-" + System.nanoTime() + "@notafiscal.test");
         u.setSenha("nao-usado-neste-teste");
         u.setTelefone("41999990000");
         u.setTipo(tipo);

@@ -1,9 +1,12 @@
 package com.motoshift.controller;
 
+import com.motoshift.dto.PerfilPublicoResponse;
 import com.motoshift.dto.UsuarioResponse;
 import com.motoshift.security.UsuarioAutenticado;
 import com.motoshift.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,14 +27,25 @@ public class UsuarioController {
         this.service = service;
     }
 
-    @Operation(summary = "Buscar usuário por ID")
+    @Operation(summary = "Buscar usuário por ID",
+               description = "O próprio usuário recebe o perfil completo. Qualquer outra "
+                           + "conta recebe só o perfil público — sem documento, CNH, "
+                           + "nascimento, e-mail, telefone ou endereço.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Perfil do usuário"),
+        @ApiResponse(responseCode = "200", description = "Perfil completo ou público",
+                content = @Content(schema = @Schema(
+                        oneOf = {UsuarioResponse.class, PerfilPublicoResponse.class}))),
         @ApiResponse(responseCode = "404", description = "Usuário não encontrado")
     })
     @GetMapping("/{id}")
-    public ResponseEntity<UsuarioResponse> buscar(@PathVariable Long id) {
-        return ResponseEntity.ok(service.buscarPorId(id));
+    public ResponseEntity<?> buscar(@PathVariable Long id,
+                                    @AuthenticationPrincipal UsuarioAutenticado atual) {
+        // Perfil alheio se lê (o lojista precisa ver quem aceitou o turno),
+        // mas só na versão reduzida. O completo é dado pessoal do dono.
+        if (id.equals(atual.id())) {
+            return ResponseEntity.ok(service.buscarPorId(id));
+        }
+        return ResponseEntity.ok(service.buscarPerfilPublico(id));
     }
 
     @Operation(summary = "Atualizar dados do usuário")
@@ -44,8 +58,7 @@ public class UsuarioController {
             @PathVariable Long id,
             @RequestBody Map<String, Object> body,
             @AuthenticationPrincipal UsuarioAutenticado atual) {
-        // Perfil alheio se le (o lojista precisa ver quem aceitou o turno),
-        // mas so o dono edita.
+        // Só o dono edita.
         atual.exigirMesmoUsuario(id);
         return ResponseEntity.ok(service.atualizar(id, body));
     }

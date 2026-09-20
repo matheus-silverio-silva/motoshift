@@ -11,7 +11,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -50,23 +52,30 @@ public class TurnoController {
         return service.criar(req, atual.id());
     }
 
-    @Operation(summary = "Listar turnos", description = "Filtra por lojistId, motoboyId ou retorna todos disponíveis.")
+    @Operation(summary = "Listar turnos",
+            description = "Filtra por lojistId, motoboyId ou retorna todos disponíveis. "
+                    + "Informe pagina (e opcionalmente tamanho) para paginar; sem pagina, "
+                    + "a lista vem inteira. O total vai no header X-Total-Count.")
     @ApiResponse(responseCode = "200", description = "Lista de turnos")
     @GetMapping
-    public List<TurnoResponse> listar(
+    public ResponseEntity<List<TurnoResponse>> listar(
             @RequestParam(required = false) Long lojistId,
             @RequestParam(required = false) Long motoboyId,
+            @RequestParam(required = false) Integer pagina,
+            @RequestParam(required = false) Integer tamanho,
             @AuthenticationPrincipal UsuarioAutenticado atual) {
+        Pageable pedido = Paginacao.pedido(pagina, tamanho);
+
         // A agenda de alguem e dado privado: o filtro so aceita o proprio id.
         if (lojistId != null) {
             atual.exigirMesmoUsuario(lojistId);
-            return consultas.listarPorLojista(lojistId);
+            return Paginacao.resposta(consultas.listarPorLojista(lojistId, pedido));
         }
         if (motoboyId != null) {
             atual.exigirMesmoUsuario(motoboyId);
-            return consultas.listarPorMotoboy(motoboyId);
+            return Paginacao.resposta(consultas.listarPorMotoboy(motoboyId, pedido));
         }
-        return consultas.listarDisponiveis();
+        return Paginacao.resposta(consultas.listarDisponiveis(pedido));
     }
 
     @Operation(summary = "Listar turnos disponíveis",
@@ -75,7 +84,7 @@ public class TurnoController {
                     + "distância real do usuário; a resposta traz distanciaKm em cada turno.")
     @ApiResponse(responseCode = "200", description = "Turnos disponíveis")
     @GetMapping("/disponiveis")
-    public List<TurnoResponse> disponiveis(
+    public ResponseEntity<List<TurnoResponse>> disponiveis(
             @RequestParam(required = false) String horarioInicio,
             @RequestParam(required = false) String horarioFim,
             @RequestParam(required = false) Integer diaSemana,
@@ -86,17 +95,22 @@ public class TurnoController {
             // SCRUM-18: posição do usuário (GPS do app) + raio de busca em km.
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng,
-            @RequestParam(required = false) Double raioKm) {
+            @RequestParam(required = false) Double raioKm,
+            @RequestParam(required = false) Integer pagina,
+            @RequestParam(required = false) Integer tamanho) {
 
         boolean hasFilter = horarioInicio != null || horarioFim != null || diaSemana != null
                 || raioMaxKm != null || dataInicio != null || dataFim != null
                 || ordenarPor != null || lat != null || lng != null || raioKm != null;
 
+        Pageable pedido = Paginacao.pedido(pagina, tamanho);
         if (hasFilter) {
-            return consultas.listarDisponiveisComFiltros(horarioInicio, horarioFim,
-                    diaSemana, raioMaxKm, dataInicio, dataFim, ordenarPor, lat, lng, raioKm);
+            // Parte dos filtros (horário, dia da semana, raio exato) roda em
+            // memória, então a página é cortada depois deles.
+            return Paginacao.fatia(consultas.listarDisponiveisComFiltros(horarioInicio, horarioFim,
+                    diaSemana, raioMaxKm, dataInicio, dataFim, ordenarPor, lat, lng, raioKm), pedido);
         }
-        return consultas.listarDisponiveis();
+        return Paginacao.resposta(consultas.listarDisponiveis(pedido));
     }
 
     @Operation(summary = "Buscar turno por ID")

@@ -124,8 +124,11 @@ public class TurnoService {
                     "Todas as vagas deste turno já foram preenchidas.");
         }
 
-        // Conflito de agenda considerando TODAS as inscrições ativas do motoboy.
-        if (temConflitoDeAgenda(motoboyId, turno)) {
+        // Conflito de agenda considerando TODAS as inscrições ativas do motoboy
+        // — inclusive em turno que continua ABERTO por ter vaga sobrando, que
+        // o antigo findConflitos não pegava.
+        if (turnoRepo.existeConflitoDeAgenda(motoboyId, turnoId,
+                turno.getDataInicio(), turno.getDataFim())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Você já possui um turno agendado neste horário.");
         }
@@ -161,25 +164,6 @@ public class TurnoService {
         return mapper.toResponse(turno);
     }
 
-    /**
-     * Verifica se o motoboy já tem alguma inscrição ativa cujo turno se
-     * sobrepõe ao horário do turno alvo. Cobre o cenário multi-vaga em que o
-     * turno de origem ainda está ABERTO (não pego pelo antigo findConflitos).
-     */
-    private boolean temConflitoDeAgenda(Long motoboyId, Turno alvo) {
-        List<TurnoInscricao> ativas = inscricaoRepo.findByMotoboyIdAndStatus(motoboyId, StatusInscricao.ACEITO);
-        for (TurnoInscricao ins : ativas) {
-            Turno outro = turnoRepo.findById(ins.getTurnoId()).orElse(null);
-            if (outro == null) continue;
-            if (outro.getId().equals(alvo.getId())) continue;
-            if (outro.getStatus() == StatusTurno.CANCELADO) continue;
-            boolean sobrepoe = outro.getDataInicio().isBefore(alvo.getDataFim())
-                    && outro.getDataFim().isAfter(alvo.getDataInicio());
-            if (sobrepoe) return true;
-        }
-        return false;
-    }
-
     // RF06 — Finalizar turno: gera a dívida com cada entregador do turno.
     @Transactional
     public TurnoResponse finalizar(Long turnoId, Long usuarioId) {
@@ -201,7 +185,10 @@ public class TurnoService {
                 inscricaoRepo.findByTurnoIdAndStatus(turno.getId(), StatusInscricao.ACEITO);
 
         if (inscricoes.isEmpty()) {
-            // Legado: turno sem inscrições (aceito antes do sistema de vagas).
+            // Turno aceito antes do sistema de vagas e que a V5 não alcançou.
+            // A dívida ainda precisa existir; quem paga é o PagamentoTurnoService,
+            // e lá a inscrição é obrigatória — este caminho termina em erro alto
+            // na confirmação, que é o que se quer: barulho, não rota paralela.
             pagamentos.criarTransacaoPendente(turno, turno.getMotoboyId());
         } else {
             // Cada entregador inscrito gera sua própria transação/pagamento.

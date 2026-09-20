@@ -1,11 +1,14 @@
 package com.motoshift.repository;
 
+import com.motoshift.entity.StatusInscricao;
 import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
+import com.motoshift.entity.TurnoInscricao;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
@@ -15,16 +18,15 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * As tres consultas escritas a mao do TurnoRepository, contra um banco de
- * verdade.
+ * As consultas escritas a mao do TurnoRepository, contra um banco de verdade.
  *
  * Nao havia nenhum {@code @DataJpaTest} no projeto. O contexto do Spring so
  * garante que a JPQL compila: se o BETWEEN da bounding box invertesse latitude
  * com longitude, ou se o OR da agenda esquecesse o lojista, tudo continuaria
  * subindo — e a lista sairia errada em producao, calada.
  *
- * Os ids sao altos de proposito para nao colidirem com a massa do
- * DataInitializer.
+ * Os ids sao altos de proposito para nao colidirem com a
+ * massa de demonstracao.
  */
 @DataJpaTest
 @ActiveProfiles("test")
@@ -36,6 +38,9 @@ class TurnoRepositoryTest {
 
     @Autowired
     private TurnoRepository repo;
+
+    @Autowired
+    private TurnoInscricaoRepository inscricaoRepo;
 
     @Test
     @DisplayName("findAbertosNaArea traz so o que esta dentro da caixa, e so o que esta aberto")
@@ -85,25 +90,87 @@ class TurnoRepositoryTest {
     }
 
     @Test
-    @DisplayName("findConflitos ignora turno aberto e pega o que se sobrepoe quando aceito")
-    void findConflitos_soStatusAtivo() {
+    @DisplayName("existeConflitoDeAgenda ignora turno cancelado e enxerga o aceito que se sobrepoe")
+    void existeConflito_ignoraCancelado() {
         LocalDateTime inicio = LocalDateTime.of(2026, 6, 1, 18, 0);
         LocalDateTime fim    = inicio.plusHours(4);
+        Long motoboy = 900_021L;
 
-        Turno aceito = salvarComDatas("Sobrepoe e aceito", 900_020L, 900_021L, inicio.plusHours(1));
+        Turno cancelado = salvarComDatas("Sobrepoe mas cancelado", 900_020L, motoboy, inicio.plusHours(1));
+        cancelado.setStatus(StatusTurno.CANCELADO);
+        repo.save(cancelado);
+        inscrever(cancelado.getId(), motoboy, StatusInscricao.ACEITO);
+
+        Turno alvo = salvarComDatas("Alvo", 900_020L, null, inicio);
+        assertThat(repo.existeConflitoDeAgenda(motoboy, alvo.getId(), inicio, fim)).isFalse();
+
+        Turno aceito = salvarComDatas("Sobrepoe e aceito", 900_020L, motoboy, inicio.plusHours(2));
         aceito.setStatus(StatusTurno.ACEITO);
         repo.save(aceito);
+        inscrever(aceito.getId(), motoboy, StatusInscricao.ACEITO);
 
-        Turno aberto = salvarComDatas("Sobrepoe mas aberto", 900_020L, 900_021L, inicio.plusHours(2));
-        aberto.setStatus(StatusTurno.ABERTO);
-        repo.save(aberto);
+        assertThat(repo.existeConflitoDeAgenda(motoboy, alvo.getId(), inicio, fim)).isTrue();
+    }
 
-        List<Turno> conflitos = repo.findConflitos(900_021L, inicio, fim);
+    @Test
+    @DisplayName("existeConflitoDeAgenda pega o turno ABERTO em que o entregador ja tem vaga")
+    void existeConflito_pegaTurnoAbertoComInscricao() {
+        LocalDateTime inicio = LocalDateTime.of(2026, 7, 1, 18, 0);
+        LocalDateTime fim    = inicio.plusHours(4);
+        Long motoboy = 900_030L;
 
-        assertThat(conflitos).extracting(Turno::getId).containsExactly(aceito.getId());
+        // Turno multi-vaga: continua ABERTO mesmo com o entregador dentro. Era
+        // exatamente o que o findConflitos (que olha turnos.motoboy_id e so
+        // status ativo) deixava passar.
+        Turno ocupado = salvarComDatas("Sobrepoe e aberto", 900_031L, null, inicio.plusHours(1));
+        ocupado.setStatus(StatusTurno.ABERTO);
+        ocupado.setVagas(3);
+        repo.save(ocupado);
+        inscrever(ocupado.getId(), motoboy, StatusInscricao.ACEITO);
+
+        Turno alvo = salvarComDatas("Alvo", 900_031L, null, inicio);
+
+        assertThat(repo.existeConflitoDeAgenda(motoboy, alvo.getId(), inicio, fim)).isTrue();
+        // O proprio alvo nao conta como conflito consigo mesmo.
+        assertThat(repo.existeConflitoDeAgenda(motoboy, ocupado.getId(),
+                ocupado.getDataInicio(), ocupado.getDataFim())).isFalse();
+        // Nem inscricao cancelada, nem horario que nao se sobrepoe.
+        assertThat(repo.existeConflitoDeAgenda(motoboy, alvo.getId(),
+                fim.plusHours(1), fim.plusHours(5))).isFalse();
+    }
+
+    @Test
+    @DisplayName("findDoEntregador une turno principal e vaga extra, sem duplicar")
+    void findDoEntregador_uneOsDoisCaminhos() {
+        Long motoboy = 900_040L;
+        LocalDateTime base = LocalDateTime.of(2026, 8, 10, 8, 0);
+
+        Turno principal = salvarComDatas("Principal", 900_041L, motoboy, base);
+        Turno vagaExtra = salvarComDatas("Vaga extra", 900_041L, 900_042L, base.plusDays(1));
+        inscrever(vagaExtra.getId(), motoboy, StatusInscricao.FINALIZADO);
+        // O principal tambem tem inscricao (formato pos-V5): nao pode duplicar.
+        inscrever(principal.getId(), motoboy, StatusInscricao.ACEITO);
+
+        Turno cancelado = salvarComDatas("Cancelado", 900_041L, 900_042L, base.plusDays(2));
+        inscrever(cancelado.getId(), motoboy, StatusInscricao.CANCELADO);
+
+        List<Turno> achados = repo.findDoEntregador(motoboy,
+                List.of(StatusInscricao.ACEITO, StatusInscricao.FINALIZADO),
+                Pageable.unpaged()).getContent();
+
+        assertThat(achados).extracting(Turno::getId)
+                .containsExactlyInAnyOrder(principal.getId(), vagaExtra.getId());
     }
 
     // ── Helpers ──────────────────────────────────────────────
+
+    private void inscrever(Long turnoId, Long motoboyId, StatusInscricao status) {
+        TurnoInscricao ins = new TurnoInscricao();
+        ins.setTurnoId(turnoId);
+        ins.setMotoboyId(motoboyId);
+        ins.setStatus(status);
+        inscricaoRepo.save(ins);
+    }
 
     private Turno salvar(String titulo, StatusTurno status, Double lat, Double lng) {
         Turno t = novo(titulo, 900_100L, null, LocalDateTime.of(2026, 4, 1, 10, 0));

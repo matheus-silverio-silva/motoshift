@@ -2,6 +2,9 @@ package com.motoshift.service;
 
 import com.motoshift.entity.Notificacao;
 import com.motoshift.repository.NotificacaoRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +19,9 @@ import java.util.List;
  */
 @Service
 public class NotificacaoService {
+
+    /** Teto padrão de uma página do sino. */
+    private static final int LIMITE_PADRAO = 50;
 
     private final NotificacaoRepository repo;
 
@@ -54,10 +60,18 @@ public class NotificacaoService {
         return criar(usuarioId, tipo, titulo, mensagem, referenciaTipo, referenciaId);
     }
 
-    public List<Notificacao> listar(Long usuarioId, boolean apenasNaoLidas) {
+    /**
+     * Caixa de entrada do sino, da mais recente para a mais antiga.
+     *
+     * Sem {@code pagina}, devolve a primeira de 50 — o mesmo teto do antigo
+     * findTop50, agora valendo também para as não lidas, que voltavam sem
+     * limite nenhum.
+     */
+    public Page<Notificacao> listar(Long usuarioId, boolean apenasNaoLidas, Pageable pagina) {
+        Pageable pedido = pagina != null ? pagina : PageRequest.of(0, LIMITE_PADRAO);
         return apenasNaoLidas
-                ? repo.findByUsuarioIdAndLidaFalseOrderByCriadoEmDesc(usuarioId)
-                : repo.findTop50ByUsuarioIdOrderByCriadoEmDesc(usuarioId);
+                ? repo.findByUsuarioIdAndLidaFalseOrderByCriadoEmDesc(usuarioId, pedido)
+                : repo.findByUsuarioIdOrderByCriadoEmDesc(usuarioId, pedido);
     }
 
     public long contarNaoLidas(Long usuarioId) {

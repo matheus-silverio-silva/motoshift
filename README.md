@@ -165,7 +165,7 @@ Roda com o perfil `prod` (PostgreSQL). Variáveis principais:
 | `JWT_SECRET` | **sim** | Segredo de assinatura dos tokens, mínimo 32 caracteres. Sem ele o boot falha de propósito — melhor não subir do que assinar token com a chave de exemplo do repositório. Trocar o valor invalida os tokens emitidos, ou seja, desloga todo mundo |
 | `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | sim | Conexão com o PostgreSQL (o plugin do Railway já as injeta) |
 | `ANTHROPIC_API_KEY` | sim | Chave da API Anthropic para as funcionalidades de IA |
-| `MOTOSHIFT_CORS_ORIGINS` | não | Origens liberadas no CORS, separadas por vírgula (ex.: `https://motoshift.up.railway.app`). O padrão `*` libera qualquer origem |
+| `MOTOSHIFT_CORS_ORIGINS` | **sim** | Origens liberadas no CORS, separadas por vírgula (ex.: `https://motoshift.up.railway.app`). Sem default: o antigo `*` liberava qualquer origem quando a variável era esquecida. Agora o boot falha, o healthcheck do Railway recusa o deploy e a versão anterior continua no ar |
 | `JWT_EXPIRACAO_HORAS` | não | Validade do token; padrão 168 (7 dias) |
 | `PORT` | não | Porta do servidor (injetada automaticamente pelo Railway) |
 
@@ -173,9 +173,13 @@ Roda com o perfil `prod` (PostgreSQL). Variáveis principais:
 
 ## 🔑 Credenciais de Teste
 
-Todos os usuários abaixo usam a senha **`senha123`**. São criados automaticamente
-na primeira inicialização (junto com turnos, carteiras, avaliações e histórico),
-desde que o banco esteja vazio.
+Todos os usuários abaixo usam a senha **`senha123`**. Em desenvolvimento são
+criados automaticamente na primeira inicialização (junto com turnos, carteiras,
+extrato, avaliações, notas fiscais e notificações), desde que o banco esteja
+vazio. Em produção, a massa é recriada pelo reset descrito em
+[Resetar a massa de demonstração](#-resetar-a-massa-de-demonstração). A massa
+inteira mora em `backend/.../config/MassaDemonstracao.java`, e toda data dela é
+calculada a partir do momento em que roda.
 
 ### 🏪 Lojistas
 
@@ -199,6 +203,31 @@ desde que o banco esteja vazio.
 > com vários turnos) e **`ricardo@teste.com`** (motoboy com histórico, carteira e
 > avaliações). Os turnos de teste cobrem cenários abertos, em andamento,
 > concluídos, pendentes de pagamento e cancelados.
+
+### 🔄 Resetar a massa de demonstração
+
+Com o tempo a massa envelhece: turnos "abertos" com início no passado, extrato
+parado, notificações antigas. O reset apaga **só** a massa — as contas cujo
+e-mail termina em `@teste.com` e o que pertence a elas — e cria outra com datas
+de agora. Contas reais e os dados delas ficam intactos (o que uma conta real
+fez *dentro* da massa, como aceitar um turno da Cláudia, sai junto). Não mexe
+em schema, migrações nem no histórico do Flyway, e roda numa transação só: se
+algo falhar, nada é apagado.
+
+Em produção (serviço **Back-End** no Railway):
+
+1. Defina a variável `MOTOSHIFT_SEED_RESET` com o valor exato `confirmo`.
+   Qualquer outro valor — ou a variável ausente — não faz nada.
+2. Faça o redeploy (ou reinicie o serviço).
+3. Confira no log do deploy o resumo `[massa] reset concluido`, com quantas
+   linhas foram apagadas e criadas por tabela.
+4. **Remova a variável `MOTOSHIFT_SEED_RESET`.** Este passo não é opcional:
+   enquanto ela existir, **todo** deploy e **todo** restart apagam e recriam a
+   massa — inclusive o que foi feito com as contas de teste durante uma
+   apresentação.
+
+Em desenvolvimento não é preciso: o H2 é recriado a cada boot e a massa nasce
+nova. Para testar o reset localmente, suba com `MOTOSHIFT_SEED_RESET=confirmo`.
 
 ---
 

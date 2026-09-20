@@ -13,6 +13,7 @@ import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Emissão da nota fiscal de serviço de um turno.
@@ -266,20 +268,34 @@ public class NotaFiscalService {
      * Turnos finalizados que ainda não geraram nota, do ponto de vista de quem
      * pergunta. O lojista vê um item por entregador de cada turno seu; o
      * entregador vê os turnos em que trabalhou.
+     *
+     * <p>Três consultas no total, independentemente do número de turnos: os
+     * turnos, as inscrições de todos eles e as notas que o usuário já tem.
+     * Antes eram duas por turno (a nota e o nome da contraparte).
      */
     public List<NotaFiscalPendenteResponse> pendentes(Long usuarioId, boolean ehLojista) {
-        List<Turno> turnos = ehLojista
+        List<Turno> turnos = (ehLojista
                 ? turnoRepo.findByLojistId(usuarioId)
-                : turnosDoEntregador(usuarioId);
+                : turnosDoEntregador(usuarioId))
+                .stream()
+                .filter(t -> t.getId() != null && t.getStatus() == StatusTurno.FINALIZADO)
+                .toList();
+        if (turnos.isEmpty()) return List.of();
+
+        Map<Long, List<Long>> prestadores = prestadoresPorTurno(turnos, usuarioId, ehLojista);
+        // "turnoId:prestadorId" das notas que já existem para este usuário —
+        // e ele está em todas as que importam aqui, como prestador ou tomador.
+        Set<String> jaEmitidas = notaRepo.findDoUsuario(usuarioId).stream()
+                .map(n -> n.getTurnoId() + ":" + n.getPrestadorId())
+                .collect(Collectors.toSet());
 
         List<NotaFiscalPendenteResponse> saida = new ArrayList<>();
-        for (Turno t : turnos) {
-            if (t.getStatus() != StatusTurno.FINALIZADO || t.getId() == null) continue;
+        Map<Long, String> nomes = nomesDe(turnos, prestadores, ehLojista);
 
-            for (Long prestador : prestadoresDoTurno(t, usuarioId, ehLojista)) {
-                if (notaRepo.findByTurnoIdAndPrestadorId(t.getId(), prestador).isPresent()) {
-                    continue;
-                }
+        for (Turno t : turnos) {
+            for (Long prestador : prestadores.getOrDefault(t.getId(), List.of())) {
+                if (jaEmitidas.contains(t.getId() + ":" + prestador)) continue;
+
                 Long contraparte = ehLojista ? prestador : t.getLojistId();
                 saida.add(new NotaFiscalPendenteResponse(
                         t.getId(),
@@ -287,7 +303,7 @@ public class NotaFiscalService {
                         t.getTitulo(),
                         t.getDataInicio(),
                         emReais(t.getValorEstimado()),
-                        nomeDe(contraparte),
+                        nomes.getOrDefault(contraparte, "—"),
                         ehLojista ? "tomador" : "prestador"));
             }
         }
@@ -298,39 +314,60 @@ public class NotaFiscalService {
     // ── Apoio ───────────────────────────────────────────────────────────────
 
     /**
-     * Quem prestou o serviço neste turno. Para o entregador é ele mesmo; para
-     * o lojista, cada entregador inscrito.
+     * Quem prestou o serviço em cada turno. Para o entregador é sempre ele; para
+     * o lojista, os entregadores inscritos — numa consulta para todos os turnos.
+     *
+     * <p>Inscrição CANCELADA fica de fora; ACEITO e FINALIZADO entram. Filtrar
+     * só por ACEITO, como era, escondia justamente os turnos que interessam:
+     * ao finalizar, a inscrição vira FINALIZADO, e o lojista voltava a ver só o
+     * entregador principal do turno.
      */
-    private List<Long> prestadoresDoTurno(Turno turno, Long usuarioId, boolean ehLojista) {
-        if (!ehLojista) return List.of(usuarioId);
-
-        List<Long> ids = inscricaoRepo
-                .findByTurnoIdAndStatus(turno.getId(), StatusInscricao.ACEITO)
-                .stream()
-                .map(TurnoInscricao::getMotoboyId)
-                .toList();
-        // Turno legado sem inscrição ainda tem o entregador no próprio turno.
-        if (ids.isEmpty() && turno.getMotoboyId() != null) {
-            return List.of(turno.getMotoboyId());
+    private Map<Long, List<Long>> prestadoresPorTurno(List<Turno> turnos, Long usuarioId,
+                                                      boolean ehLojista) {
+        Map<Long, List<Long>> porTurno = new HashMap<>();
+        if (!ehLojista) {
+            turnos.forEach(t -> porTurno.put(t.getId(), List.of(usuarioId)));
+            return porTurno;
         }
-        return ids;
-    }
 
-    private List<Turno> turnosDoEntregador(Long motoboyId) {
-        Set<Long> ids = new HashSet<>();
-        List<Turno> turnos = new ArrayList<>(turnoRepo.findByMotoboyId(motoboyId));
-        turnos.forEach(t -> ids.add(t.getId()));
-
-        // Em turno multi-vaga só o primeiro inscrito fica em turnos.motoboy_id;
-        // os demais existem apenas como inscrição. Sem esta segunda busca eles
-        // nunca veriam a nota do próprio serviço.
-        for (TurnoInscricao ins : inscricaoRepo.findByMotoboyIdAndStatus(
-                motoboyId, StatusInscricao.ACEITO)) {
-            if (ids.add(ins.getTurnoId())) {
-                turnoRepo.findById(ins.getTurnoId()).ifPresent(turnos::add);
+        for (TurnoInscricao ins : inscricaoRepo.findByTurnoIdIn(turnos.stream().map(Turno::getId).toList())) {
+            if (ins.getStatus() == StatusInscricao.CANCELADO) continue;
+            porTurno.computeIfAbsent(ins.getTurnoId(), k -> new ArrayList<>()).add(ins.getMotoboyId());
+        }
+        // Turno legado sem inscrição ainda tem o entregador no próprio turno.
+        for (Turno t : turnos) {
+            if (!porTurno.containsKey(t.getId()) && t.getMotoboyId() != null) {
+                porTurno.put(t.getId(), List.of(t.getMotoboyId()));
             }
         }
-        return turnos;
+        return porTurno;
+    }
+
+    /**
+     * Turnos em que o entregador trabalhou: os que ele tem como principal e os
+     * que ocupa por inscrição não cancelada (vaga extra de turno multi-vaga),
+     * numa consulta só.
+     */
+    private List<Turno> turnosDoEntregador(Long motoboyId) {
+        return turnoRepo.findDoEntregador(motoboyId,
+                List.of(StatusInscricao.ACEITO, StatusInscricao.FINALIZADO),
+                Pageable.unpaged()).getContent();
+    }
+
+    /** Os nomes das contrapartes de uma vez — era um findById por pendência. */
+    private Map<Long, String> nomesDe(List<Turno> turnos, Map<Long, List<Long>> prestadores,
+                                      boolean ehLojista) {
+        Set<Long> ids = new HashSet<>();
+        if (ehLojista) {
+            prestadores.values().forEach(ids::addAll);
+        } else {
+            turnos.forEach(t -> ids.add(t.getLojistId()));
+        }
+        Map<Long, String> nomes = new HashMap<>();
+        for (Usuario u : usuarioRepo.findAllById(ids)) {
+            nomes.put(u.getId(), u.getNome());
+        }
+        return nomes;
     }
 
     /** Se o pedido não disse quem prestou, o próprio solicitante é o entregador. */
@@ -404,10 +441,6 @@ public class NotaFiscalService {
             mapa.put(t.getId(), t);
         }
         return mapa;
-    }
-
-    private String nomeDe(Long usuarioId) {
-        return usuarioRepo.findById(usuarioId).map(Usuario::getNome).orElse("—");
     }
 
     /**

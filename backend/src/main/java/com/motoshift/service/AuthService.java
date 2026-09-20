@@ -2,6 +2,7 @@ package com.motoshift.service;
 
 import com.motoshift.dto.AuthResponse;
 import com.motoshift.dto.LoginRequest;
+import com.motoshift.dto.PerfilPublicoResponse;
 import com.motoshift.dto.RegistroRequest;
 import com.motoshift.dto.UsuarioResponse;
 import com.motoshift.entity.Usuario;
@@ -15,7 +16,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AuthService {
@@ -27,14 +27,6 @@ public class AuthService {
     private final CarteiraService carteiras;
     private final PasswordEncoder encoder;
     private final JwtService jwt;
-
-    // RF01: rastreamento de tentativas em memória (suficiente para H2 dev)
-    private final ConcurrentHashMap<String, AttemptInfo> tentativas = new ConcurrentHashMap<>();
-
-    private static class AttemptInfo {
-        int contador = 0;
-        LocalDateTime bloqueadoAte = null;
-    }
 
     public AuthService(UsuarioRepository repo,
                        CarteiraService carteiras,
@@ -104,46 +96,72 @@ public class AuthService {
         return new AuthResponse(tokenPara(salvo), UsuarioResponse.from(salvo));
     }
 
+    /**
+     * Login com bloqueio por tentativas (RF01).
+     *
+     * O estado do bloqueio mora na linha do usuario (tentativas_login,
+     * bloqueado_ate). Antes era um ConcurrentHashMap: sumia a cada deploy, cada
+     * replica contava as suas 5 tentativas e a chave era o e-mail DIGITADO — um
+     * laco com e-mails inventados enchia a memoria. Agora so conta tentativa
+     * quem tem conta, e o contador e o mesmo para todas as instancias.
+     *
+     * Limite conhecido e aceito: bloquear por conta permite que alguem que sabe
+     * o seu e-mail erre a senha 5 vezes e o deixe 15 minutos fora. E o custo do
+     * RF01 como esta escrito (bloqueio da conta). Mitigar pede sinal que o
+     * backend nao tem hoje — IP confiavel atras do proxy do Railway, captcha ou
+     * segundo fator — e fica registrado como evolucao, nao como descuido.
+     *
+     * E-mail inexistente responde 401 sem contador: nao ha conta para bloquear,
+     * e fingir "4 tentativas restantes" nao esconderia nada — o cadastro ja
+     * responde "E-mail ja cadastrado" para quem quiser descobrir.
+     */
     public AuthResponse login(LoginRequest req) {
         String email = req.getEmail() != null ? req.getEmail().trim() : "";
-        AttemptInfo info = tentativas.computeIfAbsent(email, k -> new AttemptInfo());
+        Usuario u = repo.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED,
+                        "Credenciais inválidas."));
 
-        // RF01: verifica bloqueio ativo
-        if (info.bloqueadoAte != null && LocalDateTime.now().isBefore(info.bloqueadoAte)) {
-            long minutos = ChronoUnit.MINUTES.between(LocalDateTime.now(), info.bloqueadoAte) + 1;
+        LocalDateTime agora = LocalDateTime.now();
+        if (u.getBloqueadoAte() != null && agora.isBefore(u.getBloqueadoAte())) {
+            long minutos = ChronoUnit.MINUTES.between(agora, u.getBloqueadoAte()) + 1;
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
                     "Conta bloqueada. Tente novamente em " + minutos + " minuto(s).");
         }
 
-        boolean credenciaisOk = repo.findByEmail(req.getEmail())
-                .map(u -> senhaConfere(u, req.getSenha()))
-                .orElse(false);
-
-        if (!credenciaisOk) {
-            info.contador++;
-            if (info.contador >= MAX_TENTATIVAS) {
-                info.bloqueadoAte = LocalDateTime.now().plusMinutes(BLOQUEIO_MINUTOS);
-                info.contador = 0;
+        if (!senhaConfere(u, req.getSenha())) {
+            int tentativas = u.getTentativasLogin() + 1;
+            if (tentativas >= MAX_TENTATIVAS) {
+                repo.bloquearLogin(u.getId(), agora.plusMinutes(BLOQUEIO_MINUTOS));
                 throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
                         "Muitas tentativas incorretas. Tente novamente em " + BLOQUEIO_MINUTOS + " minuto(s).");
             }
-            int restantes = MAX_TENTATIVAS - info.contador;
+            repo.registrarFalhaDeLogin(u.getId());
+            int restantes = MAX_TENTATIVAS - tentativas;
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
                     "Credenciais inválidas. " + restantes + " tentativa(s) restante(s).");
         }
 
-        // Sucesso: reset do contador
-        info.contador = 0;
-        info.bloqueadoAte = null;
-
-        Usuario u = repo.findByEmail(req.getEmail()).orElseThrow();
+        // Sucesso zera o contador — so escreve se houver o que zerar, para o
+        // login normal nao virar um UPDATE a cada entrada.
+        if (u.getTentativasLogin() > 0 || u.getBloqueadoAte() != null) {
+            repo.liberarLogin(u.getId());
+        }
         return new AuthResponse(tokenPara(u), UsuarioResponse.from(u));
     }
 
+    /** Perfil completo — so para o proprio usuario (ver UsuarioController). */
     public UsuarioResponse buscarPorId(Long id) {
-        Usuario u = repo.findById(id)
+        return UsuarioResponse.from(carregar(id));
+    }
+
+    /** Perfil reduzido, o unico que uma conta ve de outra. */
+    public PerfilPublicoResponse buscarPerfilPublico(Long id) {
+        return PerfilPublicoResponse.from(carregar(id));
+    }
+
+    private Usuario carregar(Long id) {
+        return repo.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuário não encontrado"));
-        return UsuarioResponse.from(u);
     }
 
     public UsuarioResponse atualizar(Long id, java.util.Map<String, Object> body) {
@@ -183,28 +201,17 @@ public class AuthService {
     }
 
     /**
-     * Confere a senha aceitando as duas formas que existem no banco.
+     * Só BCrypt.
      *
-     * O hash é o caminho normal. O ramo de texto puro existe porque o banco de
-     * produção já tem contas gravadas antes do BCrypt: barrar essas pessoas no
-     * login seria trocar um problema de segurança por um de acesso. Na primeira
-     * entrada correta a senha é regravada com hash e a conta nunca mais passa
-     * por aqui — a migração acontece sozinha, uma conta por vez.
+     * Existia aqui um segundo ramo que comparava a senha em texto puro e a
+     * regravava com hash — para não trancar as contas criadas no Railway antes
+     * do BCrypt. Ele mantinha um comparador de senha em claro no caminho crítico
+     * da autenticação. A migração V9 fez essa conversão de uma vez, no banco, e
+     * o ramo saiu: uma senha que não seja hash simplesmente não confere.
      */
     private boolean senhaConfere(Usuario u, String informada) {
         String armazenada = u.getSenha();
         if (armazenada == null || informada == null) return false;
-
-        if (armazenada.startsWith("$2a$") || armazenada.startsWith("$2b$")
-                || armazenada.startsWith("$2y$")) {
-            return encoder.matches(informada, armazenada);
-        }
-
-        // Legado em texto puro: confere e migra.
-        if (!armazenada.equals(informada)) return false;
-
-        u.setSenha(encoder.encode(informada));
-        repo.save(u);
-        return true;
+        return encoder.matches(informada, armazenada);
     }
 }

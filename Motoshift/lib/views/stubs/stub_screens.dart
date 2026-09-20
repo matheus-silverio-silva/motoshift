@@ -3,6 +3,17 @@ import '../../theme/app_theme.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_scaffold.dart';
 
+/// As duas telas que dizem "em breve".
+///
+/// Vão para o app publicado de propósito, e não por esquecimento: cada uma
+/// está atrás de um botão que existe na interface — "Transferir via PIX" no
+/// dashboard do entregador e "Esqueceu a senha?" no login. Enquanto o fluxo
+/// não existe, a escolha é entre um botão que não faz nada e um destino que
+/// explica que aquilo ainda não está pronto. O destino é mais honesto.
+///
+/// Quando o fluxo for implementado, a tela nasce na pasta da própria feature
+/// e a rota deixa de apontar para cá.
+
 Widget _stubBody(String title) {
   return Center(
     child: Padding(

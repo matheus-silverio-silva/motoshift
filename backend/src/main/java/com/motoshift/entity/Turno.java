@@ -59,10 +59,11 @@ public class Turno {
     private String endereco;
 
     // Número de vagas de entregador para este turno (lojista pode precisar de vários).
-    // IMPORTANTE: coluna nullable de propósito. Com ddl-auto=update, o banco não
-    // consegue adicionar uma coluna NOT NULL a uma tabela que já tem linhas — isso
-    // quebraria as consultas de turno em produção. Sendo nullable, a migração
-    // ocorre sem erro; linhas antigas ficam NULL e o getter devolve 1 (default).
+    // Nullable por herança da época do ddl-auto=update, que não conseguia
+    // adicionar coluna NOT NULL a uma tabela com linhas. Segue assim porque os
+    // turnos anteriores à coluna continuam com NULL no banco, e o getter os lê
+    // como 1 — fechar isso agora seria um UPDATE em massa para trocar NULL por
+    // um valor que o código já assume.
     private Integer vagas;
 
     // Valores no banco: aberto | aceito | em_andamento | finalizado | cancelado

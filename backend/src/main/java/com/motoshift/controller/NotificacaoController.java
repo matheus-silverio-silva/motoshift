@@ -5,13 +5,13 @@ import com.motoshift.security.UsuarioAutenticado;
 import com.motoshift.service.NotificacaoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/notificacoes")
@@ -24,17 +24,21 @@ public class NotificacaoController {
         this.service = service;
     }
 
-    @Operation(summary = "Listar notificacoes do usuario")
+    @Operation(summary = "Listar notificacoes do usuario",
+            description = "Da mais recente para a mais antiga. Sem pagina, devolve as 50 "
+                        + "mais recentes; o total vai no header X-Total-Count.")
     @GetMapping
-    public List<Map<String, Object>> listar(
+    public ResponseEntity<List<Map<String, Object>>> listar(
             @RequestParam Long usuarioId,
             @RequestParam(required = false, value = "apenasNaoLidas") Boolean apenasNaoLidas,
+            @RequestParam(required = false) Integer pagina,
+            @RequestParam(required = false) Integer tamanho,
             @AuthenticationPrincipal UsuarioAutenticado atual) {
         atual.exigirMesmoUsuario(usuarioId);
         boolean somenteNaoLidas = apenasNaoLidas != null && apenasNaoLidas;
-        return service.listar(usuarioId, somenteNaoLidas).stream()
-                .map(this::toMap)
-                .collect(Collectors.toList());
+        return Paginacao.resposta(
+                service.listar(usuarioId, somenteNaoLidas, Paginacao.pedido(pagina, tamanho))
+                        .map(this::toMap));
     }
 
     @Operation(summary = "Contagem de nao lidas (badge do sino)")

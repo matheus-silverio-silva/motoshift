@@ -1,10 +1,22 @@
 package com.motoshift.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.DynamicUpdate;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+/**
+ * Conta da plataforma — lojista ou entregador.
+ *
+ * {@code @DynamicUpdate} porque esta linha tem dois escritores que não se
+ * conhecem: a edição de perfil (que salva a entidade inteira) e o controle de
+ * tentativas de login (que só mexe em dois campos, por UPDATE direto). Com o
+ * UPDATE de todas as colunas, que é o padrão do Hibernate, salvar o perfil logo
+ * depois de um erro de senha regravaria o contador com o valor antigo.
+ */
 @Entity
+@DynamicUpdate
 @Table(name = "usuarios")
 public class Usuario {
 
@@ -29,8 +41,9 @@ public class Usuario {
 
     private String fotoPerfil;
 
-    // Senha armazenada em texto simples apenas para ambiente de dev/H2.
-    // Em produção substitua por BCrypt + Spring Security.
+    // Hash BCrypt, sempre. Cadastro e massa de demonstração passam pelo
+    // PasswordEncoder, e a V9 converteu as contas antigas que ainda estavam em
+    // texto puro — o login não aceita outro formato.
     @Column(nullable = false)
     private String senha;
 
@@ -58,6 +71,16 @@ public class Usuario {
     private String nomeFantasia;
     private String enderecoComercial;
 
+    // ── RF01: bloqueio por tentativas de login ─────────────────
+    // No banco, e não num mapa em memória: o bloqueio precisa sobreviver a um
+    // redeploy, valer igual em todas as instâncias e só existir para contas que
+    // existem (o mapa era indexado pelo e-mail digitado e crescia com qualquer
+    // e-mail inventado). Escritos só pelos UPDATEs do UsuarioRepository.
+    @Column(nullable = false)
+    private Integer tentativasLogin = 0;
+
+    private LocalDateTime bloqueadoAte;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime criadoEm;
 
@@ -65,6 +88,7 @@ public class Usuario {
     private void prePersist() {
         criadoEm = LocalDateTime.now();
         if (score == null) score = 5.0;
+        if (tentativasLogin == null) tentativasLogin = 0;
     }
 
     // --- Getters e Setters ---
@@ -133,6 +157,12 @@ public class Usuario {
 
     public String getEnderecoComercial() { return enderecoComercial; }
     public void setEnderecoComercial(String enderecoComercial) { this.enderecoComercial = enderecoComercial; }
+
+    public int getTentativasLogin() { return tentativasLogin == null ? 0 : tentativasLogin; }
+    public void setTentativasLogin(Integer tentativasLogin) { this.tentativasLogin = tentativasLogin; }
+
+    public LocalDateTime getBloqueadoAte() { return bloqueadoAte; }
+    public void setBloqueadoAte(LocalDateTime bloqueadoAte) { this.bloqueadoAte = bloqueadoAte; }
 
     public LocalDateTime getCriadoEm() { return criadoEm; }
 }

@@ -3,9 +3,15 @@ package com.motoshift.service;
 import com.motoshift.dto.CarteiraResponse;
 import com.motoshift.dto.TransacaoResponse;
 import com.motoshift.entity.Carteira;
+import com.motoshift.entity.StatusTransacao;
+import com.motoshift.entity.TipoTransacao;
 import com.motoshift.entity.Transacao;
 import com.motoshift.repository.CarteiraRepository;
+import com.motoshift.repository.GanhoMensal;
 import com.motoshift.repository.TransacaoRepository;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,23 +31,17 @@ public class CarteiraService {
     private static final BigDecimal SAQUE_MINIMO = new BigDecimal("20.00");
 
     /**
-     * Tipos de lancamento que contam como ganho do entregador.
-     * "turno" e o legado, anterior a liquidacao automatica; "pagamento_recebido"
-     * e o que passa a ser gerado. Somar os dois mantem o extrato coerente para
-     * quem tem historico das duas epocas.
-     */
-    public static final List<String> TIPOS_GANHO = List.of("turno", "pagamento_recebido");
-
-    /**
-     * Status que valem como dinheiro que o usuario ja tem.
+     * O que conta como ganho: pagamento de turno ja liquidado.
      *
-     * "processado" e o legado, "concluido" e o atual. O que fica de fora e o
-     * que importa: a Transacao de tipo "turno" nasce PENDENTE na finalizacao
-     * do turno, muito antes do pagamento ser confirmado. Somar pendente em
-     * "ganhos do mes" mostra ao entregador dinheiro que ele ainda nao recebeu
-     * — o dashboard diria R$ 120 com o saldo em R$ 0.
+     * Eram duas listas de compatibilidade — tipos ("turno" legado e
+     * "pagamento_recebido") e status ("processado" legado e "concluido"). A V10
+     * unificou os valores no banco e o corte virou um tipo e um status. O que
+     * continua importando e o que fica de fora: o pagamento nasce PENDENTE na
+     * finalizacao do turno, muito antes de ser pago, e somar pendente mostraria
+     * ao entregador R$ 120 de "ganhos do mes" com o saldo em R$ 0.
      */
-    public static final List<String> STATUS_LIQUIDADO = List.of("processado", "concluido");
+    public static final TipoTransacao TIPO_GANHO = TipoTransacao.PAGAMENTO_RECEBIDO;
+    public static final StatusTransacao STATUS_LIQUIDADO = StatusTransacao.CONCLUIDO;
 
     private final CarteiraRepository carteiraRepo;
     private final TransacaoRepository transacaoRepo;
@@ -78,6 +78,12 @@ public class CarteiraService {
         return resp;
     }
 
+    /** Extrato paginado, do lancamento mais recente para o mais antigo. */
+    public Page<TransacaoResponse> extrato(Long usuarioId, Pageable pagina) {
+        return transacaoRepo.findByUsuarioIdOrderByCriadoEmDesc(usuarioId, pagina)
+                .map(TransacaoResponse::from);
+    }
+
     /**
      * Ganhos do mes corrente, somados das transacoes.
      *
@@ -88,12 +94,21 @@ public class CarteiraService {
     public BigDecimal ganhosDoMes(Long usuarioId) {
         LocalDateTime inicioMes = LocalDate.now().withDayOfMonth(1).atStartOfDay();
         BigDecimal total = transacaoRepo.somarPorTipoDesde(
-                usuarioId, TIPOS_GANHO, STATUS_LIQUIDADO, inicioMes);
+                usuarioId, TIPO_GANHO, STATUS_LIQUIDADO, inicioMes);
         return (total == null ? BigDecimal.ZERO : total).setScale(2, RoundingMode.HALF_UP);
     }
 
+    /**
+     * Saque via Pix.
+     *
+     * {@code chaveDoCliente} vem do header Idempotency-Key. Com ela, o mesmo
+     * pedido repetido — duplo toque no botao, retry depois de um timeout —
+     * devolve o resultado do primeiro em vez de debitar de novo. Sem ela o
+     * lancamento ganha uma chave aleatoria: a coluna fica preenchida e unica,
+     * mas a protecao contra repeticao depende de o cliente mandar a chave.
+     */
     @Transactional
-    public Map<String, Object> saque(Long usuarioId, BigDecimal valor) {
+    public Map<String, Object> saque(Long usuarioId, BigDecimal valor, String chaveDoCliente) {
         if (valor == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe o valor do saque.");
         }
@@ -107,6 +122,13 @@ public class CarteiraService {
         Carteira carteira = carteiraRepo.findByUsuarioId(usuarioId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Carteira não encontrada"));
 
+        String chave = chaveDoSaque(usuarioId, chaveDoCliente);
+        if (chaveDoCliente != null && transacaoRepo.existsByIdempotencyKey(chave)) {
+            // Ja foi feito. Responder igual ao primeiro pedido e o que torna a
+            // repeticao inofensiva para quem chamou.
+            return respostaDoSaque(carteira);
+        }
+
         if (carteira.getChavePix() == null || carteira.getChavePix().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Cadastre uma chave Pix antes de solicitar saque.");
@@ -117,17 +139,39 @@ public class CarteiraService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Saldo insuficiente para saque.");
         }
 
+        Transacao tx = new Transacao();
+        tx.setUsuarioId(usuarioId);
+        tx.setTipo(TipoTransacao.SAQUE);
+        tx.setValor(valor);
+        tx.setDescricao("Transferência Pix — " + carteira.getChavePix());
+        tx.setStatus(StatusTransacao.CONCLUIDO);
+        tx.setIdempotencyKey(chave);
+        try {
+            // O lancamento vai ao banco ANTES do debito: se dois pedidos com a
+            // mesma chave passarem juntos pela checagem acima, o indice unico
+            // barra o segundo aqui e a transacao inteira volta — saldo incluso.
+            transacaoRepo.saveAndFlush(tx);
+        } catch (DataIntegrityViolationException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Este saque já está sendo processado.");
+        }
+
         carteira.setSaldoDisponivel(carteira.getSaldoDisponivel().subtract(valor));
         carteiraRepo.save(carteira);
 
-        Transacao tx = new Transacao();
-        tx.setUsuarioId(usuarioId);
-        tx.setTipo("saque");
-        tx.setValor(valor);
-        tx.setDescricao("Transferência Pix — " + carteira.getChavePix());
-        tx.setStatus("concluido");
-        transacaoRepo.save(tx);
+        return respostaDoSaque(carteira);
+    }
 
+    private static String chaveDoSaque(Long usuarioId, String chaveDoCliente) {
+        if (chaveDoCliente == null || chaveDoCliente.isBlank()) {
+            return "saque:" + UUID.randomUUID();
+        }
+        // O usuario entra na chave: a mesma string vinda de duas contas sao
+        // dois pedidos diferentes, e nunca um "ja processado" do vizinho.
+        return "saque:" + usuarioId + ":" + chaveDoCliente.trim();
+    }
+
+    private static Map<String, Object> respostaDoSaque(Carteira carteira) {
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("mensagem", "Saque realizado com sucesso!");
         resp.put("novoSaldo", carteira.getSaldoDisponivel().setScale(2, RoundingMode.HALF_UP));
@@ -144,35 +188,36 @@ public class CarteiraService {
     /**
      * Ganhos por mes, para o grafico da carteira.
      *
-     * Mesmo filtro de status do {@link #ganhosDoMes}: o grafico e a serie
-     * historica do mesmo numero, e as duas leituras nao podem discordar.
+     * A soma sai agrupada do banco; aqui so se monta a serie com um item por
+     * mes pedido, inclusive os meses sem lancamento.
      */
     public List<Map<String, Object>> grafico(Long usuarioId, int meses) {
-        List<Transacao> txs = transacaoRepo
-                .findByUsuarioIdAndTipoInAndStatusInOrderByCriadoEmDesc(
-                        usuarioId, TIPOS_GANHO, STATUS_LIQUIDADO);
-
         LocalDate hoje = LocalDate.now();
-        List<Map<String, Object>> result = new ArrayList<>();
+        LocalDateTime desde = hoje.minusMonths(Math.max(meses, 1) - 1L)
+                .withDayOfMonth(1).atStartOfDay();
 
+        Map<String, BigDecimal> porMes = new HashMap<>();
+        for (GanhoMensal g : transacaoRepo.somarPorMesDesde(
+                usuarioId, TIPO_GANHO, STATUS_LIQUIDADO, desde)) {
+            porMes.put(rotulo(g.mes(), g.ano()), g.total());
+        }
+
+        List<Map<String, Object>> result = new ArrayList<>();
         for (int i = meses - 1; i >= 0; i--) {
             LocalDate mesRef = hoje.minusMonths(i);
-            int ano = mesRef.getYear();
-            int mes = mesRef.getMonthValue();
-
-            BigDecimal total = txs.stream()
-                    .filter(tx -> tx.getCriadoEm().getYear() == ano
-                            && tx.getCriadoEm().getMonthValue() == mes)
-                    .map(Transacao::getValor)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            String rotulo = rotulo(mesRef.getMonthValue(), mesRef.getYear());
+            BigDecimal total = porMes.getOrDefault(rotulo, BigDecimal.ZERO);
 
             Map<String, Object> item = new LinkedHashMap<>();
-            item.put("mes", String.format("%02d/%d", mes, ano));
+            item.put("mes", rotulo);
             item.put("ganhos", total.setScale(2, RoundingMode.HALF_UP));
             result.add(item);
         }
 
         return result;
+    }
+
+    private static String rotulo(int mes, int ano) {
+        return String.format("%02d/%d", mes, ano);
     }
 }

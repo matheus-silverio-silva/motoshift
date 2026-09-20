@@ -145,6 +145,37 @@ class SegurancaDaApiTest {
     }
 
     @Test
+    @DisplayName("perfil alheio sai reduzido: sem documento, CNH, nascimento, e-mail ou telefone")
+    void perfilAlheio_semDadoPessoal() throws Exception {
+        Conta lojista = registrarLojista("curiosa");
+        Conta motoboy = registrarMotoboy("perfil-reservado");
+
+        String alheio = mvc.perform(get("/api/usuarios/" + motoboy.id())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + lojista.token()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        // O furo: qualquer token lia o perfil completo de qualquer id — um laco
+        // de 1 a N montava uma base de CPF/CNPJ e CNH de todo mundo.
+        JsonNode publico = json.readTree(alheio);
+        assertThat(publico.get("nome").asText()).isEqualTo("perfil-reservado");
+        for (String campo : new String[] {"documentoFederal", "cnhNumero", "cnhValidade",
+                "dataNascimento", "email", "telefone", "enderecoComercial", "veiculoPlaca"}) {
+            assertThat(publico.has(campo)).as("campo %s no perfil publico", campo).isFalse();
+        }
+
+        // O dono continua lendo tudo do proprio perfil.
+        String proprio = mvc.perform(get("/api/usuarios/" + motoboy.id())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + motoboy.token()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode completo = json.readTree(proprio);
+        assertThat(completo.get("email").asText()).isEqualTo("perfil-reservado@segtest.com");
+        assertThat(completo.get("documentoFederal").asText()).isEqualTo("12345678900");
+    }
+
+    @Test
     @DisplayName("login, cadastro e health seguem publicos")
     void rotasPublicasContinuamAbertas() throws Exception {
         // Credencial errada de proposito: o que importa e o 401 vir do proprio

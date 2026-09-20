@@ -204,12 +204,22 @@ public class RelatorioService {
                 .filter(t -> t.getMotoboyId() != null && t.getStatus() == StatusTurno.CANCELADO).count();
         double taxaCancelamento = comMotoboy > 0 ? (canceladosComMotoboy * 100.0 / comMotoboy) : 0;
 
-        // Avaliação média dos motoboys que finalizaram turnos no mês
+        // Avaliação média dos motoboys que finalizaram turnos no mês.
+        // Os scores numa consulta só — era um findById por turno do mês.
+        List<Long> entregadores = doMes.stream()
+                .filter(t -> t.getStatus() == StatusTurno.FINALIZADO && t.getMotoboyId() != null)
+                .map(Turno::getMotoboyId)
+                .distinct()
+                .toList();
+        Map<Long, Double> scores = new HashMap<>();
+        if (!entregadores.isEmpty()) {
+            usuarioRepo.findAllById(entregadores)
+                    .forEach(u -> scores.put(u.getId(), u.getScore() != null ? u.getScore() : 5.0));
+        }
         OptionalDouble avaliacaoOpt = doMes.stream()
                 .filter(t -> t.getStatus() == StatusTurno.FINALIZADO && t.getMotoboyId() != null)
-                .map(t -> usuarioRepo.findById(t.getMotoboyId()))
-                .filter(Optional::isPresent)
-                .mapToDouble(opt -> opt.get().getScore() != null ? opt.get().getScore() : 5.0)
+                .filter(t -> scores.containsKey(t.getMotoboyId()))
+                .mapToDouble(t -> scores.get(t.getMotoboyId()))
                 .average();
         double avaliacaoMedia = avaliacaoOpt.isPresent()
                 ? Math.round(avaliacaoOpt.getAsDouble() * 10.0) / 10.0 : 0;

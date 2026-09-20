@@ -1,12 +1,15 @@
 package com.motoshift.controller;
 
 import com.motoshift.dto.CarteiraResponse;
+import com.motoshift.dto.TransacaoResponse;
 import com.motoshift.security.UsuarioAutenticado;
 import com.motoshift.service.CarteiraService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -44,11 +47,28 @@ public class CarteiraController {
         @ApiResponse(responseCode = "404", description = "Carteira não encontrada")
     })
     @PostMapping("/{usuarioId}/saque")
-    public Map<String, Object> saque(@PathVariable Long usuarioId,
-                                     @RequestBody Map<String, BigDecimal> body,
-                                     @AuthenticationPrincipal UsuarioAutenticado atual) {
+    public Map<String, Object> saque(
+            @PathVariable Long usuarioId,
+            @RequestBody Map<String, BigDecimal> body,
+            @Parameter(description = "Identificador do pedido gerado pelo cliente. Repetir o "
+                    + "mesmo valor devolve o resultado do primeiro saque sem debitar de novo.")
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @AuthenticationPrincipal UsuarioAutenticado atual) {
         atual.exigirMesmoUsuario(usuarioId);
-        return service.saque(usuarioId, body.get("valor"));
+        return service.saque(usuarioId, body.get("valor"), idempotencyKey);
+    }
+
+    @Operation(summary = "Extrato paginado",
+               description = "Lançamentos do mais recente para o mais antigo. O total vem no "
+                           + "header X-Total-Count.")
+    @GetMapping("/{usuarioId}/transacoes")
+    public ResponseEntity<List<TransacaoResponse>> extrato(
+            @PathVariable Long usuarioId,
+            @RequestParam(defaultValue = "0") int pagina,
+            @RequestParam(required = false) Integer tamanho,
+            @AuthenticationPrincipal UsuarioAutenticado atual) {
+        atual.exigirMesmoUsuario(usuarioId);
+        return Paginacao.resposta(service.extrato(usuarioId, Paginacao.pedido(pagina, tamanho)));
     }
 
     @Operation(summary = "Atualizar chave Pix", description = "Cadastra ou atualiza a chave Pix para saques.")

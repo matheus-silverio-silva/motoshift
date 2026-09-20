@@ -9,6 +9,7 @@ import '../../services/auth_service.dart';
 import 'package:latlong2/latlong.dart';
 import '../avaliacao/avaliacao_screen.dart';
 import 'filtros_turnos_sheet.dart';
+import 'turnos_cards.dart';
 import 'turnos_conteudo_desktop.dart';
 import '../../services/localizacao_service.dart';
 import '../../widgets/mapa_raio.dart';
@@ -564,41 +565,8 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         else
           ...provider.turnosDisponiveis
               .take(8)
-              .map((t) => _buildDisponivelCard(t, provider, auth)),
+              .map((t) => TurnoDisponivelCard(turno: t)),
       ],
-    );
-  }
-
-  Widget _buildDisponivelCard(
-      Turno turno, TurnoProvider provider, AuthService auth) {
-    return ShiftCard(
-      horario: turno.horarioFormatado,
-      name: turno.titulo,
-      meta: [
-        turno.regiao,
-        // distanciaKm só vem quando a busca foi por raio; fora disso mostra o
-        // raio de entrega do turno, como sempre mostrou.
-        if (turno.distanciaKm != null)
-          'a ${turno.distanciaKm!.toStringAsFixed(1).replaceAll('.', ',')} km'
-        else
-          '${turno.raioEntregaKm.toStringAsFixed(0)} km',
-        if (turno.multiVaga)
-          '${turno.vagasRestantes} de ${turno.vagas} vagas',
-      ],
-      value: 'R\$ ${turno.valorEstimado.toStringAsFixed(0)}',
-      iconData: Icons.two_wheeler_outlined,
-      // O chip "Ver" saiu: ele abria exatamente o que o toque no card já abre,
-      // e com 24px de altura ficava abaixo do alvo mínimo de 44px. A pílula de
-      // vagas ocupa o lugar e informa mais.
-      pillLabel: turno.multiVaga
-          ? '${turno.vagasRestantes} ${turno.vagasRestantes == 1 ? 'vaga' : 'vagas'}'
-          : null,
-      pillVariant: PillVariant.teal,
-      onTap: () => Navigator.pushNamed(
-        context,
-        AppRoutes.detalheTurno,
-        arguments: turno,
-      ),
     );
   }
 
@@ -622,7 +590,11 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
       children: [
         if (ativo != null) ...[
           SectionTitle(title: 'Turno em andamento'),
-          _buildAtivoCard(ativo, provider),
+          TurnoAtivoCard(
+            turno: ativo,
+            onConfirmarConclusao: () => _finalizar(ativo, provider),
+            onCancelar: () => _cancelar(ativo, provider),
+          ),
         ],
         if (proximos.isNotEmpty) ...[
           SectionTitle(
@@ -632,7 +604,8 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
           ...proximos
               .take(3)
               .map((t) => ShiftCard(
-                    horario: _formatProximoData(t.dataInicio, t.dataFim),
+                    horario: formatarProximoData(t.dataInicio, t.dataFim,
+                        agora: widget.agora),
                     name: t.titulo,
                     meta: [t.regiao],
                     value:
@@ -653,132 +626,31 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     );
   }
 
-  Widget _buildAtivoCard(Turno turno, TurnoProvider provider) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 9),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.tealSoft, width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.two_wheeler_rounded,
-                    color: Colors.white, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(turno.titulo,
-                        style: tsJakarta(13, FontWeight.w700,
-                            color: AppColors.ink)),
-                    Text(turno.horarioFormatado,
-                        style: tsJakarta(10.5, FontWeight.w400,
-                            color: AppColors.muted)),
-                  ],
-                ),
-              ),
-              const StatusPill(
-                  label: 'Em andamento',
-                  variant: PillVariant.amber,
-                  leadingDot: true),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () async {
-                    final ok =
-                        await provider.finalizarTurno(turno.id!);
-                    if (!mounted) return;
-                    if (ok) {
-                      await _mostrarDialogAvaliacao(turno);
-                      _carregar();
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                              provider.erro ?? 'Erro ao finalizar'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  },
-                  child: Container(
+  /// Finaliza o turno em andamento e encaminha para a avaliação.
+  Future<void> _finalizar(Turno turno, TurnoProvider provider) async {
+    final ok = await provider.finalizarTurno(turno.id!);
+    if (!mounted) return;
+    if (ok) {
+      await _mostrarDialogAvaliacao(turno);
+      _carregar();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.erro ?? 'Erro ao finalizar'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
-                    constraints: const BoxConstraints(minHeight: 44),
-
-                    alignment: Alignment.center,
-
-                    padding:
-
-                        const EdgeInsets.symmetric(vertical: 11),
-                    decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Confirmar conclusão',
-                        style: tsJakarta(12, FontWeight.w700,
-                            color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () async {
-                  final ok =
-                      await provider.cancelarTurno(turno.id!);
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(ok
-                        ? 'Turno cancelado.'
-                        : (provider.erro ?? 'Erro')),
-                    backgroundColor:
-                        ok ? Colors.orange : Colors.red,
-                  ));
-                  if (ok) _carregar();
-                },
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 11),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface2,
-                    borderRadius: BorderRadius.circular(10),
-                    border:
-                        Border.all(color: AppColors.line, width: 1.5),
-                  ),
-                  child: Text(
-                    'Cancelar',
-                    style: tsJakarta(12, FontWeight.w700,
-                        color: AppColors.muted),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+  Future<void> _cancelar(Turno turno, TurnoProvider provider) async {
+    final ok = await provider.cancelarTurno(turno.id!);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? 'Turno cancelado.' : (provider.erro ?? 'Erro')),
+      backgroundColor: ok ? Colors.orange : Colors.red,
+    ));
+    if (ok) _carregar();
   }
 
   Future<void> _mostrarDialogAvaliacao(Turno turno) async {
@@ -824,23 +696,5 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     );
   }
 
-  /// "Amanhã, 14:00 – 18:00" / "Hoje, ..." / "Qua, ...".
-  ///
-  /// A data de referência vem de `widget.agora`, como nas outras telas com
-  /// golden. Sem isso, a seção "Próximos turnos" mudava de rótulo à
-  /// meia-noite e o golden desta tela ia junto.
-  String _formatProximoData(DateTime inicio, DateTime fim) {
-    final agora = widget.agora ?? clock.now();
-    final diff = inicio
-        .difference(DateTime(agora.year, agora.month, agora.day));
-    String dia;
-    if (diff.inDays == 1) dia = 'Amanhã';
-    else if (diff.inDays == 0) dia = 'Hoje';
-    else {
-      const semana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-      dia = semana[inicio.weekday % 7];
-    }
-    return '$dia, ${inicio.hour.toString().padLeft(2, '0')}:${inicio.minute.toString().padLeft(2, '0')} – ${fim.hour.toString().padLeft(2, '0')}:${fim.minute.toString().padLeft(2, '0')}';
-  }
 }
 
