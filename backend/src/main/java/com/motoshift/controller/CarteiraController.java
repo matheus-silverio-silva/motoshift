@@ -2,22 +2,34 @@ package com.motoshift.controller;
 
 import com.motoshift.dto.CarteiraResponse;
 import com.motoshift.dto.CobrancaResponse;
+import com.motoshift.dto.ExtratoFiltro;
+import com.motoshift.dto.FluxoPontoResponse;
+import com.motoshift.dto.ResumoFinanceiroResponse;
 import com.motoshift.dto.TransacaoResponse;
 import com.motoshift.security.UsuarioAutenticado;
 import com.motoshift.service.CarteiraService;
 import com.motoshift.service.CobrancaService;
+import com.motoshift.service.ExtratoService;
 import com.motoshift.service.ledger.RetentativaOtimista;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -31,13 +43,16 @@ public class CarteiraController {
 
     /** Ver {@link RetentativaOtimista}: o retry mora em quem abre a transação. */
     private final RetentativaOtimista retentativa;
+    private final ExtratoService extrato;
 
     public CarteiraController(CarteiraService service,
                               CobrancaService cobrancas,
-                              RetentativaOtimista retentativa) {
+                              RetentativaOtimista retentativa,
+                              ExtratoService extrato) {
         this.service = service;
         this.cobrancas = cobrancas;
         this.retentativa = retentativa;
+        this.extrato = extrato;
     }
 
     // ── Recarga ──────────────────────────────────────────────────────────────
@@ -111,6 +126,86 @@ public class CarteiraController {
             @AuthenticationPrincipal UsuarioAutenticado atual) {
         return retentativa.executar("sacar",
                 () -> cobrancas.sacar(atual.id(), body.get("valor"), idempotencyKey));
+    }
+
+    // ── Extrato ──────────────────────────────────────────────────────────────
+
+    @Operation(summary = "Extrato filtrado e paginado",
+            description = "Lançamentos do usuário autenticado, do mais recente para o mais "
+                    + "antigo. Todos os filtros são opcionais e combináveis: dataInicio, "
+                    + "dataFim (ambos inclusivos), tipos (lista), status, natureza "
+                    + "(credito|debito), turnoId, contraparteId, valorMin, valorMax e busca "
+                    + "(texto na descrição). O total vem no header X-Total-Count. O filtro "
+                    + "roda no banco — antes o app baixava o extrato inteiro e escondia "
+                    + "linhas na tela.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Página do extrato"),
+        @ApiResponse(responseCode = "400", description = "Filtro inválido")
+    })
+    @GetMapping("/extrato")
+    public ResponseEntity<List<TransacaoResponse>> extratoFiltrado(
+            ExtratoFiltro filtro,
+            @RequestParam(defaultValue = "0") int pagina,
+            @RequestParam(required = false) Integer tamanho,
+            @AuthenticationPrincipal UsuarioAutenticado atual) {
+        Pageable pedido = PageRequest.of(Math.max(pagina, 0),
+                tamanho == null ? 20 : Math.max(tamanho, 1));
+        return Paginacao.resposta(extrato.extrato(atual.id(), filtro, pedido));
+    }
+
+    @Operation(summary = "Exportar o extrato em CSV",
+            description = "Mesmos filtros de /extrato, sem paginação — exportar meia página "
+                    + "não exporta nada. Separador ';' porque o Excel em português usa a "
+                    + "vírgula como separador decimal.")
+    @ApiResponse(responseCode = "200", description = "Arquivo CSV")
+    @GetMapping("/extrato/exportar")
+    public ResponseEntity<String> exportarExtrato(
+            ExtratoFiltro filtro,
+            @RequestParam(defaultValue = "csv") String formato,
+            @AuthenticationPrincipal UsuarioAutenticado atual) {
+        if (!"csv".equalsIgnoreCase(formato)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Formato não suportado: use csv.");
+        }
+        String csv = extrato.exportarCsv(atual.id(), filtro);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"extrato.csv\"")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csv);
+    }
+
+    @Operation(summary = "Resumo financeiro do período",
+            description = "Entradas, saídas e líquido do período, mais o retrato atual da "
+                    + "carteira: disponível, bloqueado, a receber (entregador: turnos aceitos "
+                    + "ainda não finalizados) e comprometido (lojista: reservas abertas, com "
+                    + "a lista por turno). Sem datas, usa os últimos 30 dias.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Resumo do período"),
+        @ApiResponse(responseCode = "400", description = "Data final anterior à inicial")
+    })
+    @GetMapping("/resumo")
+    public ResumoFinanceiroResponse resumo(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataInicio,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataFim,
+            @AuthenticationPrincipal UsuarioAutenticado atual) {
+        return extrato.resumo(atual.id(), dataInicio, dataFim);
+    }
+
+    @Operation(summary = "Série de fluxo de caixa",
+            description = "Entradas e saídas agrupadas por dia, semana ou mês, somadas no "
+                    + "banco. Períodos sem lançamento vêm com zero, para o gráfico não "
+                    + "mentir sobre o intervalo. Sem datas, usa os últimos 30 dias.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Série do gráfico"),
+        @ApiResponse(responseCode = "400", description = "Agrupamento ou período inválido")
+    })
+    @GetMapping("/fluxo")
+    public List<FluxoPontoResponse> fluxo(
+            @RequestParam(defaultValue = "dia") String agrupamento,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataInicio,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataFim,
+            @AuthenticationPrincipal UsuarioAutenticado atual) {
+        return extrato.fluxo(atual.id(), agrupamento, dataInicio, dataFim);
     }
 
     @Operation(summary = "Consultar carteira", description = "Retorna saldo atual, ganhos mensais e histórico de transações.")

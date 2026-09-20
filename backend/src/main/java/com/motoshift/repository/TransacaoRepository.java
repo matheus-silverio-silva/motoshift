@@ -14,7 +14,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
+public interface TransacaoRepository extends JpaRepository<Transacao, Long>,
+        org.springframework.data.jpa.repository.JpaSpecificationExecutor<Transacao> {
 
     List<Transacao> findByUsuarioIdOrderByCriadoEmDesc(Long usuarioId);
 
@@ -66,4 +67,76 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
                                        @Param("tipo") TipoTransacao tipo,
                                        @Param("status") StatusTransacao status,
                                        @Param("desde") LocalDateTime desde);
+
+    /**
+     * Entradas e saidas por DIA, somadas no banco — a base do grafico de fluxo.
+     *
+     * <p>Substitui o agrupamento em memoria do grafico antigo, que carregava o
+     * extrato inteiro para separa-lo mes a mes num stream. O que sai daqui e no
+     * maximo um registro por dia e natureza; quem quiser a serie por semana ou
+     * por mes dobra esses baldes, e isso custa o tamanho do periodo, nao o
+     * volume de lancamentos.
+     *
+     * <p>So lancamentos CONCLUIDOS: um grafico de fluxo de caixa que inclui
+     * dinheiro que nao se moveu nao e um grafico de fluxo de caixa.
+     */
+    @Query("SELECT new com.motoshift.repository.PontoDeFluxo("
+         + "  year(t.criadoEm), month(t.criadoEm), day(t.criadoEm), t.natureza, SUM(t.valor)) "
+         + "FROM Transacao t "
+         + "WHERE t.usuarioId = :usuarioId AND t.status = com.motoshift.entity.StatusTransacao.CONCLUIDO "
+         + "AND t.criadoEm >= :inicio AND t.criadoEm < :fim "
+         + "GROUP BY year(t.criadoEm), month(t.criadoEm), day(t.criadoEm), t.natureza "
+         + "ORDER BY year(t.criadoEm), month(t.criadoEm), day(t.criadoEm)")
+    List<PontoDeFluxo> fluxoPorDia(@Param("usuarioId") Long usuarioId,
+                                   @Param("inicio") LocalDateTime inicio,
+                                   @Param("fim") LocalDateTime fim);
+
+    /** Quanto cada tipo somou no periodo — a quebra do resumo. */
+    @Query("SELECT new com.motoshift.repository.TotalPorTipo(t.tipo, SUM(t.valor), COUNT(t)) "
+         + "FROM Transacao t "
+         + "WHERE t.usuarioId = :usuarioId AND t.status = com.motoshift.entity.StatusTransacao.CONCLUIDO "
+         + "AND t.criadoEm >= :inicio AND t.criadoEm < :fim "
+         + "GROUP BY t.tipo "
+         + "ORDER BY SUM(t.valor) DESC")
+    List<TotalPorTipo> totalPorTipo(@Param("usuarioId") Long usuarioId,
+                                    @Param("inicio") LocalDateTime inicio,
+                                    @Param("fim") LocalDateTime fim);
+
+    /**
+     * Soma por natureza no periodo — entradas e saidas do resumo.
+     *
+     * <p>Aqui a natureza e o criterio certo, e nao os deltas de saldo: o que se
+     * pergunta e "quanto entrou e quanto saiu no extrato", que e a leitura do
+     * usuario. Reserva e liberacao aparecem como saida e entrada porque e assim
+     * que ele as ve na tela.
+     */
+    @Query("SELECT t.natureza, COALESCE(SUM(t.valor), 0) FROM Transacao t "
+         + "WHERE t.usuarioId = :usuarioId AND t.status = com.motoshift.entity.StatusTransacao.CONCLUIDO "
+         + "AND t.criadoEm >= :inicio AND t.criadoEm < :fim "
+         + "GROUP BY t.natureza")
+    List<Object[]> somarPorNatureza(@Param("usuarioId") Long usuarioId,
+                                    @Param("inicio") LocalDateTime inicio,
+                                    @Param("fim") LocalDateTime fim);
+
+    /**
+     * O que cada turno ainda mantem bloqueado na carteira do lojista.
+     *
+     * <p>Reserva menos o que ja saiu dela — pagamentos e liberacoes —, com os
+     * sinais vindo do tipo. So aparece turno com saldo remanescente: um turno
+     * ja liquidado por inteiro some da lista em vez de figurar com zero.
+     */
+    @Query("SELECT new com.motoshift.repository.ReservaAberta(t.turnoId, MAX(tu.titulo), "
+         + "  SUM(CASE WHEN t.tipo = com.motoshift.entity.TipoTransacao.RESERVA THEN t.valor "
+         + "           ELSE -t.valor END)) "
+         + "FROM Transacao t JOIN Turno tu ON tu.id = t.turnoId "
+         + "WHERE t.usuarioId = :usuarioId "
+         + "AND t.status = com.motoshift.entity.StatusTransacao.CONCLUIDO "
+         + "AND t.tipo IN (com.motoshift.entity.TipoTransacao.RESERVA, "
+         + "               com.motoshift.entity.TipoTransacao.LIBERACAO_RESERVA, "
+         + "               com.motoshift.entity.TipoTransacao.PAGAMENTO_ENVIADO) "
+         + "GROUP BY t.turnoId "
+         + "HAVING SUM(CASE WHEN t.tipo = com.motoshift.entity.TipoTransacao.RESERVA THEN t.valor "
+         + "                ELSE -t.valor END) > 0 "
+         + "ORDER BY t.turnoId")
+    List<ReservaAberta> reservasAbertas(@Param("usuarioId") Long usuarioId);
 }

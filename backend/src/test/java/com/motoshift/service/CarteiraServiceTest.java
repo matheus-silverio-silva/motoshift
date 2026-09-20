@@ -15,6 +15,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -176,8 +178,10 @@ class CarteiraServiceTest {
         when(carteiraRepo.findByUsuarioId(7L)).thenReturn(Optional.of(c));
         when(transacaoRepo.somarPorTipoDesde(anyLong(), any(), any(), any()))
                 .thenReturn(BigDecimal.ZERO);
-        when(transacaoRepo.findByUsuarioIdOrderByCriadoEmDesc(7L))
-                .thenReturn(List.of());
+        // Paginado: a rota passou a devolver só a primeira página do extrato
+        // em vez de todos os lançamentos do usuário num array só.
+        when(transacaoRepo.findByUsuarioIdOrderByCriadoEmDesc(eq(7L), any(Pageable.class)))
+                .thenReturn(Page.empty());
 
         CarteiraResponse resp = service.buscar(7L);
 

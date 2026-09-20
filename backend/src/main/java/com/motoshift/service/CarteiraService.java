@@ -12,6 +12,7 @@ import com.motoshift.repository.GanhoMensal;
 import com.motoshift.repository.TransacaoRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -81,14 +82,28 @@ public class CarteiraService {
         CarteiraResponse resp = CarteiraResponse.from(carteira);
         resp.setGanhosMensais(ganhosDoMes(usuarioId));
 
+        // Só a primeira página, e não o extrato inteiro.
+        //
+        // Esta rota devolvia TODOS os lançamentos do usuário num array só. Com
+        // vinte linhas passava despercebido; com dois anos de uso é uma
+        // resposta enorme para uma tela que mostra as primeiras dez. Quem
+        // precisa do resto usa GET /api/carteira/extrato, que pagina e filtra.
         List<TransacaoResponse> transacoes = transacaoRepo
-                .findByUsuarioIdOrderByCriadoEmDesc(usuarioId)
-                .stream()
+                .findByUsuarioIdOrderByCriadoEmDesc(usuarioId,
+                        PageRequest.of(0, PRIMEIRA_PAGINA_DO_EXTRATO))
                 .map(TransacaoResponse::from)
-                .collect(Collectors.toList());
+                .getContent();
         resp.setTransacoes(transacoes);
         return resp;
     }
+
+    /**
+     * Quantos lançamentos a rota de compatibilidade devolve.
+     *
+     * Suficiente para a tela de carteira do app atual, que lista os últimos
+     * lançamentos e não tem paginação própria.
+     */
+    private static final int PRIMEIRA_PAGINA_DO_EXTRATO = 20;
 
     /** Extrato paginado, do lancamento mais recente para o mais antigo. */
     public Page<TransacaoResponse> extrato(Long usuarioId, Pageable pagina) {
