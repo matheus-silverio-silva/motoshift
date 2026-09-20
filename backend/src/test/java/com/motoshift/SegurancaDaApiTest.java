@@ -44,11 +44,11 @@ class SegurancaDaApiTest {
     @Autowired
     private ObjectMapper json;
 
-    // O ledger exige uma transação aberta (propagação MANDATORY): fora de uma
-    // requisição, quem a abre é este template.
     @Autowired
-    private com.motoshift.service.ledger.LedgerService ledger;
+    private com.motoshift.service.CobrancaService cobrancas;
 
+    // Fora de uma requisição HTTP não há transação aberta; quem a abre para o
+    // preparo do cenário é este template.
     @Autowired
     private org.springframework.transaction.support.TransactionTemplate transacoes;
 
@@ -199,11 +199,23 @@ class SegurancaDaApiTest {
 
     // ── Helpers ──────────────────────────────────────────────
 
-    /** Recarga direta pelo ledger — o caminho HTTP é assunto de outro teste. */
+    /**
+     * Recarrega pelo caminho real: cria a cobrança e confirma.
+     *
+     * <p>Poderia chamar o ledger direto, e a primeira versão deste helper fazia
+     * isso — passando o id do usuário como se fosse o id da cobrança. Isso
+     * gerava a chave {@code recarga:{id}}, que colide com a chave de uma
+     * cobrança de verdade de mesmo id criada por outro teste: a recarga era
+     * tratada como já aplicada e o saldo ficava zero, longe daqui. Ids de
+     * entidade não são intercambiáveis, mesmo quando são todos {@code Long}.
+     */
     private void comSaldo(Conta conta) {
-        transacoes.executeWithoutResult(status ->
-                ledger.aplicar(com.motoshift.service.ledger.Movimento.recarga(
-                        conta.id(), new java.math.BigDecimal("5000.00"), conta.id())));
+        transacoes.executeWithoutResult(status -> {
+            Long cobranca = cobrancas
+                    .criarRecarga(conta.id(), new java.math.BigDecimal("5000.00"), null)
+                    .getId();
+            cobrancas.confirmarRecarga(conta.id(), cobranca);
+        });
     }
 
     private record Conta(long id, String token) {}

@@ -46,6 +46,9 @@ class CarteiraServiceTest {
     @InjectMocks
     private CarteiraService service;
 
+    @Mock
+    private CobrancaService cobrancas;
+
     private Carteira carteiraCom(BigDecimal disponivel, String pix) {
         Carteira c = new Carteira();
         c.setUsuarioId(7L);
@@ -106,118 +109,14 @@ class CarteiraServiceTest {
         assertThat(service.ganhosDoMes(7L).scale()).isEqualTo(2);
     }
 
+
     // ── saque ────────────────────────────────────────────────────────────────
-
-    @Test
-    @DisplayName("saque debita o disponivel e registra a transacao")
-    void saque_caminhoFeliz() {
-        Carteira c = carteiraCom(new BigDecimal("320.00"), "ricardo@pix.com");
-        when(carteiraRepo.findByUsuarioId(7L)).thenReturn(Optional.of(c));
-
-        Map<String, Object> resp = service.saque(7L, new BigDecimal("100.00"), null);
-
-        assertThat(c.getSaldoDisponivel()).isEqualByComparingTo("220.00");
-        assertThat(resp.get("novoSaldo")).isEqualTo(new BigDecimal("220.00"));
-
-        ArgumentCaptor<Transacao> tx = ArgumentCaptor.forClass(Transacao.class);
-        verify(transacaoRepo).saveAndFlush(tx.capture());
-        assertThat(tx.getValue().getTipo()).isEqualTo(TipoTransacao.SAQUE);
-        assertThat(tx.getValue().getStatus()).isEqualTo(StatusTransacao.CONCLUIDO);
-        assertThat(tx.getValue().getUsuarioId()).isEqualTo(7L);
-        // Sem header do cliente a chave e aleatoria — mas nunca vazia.
-        assertThat(tx.getValue().getIdempotencyKey()).startsWith("saque:");
-    }
-
-    @Test
-    @DisplayName("saque repetido com a mesma Idempotency-Key nao debita de novo")
-    void saque_mesmaChave_naoDebitaDuasVezes() {
-        Carteira c = carteiraCom(new BigDecimal("320.00"), "ricardo@pix.com");
-        when(carteiraRepo.findByUsuarioId(7L)).thenReturn(Optional.of(c));
-        when(transacaoRepo.existsByIdempotencyKey("saque:7:toque-1"))
-                .thenReturn(false)   // primeiro pedido
-                .thenReturn(true);   // o duplo toque chega depois
-
-        service.saque(7L, new BigDecimal("100.00"), "toque-1");
-        Map<String, Object> repetido = service.saque(7L, new BigDecimal("100.00"), "toque-1");
-
-        assertThat(c.getSaldoDisponivel()).isEqualByComparingTo("220.00");
-        assertThat(repetido.get("novoSaldo")).isEqualTo(new BigDecimal("220.00"));
-        verify(transacaoRepo, times(1)).saveAndFlush(any());
-    }
-
-    @Test
-    @DisplayName("saque de exatamente R$ 20,00 passa — o minimo e inclusivo")
-    void saque_noLimiteMinimo() {
-        // compareTo e nao equals: new BigDecimal("20.0").equals(new
-        // BigDecimal("20.00")) e false por causa da escala, e o limite passaria
-        // a rejeitar um valor valido.
-        Carteira c = carteiraCom(new BigDecimal("50.00"), "pix@x.com");
-        when(carteiraRepo.findByUsuarioId(7L)).thenReturn(Optional.of(c));
-
-        assertThatNoException()
-                .isThrownBy(() -> service.saque(7L, new BigDecimal("20.000"), null));
-    }
-
-    @Test
-    @DisplayName("saque abaixo do minimo e recusado")
-    void saque_abaixoDoMinimo() {
-        assertThatThrownBy(() -> service.saque(7L, new BigDecimal("19.99"), null))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("mínimo");
-
-        verifyNoInteractions(carteiraRepo);
-    }
-
-    @Test
-    @DisplayName("saque sem chave Pix e recusado antes de mexer no saldo")
-    void saque_semChavePix() {
-        Carteira c = carteiraCom(new BigDecimal("500.00"), null);
-        when(carteiraRepo.findByUsuarioId(7L)).thenReturn(Optional.of(c));
-
-        assertThatThrownBy(() -> service.saque(7L, new BigDecimal("100.00"), null))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("Pix");
-
-        assertThat(c.getSaldoDisponivel()).isEqualByComparingTo("500.00");
-        verify(transacaoRepo, never()).saveAndFlush(any());
-    }
-
-    @Test
-    @DisplayName("saque nao alcanca o saldo bloqueado — ele esta preso em turnos")
-    void saque_naoTocaNoBloqueado() {
-        Carteira c = carteiraCom(new BigDecimal("50.00"), "pix@x.com");
-        c.setSaldoBloqueado(new BigDecimal("500.00"));
-        when(carteiraRepo.findByUsuarioId(7L)).thenReturn(Optional.of(c));
-
-        // Patrimonio total 550, disponivel 50: sacar 100 tem que falhar.
-        assertThatThrownBy(() -> service.saque(7L, new BigDecimal("100.00"), null))
-                .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("insuficiente");
-
-        assertThat(c.getSaldoBloqueado()).isEqualByComparingTo("500.00");
-        verify(transacaoRepo, never()).saveAndFlush(any());
-    }
-
-    @Test
-    @DisplayName("saque em carteira inexistente da 404, nao NullPointerException")
-    void saque_carteiraInexistente() {
-        when(carteiraRepo.findByUsuarioId(7L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.saque(7L, new BigDecimal("100.00"), null))
-                .isInstanceOf(ResponseStatusException.class)
-                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
-                .isEqualTo(HttpStatus.NOT_FOUND);
-    }
-
-    @Test
-    @DisplayName("saque sem valor da 400")
-    void saque_valorNulo() {
-        assertThatThrownBy(() -> service.saque(7L, null, null))
-                .isInstanceOf(ResponseStatusException.class)
-                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
-                .isEqualTo(HttpStatus.BAD_REQUEST);
-    }
-
+    //
+    // Os testes de saque saíram daqui: o saque deixou de ser lógica deste
+    // serviço. Ele agora fala com o gateway, trata a recusa e estorna, e mora
+    // no CobrancaService — com cobertura no CobrancaServiceTest, contra um
+    // banco de verdade. O que sobrou aqui é um invólucro de compatibilidade
+    // que só reembala a resposta no formato que o app antigo espera.
     // ── grafico ──────────────────────────────────────────────────────────────
 
     @Test

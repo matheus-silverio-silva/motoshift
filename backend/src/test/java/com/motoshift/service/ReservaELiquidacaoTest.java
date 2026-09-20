@@ -54,6 +54,7 @@ class ReservaELiquidacaoTest {
     @Autowired private TurnoService turnos;
     @Autowired private PagamentoTurnoService pagamentos;
     @Autowired private LedgerService ledger;
+    @Autowired private CobrancaService cobrancas;
     @Autowired private ConsistenciaService consistencia;
     @Autowired private TurnoRepository turnoRepo;
     @Autowired private TurnoInscricaoRepository inscricaoRepo;
@@ -299,8 +300,18 @@ class ReservaELiquidacaoTest {
         return usuarioRepo.save(u);
     }
 
+    /**
+     * Recarrega pelo caminho real — cobrança criada e confirmada.
+     *
+     * Não forja um movimento no ledger: a chave de um crédito de recarga é
+     * {@code recarga:{cobrancaId}}, e inventar esse id faz a chave colidir com
+     * a de uma cobrança de verdade de mesmo número, criada por outro teste. O
+     * sintoma aparece longe da causa — a recarga é tratada como já aplicada e o
+     * saldo simplesmente não sobe.
+     */
     private void recarregar(Usuario u, String valor) {
-        ledger.aplicar(Movimento.recarga(u.getId(), new BigDecimal(valor), System.nanoTime()));
+        Long cobranca = cobrancas.criarRecarga(u.getId(), new BigDecimal(valor), null).getId();
+        cobrancas.confirmarRecarga(u.getId(), cobranca);
     }
 
     private Turno publicar(String valor, int vagas) {
