@@ -145,9 +145,12 @@ void main() {
   });
 
   testWidgets('MinhasAvaliacoesScreen (lojista)', (tester) async {
+    // Data fixa pelo mesmo motivo do histórico: a lista "a avaliar" imprime o
+    // dd/MM do turno, e o fixture padrão ancora os turnos em HOJE.
     await pumpGolden(
       tester,
       child: const MinhasAvaliacoesScreen(),
+      apiFake: FakeApiDatasFixas(),
       tipoUsuario: TipoUsuario.lojista,
     );
     await expectLater(

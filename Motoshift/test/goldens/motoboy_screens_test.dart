@@ -90,7 +90,14 @@ void main() {
   });
 
   testWidgets('MinhasAvaliacoesScreen (motoboy)', (tester) async {
-    await pumpGolden(tester, child: const MinhasAvaliacoesScreen());
+    // Data fixa: a lista "a avaliar" imprime o dd/MM do turno, e o fixture
+    // padrão ancora os turnos em HOJE — o golden passava no dia da gravação e
+    // falhava no dia seguinte. Mesmo motivo do histórico e dos dashboards.
+    await pumpGolden(
+      tester,
+      child: const MinhasAvaliacoesScreen(),
+      apiFake: FakeApiDatasFixas(),
+    );
     await expectLater(
       find.byType(MinhasAvaliacoesScreen),
       matchesGoldenFile('goldens/minhas_avaliacoes_motoboy.png'),
