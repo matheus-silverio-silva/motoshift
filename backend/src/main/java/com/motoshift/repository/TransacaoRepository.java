@@ -139,4 +139,38 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long>,
          + "                ELSE -t.valor END) > 0 "
          + "ORDER BY t.turnoId")
     List<ReservaAberta> reservasAbertas(@Param("usuarioId") Long usuarioId);
+
+    /**
+     * Lancamentos de um tipo no periodo, com o turno que os originou ao lado.
+     *
+     * <p>Base dos relatorios: a apuracao passou a sair do EXTRATO e nao mais de
+     * Turno.valorEstimado. A diferenca nao e de estilo — valorEstimado e o que
+     * o turno PROMETIA pagar por entregador, e o relatorio precisa do que foi
+     * de fato pago. Num turno de tres vagas com dois inscritos, o primeiro diz
+     * 120 e o segundo diz 240, e so um dos dois e a resposta certa para "quanto
+     * este lojista gastou".
+     *
+     * <p>LEFT JOIN porque nem todo lancamento tem turno, e mesmo os que tem
+     * podem apontar para um turno apagado — o relatorio nao pode sumir com uma
+     * linha de dinheiro por causa disso.
+     */
+    @Query("SELECT t, tu FROM Transacao t LEFT JOIN Turno tu ON tu.id = t.turnoId "
+         + "WHERE t.usuarioId = :usuarioId AND t.tipo = :tipo "
+         + "AND t.status = com.motoshift.entity.StatusTransacao.CONCLUIDO "
+         + "AND t.criadoEm >= :inicio AND t.criadoEm < :fim "
+         + "ORDER BY t.criadoEm")
+    List<Object[]> lancamentosComTurno(@Param("usuarioId") Long usuarioId,
+                                       @Param("tipo") TipoTransacao tipo,
+                                       @Param("inicio") LocalDateTime inicio,
+                                       @Param("fim") LocalDateTime fim);
+
+    /** Soma simples de um tipo no periodo — usada nos totais dos relatorios. */
+    @Query("SELECT COALESCE(SUM(t.valor), 0) FROM Transacao t "
+         + "WHERE t.usuarioId = :usuarioId AND t.tipo = :tipo "
+         + "AND t.status = com.motoshift.entity.StatusTransacao.CONCLUIDO "
+         + "AND t.criadoEm >= :inicio AND t.criadoEm < :fim")
+    BigDecimal somarTipoNoPeriodo(@Param("usuarioId") Long usuarioId,
+                                  @Param("tipo") TipoTransacao tipo,
+                                  @Param("inicio") LocalDateTime inicio,
+                                  @Param("fim") LocalDateTime fim);
 }
