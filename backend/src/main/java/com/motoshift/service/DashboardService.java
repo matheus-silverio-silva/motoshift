@@ -77,12 +77,14 @@ public class DashboardService {
 
         // Reputação média dos entregadores que atenderam este lojista.
         // Continua sendo útil, mas agora com nome próprio.
+        //
+        // Os scores vêm numa consulta só: o findById dentro do stream fazia uma
+        // ida ao banco por turno finalizado do lojista.
+        Map<Long, Double> scorePorEntregador = scoresDosEntregadores(todosTurnos);
         OptionalDouble mediaOpt = todosTurnos.stream()
                 .filter(t -> t.getStatus() == StatusTurno.FINALIZADO && t.getMotoboyId() != null)
-                .map(t -> usuarioRepo.findById(t.getMotoboyId()))
-                .filter(java.util.Optional::isPresent)
-                .map(java.util.Optional::get)
-                .mapToDouble(u -> u.getScore() != null ? u.getScore() : 0.0)
+                .filter(t -> scorePorEntregador.containsKey(t.getMotoboyId()))
+                .mapToDouble(t -> scorePorEntregador.get(t.getMotoboyId()))
                 .average();
         double reputacaoEntregadores = mediaOpt.isPresent()
                 ? Math.round(mediaOpt.getAsDouble() * 10.0) / 10.0
@@ -110,6 +112,21 @@ public class DashboardService {
         resp.put("totalGasto", totalGasto);
         resp.put("turnosRecentes", turnosRecentes);
         return resp;
+    }
+
+    /** Score de cada entregador que aparece na lista de turnos, numa consulta. */
+    private Map<Long, Double> scoresDosEntregadores(List<com.motoshift.entity.Turno> turnos) {
+        List<Long> ids = turnos.stream()
+                .filter(t -> t.getStatus() == StatusTurno.FINALIZADO && t.getMotoboyId() != null)
+                .map(com.motoshift.entity.Turno::getMotoboyId)
+                .distinct()
+                .toList();
+        Map<Long, Double> scores = new HashMap<>();
+        if (ids.isEmpty()) return scores;
+        for (Usuario u : usuarioRepo.findAllById(ids)) {
+            scores.put(u.getId(), u.getScore() != null ? u.getScore() : 0.0);
+        }
+        return scores;
     }
 
     public Map<String, Object> doMotoboy(Long id) {

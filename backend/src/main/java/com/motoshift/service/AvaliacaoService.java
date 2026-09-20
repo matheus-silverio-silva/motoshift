@@ -113,15 +113,18 @@ public class AvaliacaoService {
         dist.put("2estrelas", contarNota(lista, 2));
         dist.put("1estrela",  contarNota(lista, 1));
 
-        List<Map<String, Object>> avaliacoes = lista.stream()
-                .limit(20)
+        List<Avaliacao> ultimas = lista.stream().limit(20).toList();
+        // Um findById por avaliação virava 20 consultas para desenhar a tela.
+        Map<Long, String> nomes = nomesDe(
+                ultimas.stream().map(Avaliacao::getAvaliadorId).distinct().toList());
+
+        List<Map<String, Object>> avaliacoes = ultimas.stream()
                 .map(a -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("turnoId", a.getTurnoId());
                     m.put("nota", a.getNota());
                     m.put("comentario", a.getComentario());
-                    m.put("nomeAvaliador", usuarioRepo.findById(a.getAvaliadorId())
-                            .map(Usuario::getNome).orElse("Usuário"));
+                    m.put("nomeAvaliador", nomes.getOrDefault(a.getAvaliadorId(), "Usuário"));
                     m.put("data", a.getCriadoEm().format(DATA_ISO));
                     return m;
                 })
@@ -157,13 +160,16 @@ public class AvaliacaoService {
 
         List<Map<String, Object>> pendentes = new ArrayList<>();
         if (participou(turno, usuarioId) && turno.getStatus() == StatusTurno.FINALIZADO) {
-            for (Long alvo : alvosDeAvaliacao(turno, usuarioId)) {
-                if (avaliacaoRepo.existsByTurnoIdAndAvaliadorIdAndAvaliadoId(turnoId, usuarioId, alvo)) {
-                    continue;
-                }
+            List<Long> alvos = alvosDeAvaliacao(turno, usuarioId).stream()
+                    .filter(alvo -> !avaliacaoRepo
+                            .existsByTurnoIdAndAvaliadorIdAndAvaliadoId(turnoId, usuarioId, alvo))
+                    .toList();
+            Map<Long, String> nomes = nomesDe(alvos);
+
+            for (Long alvo : alvos) {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("usuarioId", alvo);
-                m.put("nome", usuarioRepo.findById(alvo).map(Usuario::getNome).orElse("Usuário"));
+                m.put("nome", nomes.getOrDefault(alvo, "Usuário"));
                 pendentes.add(m);
             }
         }
@@ -184,6 +190,16 @@ public class AvaliacaoService {
 
     private long contarNota(List<Avaliacao> lista, int nota) {
         return lista.stream().filter(a -> a.getNota() == nota).count();
+    }
+
+    /** Nomes de um conjunto de usuários numa consulta só. */
+    private Map<Long, String> nomesDe(List<Long> ids) {
+        Map<Long, String> nomes = new LinkedHashMap<>();
+        if (ids.isEmpty()) return nomes;
+        for (Usuario u : usuarioRepo.findAllById(ids)) {
+            nomes.put(u.getId(), u.getNome());
+        }
+        return nomes;
     }
 
     /** Participou do turno como lojista, motoboy principal ou inscrito. */

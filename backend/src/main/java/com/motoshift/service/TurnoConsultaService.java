@@ -10,6 +10,8 @@ import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
 import com.motoshift.util.GeoUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -20,7 +22,6 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -33,9 +34,17 @@ import java.util.stream.Stream;
  * escrita a nao ser o mapeamento. Separado, o servico de ciclo de vida cabe na
  * cabeca e o filtro geografico — que e a parte mais densa daqui — para de
  * disputar espaco com a regra de negocio.
+ *
+ * As listagens recebem um Pageable opcional: null devolve tudo, como sempre
+ * (e o que o app em producao pede). Todas montam a resposta em lote — uma
+ * contagem de vagas para a lista inteira, e nao uma por turno.
  */
 @Service
 public class TurnoConsultaService {
+
+    /** Inscricoes que fazem de um turno "turno do entregador" — cancelada nao conta. */
+    private static final List<StatusInscricao> INSCRICAO_VALIDA =
+            List.of(StatusInscricao.ACEITO, StatusInscricao.FINALIZADO);
 
     private final TurnoRepository turnoRepo;
     private final TurnoInscricaoRepository inscricaoRepo;
@@ -55,12 +64,17 @@ public class TurnoConsultaService {
         this.acesso = acesso;
     }
 
-    public List<TurnoResponse> listarDisponiveis() {
-        return turnoRepo.findByStatus(StatusTurno.ABERTO).stream()
-                .map(mapper::toResponse)
-                .collect(Collectors.toList());
+    public Page<TurnoResponse> listarDisponiveis(Pageable pagina) {
+        return mapper.toResponses(turnoRepo.findByStatusOrderByDataInicioAsc(
+                StatusTurno.ABERTO, paginaOuTudo(pagina)));
     }
 
+    /**
+     * Disponiveis com filtros. Os filtros de horario, dia da semana e raio
+     * exato sao feitos em memoria, entao a pagina e cortada depois deles — por
+     * isso a lista volta inteira e quem pagina e o controller. O que chega na
+     * memoria ja veio reduzido pela bounding box do banco quando ha posicao.
+     */
     public List<TurnoResponse> listarDisponiveisComFiltros(
             String horarioInicio, String horarioFim, Integer diaSemana,
             Double raioMaxKm, String dataInicio, String dataFim, String ordenarPor,
@@ -140,38 +154,22 @@ public class TurnoConsultaService {
                                        Comparator.nullsLast(Comparator.naturalOrder()));
         };
 
-        return stream.sorted(comparator)
-                .map(t -> mapper.toResponse(t, geo ? lat : null, geo ? lng : null))
-                .collect(Collectors.toList());
+        List<Turno> filtrados = stream.sorted(comparator).toList();
+        return mapper.toResponses(filtrados, geo ? lat : null, geo ? lng : null);
     }
 
-    public List<TurnoResponse> listarPorLojista(Long lojistId) {
-        return turnoRepo.findByLojistId(lojistId).stream()
-                .map(mapper::toResponse)
-                .collect(Collectors.toList());
+    public Page<TurnoResponse> listarPorLojista(Long lojistId, Pageable pagina) {
+        return mapper.toResponses(turnoRepo.findByLojistIdOrderByDataInicioDesc(
+                lojistId, paginaOuTudo(pagina)));
     }
 
-    public List<TurnoResponse> listarPorMotoboy(Long motoboyId) {
-        // Une turnos onde o motoboy é o principal (motoboyId) com aqueles em que
-        // ele entrou por inscrição (vaga extra), sem duplicar.
-        LinkedHashMap<Long, Turno> porId = new LinkedHashMap<>();
-        for (Turno t : turnoRepo.findByMotoboyId(motoboyId)) {
-            porId.put(t.getId(), t);
-        }
-        for (TurnoInscricao ins : inscricaoRepo.findByMotoboyIdAndStatus(motoboyId, StatusInscricao.ACEITO)) {
-            if (!porId.containsKey(ins.getTurnoId())) {
-                turnoRepo.findById(ins.getTurnoId()).ifPresent(t -> porId.put(t.getId(), t));
-            }
-        }
-        // Também inclui inscrições já finalizadas (histórico), evitando duplicatas.
-        for (TurnoInscricao ins : inscricaoRepo.findByMotoboyIdAndStatus(motoboyId, StatusInscricao.FINALIZADO)) {
-            if (!porId.containsKey(ins.getTurnoId())) {
-                turnoRepo.findById(ins.getTurnoId()).ifPresent(t -> porId.put(t.getId(), t));
-            }
-        }
-        return porId.values().stream()
-                .map(mapper::toResponse)
-                .collect(Collectors.toList());
+    /**
+     * Turnos em que o entregador é o principal ou ocupa vaga por inscrição
+     * (ativa ou já finalizada), sem duplicar. Uma consulta só.
+     */
+    public Page<TurnoResponse> listarPorMotoboy(Long motoboyId, Pageable pagina) {
+        return mapper.toResponses(turnoRepo.findDoEntregador(
+                motoboyId, INSCRICAO_VALIDA, paginaOuTudo(pagina)));
     }
 
     public TurnoResponse buscarPorId(Long id) {
@@ -182,13 +180,21 @@ public class TurnoConsultaService {
     public List<Map<String, Object>> listarInscritos(Long turnoId, Long usuarioId) {
         acesso.exigirParticipante(acesso.carregar(turnoId), usuarioId);
 
-        return inscricaoRepo.findByTurnoId(turnoId).stream()
+        List<TurnoInscricao> inscricoes = inscricaoRepo.findByTurnoId(turnoId).stream()
                 .filter(i -> i.getStatus() != StatusInscricao.CANCELADO)
+                .toList();
+
+        // Os nomes de todos numa consulta, e nao um findById por inscrito.
+        Map<Long, String> nomes = usuarioRepo.findAllById(
+                        inscricoes.stream().map(TurnoInscricao::getMotoboyId).toList())
+                .stream()
+                .collect(Collectors.toMap(Usuario::getId, Usuario::getNome));
+
+        return inscricoes.stream()
                 .map(i -> {
                     Map<String, Object> m = new HashMap<>();
                     m.put("motoboyId", i.getMotoboyId());
-                    m.put("nome", usuarioRepo.findById(i.getMotoboyId())
-                            .map(Usuario::getNome).orElse("Entregador"));
+                    m.put("nome", nomes.getOrDefault(i.getMotoboyId(), "Entregador"));
                     m.put("status", i.getStatus());
                     m.put("pagamentoStatus", i.getPagamentoStatus());
                     m.put("lojistaConfirmou", i.getLojistaConfirmouEm() != null);
@@ -196,5 +202,9 @@ public class TurnoConsultaService {
                     return m;
                 })
                 .collect(Collectors.toList());
+    }
+
+    private static Pageable paginaOuTudo(Pageable pagina) {
+        return pagina == null ? Pageable.unpaged() : pagina;
     }
 }

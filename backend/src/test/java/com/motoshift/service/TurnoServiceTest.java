@@ -20,11 +20,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -145,18 +145,12 @@ class TurnoServiceTest {
                 LocalDateTime.now().plusHours(7),
                 StatusTurno.ABERTO);
 
-        Turno conflitante = buildTurno(2L,
-                LocalDateTime.now().plusHours(2),
-                LocalDateTime.now().plusHours(6),
-                StatusTurno.ACEITO);
-
         // O conflito é detectado pelas inscrições ativas do motoboy, e não mais
         // por turnoRepo.findConflitos: com várias vagas o turno de origem pode
-        // continuar "aberto" e escapava da query antiga.
+        // continuar "aberto" e escapava da query antiga. A verificação virou uma
+        // pergunta só ao banco, em vez de um findById por inscrição.
         when(turnoRepo.findById(1L)).thenReturn(Optional.of(turno));
-        when(inscricaoRepo.findByMotoboyIdAndStatus(2L, StatusInscricao.ACEITO))
-                .thenReturn(List.of(buildInscricao(2L, 2L)));
-        when(turnoRepo.findById(2L)).thenReturn(Optional.of(conflitante));
+        when(turnoRepo.existeConflitoDeAgenda(eq(2L), eq(1L), any(), any())).thenReturn(true);
 
         assertThatExceptionOfType(ResponseStatusException.class)
                 .isThrownBy(() -> turnoService.aceitar(1L, 2L))
@@ -259,11 +253,4 @@ class TurnoServiceTest {
         return t;
     }
 
-    private TurnoInscricao buildInscricao(Long turnoId, Long motoboyId) {
-        TurnoInscricao ins = new TurnoInscricao();
-        ins.setTurnoId(turnoId);
-        ins.setMotoboyId(motoboyId);
-        ins.setStatus(StatusInscricao.ACEITO);
-        return ins;
-    }
 }
