@@ -116,6 +116,7 @@ class MassaDemonstracaoTest {
         tx.setContraparteId(loja.getId());
         tx.setTurnoId(turno.getId());
         tx.setTipo(TipoTransacao.PAGAMENTO_RECEBIDO);
+        tx.setNatureza(com.motoshift.entity.NaturezaTransacao.CREDITO);
         tx.setStatus(StatusTransacao.CONCLUIDO);
         tx.setValor(new BigDecimal("80.00"));
         tx.setIdempotencyKey("teste-real:" + UUID.randomUUID());

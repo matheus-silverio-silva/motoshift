@@ -5,6 +5,7 @@ import com.motoshift.entity.StatusPagamento;
 import com.motoshift.entity.StatusTransacao;
 import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Carteira;
+import com.motoshift.entity.NaturezaTransacao;
 import com.motoshift.entity.TipoTransacao;
 import com.motoshift.entity.Transacao;
 import com.motoshift.entity.Turno;
@@ -149,6 +150,7 @@ public class PagamentoTurnoService {
         tx.setContraparteId(turno.getLojistId());
         tx.setTurnoId(turno.getId());
         tx.setTipo(TipoTransacao.PAGAMENTO_RECEBIDO);
+        tx.setNatureza(NaturezaTransacao.CREDITO);
         tx.setValor(turno.getValorEstimado());
         tx.setDescricao("Turno finalizado: " + turno.getTitulo());
         tx.setStatus(StatusTransacao.PENDENTE);

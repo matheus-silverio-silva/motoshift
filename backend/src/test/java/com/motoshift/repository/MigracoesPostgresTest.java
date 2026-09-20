@@ -96,10 +96,12 @@ class MigracoesPostgresTest {
             }
 
             // O banco passa a recusar o que o enum nao conhece.
-            assertThatThrownBy(() -> s.execute(inserirTransacao(1, 12, "turno", "pendente", "x:1")))
+            assertThatThrownBy(() -> s.execute(
+                    inserirTransacaoV12(1, 12, "turno", "pendente", "x:1", "credito")))
                     .isInstanceOf(SQLException.class)
                     .hasMessageContaining("ck_transacao_tipo");
-            assertThatThrownBy(() -> s.execute(inserirTransacao(1, null, "saque", "pendente", null)))
+            assertThatThrownBy(() -> s.execute(
+                    inserirTransacaoV12(1, null, "saque", "pendente", null, "debito")))
                     .isInstanceOf(SQLException.class);
         }
     }
@@ -112,7 +114,7 @@ class MigracoesPostgresTest {
 
         try (Connection c = conectar(url); Statement s = c.createStatement()) {
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f'"))
-                    .isEqualTo(16);
+                    .isEqualTo(17);
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated"))
                     .isZero();
         }
@@ -138,19 +140,99 @@ class MigracoesPostgresTest {
             assertThat(validada(s, "fk_turno_lojista")).isTrue();
 
             // A FK NOT VALID ja vale para o que entra daqui para frente.
-            assertThatThrownBy(() -> s.execute(inserirTransacao(424_242, null, "saque", "concluido", "orfa:2")))
+            assertThatThrownBy(() -> s.execute(
+                    inserirTransacaoV12(424_242, null, "saque", "concluido", "orfa:2", "debito")))
                     .isInstanceOf(SQLException.class)
                     .extracting(e -> ((SQLException) e).getSQLState())
                     .isEqualTo("23503");
         }
     }
 
+    @Test
+    @DisplayName("V12 classifica o historico por natureza e abre a tabela de cobrancas")
+    void v12_ledger() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v12");
+        // Ate a V11: as FKs ja existem, entao o historico simulado precisa de um
+        // dono de verdade — e a coluna natureza ainda nao existe, que e o ponto.
+        flyway(url, "11").migrate();
+
+        long usuario;
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("historico@teste.com", "x"));
+            usuario = contar(s, "SELECT id FROM usuarios WHERE email = 'historico@teste.com'");
+
+            // O que o banco tinha antes do ledger: credito de turno e saque.
+            s.execute(inserirTransacao(usuario, null, "pagamento_recebido", "concluido", "hist:1"));
+            s.execute(inserirTransacao(usuario, null, "saque", "concluido", "hist:2"));
+        }
+
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            // Backfill: nenhuma linha fica sem sinal.
+            assertThat(contar(s, "SELECT count(*) FROM transacoes WHERE natureza IS NULL")).isZero();
+            assertThat(contar(s,
+                    "SELECT count(*) FROM transacoes WHERE tipo = 'saque' AND natureza = 'debito'"))
+                    .isEqualTo(1);
+            assertThat(contar(s,
+                    "SELECT count(*) FROM transacoes WHERE tipo = 'pagamento_recebido' AND natureza = 'credito'"))
+                    .isEqualTo(1);
+
+            // O snapshot do historico fica vazio: o saldo daquele instante nao
+            // e reconstruivel, e a migracao admite isso em vez de inventar.
+            assertThat(contar(s,
+                    "SELECT count(*) FROM transacoes WHERE saldo_disponivel_apos IS NOT NULL"))
+                    .isZero();
+
+            // O dominio da coluna nova esta no banco, nao so no enum.
+            assertThatThrownBy(() -> s.execute(
+                    inserirTransacaoV12(usuario, null, "saque", "concluido", "ruim:1", "entrada")))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_transacao_natureza");
+
+            // cobrancas nasce com FK real e valor positivo obrigatorio.
+            s.execute(inserirCobranca(usuario, "recarga", "100.00", "cob:1"));
+
+            assertThatThrownBy(() -> s.execute(inserirCobranca(999_999, "recarga", "50.00", "cob:2")))
+                    .isInstanceOf(SQLException.class)
+                    .extracting(e -> ((SQLException) e).getSQLState())
+                    .isEqualTo("23503");
+
+            assertThatThrownBy(() -> s.execute(inserirCobranca(usuario, "recarga", "-5.00", "cob:3")))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_cobranca_valor");
+        }
+    }
+
     // ── Apoio ──────────────────────────────────────────────────────────────
 
+    /** INSERT valido ATE a V11 — antes de a coluna natureza existir. */
     static String inserirTransacao(long usuario, Integer turno, String tipo, String status, String chave) {
         return "INSERT INTO transacoes (usuario_id, turno_id, tipo, valor, status, idempotency_key, criado_em) "
                 + "VALUES (" + usuario + ", " + turno + ", '" + tipo + "', 10.00, '" + status + "', "
                 + (chave == null ? "NULL" : "'" + chave + "'") + ", now())";
+    }
+
+    /**
+     * INSERT valido DEPOIS da V12, que tornou natureza obrigatoria.
+     *
+     * Existe separado do de cima de proposito: as linhas que simulam o banco
+     * antigo tem de ser inseridas com o schema antigo, senao o teste nao estaria
+     * exercitando o backfill — estaria fabricando um dado que a migracao nao
+     * precisaria consertar.
+     */
+    static String inserirTransacaoV12(long usuario, Integer turno, String tipo, String status,
+                                      String chave, String natureza) {
+        return "INSERT INTO transacoes (usuario_id, turno_id, tipo, valor, status, "
+                + "idempotency_key, natureza, criado_em) "
+                + "VALUES (" + usuario + ", " + turno + ", '" + tipo + "', 10.00, '" + status + "', "
+                + (chave == null ? "NULL" : "'" + chave + "'") + ", '" + natureza + "', now())";
+    }
+
+    static String inserirCobranca(long usuario, String tipo, String valor, String chave) {
+        return "INSERT INTO cobrancas (usuario_id, tipo, valor, status, criada_em, idempotency_key) "
+                + "VALUES (" + usuario + ", '" + tipo + "', " + valor + ", 'pendente', now(), '"
+                + chave + "')";
     }
 
     private static long contar(Statement s, String sql) throws SQLException {
@@ -180,7 +262,7 @@ class MigracoesPostgresTest {
     }
 
     static String ultimaVersao() {
-        return "11";
+        return "12";
     }
 
     static Connection conectar(String url) throws SQLException {

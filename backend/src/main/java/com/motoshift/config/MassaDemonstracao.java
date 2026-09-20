@@ -608,6 +608,7 @@ public class MassaDemonstracao {
         tx.setContraparteId(t.getLojistId());
         tx.setTurnoId(t.getId());
         tx.setTipo(TipoTransacao.PAGAMENTO_RECEBIDO);
+        tx.setNatureza(com.motoshift.entity.NaturezaTransacao.CREDITO);
         tx.setValor(t.getValorEstimado());
         tx.setDescricao((status == StatusTransacao.PENDENTE ? "Turno aguardando pagamento: " : "Turno finalizado: ")
                 + t.getTitulo());
@@ -623,6 +624,7 @@ public class MassaDemonstracao {
         Transacao tx = new Transacao();
         tx.setUsuarioId(u.getId());
         tx.setTipo(TipoTransacao.SAQUE);
+        tx.setNatureza(com.motoshift.entity.NaturezaTransacao.DEBITO);
         tx.setValor(new BigDecimal(valor));
         tx.setDescricao("Transferência Pix — " + pix);
         tx.setStatus(StatusTransacao.CONCLUIDO);

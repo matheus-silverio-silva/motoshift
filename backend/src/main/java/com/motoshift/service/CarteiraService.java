@@ -3,6 +3,7 @@ package com.motoshift.service;
 import com.motoshift.dto.CarteiraResponse;
 import com.motoshift.dto.TransacaoResponse;
 import com.motoshift.entity.Carteira;
+import com.motoshift.entity.NaturezaTransacao;
 import com.motoshift.entity.StatusTransacao;
 import com.motoshift.entity.TipoTransacao;
 import com.motoshift.entity.Transacao;
@@ -142,6 +143,7 @@ public class CarteiraService {
         Transacao tx = new Transacao();
         tx.setUsuarioId(usuarioId);
         tx.setTipo(TipoTransacao.SAQUE);
+        tx.setNatureza(NaturezaTransacao.DEBITO);
         tx.setValor(valor);
         tx.setDescricao("Transferência Pix — " + carteira.getChavePix());
         tx.setStatus(StatusTransacao.CONCLUIDO);

@@ -130,6 +130,9 @@ class ContextoESchemaTest {
         Transacao t = new Transacao();
         t.setUsuarioId(usuario);
         t.setTipo(tipo);
+        t.setNatureza(tipo == TipoTransacao.SAQUE
+                ? com.motoshift.entity.NaturezaTransacao.DEBITO
+                : com.motoshift.entity.NaturezaTransacao.CREDITO);
         t.setStatus(status);
         t.setValor(new BigDecimal(valor));
         t.setIdempotencyKey("teste:" + UUID.randomUUID());
