@@ -104,7 +104,7 @@ class _RelatoriosFinanceirosScreenState
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
       header: AppHeader.back(title: 'Relatórios'),
-      desktopTitle: 'Relatórios financeiros',
+      desktopTitle: 'Relatórios',
       desktopSubtitle: 'Resumo do período, fluxo de caixa e exportação',
       rotaDaSecao: AppRoutes.relatorioFinanceiro,
       desktopBody: _desktop(),

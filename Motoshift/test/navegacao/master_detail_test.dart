@@ -198,7 +198,7 @@ void main() {
       espiao: espiao,
     );
 
-    expect(find.text('MEUS TURNOS'), findsOneWidget,
+    expect(find.text('TURNOS ACEITOS'), findsOneWidget,
         reason: 'a lista do desktop precisa da seção dos turnos aceitos');
     expect(find.textContaining('Turno Ativo — Hamburgueria'), findsWidgets);
   });
@@ -238,6 +238,6 @@ void main() {
 
     expect(find.byType(DetalheTurnoScreen), findsOneWidget);
     expect(espiao.rotas, isNot(contains(AppRoutes.turnosDisponiveis)));
-    expect(find.text('Detalhes do Turno'), findsOneWidget);
+    expect(find.text('Detalhes do turno'), findsOneWidget);
   });
 }

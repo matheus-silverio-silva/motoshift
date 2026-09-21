@@ -395,7 +395,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
             const Icon(Icons.add_rounded, color: AppColors.onTertiaryContainer, size: 18),
             const SizedBox(width: 7),
             Text(
-              'Publicar novo turno',
+              'Publicar turno',
               style: tsJakarta(
                 13,
                 FontWeight.w700,

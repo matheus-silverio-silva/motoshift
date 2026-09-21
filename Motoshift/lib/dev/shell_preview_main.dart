@@ -86,9 +86,9 @@ const _titulos = <String, String>{
   AppRoutes.dashboardMotoboy: 'Início',
   AppRoutes.agenda: 'Agenda',
   AppRoutes.turnosLojista: 'Turnos',
-  AppRoutes.turnosDisponiveis: 'Turnos disponíveis',
+  AppRoutes.turnosDisponiveis: 'Turnos',
   AppRoutes.carteira: 'Carteira',
-  AppRoutes.minhasAvaliacoes: 'Minhas avaliações',
+  AppRoutes.minhasAvaliacoes: 'Avaliações',
   AppRoutes.perfil: 'Perfil',
 };
 

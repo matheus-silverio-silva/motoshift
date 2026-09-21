@@ -3,10 +3,13 @@ import 'package:provider/provider.dart';
 import '../../models/turno.dart';
 import '../../presentation/providers/turno_selecionado_provider.dart';
 import '../../routes/app_routes.dart';
+import '../../routes/nav_config.dart';
+import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/breakpoints.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_scaffold.dart';
+import '../../widgets/empty_state.dart';
 import 'detalhe_turno_conteudo.dart';
 
 /// Rota `/detalhe-turno` — o detalhe empilhado do mobile.
@@ -52,9 +55,24 @@ class _DetalheTurnoScreenState extends State<DetalheTurnoScreen> {
     }
 
     return AppScaffold(
-      header: AppHeader.back(title: 'Detalhes do Turno'),
+      header: AppHeader.back(title: 'Detalhes do turno'),
       body: turno == null
-          ? const Center(child: Text('Turno não encontrado.'))
+          // Rota aberta sem turno (link quebrado, recarga da página no
+          // navegador): antes era um Text solto no meio da tela e nenhuma
+          // saída. Agora diz o que houve e oferece o caminho de volta.
+          ? Padding(
+              padding: const EdgeInsets.all(20),
+              child: EmptyState(
+                icon: Icons.search_off_rounded,
+                titulo: 'Turno não encontrado',
+                subtitulo: 'Este link não traz o turno que deveria abrir.',
+                acaoLabel: 'Voltar',
+                onAcao: () => Navigator.of(context).canPop()
+                    ? Navigator.pop(context)
+                    : NavConfig.voltarParaRaiz(
+                        context, context.read<AuthService>().usuario?.tipo),
+              ),
+            )
           : DetalheTurnoConteudo(
               turno: turno,
               onMudou: () => Navigator.pop(context, true),

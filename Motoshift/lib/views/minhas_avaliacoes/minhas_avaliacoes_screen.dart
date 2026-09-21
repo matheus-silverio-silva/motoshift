@@ -262,28 +262,19 @@ class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
   Widget _buildErro() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline_rounded,
-                color: AppColors.muted, size: 44),
-            const SizedBox(height: 10),
-            Text(_erro!,
-                textAlign: TextAlign.center,
-                style: tsJakarta(13, FontWeight.w400,
-                    color: AppColors.muted)),
-            const SizedBox(height: 14),
-            TextButton(
-                onPressed: () {
-                  setState(() {
-                    _carregando = true;
-                    _erro = null;
-                  });
-                  _carregar();
-                },
-                child: const Text('Tentar novamente')),
-          ],
+        padding: const EdgeInsets.all(24),
+        child: EmptyState(
+          icon: Icons.error_outline_rounded,
+          titulo: 'Não foi possível carregar',
+          subtitulo: _erro,
+          acaoLabel: 'Tentar novamente',
+          onAcao: () {
+            setState(() {
+              _carregando = true;
+              _erro = null;
+            });
+            _carregar();
+          },
         ),
       ),
     );

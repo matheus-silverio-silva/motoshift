@@ -13,6 +13,7 @@ import '../../widgets/app_header.dart';
 import '../../widgets/desktop/app_topbar.dart';
 import '../../widgets/desktop/master_detail.dart';
 import '../../widgets/desktop/shift_row.dart';
+import '../../widgets/empty_state.dart';
 import '../../widgets/shift_card.dart';
 import '../../widgets/status_pill.dart';
 import '../turno_lojista/turno_lojista_conteudo.dart';
@@ -112,6 +113,31 @@ class _TurnosLojistaListaScreenState
     });
   }
 
+  /// Vazio que distingue os dois casos.
+  ///
+  /// Dizia "Nenhum turno publicado ainda." também quando havia turnos e só a
+  /// aba escolhida estava vazia — o lojista com vinte turnos finalizados lia,
+  /// em "Cancelados", que nunca tinha publicado nada.
+  Widget _vazio({required bool semNenhum}) {
+    if (semNenhum) {
+      return EmptyState(
+        icon: Icons.storefront_outlined,
+        titulo: 'Nenhum turno publicado ainda',
+        subtitulo: 'Publique o primeiro e ele aparece aqui.',
+        acaoLabel: 'Publicar turno',
+        onAcao: () => Navigator.pushNamed(context, AppRoutes.publicarTurno),
+      );
+    }
+    final aba =
+        _opcoesFiltro.firstWhere((o) => o.$1 == _filtro).$2.toLowerCase();
+    return EmptyState(
+      icon: Icons.filter_alt_off_outlined,
+      titulo: 'Nenhum turno em "$aba"',
+      acaoLabel: 'Ver todos',
+      onAcao: () => _selecionarAba('todos'),
+    );
+  }
+
   int _qtdExpirados(List<Turno> todos) =>
       todos.where((t) => t.status == StatusTurno.expirado).length;
 
@@ -173,23 +199,7 @@ class _TurnosLojistaListaScreenState
                         ),
                       )
                     else if (filtrados.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(28),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                              color: AppColors.line, width: 1.5),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Nenhum turno publicado ainda.',
-                            textAlign: TextAlign.center,
-                            style: tsJakarta(13, FontWeight.w400,
-                                color: AppColors.muted),
-                          ),
-                        ),
-                      )
+                      _vazio(semNenhum: provider.turnosLojista.isEmpty)
                     else
                       ...filtrados.map((t) => ShiftCard(
                             horario: t.horarioFormatado,
@@ -432,7 +442,7 @@ class _TurnosLojistaListaScreenState
             Border(top: BorderSide(color: AppColors.line, width: 1.5)),
       ),
       child: AmberButton(
-        label: 'Publicar novo turno',
+        label: 'Publicar turno',
         icon: const Icon(Icons.add_rounded,
             color: AppColors.onTertiary, size: 18),
         onPressed: () =>

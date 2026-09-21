@@ -368,24 +368,18 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
             strokeWidth: 2, color: AppColors.teal),
       );
 
+  /// Erro no mesmo bloco do vazio, com a saída como botão de verdade — era um
+  /// `TextButton` solto sob um ícone, o único estado de erro do app com cara
+  /// própria.
   Widget _erroView(String erro) => Center(
         child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.wifi_off_rounded,
-                  size: 44, color: AppColors.muted),
-              const SizedBox(height: 12),
-              Text(erro,
-                  textAlign: TextAlign.center,
-                  style: tsJakarta(13, FontWeight.w400,
-                      color: AppColors.muted)),
-              const SizedBox(height: 14),
-              TextButton(
-                  onPressed: _carregar,
-                  child: const Text('Tentar novamente')),
-            ],
+          padding: const EdgeInsets.all(24),
+          child: EmptyState(
+            icon: Icons.wifi_off_rounded,
+            titulo: 'Não foi possível carregar',
+            subtitulo: erro,
+            acaoLabel: 'Tentar novamente',
+            onAcao: _carregar,
           ),
         ),
       );

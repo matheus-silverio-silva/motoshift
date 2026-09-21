@@ -428,7 +428,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
           );
         },
       ),
-      desktopTitle: 'Turnos disponíveis',
+      desktopTitle: 'Turnos',
       // O `watch` só é registrado quando o subtítulo vai mesmo ser usado. Se
       // ficasse solto aqui, o celular — que nem tem topbar — passaria a
       // rebuildar a tela inteira a cada notifyListeners() do provider.
@@ -671,7 +671,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         ],
         if (proximos.isNotEmpty) ...[
           SectionTitle(
-            title: 'Próximos turnos',
+            title: 'Turnos aceitos',
             action: '${proximos.length} agendado(s)',
           ),
           ...proximos

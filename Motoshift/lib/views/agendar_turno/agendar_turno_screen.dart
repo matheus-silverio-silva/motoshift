@@ -431,8 +431,12 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
       header: AppHeader.back(
-        title: 'Publicar Turno',
-        onBack: () => Navigator.pop(context),
+        title: 'Publicar turno',
+        // Sem onBack: "Publicar turno" é item de menu, então chega-se aqui
+        // por troca de seção, com a pilha vazia. O onBack fixo em pop()
+        // forçava a seta e, tocada, desempilhava a última rota e deixava a
+        // tela preta. Sem ele o AppHeader decide: seta quando há para onde
+        // voltar, menu quando não há.
       ),
       desktopTitle: 'Publicar turno',
       desktopSubtitle: 'Defina data, horário e valor para sua operação',

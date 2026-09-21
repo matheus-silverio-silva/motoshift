@@ -6,11 +6,13 @@ import '../../models/usuario.dart';
 import '../../presentation/providers/pendencias_provider.dart';
 import '../../routes/abrir_avaliacao.dart';
 import '../../routes/app_routes.dart';
+import '../../routes/nav_config.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
+import '../../widgets/empty_state.dart';
 import 'historico_conteudo_desktop.dart';
 import 'historico_conteudo_mobile.dart';
 import 'historico_resumo.dart';
@@ -112,8 +114,8 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
     );
 
     return AdaptiveScaffold(
-      header: AppHeader.back(title: 'Histórico de turnos'),
-      desktopTitle: 'Histórico de turnos',
+      header: AppHeader.back(title: 'Histórico'),
+      desktopTitle: 'Histórico',
       desktopSubtitle: _subtituloDesktop(resumo),
       // Também é sub-página do Perfil, e /historico-turnos não é item de
       // sidebar: apontar para ele deixava o desktop sem nada destacado.
@@ -171,35 +173,23 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
         '${DateFormat('MMMM \'de\' y', 'pt_BR').format(resumo.maisAntigo!)}';
   }
 
+  /// Histórico vazio leva aos turnos — é de lá que o histórico nasce.
   Widget _buildVazio() {
+    final isLojista =
+        context.read<AuthService>().usuario?.tipo == TipoUsuario.lojista;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: const BoxDecoration(
-                color: AppColors.tealSoft,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.history_rounded,
-                  color: AppColors.teal, size: 32),
-            ),
-            const SizedBox(height: 14),
-            Text('Sem histórico ainda',
-                style: tsBricolage(16, FontWeight.w800,
-                    color: AppColors.ink)),
-            const SizedBox(height: 4),
-            Text(
+        padding: const EdgeInsets.all(24),
+        child: EmptyState(
+          icon: Icons.history_rounded,
+          titulo: 'Sem histórico ainda',
+          subtitulo:
               'Turnos concluídos, cancelados ou expirados aparecem aqui.',
-              textAlign: TextAlign.center,
-              style: tsJakarta(12, FontWeight.w400,
-                  color: AppColors.muted),
-            ),
-          ],
+          acaoLabel: 'Ver turnos',
+          onAcao: () => NavConfig.irParaSecao(
+            context,
+            isLojista ? AppRoutes.turnosLojista : AppRoutes.turnosDisponiveis,
+          ),
         ),
       ),
     );
