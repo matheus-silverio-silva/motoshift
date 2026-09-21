@@ -127,7 +127,7 @@ class _RelatoriosFinanceirosScreenState
             const SizedBox(height: 16),
             _painelPorTipo(),
             const SizedBox(height: 16),
-            _botaoExportar(),
+            SizedBox(width: double.infinity, child: _botaoExportar()),
           ],
         ],
       ),
@@ -414,7 +414,12 @@ class _RelatoriosFinanceirosScreenState
               width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
           : const Icon(Icons.download_rounded, size: 18),
       label: const Text('Exportar CSV'),
-      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+      // Largura mínima zero, e não `Size.fromHeight`: aquela forma pede largura
+      // infinita, o que no celular (numa coluna) esticava o botão como
+      // desejado, mas no desktop — dentro de um Row, ao lado do seletor de
+      // período — derrubava o layout inteiro da página. Quem quer o botão
+      // esticado é o celular, e ele diz isso no próprio lugar onde o monta.
+      style: OutlinedButton.styleFrom(minimumSize: const Size(0, 46)),
     );
   }
 

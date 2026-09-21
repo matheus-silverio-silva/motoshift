@@ -21,6 +21,7 @@ import 'package:provider/provider.dart';
 import 'package:moto_shift/models/carteira.dart';
 import 'package:moto_shift/models/cobranca.dart';
 import 'package:moto_shift/models/extrato_filtro.dart';
+import 'package:moto_shift/models/nota_fiscal.dart';
 import 'package:moto_shift/models/perfil_publico.dart';
 import 'package:moto_shift/models/resumo_financeiro.dart';
 import 'package:moto_shift/models/transacao.dart';
@@ -33,6 +34,7 @@ import 'package:moto_shift/presentation/providers/pendencias_provider.dart';
 import 'package:moto_shift/services/api/agenda_api.dart';
 import 'package:moto_shift/services/api/api_client.dart';
 import 'package:moto_shift/services/api/auth_api.dart';
+import 'package:moto_shift/services/api/nota_fiscal_api.dart';
 import 'package:moto_shift/services/api/avaliacao_api.dart';
 import 'package:moto_shift/services/api/carteira_api.dart';
 import 'package:moto_shift/services/api/dashboard_api.dart';
@@ -614,6 +616,21 @@ class FakeTurnoApi extends TurnoApi {
   Future<List<Turno>> listarTurnosDisponiveis({DateTime? data}) async =>
       fakeTurnosDisponiveis();
 
+  /// Qualquer turno dos fakes, pelo id — é o que a notificação usa para
+  /// montar o destino.
+  @override
+  Future<Turno> buscarTurno(int turnoId) async {
+    final todos = [
+      ...fakeTurnosDisponiveis(),
+      ...fakeMeusTurnos(),
+      ...fakeTurnosLojista(),
+    ];
+    for (final t in todos) {
+      if (t.id == turnoId) return t;
+    }
+    throw const ApiException(404, 'Turno não encontrado.');
+  }
+
   /// Um inscrito por turno: o entregador dos fakes.
   ///
   /// Sem este override a tela do lojista cairia no `catch` de
@@ -864,6 +881,22 @@ class FakeNotificacaoApi extends NotificacaoApi {
   }
 }
 
+/// Notas fiscais vazias.
+///
+/// Sem fake, `pendentes()` saía para a rede de verdade — o mock de HTTP dos
+/// testes não responde, e cada chamada esperava o timeout do ApiClient. O
+/// PendenciasProvider consulta as notas a cada carregamento, então todo
+/// teste que tocasse o menu pagava ~20 s por isso.
+class FakeNotaFiscalApi extends NotaFiscalApi {
+  FakeNotaFiscalApi() : super(ApiClient());
+
+  @override
+  Future<List<NotaFiscal>> listar() async => const [];
+
+  @override
+  Future<List<NotaFiscalPendente>> pendentes() async => const [];
+}
+
 /// Perfil público de outra conta. Devolve o fake do papel pedido — id 2 é a
 /// lojista, qualquer outro é o entregador.
 class FakeUsuarioApi extends UsuarioApi {
@@ -903,6 +936,10 @@ class FakeApiService extends ApiService {
   @override
   UsuarioApi get usuarios => _usuarios;
   final UsuarioApi _usuarios = FakeUsuarioApi();
+
+  @override
+  NotaFiscalApi get notasFiscais => _notasFiscais;
+  final NotaFiscalApi _notasFiscais = FakeNotaFiscalApi();
 
   @override
   CarteiraApi get carteira => _carteira;

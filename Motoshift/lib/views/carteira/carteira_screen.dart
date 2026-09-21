@@ -9,6 +9,7 @@ import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
+import '../../widgets/empty_state.dart';
 import '../../widgets/desktop/app_topbar.dart';
 import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/desktop/panel_card.dart';
@@ -59,7 +60,14 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     });
   }
 
+  /// Sub-página da Carteira: empilha, e voltar devolve para cá.
+  Future<void> _abrirExtrato() async {
+    await Navigator.pushNamed(context, AppRoutes.extrato);
+    if (mounted) _carregar();
+  }
+
   Future<void> _carregar() async {
+
     final auth = context.read<AuthService>();
     final api = context.read<ApiService>();
     final id = auth.usuario?.id;
@@ -201,22 +209,13 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
   Widget _erroView() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.wifi_off_rounded,
-                size: 44, color: AppColors.muted),
-            const SizedBox(height: 12),
-            Text(_erro!,
-                textAlign: TextAlign.center,
-                style: tsJakarta(13, FontWeight.w400,
-                    color: AppColors.muted)),
-            const SizedBox(height: 14),
-            TextButton(
-                onPressed: _carregar,
-                child: const Text('Tentar novamente')),
-          ],
+        padding: const EdgeInsets.all(24),
+        child: EmptyState(
+          icon: Icons.wifi_off_rounded,
+          titulo: 'Não foi possível carregar',
+          subtitulo: _erro,
+          acaoLabel: 'Tentar novamente',
+          onAcao: _carregar,
         ),
       ),
     );
@@ -257,7 +256,9 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
                 balance:
                     'R\$ ${saldo.toStringAsFixed(2).replaceAll('.', ',')}',
                 onWithdraw: _solicitarSaque,
-                onExtract: _carregar,
+                // Rotulado "Extrato", mas chamava _carregar: prometia o extrato
+                // e só recarregava o saldo.
+                onExtract: _abrirExtrato,
               ),
               const SizedBox(height: 16),
               IntrinsicHeight(
@@ -286,7 +287,22 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
             padding: const EdgeInsets.all(22),
             gap: 14,
             trailing: _buildFiltroExtrato(),
-            child: _buildExtratoDesktop(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildExtratoDesktop(),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    key: const Key('carteira-extrato-completo'),
+                    onPressed: _abrirExtrato,
+                    child: Text('Ver extrato completo',
+                        style: tsJakarta(12, FontWeight.w700,
+                            color: AppColors.teal)),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -378,13 +394,16 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     final saldoStr =
         'R\$ ${saldo.toStringAsFixed(2).replaceAll('.', ',')}';
 
-    return ListView(
+    return RefreshIndicator(
+      onRefresh: _carregar,
+      color: AppColors.teal,
+      child: ListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
       children: [
         WalletHero(
           balance: saldoStr,
           onWithdraw: _solicitarSaque,
-          onExtract: _carregar,
+          onExtract: _abrirExtrato,
         ),
         const SizedBox(height: 12),
         // Stats
@@ -405,10 +424,15 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
             ),
           ],
         ),
+        // "Extrato", e não "Histórico": Histórico é a seção dos turnos
+        // encerrados, e o mesmo nome para duas coisas fazia a pessoa procurar
+        // os turnos aqui. A ação leva ao extrato completo — com filtros,
+        // detalhe de cada lançamento e exportação —, que estava registrado
+        // no app sem nenhum botão até ele. Atualizar virou puxar a lista.
         SectionTitle(
-          title: 'Histórico',
-          action: 'Atualizar',
-          onAction: _carregar,
+          title: 'Extrato',
+          action: 'Ver completo',
+          onAction: _abrirExtrato,
         ),
         if (transacoes.isEmpty)
           Container(
@@ -445,6 +469,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
                 .toList(),
           ),
       ],
+      ),
     );
   }
 

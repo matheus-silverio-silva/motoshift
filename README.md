@@ -52,7 +52,7 @@ estabilidade financeira para ambos os lados.
 │   ├── lib/
 │   │   ├── models/           # Modelos que as telas consomem
 │   │   ├── presentation/     # Providers (estado compartilhado)
-│   │   ├── routes/           # Nomes de rota
+│   │   ├── routes/           # Nomes de rota e NavConfig (menu e regra de navegação)
 │   │   ├── services/
 │   │   │   ├── api/          # ApiClient (transporte) + uma API por domínio
 │   │   │   ├── api_service   # Monta as APIs de domínio sobre um cliente só
@@ -67,7 +67,8 @@ estabilidade financeira para ambos os lados.
 │
 ├── docs/                     # Auditoria, guia de defesa, planos e requisitos
 │   ├── DER/                  # Modelo de dados e rastreabilidade das migrações
-│   └── financeiro/           # Ciclo do dinheiro: recarga → reserva → liquidação → saque
+│   ├── financeiro/           # Ciclo do dinheiro: recarga → reserva → liquidação → saque
+│   └── ux/                   # Navegação: mapa, regra seção × sub-página, nomes, pós-turno
 ├── scripts/                  # Utilitários de linha de comando
 └── .github/workflows/        # CI: mvn test, flutter analyze, flutter test
 ```
@@ -82,6 +83,11 @@ aparecer na revisão:
 - **A identidade do usuário nunca vem do corpo da requisição.** Ela sai do JWT,
   no `security/`. Os `lojistId`/`motoboyId` que o app ainda envia são ignorados
   pelo backend.
+- **Nenhuma tela monta o próprio menu.** O menu, a barra inferior e o destaque
+  vêm de `lib/routes/nav_config.dart`; a tela informa só em que seção está.
+  Item de menu troca a pilha inteira, detalhe empilha — a regra, o mapa e a
+  tabela de nomes estão em [`docs/ux/NAVEGACAO.md`](docs/ux/NAVEGACAO.md), e
+  `test/navegacao/` falha quando alguma tela foge dela.
 
 
 ## ⚙️ Como Rodar Localmente

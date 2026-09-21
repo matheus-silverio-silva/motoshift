@@ -61,6 +61,11 @@ class _SaldoLojistaScreenState extends State<SaldoLojistaScreen> {
     if (creditou == true) _carregar();
   }
 
+  Future<void> _abrirExtrato() async {
+    await Navigator.of(context).pushNamed(AppRoutes.extrato);
+    if (mounted) _carregar();
+  }
+
   @override
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
@@ -164,6 +169,20 @@ class _SaldoLojistaScreenState extends State<SaldoLojistaScreen> {
                       ),
                     ),
                   ),
+                // O extrato completo — cada recarga, reserva e pagamento, com
+                // filtros e exportação — estava registrado no app sem nenhum
+                // botão até ele. É daqui que o lojista pergunta "para onde foi
+                // meu dinheiro".
+                const SizedBox(height: 4),
+                Center(
+                  child: TextButton(
+                    key: const Key('saldo-lojista-extrato'),
+                    onPressed: _abrirExtrato,
+                    child: Text('Ver extrato completo',
+                        style: tsJakarta(12, FontWeight.w700,
+                            color: Colors.white)),
+                  ),
+                ),
               ],
             ),
           ),
