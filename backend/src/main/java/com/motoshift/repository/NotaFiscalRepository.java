@@ -9,7 +9,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
-public interface NotaFiscalRepository extends JpaRepository<NotaFiscal, Long> {
+public interface NotaFiscalRepository extends JpaRepository<NotaFiscal, Long>,
+        org.springframework.data.jpa.repository.JpaSpecificationExecutor<NotaFiscal> {
 
     Optional<NotaFiscal> findByTurnoIdAndPrestadorId(Long turnoId, Long prestadorId);
 

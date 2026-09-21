@@ -1,5 +1,6 @@
 package com.motoshift.service;
 
+import com.motoshift.dto.NotaFiscalFiltro;
 import com.motoshift.dto.NotaFiscalPendenteResponse;
 import com.motoshift.dto.NotaFiscalResponse;
 import com.motoshift.entity.NotaFiscal;
@@ -12,13 +13,18 @@ import com.motoshift.entity.Turno;
 import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.entity.Usuario;
 import com.motoshift.repository.NotaFiscalRepository;
+import com.motoshift.repository.NotaFiscalSpecs;
 import com.motoshift.repository.TransacaoRepository;
 import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
 import com.motoshift.service.fiscal.CalculoTributario;
 import com.motoshift.service.fiscal.EmissorDeNotas;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -336,6 +342,23 @@ public class NotaFiscalService {
     }
 
     // ── Consultas ───────────────────────────────────────────────────────────
+
+    /**
+     * Notas do usuário com filtros — papel, período de competência, status,
+     * contraparte e turno —, da competência mais recente para a mais antiga.
+     *
+     * @param pedido página pedida, ou {@code null} para a lista inteira
+     */
+    @Transactional(readOnly = true)
+    public Page<NotaFiscalResponse> listar(Long usuarioId, NotaFiscalFiltro filtro, Pageable pedido) {
+        Sort ordem = Sort.by(Sort.Direction.DESC, "competencia").and(Sort.by(Sort.Direction.DESC, "id"));
+        Pageable p = pedido == null
+                ? Pageable.unpaged(ordem)
+                : PageRequest.of(pedido.getPageNumber(), pedido.getPageSize(), ordem);
+        Page<NotaFiscal> notas = notaRepo.findAll(NotaFiscalSpecs.de(usuarioId, filtro), p);
+        List<NotaFiscalResponse> montadas = montarTodas(notas.getContent(), usuarioId);
+        return new PageImpl<>(montadas, notas.getPageable(), notas.getTotalElements());
+    }
 
     public List<NotaFiscalResponse> listarDoUsuario(Long usuarioId) {
         return montarTodas(notaRepo.findDoUsuario(usuarioId), usuarioId);

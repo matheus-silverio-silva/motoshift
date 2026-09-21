@@ -42,6 +42,11 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long>,
     List<Transacao> findByOperacaoIdAndUsuarioIdAndTipoIn(
             UUID operacaoId, Long usuarioId, Collection<TipoTransacao> tipos);
 
+    /** Lançamentos de certos tipos num intervalo — a base do informe anual. */
+    List<Transacao> findByUsuarioIdAndTipoInAndStatusAndCriadoEmGreaterThanEqualAndCriadoEmLessThan(
+            Long usuarioId, Collection<TipoTransacao> tipos, StatusTransacao status,
+            LocalDateTime inicio, LocalDateTime fim);
+
     /** Pagamentos de vários turnos de uma vez — a lista de notas pendentes. */
     List<Transacao> findByTurnoIdInAndTipoAndStatus(
             Collection<Long> turnoIds, TipoTransacao tipo, StatusTransacao status);

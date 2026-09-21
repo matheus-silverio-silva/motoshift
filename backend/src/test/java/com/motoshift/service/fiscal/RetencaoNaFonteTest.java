@@ -45,6 +45,7 @@ class RetencaoNaFonteTest {
     @Autowired private CarteiraRepository carteiraRepo;
     @Autowired private TransacaoRepository transacaoRepo;
     @Autowired private ConsistenciaService consistencia;
+    @Autowired private InformeRendimentosService informes;
 
     private Long lojista;
     private Long entregador;
@@ -101,6 +102,20 @@ class RetencaoNaFonteTest {
                 .isEqualByComparingTo("187.00")
                 .isEqualByComparingTo(carteiraRepo.findByUsuarioId(entregador).orElseThrow()
                         .getSaldoDisponivel());
+    }
+
+    @Test
+    @DisplayName("o informe continua bruto e mostra o que foi retido ao lado")
+    void informeComRetencao() {
+        cenario.turnoPago(lojista, "200.00", entregador);
+
+        var inf = informes.informe(entregador, false, java.time.Year.now().getValue());
+
+        // Rendimento é o bruto — o mesmo valor da NFS-e —, com as retenções ao lado.
+        assertThat(inf.total()).isEqualByComparingTo("200.00");
+        assertThat(inf.issRetido()).isEqualByComparingTo("10.00");
+        assertThat(inf.irrfRetido()).isEqualByComparingTo("3.00");
+        assertThat(inf.pagamentos()).isEqualTo(1);
     }
 
     @Test

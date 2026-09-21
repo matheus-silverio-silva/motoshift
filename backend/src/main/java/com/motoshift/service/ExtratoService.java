@@ -13,6 +13,7 @@ import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Transacao;
 import com.motoshift.repository.PontoDeFluxo;
 import com.motoshift.service.fiscal.IndiceDeDocumentos;
+import com.motoshift.util.Csv;
 import com.motoshift.repository.TransacaoRepository;
 import com.motoshift.repository.TransacaoSpecs;
 import com.motoshift.repository.TurnoInscricaoRepository;
@@ -322,24 +323,13 @@ public class ExtratoService {
         return (v == null ? BigDecimal.ZERO : v).setScale(2, RoundingMode.HALF_UP);
     }
 
+    // decimal e csvSeguro moraram aqui ate o informe de rendimentos passar a
+    // exportar CSV tambem — agora sao util.Csv, uma copia so.
     private static String decimal(BigDecimal v) {
-        return v == null ? "" : v.setScale(2, RoundingMode.HALF_UP).toPlainString();
+        return Csv.decimal(v);
     }
 
-    /**
-     * Neutraliza o que quebraria o CSV.
-     *
-     * <p>O ponto e vírgula e a quebra de linha desalinhariam as colunas; e um
-     * campo que começa com =, +, - ou @ é executado como fórmula ao abrir a
-     * planilha, o que transforma uma descrição de turno em código rodando na
-     * máquina de quem baixou o arquivo.
-     */
     private static String csvSeguro(String texto) {
-        if (texto == null) return "";
-        String limpo = texto.replace(';', ',').replace('\n', ' ').replace('\r', ' ');
-        if (!limpo.isEmpty() && "=+-@".indexOf(limpo.charAt(0)) >= 0) {
-            return "'" + limpo;
-        }
-        return limpo;
+        return Csv.seguro(texto);
     }
 }
