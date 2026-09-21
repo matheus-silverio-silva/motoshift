@@ -64,7 +64,7 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
               ? 'Tudo em dia'
               : '${provider.naoLidas} não '
                   '${provider.naoLidas == 1 ? 'lida' : 'lidas'}',
-      desktopSelectedRoute: AppRoutes.notificacoes,
+      rotaDaSecao: AppRoutes.notificacoes,
       desktopNotificationCount: provider.naoLidas,
       desktopPrimaryAction: provider.naoLidas == 0
           ? null

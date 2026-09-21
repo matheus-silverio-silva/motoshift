@@ -46,15 +46,6 @@ Widget _stubBody(String title) {
   );
 }
 
-class SacarPixScreen extends StatelessWidget {
-  const SacarPixScreen({super.key});
-  @override
-  Widget build(BuildContext context) => AppScaffold(
-        header: AppHeader.back(title: 'Transferir via PIX'),
-        body: _stubBody('Transferir via PIX'),
-      );
-}
-
 class EsqueceuSenhaScreen extends StatelessWidget {
   const EsqueceuSenhaScreen({super.key});
   @override

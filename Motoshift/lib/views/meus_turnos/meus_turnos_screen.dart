@@ -16,7 +16,6 @@ import '../../widgets/mapa_raio.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/breakpoints.dart';
 import '../../widgets/adaptive_scaffold.dart';
-import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/desktop/app_topbar.dart';
 import '../../widgets/empty_state.dart';
@@ -355,18 +354,8 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     return 'Boa noite,';
   }
 
-  void _onNav(int i) {
-    switch (i) {
-      case 0:
-        Navigator.pushReplacementNamed(context, AppRoutes.dashboardMotoboy);
-      case 1:
-        break;
-      case 2:
-        Navigator.pushReplacementNamed(context, AppRoutes.carteira);
-      case 3:
-        Navigator.pushReplacementNamed(context, AppRoutes.perfil);
-    }
-  }
+  // O _onNav desta tela saiu: era um dos sete switches identicos de barra
+  // inferior. Ver NavConfig — a tela agora informa so a secao em que esta.
 
   @override
   Widget build(BuildContext context) {
@@ -381,11 +370,6 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         greeting: _greeting(),
         name: nome,
         avatarInitials: initials,
-      ),
-      bottomNav: AppBottomNav(
-        userType: UserType.motoboy,
-        currentIndex: 1,
-        onTap: _onNav,
       ),
       body: Consumer<TurnoProvider>(
         builder: (context, provider, _) {
@@ -415,7 +399,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
       desktopSubtitle: context.isDesktop
           ? _subtituloDesktop(context.watch<TurnoProvider>())
           : null,
-      desktopSelectedRoute: AppRoutes.turnosDisponiveis,
+      rotaDaSecao: AppRoutes.turnosDisponiveis,
       desktopPrimaryAction: TopbarSecondaryButton(
         label: _hasFilters ? 'Filtros ativos' : 'Filtrar',
         icon: Icons.tune_rounded,

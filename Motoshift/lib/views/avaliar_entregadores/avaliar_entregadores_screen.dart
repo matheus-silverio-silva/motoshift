@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
@@ -178,7 +177,6 @@ class _AvaliarEntregadoresScreenState
       header: AppHeader.back(title: 'Avaliar entregadores'),
       desktopTitle: 'Avaliar entregadores',
       desktopSubtitle: args?.tituloTurno ?? 'Turno',
-      desktopSelectedRoute: AppRoutes.turnosLojista,
       desktopBody: _buildConteudo(desktop: true),
       body: _buildConteudo(desktop: false),
     );

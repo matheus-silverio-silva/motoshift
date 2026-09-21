@@ -32,13 +32,9 @@ void main() {
     );
   });
 
-  testWidgets('SacarPixScreen (stub)', (tester) async {
-    await pumpGolden(tester, child: const SacarPixScreen());
-    await expectLater(
-      find.byType(SacarPixScreen),
-      matchesGoldenFile('goldens/sacar_pix_screen.png'),
-    );
-  });
+  // O golden da SacarPixScreen saiu junto com a tela: era um stub "em breve"
+  // enquanto a Carteira ja sacava de verdade, e o botao do inicio agora abre
+  // a Carteira direto no dialogo de saque.
 
   testWidgets('EsqueceuSenhaScreen (stub)', (tester) async {
     await pumpGolden(tester, child: const EsqueceuSenhaScreen());

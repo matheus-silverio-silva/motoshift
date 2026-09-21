@@ -152,7 +152,6 @@ class _ExtratoScreenState extends State<ExtratoScreen> {
       header: AppHeader.back(title: 'Extrato'),
       desktopTitle: 'Extrato',
       desktopSubtitle: 'Todos os lançamentos da sua carteira',
-      desktopSelectedRoute: AppRoutes.carteira,
       desktopBody: _conteudo(desktop: true),
       body: _conteudo(desktop: false),
     );

@@ -67,7 +67,9 @@ class _SaldoLojistaScreenState extends State<SaldoLojistaScreen> {
       header: AppHeader.back(title: 'Saldo'),
       desktopTitle: 'Saldo',
       desktopSubtitle: 'Disponível, bloqueado e turnos comprometidos',
-      desktopSelectedRoute: AppRoutes.carteira,
+      // Secao propria: o Saldo e o item do lojista no FINANCEIRO. Marcava
+      // "Carteira", que e o item do ENTREGADOR e nem aparece no menu dele.
+      rotaDaSecao: AppRoutes.saldoLojista,
       desktopBody: _buildDesktop(),
       body: _buildMobile(),
     );

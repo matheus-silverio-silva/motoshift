@@ -6,12 +6,13 @@ import '../../models/turno.dart';
 import '../../presentation/providers/notificacao_provider.dart';
 import '../../presentation/providers/turno_provider.dart';
 import '../../routes/app_routes.dart';
+import '../../routes/nav_config.dart';
+import '../carteira/carteira_screen.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/serie_diaria.dart';
 import '../../widgets/adaptive_scaffold.dart';
-import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/desktop/app_topbar.dart';
 import '../../widgets/desktop/content_grid.dart';
@@ -77,19 +78,8 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
     return 'Boa noite,';
   }
 
-  void _onNav(int i) {
-    switch (i) {
-      case 0:
-        break;
-      case 1:
-        Navigator.pushReplacementNamed(
-            context, AppRoutes.turnosDisponiveis);
-      case 2:
-        Navigator.pushReplacementNamed(context, AppRoutes.carteira);
-      case 3:
-        Navigator.pushReplacementNamed(context, AppRoutes.perfil);
-    }
-  }
+  // O _onNav desta tela saiu: era um dos sete switches identicos de barra
+  // inferior. Ver NavConfig — a tela agora informa so a secao em que esta.
 
   Color _scoreColor(double score) {
     if (score >= 4.0) return AppColors.good;
@@ -113,11 +103,6 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
         notificacoes: context.watch<NotificacaoProvider>().naoLidas,
         onNotificacoes: () =>
             Navigator.pushNamed(context, AppRoutes.notificacoes),
-      ),
-      bottomNav: AppBottomNav(
-        userType: UserType.motoboy,
-        currentIndex: 0,
-        onTap: _onNav,
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 32),
@@ -160,7 +145,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
       ),
       desktopTitle: 'Início',
       desktopSubtitle: '${_greeting()} $nome · ${_dataExtenso()}',
-      desktopSelectedRoute: AppRoutes.dashboardMotoboy,
+      rotaDaSecao: AppRoutes.dashboardMotoboy,
       desktopPrimaryAction: TopbarSecondaryButton(
         label: 'Buscar turnos',
         icon: Icons.search,
@@ -254,8 +239,12 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
                 label: 'Saldo',
                 value: 'R\$ ${_saldo.toStringAsFixed(0)}',
                 actionLabel: 'Sacar via Pix',
-                onAction: () =>
-                    Navigator.pushNamed(context, AppRoutes.sacarPix),
+                // Abre a Carteira ja no dialogo de saque. Antes apontava para
+                // /sacar-pix, um stub "em breve" — enquanto a Carteira ao lado
+                // ja sacava de verdade.
+                onAction: () => NavConfig.irParaSecao(
+                    context, AppRoutes.carteira,
+                    argumentos: const CarteiraArgs(abrirSaque: true)),
               ),
             ),
             GridCol(

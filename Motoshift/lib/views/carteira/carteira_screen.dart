@@ -8,13 +8,22 @@ import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
-import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/desktop/app_topbar.dart';
 import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/desktop/panel_card.dart';
 import '../../widgets/section_title.dart';
 import '../../widgets/wallet_widgets.dart';
+
+/// Estado inicial pedido a Carteira ao abri-la.
+///
+/// Existe para que o "Sacar via Pix" do inicio leve direto ao dialogo de saque
+/// — antes ele ia para um stub separado, com o mesmo nome e nenhuma funcao.
+class CarteiraArgs {
+  const CarteiraArgs({this.abrirSaque = false});
+
+  final bool abrirSaque;
+}
 
 class CarteiraScreen extends StatefulWidget {
   const CarteiraScreen({super.key, this.agora});
@@ -39,7 +48,15 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _carregar());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _carregar();
+      if (!mounted) return;
+      // Chegou pelo "Sacar via Pix" do início: abre o diálogo já na chegada,
+      // em vez de deixar o usuário procurar o botão na tela que ele pediu
+      // justamente para sacar.
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is CarteiraArgs && args.abrirSaque) _solicitarSaque();
+    });
   }
 
   Future<void> _carregar() async {
@@ -144,37 +161,19 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     }
   }
 
-  void _onNav(int i) {
-    switch (i) {
-      case 0:
-        Navigator.pushReplacementNamed(
-            context, AppRoutes.dashboardMotoboy);
-      case 1:
-        Navigator.pushReplacementNamed(
-            context, AppRoutes.turnosDisponiveis);
-      case 2:
-        break;
-      case 3:
-        Navigator.pushReplacementNamed(context, AppRoutes.perfil);
-    }
-  }
+  // O _onNav desta tela saiu: era um dos sete switches identicos de barra
+  // inferior. Ver NavConfig — a tela agora informa so a secao em que esta.
 
   @override
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
-      header: AppHeader.back(
-        title: 'Carteira Digital',
-        onBack: () => Navigator.pushReplacementNamed(
-            context, AppRoutes.dashboardMotoboy),
-      ),
-      bottomNav: AppBottomNav(
-        userType: UserType.motoboy,
-        currentIndex: 2,
-        onTap: _onNav,
-      ),
-      desktopTitle: 'Carteira digital',
+      // Sem onBack: a Carteira e uma secao, entao o canto esquerdo mostra o
+      // menu. O override que havia aqui forcava uma seta que voltava para o
+      // inicio — atalho de uma tela so, que a gaveta resolve para todas.
+      header: AppHeader.back(title: 'Carteira'),
+      desktopTitle: 'Carteira',
       desktopSubtitle: _subtituloDesktop(),
-      desktopSelectedRoute: AppRoutes.carteira,
+      rotaDaSecao: AppRoutes.carteira,
       desktopPrimaryAction: TopbarPrimaryButton(
         label: 'Sacar via Pix',
         icon: Icons.qr_code_rounded,

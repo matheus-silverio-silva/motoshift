@@ -39,12 +39,15 @@ class AppRoutes {
   static const String recarga           = '/recarga';
   static const String relatorioFinanceiro = '/relatorio-financeiro';
 
-  // ── Legadas (mantidas para compatibilidade até remoção) ──────────────────
-  static const String meusTurnos        = '/meus-turnos';
-  static const String agendarTurno      = '/agendar-turno';
-
-  // ── Stubs (sub-páginas do perfil / fluxos secundários) ───────────────────
-  static const String sacarPix          = '/sacar-pix';
+  // ── Sub-páginas (alcançadas de dentro de outra tela) ─────────────────────
+  //
+  // /meus-turnos e /agendar-turno saíram: eram apelidos de /turnos-disponiveis
+  // e /publicar-turno, registrados para as MESMAS telas. Ninguém navegava para
+  // elas — só o teste as listava —, e duas rotas para a mesma tela fazem o
+  // destaque do menu depender de por qual delas o usuário chegou.
+  //
+  // /sacar-pix saiu junto com a SacarPixScreen: era um stub "em breve" enquanto
+  // a Carteira já tinha o saque funcionando.
   static const String dadosPessoais     = '/dados-pessoais';
   static const String cnhVeiculo        = '/cnh-veiculo';
   static const String minhasAvaliacoes  = '/minhas-avaliacoes';

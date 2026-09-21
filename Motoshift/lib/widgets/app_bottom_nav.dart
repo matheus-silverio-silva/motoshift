@@ -1,42 +1,41 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../routes/nav_config.dart';
+import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 
-/// Perfil de usuário — define o conjunto de itens da barra inferior
-enum UserType { lojista, motoboy }
-
-/// Barra de navegação inferior branca com quatro itens por perfil.
+/// Barra de navegação inferior com os quatro atalhos do papel logado.
 ///
-/// Lojista : Início · Agenda · Turnos · Perfil
-/// Motoboy : Início · Turnos · Carteira · Perfil
+/// <h3>O que mudou, e por quê</h3>
+/// Esta barra recebia `userType`, `currentIndex` e `onTap` de **cada tela**, e
+/// sete telas carregavam o mesmo `switch (i)` copiado à mão. Três coisas ruins
+/// saíam disso:
+///
+/// * a Agenda passava `UserType.lojista` fixo, então o entregador via a barra
+///   do lojista e "Início" o levava para um dashboard que o AuthGuard recusava;
+/// * acrescentar um item exigia editar sete `switch`, e bastava esquecer um
+///   para a barra ficar diferente dependendo da tela;
+/// * o índice destacado era um número escrito à mão, que ninguém atualizava
+///   quando a ordem dos itens mudava.
+///
+/// Agora a barra descobre sozinha o papel (pelo [AuthService]) e os itens (pelo
+/// [NavConfig]); a tela informa apenas **em que seção está**, e o destaque sai
+/// da comparação de rotas.
 class AppBottomNav extends StatelessWidget {
-  const AppBottomNav({
-    required this.userType,
-    required this.currentIndex,
-    required this.onTap,
-    super.key,
-  });
+  const AppBottomNav({required this.rotaAtual, super.key});
 
-  final UserType userType;
-  final int currentIndex;
-  final ValueChanged<int> onTap;
-
-  static const _lojista = [
-    _NavItem(icon: Icons.home_outlined,              label: 'Início'),
-    _NavItem(icon: Icons.calendar_month_outlined,    label: 'Agenda'),
-    _NavItem(icon: Icons.local_shipping_outlined,    label: 'Turnos'),
-    _NavItem(icon: Icons.person_outline_rounded,     label: 'Perfil'),
-  ];
-
-  static const _motoboy = [
-    _NavItem(icon: Icons.home_outlined,                    label: 'Início'),
-    _NavItem(icon: Icons.two_wheeler_outlined,             label: 'Turnos'),
-    _NavItem(icon: Icons.account_balance_wallet_outlined,  label: 'Carteira'),
-    _NavItem(icon: Icons.person_outline_rounded,           label: 'Perfil'),
-  ];
+  /// A seção em que a tela está — o item correspondente fica destacado.
+  final String rotaAtual;
 
   @override
   Widget build(BuildContext context) {
-    final items = userType == UserType.lojista ? _lojista : _motoboy;
+    final papel = context.watch<AuthService>().usuario?.tipo;
+    if (papel == null) return const SizedBox.shrink();
+
+    final itens = NavConfig.barraInferior(papel);
+    final secao = NavConfig.secaoDe(rotaAtual);
+
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
@@ -47,27 +46,22 @@ class AppBottomNav extends StatelessWidget {
         child: SizedBox(
           height: 56,
           child: Row(
-            children: List.generate(items.length, (i) {
-              return Expanded(
-                child: _NavTap(
-                  item: items[i],
-                  selected: i == currentIndex,
-                  onTap: () => onTap(i),
+            children: [
+              for (final item in itens)
+                Expanded(
+                  child: _NavTap(
+                    item: item,
+                    selected: item.route == secao,
+                    // Item da barra é troca de seção: substitui a pilha.
+                    onTap: () => NavConfig.irParaSecao(context, item.route),
+                  ),
                 ),
-              );
-            }),
+            ],
           ),
         ),
       ),
     );
   }
-}
-
-@immutable
-class _NavItem {
-  const _NavItem({required this.icon, required this.label});
-  final IconData icon;
-  final String label;
 }
 
 class _NavTap extends StatelessWidget {
@@ -77,40 +71,50 @@ class _NavTap extends StatelessWidget {
     required this.onTap,
   });
 
-  final _NavItem item;
+  final NavItem item;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final color = selected ? AppColors.teal : AppColors.muted;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(item.icon, size: 19, color: color),
-          const SizedBox(height: 3),
-          Text(
-            item.label,
-            style: tsJakarta(8, FontWeight.w700, color: color),
-          ),
-          const SizedBox(height: 2),
-          AnimatedOpacity(
-            opacity: selected ? 1 : 0,
-            duration: const Duration(milliseconds: 200),
-            child: Container(
-              width: 5,
-              height: 5,
-              decoration: const BoxDecoration(
-                color: AppColors.teal,
-                shape: BoxShape.circle,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: item.label,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(item.icon, size: 19, color: color),
+            const SizedBox(height: 3),
+            Text(
+              item.label,
+              style: tsJakarta(8, FontWeight.w700, color: color),
+            ),
+            const SizedBox(height: 2),
+            AnimatedOpacity(
+              opacity: selected ? 1 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: Container(
+                width: 5,
+                height: 5,
+                decoration: const BoxDecoration(
+                  color: AppColors.teal,
+                  shape: BoxShape.circle,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
+
+// O enum `UserType` que vivia aqui foi removido. Ele duplicava [TipoUsuario] e
+// existia só para a tela dizer à barra qual papel desenhar — o que nunca
+// deveria ter sido decisão da tela, e a Agenda provou isso passando
+// `UserType.lojista` fixo para os dois papéis.

@@ -436,7 +436,7 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       ),
       desktopTitle: 'Publicar turno',
       desktopSubtitle: 'Defina data, horário e valor para sua operação',
-      desktopSelectedRoute: AppRoutes.publicarTurno,
+      rotaDaSecao: AppRoutes.publicarTurno,
       desktopBody: _buildDesktop(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),

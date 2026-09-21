@@ -9,7 +9,6 @@ import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
 import '../widgets/adaptive_scaffold.dart';
-import '../widgets/app_bottom_nav.dart';
 import '../widgets/app_header.dart';
 import '../widgets/desktop/app_topbar.dart';
 import '../widgets/desktop/content_grid.dart';
@@ -116,11 +115,6 @@ class ShellPreviewScreen extends StatelessWidget {
         name: nome,
         avatarInitials: nome.substring(0, 2).toUpperCase(),
       ),
-      bottomNav: AppBottomNav(
-        userType: ehLojista ? UserType.lojista : UserType.motoboy,
-        currentIndex: 0,
-        onTap: (_) {},
-      ),
       body: _MobileBody(onTrocarPapel: () => _trocarPapel(context)),
       desktopTitle: titulo,
       desktopSubtitle: ehLojista
@@ -129,9 +123,13 @@ class ShellPreviewScreen extends StatelessWidget {
       desktopNotificationCount: 4,
       desktopPrimaryAction: ehLojista
           ? TopbarPrimaryButton(
-              label: 'Publicar turno', icon: Icons.add, onTap: () {})
+              label: 'Publicar turno',
+              icon: Icons.add,
+              // Preview do shell: o botao existe para o desenho, nao para
+              // navegar. Sem acao de proposito — nao ha para onde ir aqui.
+              onTap: () {})
           : null,
-      desktopSelectedRoute: rota,
+      rotaDaSecao: rota,
       desktopBody: _DesktopBody(onTrocarPapel: () => _trocarPapel(context)),
     );
   }

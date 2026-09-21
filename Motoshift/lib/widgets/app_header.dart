@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../routes/nav_config.dart';
+import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 
 /// Cabeçalho com gradiente teal — dois construtores nomeados:
@@ -67,10 +71,16 @@ class AppHeader extends StatelessWidget {
   }
 
   Widget _buildBack(BuildContext context) {
-    // Tela de raiz alcançada pela barra inferior não tem para onde voltar: a
-    // seta ficava ali sem função. Quando é esse o caso e existe menu lateral,
-    // o mesmo canto passa a abri-lo — é o equivalente mobile do que a topbar
-    // do desktop já fazia com `canPop()`.
+    // Três casos, nesta ordem — e o terceiro é o que consertou a tela em
+    // branco:
+    //
+    //  1. dá para voltar          → seta, que faz pop;
+    //  2. não dá, mas há menu     → botão de menu, que abre a gaveta;
+    //  3. não dá e não há menu    → seta que vai para a raiz do papel.
+    //
+    // O caso 3 antes era uma seta que chamava `pop()` sem ter o que desempilhar:
+    // o Navigator ficava vazio e a tela virava um retângulo em branco do qual
+    // não se saía sem recarregar a página.
     final temMenu = Scaffold.maybeOf(context)?.hasDrawer ?? false;
     final podeVoltar = _onBack != null || Navigator.of(context).canPop();
 
@@ -78,6 +88,11 @@ class AppHeader extends StatelessWidget {
       children: [
         if (!podeVoltar && temMenu)
           _MenuButton(onTap: () => Scaffold.of(context).openDrawer())
+        else if (!podeVoltar)
+          _BackButton(
+            onTap: () => NavConfig.voltarParaRaiz(
+                context, context.read<AuthService>().usuario?.tipo),
+          )
         else
           _BackButton(onTap: _onBack),
         Expanded(

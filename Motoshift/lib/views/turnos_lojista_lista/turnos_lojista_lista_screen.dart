@@ -8,7 +8,6 @@ import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/breakpoints.dart';
 import '../../widgets/adaptive_scaffold.dart';
-import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/desktop/app_topbar.dart';
@@ -46,19 +45,8 @@ class _TurnosLojistaListaScreenState
     }
   }
 
-  void _onNav(int i) {
-    switch (i) {
-      case 0:
-        Navigator.pushReplacementNamed(
-            context, AppRoutes.dashboardLojista);
-      case 1:
-        Navigator.pushReplacementNamed(context, AppRoutes.agenda);
-      case 2:
-        break;
-      case 3:
-        Navigator.pushReplacementNamed(context, AppRoutes.perfil);
-    }
-  }
+  // O _onNav desta tela saiu: era um dos sete switches identicos de barra
+  // inferior. Ver NavConfig — a tela agora informa so a secao em que esta.
 
   /// Abas da lista. "Expirados" existe porque o backend expira sozinho os
   /// turnos que ninguém aceitou até o horário de início (SCRUM-19): sem uma
@@ -118,11 +106,6 @@ class _TurnosLojistaListaScreenState
         name: nome,
         avatarInitials: initials,
       ),
-      bottomNav: AppBottomNav(
-        userType: UserType.lojista,
-        currentIndex: 2,
-        onTap: _onNav,
-      ),
       desktopTitle: 'Turnos',
       // O `watch` só é registrado quando o subtítulo vai mesmo ser usado. Se
       // ficasse solto aqui, o celular — que nem tem topbar — passaria a
@@ -130,7 +113,7 @@ class _TurnosLojistaListaScreenState
       desktopSubtitle: context.isDesktop
           ? _subtituloDesktop(context.watch<TurnoProvider>())
           : null,
-      desktopSelectedRoute: AppRoutes.turnosLojista,
+      rotaDaSecao: AppRoutes.turnosLojista,
       desktopPrimaryAction: TopbarPrimaryButton(
         label: 'Publicar turno',
         icon: Icons.add,

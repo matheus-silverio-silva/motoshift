@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/extrato_filtro.dart';
 import '../../models/resumo_financeiro.dart';
+import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
@@ -105,6 +106,7 @@ class _RelatoriosFinanceirosScreenState
       header: AppHeader.back(title: 'Relatórios'),
       desktopTitle: 'Relatórios financeiros',
       desktopSubtitle: 'Resumo do período, fluxo de caixa e exportação',
+      rotaDaSecao: AppRoutes.relatorioFinanceiro,
       desktopBody: _desktop(),
       body: _mobile(),
     );

@@ -135,7 +135,7 @@ class _MinhasAvaliacoesScreenState extends State<MinhasAvaliacoesScreen> {
       header: AppHeader.back(title: 'Avaliações'),
       desktopTitle: 'Avaliações',
       desktopSubtitle: _carregando ? 'Carregando…' : _subtitulo(total, media),
-      desktopSelectedRoute: AppRoutes.minhasAvaliacoes,
+      rotaDaSecao: AppRoutes.minhasAvaliacoes,
       desktopBody: _carregando
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.teal),

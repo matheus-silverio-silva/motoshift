@@ -113,7 +113,7 @@ class _NotasFiscaisScreenState extends State<NotasFiscaisScreen> {
       header: AppHeader.back(title: 'Notas fiscais'),
       desktopTitle: 'Notas fiscais',
       desktopSubtitle: _carregando ? 'Carregando…' : _subtitulo(),
-      desktopSelectedRoute: AppRoutes.notasFiscais,
+      rotaDaSecao: AppRoutes.notasFiscais,
       desktopBody: _buildCorpo(desktop: true),
       body: _buildCorpo(desktop: false),
     );

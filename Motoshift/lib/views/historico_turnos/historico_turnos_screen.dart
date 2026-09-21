@@ -120,7 +120,9 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
       desktopSubtitle: _subtituloDesktop(resumo),
       // Também é sub-página do Perfil, e /historico-turnos não é item de
       // sidebar: apontar para ele deixava o desktop sem nada destacado.
-      desktopSelectedRoute: AppRoutes.perfil,
+      // Marcava "Perfil" — heranca da epoca em que o Historico era uma
+      // sub-pagina dele. Hoje e item proprio do menu.
+      rotaDaSecao: AppRoutes.historicoTurnos,
       desktopBody: _comEstado(
         HistoricoConteudoDesktop(
           resumo: resumo,

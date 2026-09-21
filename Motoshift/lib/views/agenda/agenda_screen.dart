@@ -7,7 +7,6 @@ import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
-import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/calendar_month.dart';
 import '../../widgets/desktop/app_topbar.dart';
@@ -93,18 +92,8 @@ class _AgendaScreenState extends State<AgendaScreen> {
     return _turnosPorDia[key] ?? [];
   }
 
-  void _onNav(int i) {
-    switch (i) {
-      case 0:
-        Navigator.pushReplacementNamed(context, AppRoutes.dashboardLojista);
-      case 1:
-        break;
-      case 2:
-        Navigator.pushReplacementNamed(context, AppRoutes.turnosLojista);
-      case 3:
-        Navigator.pushReplacementNamed(context, AppRoutes.perfil);
-    }
-  }
+  // O _onNav desta tela saiu: era um dos sete switches identicos de barra
+  // inferior. Ver NavConfig — a tela agora informa so a secao em que esta.
 
   String _greeting() {
     final h = _agora.hour;
@@ -128,14 +117,9 @@ class _AgendaScreenState extends State<AgendaScreen> {
         name: nome,
         avatarInitials: initials,
       ),
-      bottomNav: AppBottomNav(
-        userType: UserType.lojista,
-        currentIndex: 1,
-        onTap: _onNav,
-      ),
       desktopTitle: 'Agenda',
       desktopSubtitle: _subtituloDesktop(),
-      desktopSelectedRoute: AppRoutes.agenda,
+      rotaDaSecao: AppRoutes.agenda,
       desktopPrimaryAction: ehLojista
           ? TopbarPrimaryButton(
               label: 'Publicar turno',
