@@ -3,13 +3,14 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/turno.dart';
 import '../../models/usuario.dart';
+import '../../presentation/providers/pendencias_provider.dart';
+import '../../routes/abrir_avaliacao.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
-import '../avaliacao/avaliacao_screen.dart';
 import 'historico_conteudo_desktop.dart';
 import 'historico_conteudo_mobile.dart';
 import 'historico_resumo.dart';
@@ -24,7 +25,6 @@ class HistoricoTurnosScreen extends StatefulWidget {
 
 class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
   List<Turno> _turnos = const [];
-  Set<int> _turnosAvaliados = const {};
   bool _carregando = true;
   String _filtro = 'todos';
 
@@ -37,6 +37,7 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
   Future<void> _carregar() async {
     final auth = context.read<AuthService>();
     final api = context.read<ApiService>();
+    final pendencias = context.read<PendenciasProvider>();
     final id = auth.usuario?.id;
     if (id == null) return;
 
@@ -46,7 +47,9 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
       final lista = isLojista
           ? await api.turnos.listarTurnosLojista(id)
           : await api.turnos.listarMeusTurnos(id);
-      final avaliados = await api.avaliacoes.buscarTurnosAvaliados(id);
+      // A fila de avaliação vem do PendenciasProvider, que pergunta por turno
+      // — ver HistoricoResumo.aAvaliar.
+      await pendencias.garantirCarregado(auth.usuario);
       if (!mounted) return;
       setState(() {
         // Tudo que não está mais em jogo entra no histórico — por negação,
@@ -57,7 +60,6 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
         // status terminal já nasce visível.
         _turnos = lista.where((t) => !t.status.ativo).toList()
           ..sort((a, b) => b.dataInicio.compareTo(a.dataInicio));
-        _turnosAvaliados = avaliados.toSet();
         _carregando = false;
       });
     } catch (_) {
@@ -67,26 +69,16 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
 
   // ── Ações ────────────────────────────────────────────────────────────────
 
+  /// Avaliar a partir do histórico.
+  ///
+  /// Mandava o lojista para `/avaliacao` com `avaliadoId: t.motoboyId` — o
+  /// primeiro entregador do turno — e `nomeAvaliado: t.titulo`, que é o nome
+  /// do turno e não o de quem estava sendo avaliado. Num turno multi-vaga os
+  /// outros entregadores ficavam inalcançáveis por aqui. Quem decide agora é
+  /// [abrirAvaliacao], a mesma função usada nos outros quatro caminhos.
   Future<void> _abrirAvaliacao(Turno t) async {
-    final auth = context.read<AuthService>();
-    final isLojista = auth.usuario?.tipo == TipoUsuario.lojista;
-    final avaliadorId = auth.usuario?.id;
-    if (avaliadorId == null || t.id == null) return;
-
-    final avaliadoId = isLojista ? (t.motoboyId ?? -1) : t.lojistId;
-    if (avaliadoId < 0) return;
-
-    await Navigator.pushNamed(
-      context,
-      AppRoutes.avaliacao,
-      arguments: AvaliacaoArgs(
-        turnoId: t.id!,
-        avaliadorId: avaliadorId,
-        avaliadoId: avaliadoId,
-        nomeAvaliado: t.titulo,
-      ),
-    );
-    _carregar();
+    await abrirAvaliacao(context, t);
+    if (mounted) _carregar();
   }
 
   // _confirmarPagamento e _abrirInscritosPagamento sairam daqui.
@@ -111,8 +103,13 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
   Widget build(BuildContext context) {
     final isLojista =
         context.watch<AuthService>().usuario?.tipo == TipoUsuario.lojista;
-    final resumo =
-        HistoricoResumo(turnos: _turnos, avaliados: _turnosAvaliados);
+    final resumo = HistoricoResumo(
+      turnos: _turnos,
+      aAvaliar: {
+        for (final t in context.watch<PendenciasProvider>().turnosAAvaliar)
+          if (t.turno.id != null) t.turno.id!,
+      },
+    );
 
     return AdaptiveScaffold(
       header: AppHeader.back(title: 'Histórico de turnos'),
@@ -130,6 +127,7 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
           isLojista: isLojista,
           onFiltro: (f) => setState(() => _filtro = f),
           onAbrirTurno: (t) => _abrirTurno(t, isLojista),
+          onAvaliar: _abrirAvaliacao,
         ),
       ),
       body: _comEstado(

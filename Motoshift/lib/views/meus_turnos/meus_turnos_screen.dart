@@ -2,13 +2,14 @@ import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/turno.dart';
+import '../../presentation/providers/pendencias_provider.dart';
 import '../../presentation/providers/turno_provider.dart';
 import '../../presentation/providers/turno_selecionado_provider.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import 'package:latlong2/latlong.dart';
-import '../avaliacao/avaliacao_screen.dart';
+import '../../routes/abrir_avaliacao.dart';
 import 'filtros_turnos_sheet.dart';
 import 'turnos_cards.dart';
 import 'turnos_conteudo_desktop.dart';
@@ -703,8 +704,16 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     final ok = await provider.finalizarTurno(turno.id!);
     if (!mounted) return;
     if (ok) {
-      await _mostrarDialogAvaliacao(turno);
+      // Terceiro dos cinco caminhos até a avaliação — e o terceiro que
+      // passava `nomeAvaliado: turno.titulo`, mostrando "Turno Noite —
+      // Hamburgueria" onde deveria estar o nome da loja. Ver abrirAvaliacao.
+      await abrirAvaliacao(context, turno);
+      if (!mounted) return;
       _carregar();
+      // O selo do menu e o painel do início contam a mesma pendência.
+      context
+          .read<PendenciasProvider>()
+          .carregar(context.read<AuthService>().usuario);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -725,22 +734,6 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     if (ok) _carregar();
   }
 
-  Future<void> _mostrarDialogAvaliacao(Turno turno) async {
-    final auth = context.read<AuthService>();
-    final motoboyId = auth.usuario?.id;
-    if (motoboyId == null) return;
-
-    await Navigator.pushNamed(
-      context,
-      AppRoutes.avaliacao,
-      arguments: AvaliacaoArgs(
-        turnoId: turno.id!,
-        avaliadorId: motoboyId,
-        avaliadoId: turno.lojistId,
-        nomeAvaliado: turno.titulo,
-      ),
-    );
-  }
 
   void _abrirFiltros() {
     showModalBottomSheet(

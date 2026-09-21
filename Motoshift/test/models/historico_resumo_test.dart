@@ -28,8 +28,8 @@ Turno _turno({
   );
 }
 
-HistoricoResumo _resumo(List<Turno> turnos, {Set<int> avaliados = const {}}) =>
-    HistoricoResumo(turnos: turnos, avaliados: avaliados);
+HistoricoResumo _resumo(List<Turno> turnos, {Set<int> aAvaliar = const {}}) =>
+    HistoricoResumo(turnos: turnos, aAvaliar: aAvaliar);
 
 void main() {
   group('Contagem por estado', () {
@@ -69,22 +69,27 @@ void main() {
   });
 
   group('Avaliação', () {
-    test('turno já avaliado sai da fila', () {
+    test('a fila é a dos turnos que o backend diz estarem pendentes', () {
       final turnos = [
         _turno(id: 1, status: StatusTurno.finalizado),
         _turno(id: 2, status: StatusTurno.finalizado),
       ];
 
-      expect(_resumo(turnos).qtdAvaliar, 2);
-      expect(_resumo(turnos, avaliados: {1}).qtdAvaliar, 1);
-      expect(_resumo(turnos, avaliados: {1, 2}).qtdAvaliar, 0);
+      expect(_resumo(turnos, aAvaliar: {1, 2}).qtdAvaliar, 2);
+      expect(_resumo(turnos, aAvaliar: {2}).qtdAvaliar, 1);
+      expect(_resumo(turnos, aAvaliar: const {}).qtdAvaliar, 0);
     });
 
     test('cancelado e expirado nunca entram na fila de avaliação', () {
-      final r = _resumo([
-        _turno(id: 1, status: StatusTurno.cancelado),
-        _turno(id: 2, status: StatusTurno.expirado),
-      ]);
+      // Os dois ids estão na lista de pendentes de propósito: o que os tira
+      // da fila tem de ser o status, e não a ausência deles no conjunto.
+      final r = _resumo(
+        [
+          _turno(id: 1, status: StatusTurno.cancelado),
+          _turno(id: 2, status: StatusTurno.expirado),
+        ],
+        aAvaliar: {1, 2},
+      );
       expect(r.qtdAvaliar, 0);
     });
   });

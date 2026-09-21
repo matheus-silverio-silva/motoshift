@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
+import '../../presentation/providers/pendencias_provider.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
@@ -294,6 +295,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                   ),
                 );
                 if (confirm == true && context.mounted) {
+                  context.read<PendenciasProvider>().limpar();
                   context.read<AuthService>().logout();
                   Navigator.pushNamedAndRemoveUntil(
                     context,

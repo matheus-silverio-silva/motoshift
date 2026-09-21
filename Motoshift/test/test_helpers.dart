@@ -21,6 +21,7 @@ import 'package:provider/provider.dart';
 import 'package:moto_shift/models/carteira.dart';
 import 'package:moto_shift/models/cobranca.dart';
 import 'package:moto_shift/models/extrato_filtro.dart';
+import 'package:moto_shift/models/perfil_publico.dart';
 import 'package:moto_shift/models/resumo_financeiro.dart';
 import 'package:moto_shift/models/transacao.dart';
 import 'package:moto_shift/models/turno.dart';
@@ -28,6 +29,7 @@ import 'package:moto_shift/models/usuario.dart';
 import 'package:moto_shift/presentation/providers/turno_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_selecionado_provider.dart';
 import 'package:moto_shift/presentation/providers/notificacao_provider.dart';
+import 'package:moto_shift/presentation/providers/pendencias_provider.dart';
 import 'package:moto_shift/services/api/agenda_api.dart';
 import 'package:moto_shift/services/api/api_client.dart';
 import 'package:moto_shift/services/api/auth_api.dart';
@@ -36,6 +38,7 @@ import 'package:moto_shift/services/api/carteira_api.dart';
 import 'package:moto_shift/services/api/dashboard_api.dart';
 import 'package:moto_shift/services/api/notificacao_api.dart';
 import 'package:moto_shift/services/api/turno_api.dart';
+import 'package:moto_shift/services/api/usuario_api.dart';
 import 'package:moto_shift/services/api_service.dart';
 import 'package:moto_shift/services/auth_service.dart';
 import 'package:moto_shift/theme/app_theme.dart';
@@ -611,6 +614,22 @@ class FakeTurnoApi extends TurnoApi {
   Future<List<Turno>> listarTurnosDisponiveis({DateTime? data}) async =>
       fakeTurnosDisponiveis();
 
+  /// Um inscrito por turno: o entregador dos fakes.
+  ///
+  /// Sem este override a tela do lojista cairia no `catch` de
+  /// `_sincronizarInscritos`, que tenta a rede de verdade — e o card do
+  /// entregador só apareceria depois de o socket desistir, ou seja, nunca
+  /// dentro de um golden.
+  @override
+  Future<List<Map<String, dynamic>>> listarInscritos(int turnoId) async => [
+        {
+          'motoboyId': 1,
+          'nome': 'Ricardo Souza',
+          'status': 'ACEITO',
+          'pagamentoStatus': 'PAGO',
+        },
+      ];
+
   @override
   Future<List<Turno>> listarTurnosLojista(int lojistId) async =>
       fakeTurnosLojista();
@@ -797,13 +816,34 @@ class FakeAvaliacaoApi extends AvaliacaoApi {
   @override
   Future<List<int>> buscarTurnosAvaliados(int usuarioId) async => [1, 2];
 
+  /// Turnos 1 e 2 já avaliados; os demais ainda devem uma nota.
+  ///
+  /// É a mesma seleção de [buscarTurnosAvaliados], agora expressa do lado
+  /// certo: a tela pergunta "quem falta neste turno", e não "quais turnos já
+  /// toquei". Um pendente por turno — o caso multi-vaga tem fake próprio,
+  /// em `avaliacao_multivaga_test.dart`.
+  static const _jaAvaliados = {1, 2};
+
   @override
-  Future<bool> verificarPendente(int turnoId, int usuarioId) async => false;
+  Future<bool> verificarPendente(int turnoId, int usuarioId) async =>
+      !_jaAvaliados.contains(turnoId);
 
   @override
   Future<({bool precisaAvaliar, List<Map<String, dynamic>> pendentes})>
-      buscarAvaliacoesPendentes(int turnoId, int usuarioId) async =>
-          (precisaAvaliar: false, pendentes: <Map<String, dynamic>>[]);
+      buscarAvaliacoesPendentes(int turnoId, int usuarioId) async {
+    if (_jaAvaliados.contains(turnoId)) {
+      return (precisaAvaliar: false, pendentes: <Map<String, dynamic>>[]);
+    }
+    // A outra parte do turno: o lojista (id 2) deve nota ao entregador, e o
+    // entregador (id 1) à loja.
+    final contraparte = usuarioId == 2
+        ? {'usuarioId': 1, 'nome': 'Ricardo Souza'}
+        : {'usuarioId': 2, 'nome': 'Cláudia Oliveira'};
+    return (
+      precisaAvaliar: true,
+      pendentes: <Map<String, dynamic>>[contraparte],
+    );
+  }
 }
 
 class FakeNotificacaoApi extends NotificacaoApi {
@@ -824,6 +864,29 @@ class FakeNotificacaoApi extends NotificacaoApi {
   }
 }
 
+/// Perfil público de outra conta. Devolve o fake do papel pedido — id 2 é a
+/// lojista, qualquer outro é o entregador.
+class FakeUsuarioApi extends UsuarioApi {
+  FakeUsuarioApi() : super(ApiClient());
+
+  @override
+  Future<PerfilPublico> buscarPerfilPublico(int usuarioId) async {
+    final u = usuarioId == 2 ? fakeLojista() : fakeMotoboy();
+    return PerfilPublico(
+      id: u.id!,
+      nome: u.nome,
+      tipo: u.tipo.name,
+      cidade: u.cidade,
+      estado: u.estado,
+      score: u.score,
+      mediaAvaliacao: u.mediaAvaliacao,
+      veiculoModelo: u.veiculoModelo,
+      veiculoCor: u.veiculoCor,
+      nomeFantasia: u.nomeFantasia,
+    );
+  }
+}
+
 /// O ApiService dos testes: mesma montagem do de produção, com cada domínio
 /// trocado pelo seu fake.
 class FakeApiService extends ApiService {
@@ -836,6 +899,10 @@ class FakeApiService extends ApiService {
   @override
   TurnoApi get turnos => _turnos;
   final TurnoApi _turnos = FakeTurnoApi();
+
+  @override
+  UsuarioApi get usuarios => _usuarios;
+  final UsuarioApi _usuarios = FakeUsuarioApi();
 
   @override
   CarteiraApi get carteira => _carteira;
@@ -1004,6 +1071,9 @@ Future<void> pumpGolden(
           value: selecaoProv),
       ChangeNotifierProvider<NotificacaoProvider>(
         create: (_) => NotificacaoProvider(api),
+      ),
+      ChangeNotifierProvider<PendenciasProvider>(
+        create: (_) => PendenciasProvider(api),
       ),
     ],
     child: MaterialApp(

@@ -56,7 +56,7 @@ class _TurnoLojistScreenState extends State<TurnoLojistScreen> {
           ? const Center(child: Text('Turno não encontrado.'))
           : TurnoLojistaConteudo(
               turno: turno,
-              onCancelado: () => Navigator.pop(context, true),
+              onMudou: () => Navigator.pop(context, true),
             ),
     );
   }

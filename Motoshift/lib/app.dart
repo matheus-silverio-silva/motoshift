@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'presentation/providers/turno_provider.dart';
 import 'presentation/providers/turno_selecionado_provider.dart';
 import 'presentation/providers/notificacao_provider.dart';
+import 'presentation/providers/pendencias_provider.dart';
 import 'routes/app_routes.dart';
 import 'services/api_service.dart';
 import 'services/auth_service.dart';
@@ -72,6 +73,14 @@ class MotoShiftApp extends StatelessWidget {
         ChangeNotifierProxyProvider<ApiService, NotificacaoProvider>(
           create: (ctx) => NotificacaoProvider(ctx.read<ApiService>()),
           update: (_, api, prev) => prev ?? NotificacaoProvider(api),
+        ),
+
+        // O que falta depois do turno — avaliação e nota fiscal. Fonte única
+        // do painel do início, da central de Avaliações, do selo do menu e do
+        // bloco "O que falta" do detalhe do turno.
+        ChangeNotifierProxyProvider<ApiService, PendenciasProvider>(
+          create: (ctx) => PendenciasProvider(ctx.read<ApiService>()),
+          update: (_, api, prev) => prev ?? PendenciasProvider(api),
         ),
       ],
       child: MaterialApp(

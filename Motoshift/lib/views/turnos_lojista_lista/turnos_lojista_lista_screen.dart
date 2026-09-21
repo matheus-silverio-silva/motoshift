@@ -287,7 +287,7 @@ class _TurnosLojistaListaScreenState
                   key: ValueKey(selecionado.id),
                   turno: selecionado,
                   desktop: true,
-                  onCancelado: () {
+                  onMudou: () {
                     selecao.limpar();
                     _recarregar();
                   },

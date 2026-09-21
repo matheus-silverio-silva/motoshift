@@ -120,9 +120,11 @@ class _AvaliacaoScreenState extends State<AvaliacaoScreen> {
   /// No desktop a avaliação é um modal de 480px sobre um fundo escurecido,
   /// conforme o artboard 12.
   ///
-  /// A rota continua opaca, então a tela de origem não aparece por trás — um
-  /// overlay de verdade exigiria trocar `routes:` por uma rota transparente
-  /// em app.dart.
+  /// O escurecido é este `backgroundColor` translúcido, e por muito tempo ele
+  /// não escurecia coisa nenhuma: a rota era opaca, então atrás do scrim não
+  /// havia nada para aparecer. Quem abre a avaliação agora é
+  /// `abrirAvaliacao`, que no desktop empurra uma rota `opaque: false` — a
+  /// tela de origem continua na árvore e aparece através daqui.
   Widget _buildModalDesktop(AvaliacaoArgs? args) {
     return Scaffold(
       backgroundColor: AppColors.ink.withOpacity(0.45),

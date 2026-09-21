@@ -12,19 +12,25 @@ import '../../models/turno.dart';
 class HistoricoResumo {
   const HistoricoResumo({
     required this.turnos,
-    required this.avaliados,
+    required this.aAvaliar,
   });
 
   /// Só turnos encerrados — quem carrega já filtra por `!status.ativo`.
   final List<Turno> turnos;
 
-  /// Ids de turnos que este usuário já avaliou.
-  final Set<int> avaliados;
+  /// Ids de turnos em que este usuário **ainda deve** uma avaliação.
+  ///
+  /// Era o conjunto inverso — os turnos já avaliados, de `/avaliacoes/feitas`.
+  /// Aquela rota devolve ids distintos de turno, então bastava avaliar um
+  /// entregador para o turno inteiro sair da lista: num turno de três vagas,
+  /// dois entregadores ficavam sem nota e sem como recebê-la. Quem responde
+  /// isso corretamente é o PendenciasProvider, por turno.
+  final Set<int> aAvaliar;
 
   // ── Predicados ────────────────────────────────────────────────────────────
 
   bool precisaAvaliar(Turno t) =>
-      t.status == StatusTurno.finalizado && !avaliados.contains(t.id);
+      t.status == StatusTurno.finalizado && aAvaliar.contains(t.id);
 
   /// Turno finalizado cujo pagamento não liquidou.
   ///

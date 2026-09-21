@@ -4,6 +4,7 @@ import '../../models/usuario.dart';
 import '../../presentation/providers/notificacao_provider.dart';
 import '../../routes/app_routes.dart';
 import '../../routes/nav_config.dart';
+import '../../presentation/providers/pendencias_provider.dart';
 import '../../services/auth_service.dart';
 import '../app_nav_drawer.dart';
 import '../../theme/app_theme.dart';
@@ -140,6 +141,7 @@ class DesktopShell extends StatelessWidget {
       ),
     );
     if (confirm == true && context.mounted) {
+      context.read<PendenciasProvider>().limpar();
       context.read<AuthService>().logout();
       Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (_) => false);
     }

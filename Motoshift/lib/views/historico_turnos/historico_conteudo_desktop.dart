@@ -22,6 +22,7 @@ class HistoricoConteudoDesktop extends StatelessWidget {
     required this.isLojista,
     required this.onFiltro,
     required this.onAbrirTurno,
+    required this.onAvaliar,
     super.key,
   });
 
@@ -30,6 +31,14 @@ class HistoricoConteudoDesktop extends StatelessWidget {
   final bool isLojista;
   final ValueChanged<String> onFiltro;
   final ValueChanged<Turno> onAbrirTurno;
+
+  /// Avaliar a partir da própria linha.
+  ///
+  /// O card do celular tinha o botão desde sempre; a tabela do desktop, não —
+  /// e o KPI "a avaliar" ficava ali em cima contando pendências que a tela não
+  /// deixava resolver. Quem usasse o app na tela larga tinha de sair do
+  /// histórico para avaliar.
+  final ValueChanged<Turno> onAvaliar;
 
   @override
   Widget build(BuildContext context) {
@@ -151,7 +160,7 @@ class HistoricoConteudoDesktop extends StatelessWidget {
   /// `lojistId` — o nome exigiria uma busca por turno. Fica a região, que é
   /// dado que a lista já tem.
   Widget _buildTabela() {
-    const flexes = [26, 16, 20, 15, 14];
+    const flexes = [26, 14, 18, 14, 12, 16];
     final linhas = resumo.filtrar(filtro);
 
     Widget celula(int i, Widget filho, {bool fim = false}) => Expanded(
@@ -195,6 +204,7 @@ class HistoricoConteudoDesktop extends StatelessWidget {
               celula(2, cabecalho('REGIÃO')),
               celula(3, cabecalho('STATUS')),
               celula(4, cabecalho('VALOR'), fim: true),
+              celula(5, const SizedBox.shrink(), fim: true),
             ],
           ),
         ),
@@ -275,6 +285,49 @@ class HistoricoConteudoDesktop extends StatelessWidget {
               ),
               fim: true,
             ),
+            celula(
+              5,
+              resumo.precisaAvaliar(t)
+                  ? _BotaoAvaliar(onTap: () => onAvaliar(t))
+                  : const SizedBox.shrink(),
+              fim: true,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// O "Avaliar" da linha da tabela — o mesmo rótulo e a mesma cor do botão do
+/// card do celular, para os dois caminhos parecerem o mesmo caminho.
+class _BotaoAvaliar extends StatelessWidget {
+  const _BotaoAvaliar({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 44),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: AppColors.amberSoft,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.star_rounded,
+                size: 13, color: AppColors.onTertiaryContainer),
+            const SizedBox(width: 5),
+            Text('Avaliar',
+                style: tsJakarta(11, FontWeight.w700,
+                    color: AppColors.onTertiaryContainer)),
           ],
         ),
       ),

@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 
 import 'package:moto_shift/models/turno.dart';
 import 'package:moto_shift/presentation/providers/notificacao_provider.dart';
+import 'package:moto_shift/presentation/providers/pendencias_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_selecionado_provider.dart';
 import 'package:moto_shift/routes/app_routes.dart';
@@ -71,6 +72,9 @@ Future<TurnoSelecionadoProvider> _montar(
         ChangeNotifierProvider<TurnoSelecionadoProvider>.value(value: selecao),
         ChangeNotifierProvider<NotificacaoProvider>(
           create: (_) => NotificacaoProvider(api),
+        ),
+        ChangeNotifierProvider<PendenciasProvider>(
+          create: (_) => PendenciasProvider(api),
         ),
       ],
       child: MaterialApp(

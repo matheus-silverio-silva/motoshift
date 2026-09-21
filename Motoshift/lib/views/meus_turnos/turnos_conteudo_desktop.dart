@@ -109,7 +109,7 @@ class TurnosConteudoDesktop extends StatelessWidget {
                   key: ValueKey(selecionado.id),
                   turno: selecionado,
                   desktop: true,
-                  onAceito: () {
+                  onMudou: () {
                     selecao.limpar();
                     onAceito();
                   },

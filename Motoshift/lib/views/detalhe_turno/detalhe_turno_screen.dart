@@ -57,7 +57,7 @@ class _DetalheTurnoScreenState extends State<DetalheTurnoScreen> {
           ? const Center(child: Text('Turno não encontrado.'))
           : DetalheTurnoConteudo(
               turno: turno,
-              onAceito: () => Navigator.pop(context, true),
+              onMudou: () => Navigator.pop(context, true),
             ),
     );
   }

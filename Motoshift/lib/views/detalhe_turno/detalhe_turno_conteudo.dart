@@ -4,29 +4,34 @@ import '../../models/turno.dart';
 import '../../presentation/providers/turno_provider.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/app_buttons.dart';
+import '../../widgets/acoes_do_turno.dart';
 import '../../widgets/desktop/info_tile_grid.dart';
 import '../../widgets/mapa_turno.dart';
+import '../../widgets/o_que_falta.dart';
 
 /// Conteúdo do detalhe do turno (tela 6), sem nenhum scaffold em volta.
 ///
 /// A mesma instância serve à rota `/detalhe-turno` do mobile e ao painel
-/// direito do master-detail do desktop — inclusive a ação de aceitar, que é o
-/// motivo real de não duplicar esta tela. Quem hospeda decide o que acontece
-/// depois de aceitar, via [onAceito]: no mobile é um `pop`, no desktop é só
-/// recarregar a lista.
+/// direito do master-detail do desktop — inclusive as ações, que são o motivo
+/// real de não duplicar esta tela. Quem hospeda decide o que acontece depois,
+/// via [onMudou]: no mobile é um `pop`, no desktop é só recarregar a lista.
+///
+/// O parâmetro se chamava `onAceito` porque aceitar era a única coisa que o
+/// entregador podia fazer aqui. Finalizar e cancelar existiam apenas no card
+/// da lista, e quem abrisse o turno em andamento pelo detalhe encontrava um
+/// rodapé escrito "Turno aceito" e nenhuma saída — ver [AcoesDoTurno].
 class DetalheTurnoConteudo extends StatefulWidget {
   const DetalheTurnoConteudo({
     required this.turno,
-    this.onAceito,
+    this.onMudou,
     this.desktop = false,
     super.key,
   });
 
   final Turno turno;
 
-  /// Chamado depois de aceitar com sucesso.
-  final VoidCallback? onAceito;
+  /// Chamado depois de aceitar, finalizar ou cancelar com sucesso.
+  final VoidCallback? onMudou;
 
   /// `true` monta a versão do artboard desktop (cabeçalho maior, grid de 2
   /// colunas, ações em linha); `false` mantém a pilha vertical do mobile.
@@ -58,7 +63,7 @@ class _DetalheTurnoConteudoState extends State<DetalheTurnoConteudo> {
           backgroundColor: AppColors.good,
         ),
       );
-      widget.onAceito?.call();
+      widget.onMudou?.call();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -90,6 +95,8 @@ class _DetalheTurnoConteudoState extends State<DetalheTurnoConteudo> {
               _InfoCard(turno: turno),
               const SizedBox(height: 12),
               _GridInfo(turno: turno),
+              // Some sozinho quando não há pendência — ver OQueFalta.
+              OQueFalta(turno: turno, margem: const EdgeInsets.only(top: 12)),
               if (turno.descricao != null && turno.descricao!.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 RequisitosCard(descricao: turno.descricao!),
@@ -97,10 +104,13 @@ class _DetalheTurnoConteudoState extends State<DetalheTurnoConteudo> {
             ],
           ),
         ),
-        _FooterMobile(
-          turno: turno,
-          aceitando: _aceitando,
-          onAceitar: _aceitar,
+        _Rodape(
+          child: AcoesDoTurno(
+            turno: turno,
+            aceitando: _aceitando,
+            onAceitar: _aceitar,
+            onMudou: widget.onMudou,
+          ),
         ),
       ],
     );
@@ -132,10 +142,13 @@ class _DetalheTurnoConteudoState extends State<DetalheTurnoConteudo> {
             RequisitosCard(descricao: turno.descricao!),
           ],
           const SizedBox(height: 16),
-          _AcoesDesktop(
+          OQueFalta(turno: turno, margem: const EdgeInsets.only(bottom: 16)),
+          AcoesDoTurno(
             turno: turno,
             aceitando: _aceitando,
             onAceitar: _aceitar,
+            onMudou: widget.onMudou,
+            emLinha: true,
           ),
         ],
       ),
@@ -417,83 +430,28 @@ class RequisitosCard extends StatelessWidget {
   }
 }
 
-// ── Ações ───────────────────────────────────────────────────────────────────
-class _FooterMobile extends StatelessWidget {
-  const _FooterMobile({
-    required this.turno,
-    required this.aceitando,
-    required this.onAceitar,
-  });
-  final Turno turno;
-  final bool aceitando;
-  final VoidCallback onAceitar;
+// ── Rodapé ──────────────────────────────────────────────────────────────────
+//
+// _FooterMobile, _AcoesDesktop e _StatusInerte saíram daqui: os três eram a
+// mesma decisão ("o que dá para fazer com este turno?"), escrita em três
+// lugares e sempre pela metade — nenhum deles oferecia finalizar ou cancelar.
+// A decisão agora é do AcoesDoTurno, que vale para os dois papéis.
+
+/// A faixa branca que ancora as ações no pé da tela do celular.
+class _Rodape extends StatelessWidget {
+  const _Rodape({required this.child});
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final podeAceitar = turno.status == StatusTurno.aberto;
-
     return Container(
       padding: EdgeInsets.fromLTRB(
           16, 12, 16, 12 + MediaQuery.of(context).padding.bottom),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppColors.surface,
-        border: const Border(
-          top: BorderSide(color: AppColors.line, width: 1.5),
-        ),
+        border: Border(top: BorderSide(color: AppColors.line, width: 1.5)),
       ),
-      child: podeAceitar
-          ? PrimaryButton(
-              label: 'Aceitar turno',
-              loading: aceitando,
-              onPressed: onAceitar,
-            )
-          : _StatusInerte(turno: turno),
-    );
-  }
-}
-
-class _AcoesDesktop extends StatelessWidget {
-  const _AcoesDesktop({
-    required this.turno,
-    required this.aceitando,
-    required this.onAceitar,
-  });
-  final Turno turno;
-  final bool aceitando;
-  final VoidCallback onAceitar;
-
-  @override
-  Widget build(BuildContext context) {
-    if (turno.status != StatusTurno.aberto) {
-      return _StatusInerte(turno: turno);
-    }
-    return PrimaryButton(
-      label: 'Aceitar turno',
-      loading: aceitando,
-      onPressed: onAceitar,
-    );
-  }
-}
-
-class _StatusInerte extends StatelessWidget {
-  const _StatusInerte({required this.turno});
-  final Turno turno;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        color: AppColors.surface2,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.line, width: 1.5),
-      ),
-      child: Center(
-        child: Text(
-          'Turno ${turno.status.label.toLowerCase()}',
-          style: tsJakarta(13, FontWeight.w600, color: AppColors.muted),
-        ),
-      ),
+      child: child,
     );
   }
 }

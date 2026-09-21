@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/usuario.dart';
 import '../presentation/providers/notificacao_provider.dart';
+import '../presentation/providers/pendencias_provider.dart';
 import '../routes/app_routes.dart';
 import '../routes/nav_config.dart';
 import '../services/auth_service.dart';
@@ -51,6 +52,9 @@ class AppNavDrawer extends StatelessWidget {
         },
         onLogout: () {
           Navigator.pop(context);
+          // As pendências são da conta que sai: sem limpar, o selo do menu
+          // levaria o número dela para a conta seguinte.
+          context.read<PendenciasProvider>().limpar();
           context.read<AuthService>().logout();
           Navigator.pushNamedAndRemoveUntil(
               context, AppRoutes.login, (_) => false);
@@ -79,8 +83,23 @@ class AppNavDrawer extends StatelessWidget {
 /// shell do desktop chamam esta função e passam o resultado pronto.
 Map<NavBadge, String?> badgesDoMenu(BuildContext context) {
   final naoLidas = context.watch<NotificacaoProvider>().naoLidas;
+  final pendencias = context.watch<PendenciasProvider>();
+
+  // O menu é a única coisa presente em toda tela, então é dele o gatilho do
+  // primeiro carregamento das pendências. Fora do frame de propósito:
+  // `carregar` notifica os ouvintes, e notificar durante o build da árvore
+  // que está ouvindo é erro de framework.
+  if (!pendencias.carregado && !pendencias.carregando) {
+    final usuario = context.read<AuthService>().usuario;
+    if (usuario != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => pendencias.garantirCarregado(usuario));
+    }
+  }
+
   return {
     NavBadge.notificacoes: _contador(naoLidas),
+    NavBadge.avaliacoes: _contador(pendencias.quantidadeAvaliacoes),
   };
 }
 

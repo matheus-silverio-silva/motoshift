@@ -17,6 +17,7 @@ import 'package:provider/provider.dart';
 
 import 'package:moto_shift/models/usuario.dart';
 import 'package:moto_shift/presentation/providers/notificacao_provider.dart';
+import 'package:moto_shift/presentation/providers/pendencias_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_selecionado_provider.dart';
 import 'package:moto_shift/services/api_service.dart';
@@ -62,6 +63,9 @@ Future<void> _montarEmpilhada(
         ),
         ChangeNotifierProvider<NotificacaoProvider>(
           create: (_) => NotificacaoProvider(api),
+        ),
+        ChangeNotifierProvider<PendenciasProvider>(
+          create: (_) => PendenciasProvider(api),
         ),
       ],
       child: MaterialApp(
