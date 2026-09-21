@@ -6,6 +6,8 @@ import com.motoshift.dto.ExtratoFiltro;
 import com.motoshift.dto.FluxoPontoResponse;
 import com.motoshift.dto.ResumoFinanceiroResponse;
 import com.motoshift.dto.TransacaoResponse;
+import com.motoshift.dto.DocumentoResponse;
+import com.motoshift.service.fiscal.DocumentoFiscalService;
 import com.motoshift.security.UsuarioAutenticado;
 import com.motoshift.service.CarteiraService;
 import com.motoshift.service.CobrancaService;
@@ -44,15 +46,60 @@ public class CarteiraController {
     /** Ver {@link RetentativaOtimista}: o retry mora em quem abre a transação. */
     private final RetentativaOtimista retentativa;
     private final ExtratoService extrato;
+    private final DocumentoFiscalService documentos;
 
     public CarteiraController(CarteiraService service,
                               CobrancaService cobrancas,
                               RetentativaOtimista retentativa,
-                              ExtratoService extrato) {
+                              ExtratoService extrato,
+                              DocumentoFiscalService documentos) {
         this.service = service;
         this.cobrancas = cobrancas;
         this.retentativa = retentativa;
         this.extrato = extrato;
+        this.documentos = documentos;
+    }
+
+    // ── Documento de um lançamento ───────────────────────────────────────────
+
+    @Operation(summary = "Gerar o documento de um lançamento (SIMULADO)",
+            description = "Emite — ou devolve, se já existir — o documento do lançamento: "
+                    + "NFS-e para pagamento de turno (a mesma nota nos dois lados: o "
+                    + "entregador pelo pagamento_recebido, o lojista pelo pagamento_enviado), "
+                    + "recibo para recarga, comprovante Pix para saque concluído e comprovante "
+                    + "de movimentação para o resto. Reserva e liberação não são serviço "
+                    + "prestado e nunca geram nota. Idempotente. Tudo simulado: nenhuma "
+                    + "transmissão à prefeitura ou à Receita, e o documento traz a marca "
+                    + "\"DOCUMENTO SIMULADO — SEM VALOR FISCAL\".")
+    @ApiResponses({
+        @ApiResponse(responseCode = "201", description = "NFS-e emitida agora"),
+        @ApiResponse(responseCode = "200", description = "Documento que já existia (ou comprovante, que é derivado)"),
+        @ApiResponse(responseCode = "403", description = "O lançamento não é do usuário"),
+        @ApiResponse(responseCode = "404", description = "Lançamento não encontrado"),
+        @ApiResponse(responseCode = "409", description = "Lançamento sem documento ainda (não concluído, Pix pendente)")
+    })
+    @PostMapping("/transacoes/{id}/documento")
+    public ResponseEntity<DocumentoResponse> gerarDocumento(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UsuarioAutenticado atual) {
+        DocumentoFiscalService.Resultado r = documentos.emitir(id, atual.id());
+        return ResponseEntity.status(r.criado() ? HttpStatus.CREATED : HttpStatus.OK)
+                .body(r.documento());
+    }
+
+    @Operation(summary = "Consultar o documento de um lançamento (SIMULADO)",
+            description = "O documento já gerado. Comprovante sempre existe (é derivado do "
+                    + "lançamento); NFS-e responde 404 até ser gerada pelo POST.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Documento"),
+        @ApiResponse(responseCode = "403", description = "O lançamento não é do usuário"),
+        @ApiResponse(responseCode = "404", description = "Lançamento não encontrado, ou NFS-e ainda não gerada"),
+        @ApiResponse(responseCode = "409", description = "Lançamento sem documento ainda")
+    })
+    @GetMapping("/transacoes/{id}/documento")
+    public DocumentoResponse documento(@PathVariable Long id,
+                                       @AuthenticationPrincipal UsuarioAutenticado atual) {
+        return documentos.buscar(id, atual.id());
     }
 
     // ── Recarga ──────────────────────────────────────────────────────────────

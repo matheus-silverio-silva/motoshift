@@ -12,6 +12,7 @@ import com.motoshift.entity.StatusInscricao;
 import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Transacao;
 import com.motoshift.repository.PontoDeFluxo;
+import com.motoshift.service.fiscal.IndiceDeDocumentos;
 import com.motoshift.repository.TransacaoRepository;
 import com.motoshift.repository.TransacaoSpecs;
 import com.motoshift.repository.TurnoInscricaoRepository;
@@ -67,15 +68,18 @@ public class ExtratoService {
     private final CarteiraService carteiras;
     private final TurnoRepository turnoRepo;
     private final TurnoInscricaoRepository inscricaoRepo;
+    private final IndiceDeDocumentos indice;
 
     public ExtratoService(TransacaoRepository transacaoRepo,
                           CarteiraService carteiras,
                           TurnoRepository turnoRepo,
-                          TurnoInscricaoRepository inscricaoRepo) {
+                          TurnoInscricaoRepository inscricaoRepo,
+                          IndiceDeDocumentos indice) {
         this.transacaoRepo = transacaoRepo;
         this.carteiras = carteiras;
         this.turnoRepo = turnoRepo;
         this.inscricaoRepo = inscricaoRepo;
+        this.indice = indice;
     }
 
     // -- Extrato -------------------------------------------------------------
@@ -83,8 +87,11 @@ public class ExtratoService {
     /** Lançamentos filtrados, do mais recente para o mais antigo. */
     @Transactional(readOnly = true)
     public Page<TransacaoResponse> extrato(Long usuarioId, ExtratoFiltro filtro, Pageable pagina) {
-        return transacaoRepo.findAll(TransacaoSpecs.de(usuarioId, filtro), pagina(pagina))
-                .map(TransacaoResponse::from);
+        Page<Transacao> lancamentos =
+                transacaoRepo.findAll(TransacaoSpecs.de(usuarioId, filtro), pagina(pagina));
+        // O documento de cada linha, em duas consultas para a página inteira.
+        var documentos = indice.indexar(lancamentos.getContent());
+        return lancamentos.map(t -> TransacaoResponse.from(t).comDocumento(documentos.get(t.getId())));
     }
 
     /**

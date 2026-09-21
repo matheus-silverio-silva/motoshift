@@ -207,6 +207,30 @@ public record Movimento(
                 tributo + " retido na fonte: " + tituloTurno, chave);
     }
 
+    /**
+     * A cobranca de um saque (ou do estorno dele), lida da chave do lancamento.
+     *
+     * <p>A chave e montada aqui mesmo, em {@link #saque} e {@link #estornoDeSaque},
+     * e por isso e aqui que ela se le: quem precisa saber se o Pix de um saque
+     * concluiu (o comprovante) nao precisa conhecer o formato.
+     */
+    public static java.util.Optional<Long> cobrancaDoSaque(String idempotencyKey) {
+        if (idempotencyKey == null) return java.util.Optional.empty();
+        String numero;
+        if (idempotencyKey.startsWith("saque:")) {
+            numero = idempotencyKey.substring("saque:".length());
+        } else if (idempotencyKey.startsWith("estorno:saque:")) {
+            numero = idempotencyKey.substring("estorno:saque:".length());
+        } else {
+            return java.util.Optional.empty();
+        }
+        try {
+            return java.util.Optional.of(Long.parseLong(numero));
+        } catch (NumberFormatException e) {
+            return java.util.Optional.empty();
+        }
+    }
+
     /** Efeito no patrimonio (disponivel + bloqueado). Zero em movimento interno. */
     public BigDecimal deltaTotal() {
         return deltaDisponivel.add(deltaBloqueado);

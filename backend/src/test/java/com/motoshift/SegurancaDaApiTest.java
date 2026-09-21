@@ -20,6 +20,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 /**
  * A prova de que a API esta fechada — o teste que faltava.
@@ -217,6 +218,36 @@ class SegurancaDaApiTest {
             cobrancas.confirmarRecarga(conta.id(), cobranca);
         });
     }
+
+    @Test
+    @DisplayName("documento de lançamento: sem token 401, terceiro 403, dono 200 — e sempre simulado")
+    void documentoDeLancamento() throws Exception {
+        Conta dona = registrarLojista("docdona");
+        Conta intruso = registrarMotoboy("docintruso");
+        comSaldo(dona);
+
+        Long recarga = transacoes.execute(status -> transacaoRepo
+                .findByUsuarioIdOrderByCriadoEmDesc(dona.id()).stream()
+                .filter(t -> t.getTipo() == com.motoshift.entity.TipoTransacao.RECARGA)
+                .findFirst().orElseThrow().getId());
+        String rota = "/api/carteira/transacoes/" + recarga + "/documento";
+
+        mvc.perform(post(rota)).andExpect(status().isUnauthorized());
+
+        mvc.perform(post(rota).header(HttpHeaders.AUTHORIZATION, "Bearer " + intruso.token()))
+                .andExpect(status().isForbidden());
+        mvc.perform(get(rota).header(HttpHeaders.AUTHORIZATION, "Bearer " + intruso.token()))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(post(rota).header(HttpHeaders.AUTHORIZATION, "Bearer " + dona.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tipoDocumento").value("RECIBO_RECARGA"))
+                .andExpect(jsonPath("$.simulado").value(true))
+                .andExpect(jsonPath("$.marca").value("DOCUMENTO SIMULADO — SEM VALOR FISCAL"));
+    }
+
+    @Autowired
+    private com.motoshift.repository.TransacaoRepository transacaoRepo;
 
     private record Conta(long id, String token) {}
 

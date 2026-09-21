@@ -4,6 +4,8 @@ import com.motoshift.entity.NaturezaTransacao;
 import com.motoshift.entity.StatusTransacao;
 import com.motoshift.entity.TipoTransacao;
 import com.motoshift.entity.Transacao;
+import com.motoshift.service.fiscal.IndiceDeDocumentos;
+import com.motoshift.service.fiscal.TipoDocumento;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -48,6 +50,31 @@ public class TransacaoResponse {
     @Deprecated
     private Long motoboyId;
 
+    /**
+     * Se o lançamento tem documento (NFS-e ou comprovante) que dá para gerar
+     * agora. Falso para o que não concluiu e para saque com Pix pendente.
+     */
+    private boolean documentoDisponivel;
+
+    /** NFSE, RECIBO_RECARGA, COMPROVANTE_PIX ou COMPROVANTE_MOVIMENTACAO. */
+    private TipoDocumento tipoDocumento;
+
+    /**
+     * Id da NFS-e, quando já emitida. Comprovante não tem: é derivado do
+     * lançamento a cada pedido, então não há "emitido" a registrar.
+     */
+    private Long documentoId;
+
+    /** Preenche o que o extrato mostra sobre o documento — ver IndiceDeDocumentos. */
+    public TransacaoResponse comDocumento(IndiceDeDocumentos.Info info) {
+        if (info != null) {
+            this.documentoDisponivel = info.disponivel();
+            this.tipoDocumento = info.tipo();
+            this.documentoId = info.documentoId();
+        }
+        return this;
+    }
+
     @SuppressWarnings("deprecation")
     public static TransacaoResponse from(Transacao t) {
         TransacaoResponse r = new TransacaoResponse();
@@ -69,6 +96,9 @@ public class TransacaoResponse {
     }
 
     public Long getId() { return id; }
+    public boolean isDocumentoDisponivel() { return documentoDisponivel; }
+    public TipoDocumento getTipoDocumento() { return tipoDocumento; }
+    public Long getDocumentoId() { return documentoId; }
     public Long getUsuarioId() { return usuarioId; }
     public Long getContraparteId() { return contraparteId; }
     public Long getTurnoId() { return turnoId; }

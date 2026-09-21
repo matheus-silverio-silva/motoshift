@@ -10,6 +10,7 @@ import com.motoshift.entity.Transacao;
 import com.motoshift.repository.CarteiraRepository;
 import com.motoshift.repository.GanhoMensal;
 import com.motoshift.repository.TransacaoRepository;
+import com.motoshift.service.fiscal.IndiceDeDocumentos;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -56,12 +57,22 @@ public class CarteiraService {
      */
     private final CobrancaService cobrancas;
 
+    private final IndiceDeDocumentos indice;
+
     public CarteiraService(CarteiraRepository carteiraRepo,
                            TransacaoRepository transacaoRepo,
-                           @org.springframework.context.annotation.Lazy CobrancaService cobrancas) {
+                           @org.springframework.context.annotation.Lazy CobrancaService cobrancas,
+                           IndiceDeDocumentos indice) {
         this.carteiraRepo = carteiraRepo;
         this.transacaoRepo = transacaoRepo;
         this.cobrancas = cobrancas;
+        this.indice = indice;
+    }
+
+    /** Lançamentos como o app os mostra, com o documento de cada um. */
+    private Page<TransacaoResponse> comDocumentos(Page<Transacao> lancamentos) {
+        var documentos = indice.indexar(lancamentos.getContent());
+        return lancamentos.map(t -> TransacaoResponse.from(t).comDocumento(documentos.get(t.getId())));
     }
 
     /** Carteira do usuario, criada na hora se ainda nao existir. */
@@ -88,10 +99,9 @@ public class CarteiraService {
         // vinte linhas passava despercebido; com dois anos de uso é uma
         // resposta enorme para uma tela que mostra as primeiras dez. Quem
         // precisa do resto usa GET /api/carteira/extrato, que pagina e filtra.
-        List<TransacaoResponse> transacoes = transacaoRepo
+        List<TransacaoResponse> transacoes = comDocumentos(transacaoRepo
                 .findByUsuarioIdOrderByCriadoEmDesc(usuarioId,
-                        PageRequest.of(0, PRIMEIRA_PAGINA_DO_EXTRATO))
-                .map(TransacaoResponse::from)
+                        PageRequest.of(0, PRIMEIRA_PAGINA_DO_EXTRATO)))
                 .getContent();
         resp.setTransacoes(transacoes);
         return resp;
@@ -107,8 +117,7 @@ public class CarteiraService {
 
     /** Extrato paginado, do lancamento mais recente para o mais antigo. */
     public Page<TransacaoResponse> extrato(Long usuarioId, Pageable pagina) {
-        return transacaoRepo.findByUsuarioIdOrderByCriadoEmDesc(usuarioId, pagina)
-                .map(TransacaoResponse::from);
+        return comDocumentos(transacaoRepo.findByUsuarioIdOrderByCriadoEmDesc(usuarioId, pagina));
     }
 
     /**

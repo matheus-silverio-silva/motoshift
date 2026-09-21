@@ -51,6 +51,11 @@ class CarteiraServiceTest {
     @Mock
     private CobrancaService cobrancas;
 
+    // O extrato anota o documento de cada linha; aqui o mock devolve "nenhum",
+    // que e o que importa para a carteira. O indice tem teste proprio.
+    @Mock
+    private com.motoshift.service.fiscal.IndiceDeDocumentos indice;
+
     private Carteira carteiraCom(BigDecimal disponivel, String pix) {
         Carteira c = new Carteira();
         c.setUsuarioId(7L);
