@@ -11,8 +11,10 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface TransacaoRepository extends JpaRepository<Transacao, Long>,
         org.springframework.data.jpa.repository.JpaSpecificationExecutor<Transacao> {
@@ -27,6 +29,22 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long>,
 
     /** Base da idempotencia: se a chave ja existe, a operacao ja aconteceu. */
     Optional<Transacao> findByIdempotencyKey(String idempotencyKey);
+
+    /**
+     * O pagamento de um entregador num turno — o lançamento que a NFS-e
+     * documenta. Há no máximo um por inscrição; o mais antigo ganha se o
+     * histórico tiver sobras de antes do ledger.
+     */
+    Optional<Transacao> findFirstByTurnoIdAndUsuarioIdAndTipoAndStatusOrderByCriadoEmAsc(
+            Long turnoId, Long usuarioId, TipoTransacao tipo, StatusTransacao status);
+
+    /** Lançamentos de uma operação, de um dono, de certos tipos — as retenções de um pagamento. */
+    List<Transacao> findByOperacaoIdAndUsuarioIdAndTipoIn(
+            UUID operacaoId, Long usuarioId, Collection<TipoTransacao> tipos);
+
+    /** Pagamentos de vários turnos de uma vez — a lista de notas pendentes. */
+    List<Transacao> findByTurnoIdInAndTipoAndStatus(
+            Collection<Long> turnoIds, TipoTransacao tipo, StatusTransacao status);
 
     boolean existsByIdempotencyKey(String idempotencyKey);
 

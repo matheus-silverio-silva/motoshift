@@ -304,7 +304,8 @@ public class ExtratoService {
      */
     private static NaturezaTransacao naturezaDe(com.motoshift.entity.TipoTransacao tipo) {
         return switch (tipo) {
-            case SAQUE, RESERVA, PAGAMENTO_ENVIADO -> NaturezaTransacao.DEBITO;
+            case SAQUE, RESERVA, PAGAMENTO_ENVIADO, RETENCAO_ISS, RETENCAO_IRRF ->
+                    NaturezaTransacao.DEBITO;
             case RECARGA, LIBERACAO_RESERVA, PAGAMENTO_RECEBIDO, ESTORNO, BONUS ->
                     NaturezaTransacao.CREDITO;
         };

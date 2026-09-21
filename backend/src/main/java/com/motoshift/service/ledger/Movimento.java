@@ -34,12 +34,16 @@ import java.math.BigDecimal;
  *   pagamento_recebido       +v          0        +v     credito
  *   saque                    -v          0        -v     debito
  *   estorno                  +v          0        +v     credito
+ *   retencao_iss             -v          0        -v     debito
+ *   retencao_irrf            -v          0        -v     debito
  * </pre>
  *
  * Repare que a coluna do total fecha: reserva e liberacao nao criam nem
  * destroem nada, e pagamento_enviado (-v no lojista) e pagamento_recebido (+v
  * no entregador) se anulam. E dai que sai a invariante (c) — a soma de todas as
- * carteiras so muda por recarga, saque e estorno.
+ * carteiras so muda por recarga, saque, estorno e retencao. As retencoes sao
+ * dinheiro saindo da plataforma, como o saque; o destino e o fisco, que aqui e
+ * simulado e nao tem carteira.
  *
  * @param usuarioId       dono do lancamento: de quem e este extrato
  * @param contraparteId   o outro lado, quando existe
@@ -169,6 +173,38 @@ public record Movimento(
                 TipoTransacao.PAGAMENTO_RECEBIDO, NaturezaTransacao.CREDITO,
                 valor, valor, ZERO,
                 "Turno finalizado: " + tituloTurno, chave);
+    }
+
+    // -- Retencao na fonte ---------------------------------------------------
+
+    /**
+     * Tributo retido do pagamento de um turno, debitado do entregador.
+     *
+     * <p>So existe com {@code motoshift.fiscal.reter-na-fonte=true}. O
+     * pagamento_recebido continua pelo valor BRUTO e a retencao vem logo em
+     * seguida, na mesma operacao: o extrato mostra o que foi pago, o que foi
+     * retido e, pela diferenca, o que sobrou. Creditar o liquido direto
+     * esconderia a retencao — e a NFS-e, o informe de rendimentos e o proprio
+     * pagamento_recebido deixariam de concordar sobre o valor do servico.
+     *
+     * <p>Um lancamento por tributo, e nao um so com a soma, porque a nota
+     * precisa de ISS e IRRF separados e os le daqui: o ledger e a fonte do que
+     * foi retido, nao um recalculo com a aliquota que estiver configurada no
+     * dia da emissao.
+     *
+     * @param tipo {@link TipoTransacao#RETENCAO_ISS} ou {@link TipoTransacao#RETENCAO_IRRF}
+     */
+    public static Movimento retencaoNaFonte(Long entregadorId, Long lojistaId, Long turnoId,
+                                            TipoTransacao tipo, BigDecimal valor,
+                                            String tituloTurno, String chave) {
+        if (tipo != TipoTransacao.RETENCAO_ISS && tipo != TipoTransacao.RETENCAO_IRRF) {
+            throw new IllegalArgumentException("Tipo de retencao invalido: " + tipo);
+        }
+        String tributo = tipo == TipoTransacao.RETENCAO_ISS ? "ISS" : "IRRF";
+        return new Movimento(entregadorId, lojistaId, turnoId,
+                tipo, NaturezaTransacao.DEBITO,
+                valor, valor.negate(), ZERO,
+                tributo + " retido na fonte: " + tituloTurno, chave);
     }
 
     /** Efeito no patrimonio (disponivel + bloqueado). Zero em movimento interno. */

@@ -2,11 +2,13 @@ package com.motoshift.service;
 
 import com.motoshift.entity.StatusInscricao;
 import com.motoshift.entity.StatusPagamento;
+import com.motoshift.entity.TipoTransacao;
 import com.motoshift.entity.Transacao;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.repository.TransacaoRepository;
 import com.motoshift.repository.TurnoInscricaoRepository;
+import com.motoshift.service.fiscal.CalculoTributario;
 import com.motoshift.service.ledger.LedgerService;
 import com.motoshift.service.ledger.Movimento;
 import com.motoshift.service.ledger.Movimento.MotivoLiberacao;
@@ -20,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * O dinheiro de um turno: reserva ao publicar, liquidacao ao finalizar,
@@ -62,15 +65,18 @@ public class PagamentoTurnoService {
     private final TurnoInscricaoRepository inscricaoRepo;
     private final NotificacaoService notificacoes;
     private final LedgerService ledger;
+    private final CalculoTributario tributos;
 
     public PagamentoTurnoService(TransacaoRepository transacaoRepo,
                                  TurnoInscricaoRepository inscricaoRepo,
                                  NotificacaoService notificacoes,
-                                 LedgerService ledger) {
+                                 LedgerService ledger,
+                                 CalculoTributario tributos) {
         this.transacaoRepo = transacaoRepo;
         this.inscricaoRepo = inscricaoRepo;
         this.notificacoes = notificacoes;
         this.ledger = ledger;
+        this.tributos = tributos;
     }
 
     // -- Publicar ------------------------------------------------------------
@@ -131,13 +137,15 @@ public class PagamentoTurnoService {
         for (TurnoInscricao ins : inscricoesFinalizadas) {
             if (ins.getMotoboyId() == null) continue;
 
-            ledger.transferir(
+            LedgerService.Transferencia t = ledger.transferir(
                     Movimento.pagamentoEnviado(turno.getLojistId(), ins.getMotoboyId(),
                             valorPorEntregador, turno.getId(), turno.getTitulo(),
                             chaveDaLiquidacao(ins, "debito")),
                     Movimento.pagamentoRecebido(ins.getMotoboyId(), turno.getLojistId(),
                             valorPorEntregador, turno.getId(), turno.getTitulo(),
                             chaveDaLiquidacao(ins, "credito")));
+
+            BigDecimal retido = reterNaFonte(turno, ins, valorPorEntregador, t.operacaoId());
 
             ins.setPagamentoStatus(StatusPagamento.PAGO);
             inscricaoRepo.save(ins);
@@ -146,7 +154,11 @@ public class PagamentoTurnoService {
             notificacoes.criar(ins.getMotoboyId(), "pagamento_confirmado",
                     "Pagamento recebido",
                     "O pagamento do turno \"" + turno.getTitulo()
-                            + "\" foi creditado na sua carteira.",
+                            + "\" foi creditado na sua carteira"
+                            + (retido.signum() > 0
+                                    ? ", com " + LedgerService.emReais(retido)
+                                            + " retidos na fonte."
+                                    : "."),
                     "carteira", turno.getId());
         }
 
@@ -161,6 +173,39 @@ public class PagamentoTurnoService {
             log.error("[pagamento] turno {} pagaria {} com reserva de {}",
                     turno.getId(), pago, reservado);
         }
+    }
+
+    /**
+     * ISS e IRRF retidos do entregador, quando a retenção na fonte está ligada.
+     *
+     * <p>Dois débitos logo depois do crédito bruto, na mesma operação — ver
+     * {@link Movimento#retencaoNaFonte}. A retenção não altera a
+     * transferência: o lojista paga o valor cheio (que ele reservou), o
+     * entregador recebe o valor cheio, e o tributo sai do entregador para o
+     * fisco. Isso mantém o pagamento_recebido igual ao valor do serviço na
+     * NFS-e com a retenção ligada ou desligada.
+     *
+     * <p>As chaves derivam da inscrição, como as da transferência: finalizar
+     * de novo não retém de novo.
+     *
+     * @return quanto foi retido — zero com a retenção desligada
+     */
+    private BigDecimal reterNaFonte(Turno turno, TurnoInscricao ins, BigDecimal valor,
+                                    UUID operacaoId) {
+        if (!tributos.reterNaFonte() || valor.signum() <= 0) return BigDecimal.ZERO;
+
+        CalculoTributario.Tributos t = tributos.calcular(valor);
+        if (t.iss().signum() > 0) {
+            ledger.aplicarNaOperacao(Movimento.retencaoNaFonte(ins.getMotoboyId(),
+                    turno.getLojistId(), turno.getId(), TipoTransacao.RETENCAO_ISS, t.iss(),
+                    turno.getTitulo(), chaveDaLiquidacao(ins, "retencao-iss")), operacaoId);
+        }
+        if (t.irrf().signum() > 0) {
+            ledger.aplicarNaOperacao(Movimento.retencaoNaFonte(ins.getMotoboyId(),
+                    turno.getLojistId(), turno.getId(), TipoTransacao.RETENCAO_IRRF, t.irrf(),
+                    turno.getTitulo(), chaveDaLiquidacao(ins, "retencao-irrf")), operacaoId);
+        }
+        return t.total();
     }
 
     // -- Cancelar e expirar --------------------------------------------------

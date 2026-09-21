@@ -114,6 +114,21 @@ public class LedgerService {
         return new Transferencia(aplicar(debito, operacaoId), aplicar(credito, operacaoId));
     }
 
+    /**
+     * Aplica um movimento dentro de uma operacao que ja existe.
+     *
+     * <p>E o caso da retencao na fonte: o tributo retido pertence ao mesmo
+     * evento do pagamento que o originou, e o extrato precisa mostrar as tres
+     * linhas — pagamento, ISS, IRRF — agrupadas pelo mesmo {@code operacaoId}.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Transacao aplicarNaOperacao(Movimento m, UUID operacaoId) {
+        if (operacaoId == null) {
+            throw new IllegalArgumentException("aplicarNaOperacao sem operacaoId.");
+        }
+        return aplicar(m, operacaoId);
+    }
+
     /** Os dois lados de uma transferencia, ja gravados. */
     public record Transferencia(Transacao debito, Transacao credito) {
 

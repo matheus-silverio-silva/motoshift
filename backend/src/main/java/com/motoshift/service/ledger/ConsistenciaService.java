@@ -33,7 +33,8 @@ import java.util.Map;
  *       historias diferentes — e o extrato e quem tem razao, porque e o
  *       registro do que aconteceu.</li>
  *   <li><b>A plataforma nao cria dinheiro.</b> A soma de TODAS as carteiras tem
- *       de ser recargas concluidas menos saques concluidos mais estornos. Toda
+ *       de ser recargas concluidas menos saques concluidos mais estornos, menos
+ *       o que foi retido na fonte (quando a retencao esta ligada). Toda
  *       transferencia interna — reserva, liberacao, pagamento de turno — e soma
  *       zero no conjunto: o que sai de um entra em outro. Se este numero
  *       desequilibrar, algum caminho esta creditando sem debitar, que era
@@ -137,11 +138,16 @@ public class ConsistenciaService {
         BigDecimal saques = somaDoTipo(lancamentos, TipoTransacao.SAQUE);
         BigDecimal estornos = somaDoTipo(lancamentos, TipoTransacao.ESTORNO);
         BigDecimal bonus = somaDoTipo(lancamentos, TipoTransacao.BONUS);
-        BigDecimal esperadoTotal = recargas.subtract(saques).add(estornos).add(bonus);
+        // Retencao na fonte e dinheiro que sai para o fisco (simulado), como o
+        // saque sai para a chave Pix: diminui o total, e so por esse caminho.
+        BigDecimal retencoes = somaDoTipo(lancamentos, TipoTransacao.RETENCAO_ISS)
+                .add(somaDoTipo(lancamentos, TipoTransacao.RETENCAO_IRRF));
+        BigDecimal esperadoTotal = recargas.subtract(saques).add(estornos).add(bonus)
+                .subtract(retencoes);
 
         if (totalCarteiras.compareTo(esperadoTotal) != 0) {
             problemas.add("(c) carteiras somam " + totalCarteiras
-                    + " e recargas - saques + estornos dao " + esperadoTotal
+                    + " e recargas - saques + estornos - retencoes dao " + esperadoTotal
                     + " (diferenca de " + totalCarteiras.subtract(esperadoTotal) + ")");
         }
 
@@ -152,6 +158,7 @@ public class ConsistenciaService {
         totais.put("recargas", recargas);
         totais.put("saques", saques);
         totais.put("estornos", estornos);
+        totais.put("retencoes", retencoes);
 
         return new Resultado(problemas.isEmpty(), problemas, totais);
     }
@@ -176,7 +183,7 @@ public class ConsistenciaService {
         BigDecimal v = t.getValor();
         return switch (t.getTipo()) {
             case RECARGA, PAGAMENTO_RECEBIDO, ESTORNO, BONUS, LIBERACAO_RESERVA -> v;
-            case SAQUE, RESERVA -> v.negate();
+            case SAQUE, RESERVA, RETENCAO_ISS, RETENCAO_IRRF -> v.negate();
             case PAGAMENTO_ENVIADO -> BigDecimal.ZERO;
         };
     }
@@ -186,7 +193,8 @@ public class ConsistenciaService {
         return switch (t.getTipo()) {
             case RESERVA -> v;
             case LIBERACAO_RESERVA, PAGAMENTO_ENVIADO -> v.negate();
-            case RECARGA, PAGAMENTO_RECEBIDO, ESTORNO, BONUS, SAQUE -> BigDecimal.ZERO;
+            case RECARGA, PAGAMENTO_RECEBIDO, ESTORNO, BONUS, SAQUE,
+                 RETENCAO_ISS, RETENCAO_IRRF -> BigDecimal.ZERO;
         };
     }
 }

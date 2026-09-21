@@ -114,7 +114,7 @@ class MigracoesPostgresTest {
 
         try (Connection c = conectar(url); Statement s = c.createStatement()) {
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f'"))
-                    .isEqualTo(17);
+                    .isEqualTo(18);
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated"))
                     .isZero();
         }
@@ -204,6 +204,71 @@ class MigracoesPostgresTest {
         }
     }
 
+    @Test
+    @DisplayName("V14 liga a nota ao pagamento, grava a competência e corrige o líquido que nunca foi retido")
+    void v14_fiscal() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v14");
+        flyway(url, "13").migrate();
+
+        long lojista;
+        long entregador;
+        long pagamento;
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("loja-v14@teste.com", "x"));
+            s.execute(inserirUsuario("entregador-v14@teste.com", "x"));
+            lojista = contar(s, "SELECT id FROM usuarios WHERE email = 'loja-v14@teste.com'");
+            entregador = contar(s, "SELECT id FROM usuarios WHERE email = 'entregador-v14@teste.com'");
+
+            s.execute("INSERT INTO turnos (lojist_id, titulo, data_inicio, data_fim, valor_estimado, "
+                    + "status, criado_em) VALUES (" + lojista + ", 'Turno V14', "
+                    + "'2026-03-10 18:00', '2026-03-10 22:00', 200, 'finalizado', now())");
+            long turno = contar(s, "SELECT id FROM turnos WHERE titulo = 'Turno V14'");
+
+            // O pagamento que a liquidação da V12 teria gravado.
+            s.execute("INSERT INTO transacoes (usuario_id, contraparte_id, turno_id, tipo, valor, "
+                    + "status, idempotency_key, natureza, operacao_id, criado_em) VALUES ("
+                    + entregador + ", " + lojista + ", " + turno + ", 'pagamento_recebido', 200.00, "
+                    + "'concluido', 'v14:pagamento', 'credito', gen_random_uuid(), now())");
+            pagamento = contar(s, "SELECT id FROM transacoes WHERE idempotency_key = 'v14:pagamento'");
+
+            // A nota como a V7 a emitia: líquido descontando o que nunca foi retido.
+            s.execute("INSERT INTO notas_fiscais (turno_id, prestador_id, tomador_id, emitida_por_id, "
+                    + "numero, serie, codigo_verificacao, descricao_servico, valor_servico, "
+                    + "iss_aliquota, iss_valor, irrf_aliquota, irrf_valor, valor_liquido, emitida_em) "
+                    + "VALUES (" + turno + ", " + entregador + ", " + lojista + ", " + entregador
+                    + ", 1, 'A1', 'AAAA-BBBB', 'Serviço', 200.00, 0.05, 10.00, 0.015, 3.00, 187.00, now())");
+        }
+
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            assertThat(contar(s, "SELECT transacao_id FROM notas_fiscais")).isEqualTo(pagamento);
+            assertThat(contar(s, "SELECT count(*) FROM notas_fiscais n JOIN transacoes t "
+                    + "ON t.id = n.transacao_id WHERE n.operacao_id = t.operacao_id")).isEqualTo(1);
+            assertThat(contar(s, "SELECT count(*) FROM notas_fiscais "
+                    + "WHERE competencia = TIMESTAMP '2026-03-10 18:00'")).isEqualTo(1);
+
+            // O líquido volta a ser o que o extrato creditou; os tributos ficam,
+            // agora como valor aproximado.
+            assertThat(contar(s, "SELECT count(*) FROM notas_fiscais WHERE valor_liquido = 200.00 "
+                    + "AND iss_valor = 10.00 AND NOT tributos_retidos")).isEqualTo(1);
+
+            // O domínio de tipos aceita as retenções, e só elas a mais.
+            s.execute(inserirTransacaoV12(entregador, null, "retencao_iss", "concluido",
+                    "v14:ret", "debito"));
+            assertThatThrownBy(() -> s.execute(inserirTransacaoV12(entregador, null,
+                    "retencao_pis", "concluido", "v14:ruim", "debito")))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_transacao_tipo");
+
+            // A nota só aponta para lançamento que existe.
+            assertThatThrownBy(() -> s.execute("UPDATE notas_fiscais SET transacao_id = 99999999"))
+                    .isInstanceOf(SQLException.class)
+                    .extracting(e -> ((SQLException) e).getSQLState())
+                    .isEqualTo("23503");
+        }
+    }
+
     // ── Apoio ──────────────────────────────────────────────────────────────
 
     /** INSERT valido ATE a V11 — antes de a coluna natureza existir. */
@@ -262,7 +327,7 @@ class MigracoesPostgresTest {
     }
 
     static String ultimaVersao() {
-        return "13";
+        return "14";
     }
 
     static Connection conectar(String url) throws SQLException {
