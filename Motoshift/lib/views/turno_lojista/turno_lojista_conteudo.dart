@@ -4,7 +4,9 @@ import '../../models/turno.dart';
 import '../../models/usuario.dart';
 import '../../presentation/providers/turno_provider.dart';
 import '../../services/api_service.dart';
+import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
+import '../perfil_publico/perfil_publico_screen.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/desktop/info_tile_grid.dart';
 import '../../widgets/mapa_turno.dart';
@@ -508,16 +510,27 @@ class _MotoboyCard extends StatelessWidget {
               ],
             ),
           ),
+          // Era "Contatar", com onTap vazio. A saída óbvia seria abrir o
+          // telefone do entregador — mas o PerfilPublicoResponse não devolve
+          // telefone nem e-mail, e não por esquecimento: foram cortados por
+          // LGPD. Expor o número só para este botão desfaria essa decisão.
           GestureDetector(
-            onTap: () {},
+            onTap: () => Navigator.pushNamed(
+              context,
+              AppRoutes.perfilPublico,
+              arguments: PerfilPublicoArgs(usuarioId: motoboyId, nome: nome),
+            ),
+            behavior: HitTestBehavior.opaque,
             child: Container(
+              constraints: const BoxConstraints(minHeight: 44),
+              alignment: Alignment.center,
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
                 color: AppColors.tealSoft,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Text('Contatar',
+              child: Text('Ver perfil',
                   style: tsJakarta(11, FontWeight.w700,
                       color: AppColors.tealDeep)),
             ),

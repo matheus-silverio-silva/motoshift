@@ -52,32 +52,64 @@ class _TurnosLojistaListaScreenState
   /// turnos que ninguém aceitou até o horário de início (SCRUM-19): sem uma
   /// aba própria eles não estavam em "Abertos" nem em "Finalizados" e o
   /// lojista só os encontrava por acaso, em "Todos".
+  ///
+  /// "Cancelados" entrou pelo mesmo motivo, e o buraco era maior: o turno
+  /// cancelado não tinha aba nenhuma, e "Abertos" olhava só para `aberto` e
+  /// `aceito` — o turno **em andamento** também ficava de fora. Agora todo
+  /// status cai em exatamente uma aba, que é o que [_filtroDe] diz e o que
+  /// permite abrir um turno por link direto sem ele sumir da lista.
   static const List<(String, String)> _opcoesFiltro = [
     ('todos', 'Todos'),
     ('abertos', 'Abertos'),
     ('finalizados', 'Finalizados'),
     ('expirados', 'Expirados'),
+    ('cancelados', 'Cancelados'),
   ];
 
+  /// A aba onde um turno aparece — a inversa de [_turnosFiltrados].
+  static String _filtroDe(StatusTurno status) => switch (status) {
+        StatusTurno.aberto ||
+        StatusTurno.aceito ||
+        StatusTurno.emAndamento =>
+          'abertos',
+        StatusTurno.finalizado => 'finalizados',
+        StatusTurno.expirado => 'expirados',
+        StatusTurno.cancelado => 'cancelados',
+      };
+
   List<Turno> _turnosFiltrados(List<Turno> todos) {
-    if (_filtro == 'abertos') {
-      return todos
-          .where((t) =>
-              t.status == StatusTurno.aberto ||
-              t.status == StatusTurno.aceito)
-          .toList();
+    if (_filtro == 'todos') return todos;
+    return todos.where((t) => _filtroDe(t.status) == _filtro).toList();
+  }
+
+  /// Troca a aba e, se o turno selecionado não estiver na nova, desfaz a
+  /// seleção. Sem isso o desktop ficava com o painel da direita mostrando um
+  /// turno que não está em lugar nenhum da lista — e [_sincronizarAba]
+  /// puxaria a aba de volta na sequência, brigando com o clique da pessoa.
+  void _selecionarAba(String filtro) {
+    if (_filtro == filtro) return;
+    final selecao = context.read<TurnoSelecionadoProvider>();
+    final turnos = context.read<TurnoProvider>().turnosLojista;
+    setState(() => _filtro = filtro);
+    if (!_turnosFiltrados(turnos).any((t) => t.id == selecao.id)) {
+      selecao.limpar();
     }
-    if (_filtro == 'finalizados') {
-      return todos
-          .where((t) => t.status == StatusTurno.finalizado)
-          .toList();
-    }
-    if (_filtro == 'expirados') {
-      return todos
-          .where((t) => t.status == StatusTurno.expirado)
-          .toList();
-    }
-    return todos;
+  }
+
+  /// Leva a aba até o turno que chegou de fora.
+  ///
+  /// `/turno-lojista` no desktop redireciona para esta lista com o turno já
+  /// selecionado (notificação, dashboard, histórico). O filtro, porém,
+  /// continuava sendo o que estava: quem abria um turno cancelado ou
+  /// finalizado enquanto a aba era "Abertos" via a lista sem a linha
+  /// correspondente e o painel da direita dizendo "Selecione um turno" —
+  /// com um turno selecionado.
+  void _sincronizarAba(Turno turno) {
+    final destino = _filtroDe(turno.status);
+    if (_filtro == destino) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _filtro != destino) setState(() => _filtro = destino);
+    });
   }
 
   int _qtdExpirados(List<Turno> todos) =>
@@ -208,8 +240,21 @@ class _TurnosLojistaListaScreenState
     return Consumer2<TurnoProvider, TurnoSelecionadoProvider>(
       builder: (context, provider, selecao, _) {
         final filtrados = _turnosFiltrados(provider.turnosLojista);
-        final selecionado =
-            filtrados.where((t) => t.id == selecao.id).firstOrNull;
+
+        // A seleção é resolvida contra a lista inteira, não contra a aba: o
+        // turno pode ter chegado por link direto com um status que a aba
+        // corrente não mostra. Resolvido o turno, _sincronizarAba leva a aba
+        // até ele — e o detalhe já abre no mesmo quadro, sem piscar o
+        // "Selecione um turno" enquanto a troca de aba não acontece.
+        final doLojista = provider.turnosLojista
+            .where((t) => t.id != null && t.id == selecao.id)
+            .firstOrNull;
+        if (doLojista != null) _sincronizarAba(doLojista);
+
+        final selecionado = filtrados
+                .where((t) => t.id != null && t.id == selecao.id)
+                .firstOrNull ??
+            doLojista;
 
         return MasterDetailLayout(
           listHeader: MasterDetailListHeader(
@@ -217,9 +262,19 @@ class _TurnosLojistaListaScreenState
                 ? 'Carregando…'
                 : '${filtrados.length} '
                     '${filtrados.length == 1 ? 'turno' : 'turnos'}',
-            trailing: _buildFiltrosDesktop(),
           ),
-          list: _buildListaDesktop(provider, filtrados, selecao),
+          // As pílulas saíram do `trailing` do cabeçalho quando a quinta aba
+          // entrou: cinco não cabem nos 380px da coluna, e o Row do cabeçalho
+          // espremeria a contagem até sumir antes de estourar. Como banda
+          // própria elas rolam na horizontal, do mesmo jeito que no celular.
+          list: Column(
+            children: [
+              _buildFiltrosDesktop(),
+              Expanded(
+                child: _buildListaDesktop(provider, filtrados, selecao),
+              ),
+            ],
+          ),
           detail: selecionado == null
               ? const MasterDetailEmpty(
                   icon: Icons.local_shipping_outlined,
@@ -250,31 +305,37 @@ class _TurnosLojistaListaScreenState
   }
 
   Widget _buildFiltrosDesktop() {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: _opcoesFiltro.map((op) {
-        final sel = _filtro == op.$1;
-        return Padding(
-          padding: const EdgeInsets.only(left: 6),
-          child: InkWell(
-            onTap: () => setState(() => _filtro = op.$1),
-            borderRadius: BorderRadius.circular(9),
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: sel ? AppColors.teal : AppColors.surface2,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: _opcoesFiltro.map((op) {
+            final sel = _filtro == op.$1;
+            return Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: InkWell(
+                onTap: () => _selecionarAba(op.$1),
                 borderRadius: BorderRadius.circular(9),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: sel ? AppColors.teal : AppColors.surface2,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    op.$2,
+                    style: tsJakarta(11, FontWeight.w700,
+                        color: sel ? Colors.white : AppColors.muted),
+                  ),
+                ),
               ),
-              child: Text(
-                op.$2,
-                style: tsJakarta(11, FontWeight.w700,
-                    color: sel ? Colors.white : AppColors.muted),
-              ),
-            ),
-          ),
-        );
-      }).toList(),
+            );
+          }).toList(),
+        ),
+      ),
     );
   }
 
@@ -327,8 +388,8 @@ class _TurnosLojistaListaScreenState
   }
 
   Widget _buildFiltros() {
-    // Rolável na horizontal: com a aba "Expirados" as quatro pílulas passam
-    // da largura de um celular estreito.
+    // Rolável na horizontal: com "Expirados" e "Cancelados" as cinco pílulas
+    // passam da largura de um celular estreito.
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -337,7 +398,7 @@ class _TurnosLojistaListaScreenState
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: GestureDetector(
-              onTap: () => setState(() => _filtro = op.$1),
+              onTap: () => _selecionarAba(op.$1),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 constraints: const BoxConstraints(minHeight: 44),

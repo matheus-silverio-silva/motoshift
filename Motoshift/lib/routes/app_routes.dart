@@ -48,6 +48,7 @@ class AppRoutes {
   //
   // /sacar-pix saiu junto com a SacarPixScreen: era um stub "em breve" enquanto
   // a Carteira já tinha o saque funcionando.
+  static const String perfilPublico     = '/perfil-publico';
   static const String dadosPessoais     = '/dados-pessoais';
   static const String cnhVeiculo        = '/cnh-veiculo';
   static const String minhasAvaliacoes  = '/minhas-avaliacoes';

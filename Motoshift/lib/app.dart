@@ -19,6 +19,7 @@ import 'views/carteira/carteira_screen.dart';
 import 'views/agenda/agenda_screen.dart';
 import 'views/avaliacao/avaliacao_screen.dart';
 import 'views/perfil/perfil_screen.dart';
+import 'views/perfil_publico/perfil_publico_screen.dart';
 import 'views/detalhe_turno/detalhe_turno_screen.dart';
 import 'views/turno_lojista/turno_lojista_screen.dart';
 import 'views/turnos_lojista_lista/turnos_lojista_lista_screen.dart';
@@ -34,7 +35,7 @@ import 'views/extrato/extrato_screen.dart';
 import 'views/extrato/lancamento_detalhe_screen.dart';
 import 'views/recarga/recarga_screen.dart';
 import 'views/relatorios_financeiros/relatorios_financeiros_screen.dart';
-import 'views/stubs/stub_screens.dart';
+import 'views/recuperar_senha/recuperar_senha_screen.dart';
 import 'widgets/auth_guard.dart';
 import 'models/usuario.dart';
 import 'models/extrato_filtro.dart';
@@ -103,7 +104,7 @@ Map<String, WidgetBuilder> rotasDoApp() => {
         AppRoutes.splash:    (_) => const SplashScreen(),
         AppRoutes.login:     (_) => const LoginScreen(),
         AppRoutes.cadastro:  (_) => const CadastroScreen(),
-        AppRoutes.esqueceuSenha: (_) => const EsqueceuSenhaScreen(),
+        AppRoutes.esqueceuSenha: (_) => const RecuperarSenhaScreen(),
 
         // ── Dashboards (protegidas por papel) ─────────────────────────────
         AppRoutes.dashboardMotoboy: (_) => const AuthGuard(
@@ -193,6 +194,7 @@ Map<String, WidgetBuilder> rotasDoApp() => {
             (_) => const AuthGuard(child: RelatoriosFinanceirosScreen()),
 
         // ── Perfil — sub-páginas (qualquer autenticado) ───────────────────
+        AppRoutes.perfilPublico:    (_) => const AuthGuard(child: PerfilPublicoScreen()),
         AppRoutes.dadosPessoais:    (_) => const AuthGuard(child: DadosPessoaisScreen()),
         AppRoutes.cnhVeiculo:       (_) => const AuthGuard(child: CnhVeiculoScreen()),
         AppRoutes.minhasAvaliacoes: (_) => const AuthGuard(child: MinhasAvaliacoesScreen()),

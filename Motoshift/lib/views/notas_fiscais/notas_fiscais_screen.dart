@@ -12,6 +12,14 @@ import '../../widgets/desktop/panel_card.dart';
 import '../../widgets/empty_state.dart';
 import 'nota_fiscal_detalhe.dart';
 
+/// Estado inicial pedido à tela de notas fiscais.
+class NotasFiscaisArgs {
+  const NotasFiscaisArgs({this.notaId});
+
+  /// Nota a abrir ao chegar — vem da notificação de nota emitida.
+  final int? notaId;
+}
+
 /// Notas fiscais de serviço — a mesma tela para os dois papéis.
 ///
 /// O entregador presta o serviço e o lojista o toma, então o documento é um
@@ -36,7 +44,17 @@ class _NotasFiscaisScreenState extends State<NotasFiscaisScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _carregar());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _carregar();
+      if (!mounted) return;
+      // Veio de uma notificação de nota fiscal: abre aquela nota, em vez de
+      // deixar o usuário procurá-la numa lista que pode ter dezenas.
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is NotasFiscaisArgs && args.notaId != null) {
+        final nota = _notas.where((n) => n.id == args.notaId).firstOrNull;
+        if (nota != null) _abrirDetalhe(nota);
+      }
+    });
   }
 
   Future<void> _carregar() async {

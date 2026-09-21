@@ -8,6 +8,7 @@ import '../../presentation/providers/turno_provider.dart';
 import '../../routes/app_routes.dart';
 import '../../routes/nav_config.dart';
 import '../carteira/carteira_screen.dart';
+import '../meus_turnos/meus_turnos_screen.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
@@ -137,8 +138,16 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
           SectionTitle(
             title: 'Turnos aceitos',
             action: 'Ver todos',
-            onAction: () => Navigator.pushNamed(
-                context, AppRoutes.turnosDisponiveis),
+            // Leva a Turnos JA POSICIONADA nos aceitos. Sem o argumento o
+            // link abria a lista no topo, em "Turnos disponíveis", e os
+            // aceitos ficavam abaixo da dobra: "ver todos" os aceitos
+            // entregava a lista dos disponíveis. É troca de seção, então
+            // substitui a pilha — ver NavConfig.
+            onAction: () => NavConfig.irParaSecao(
+              context,
+              AppRoutes.turnosDisponiveis,
+              argumentos: const MeusTurnosArgs(focarAceitos: true),
+            ),
           ),
           _buildTurnosAceitosSection(),
         ],
@@ -150,7 +159,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
         label: 'Buscar turnos',
         icon: Icons.search,
         onTap: () =>
-            Navigator.pushNamed(context, AppRoutes.turnosDisponiveis),
+            NavConfig.irParaSecao(context, AppRoutes.turnosDisponiveis),
       ),
       desktopBody: _buildDesktop(auth),
     );
@@ -267,8 +276,11 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
                   PanelCard(
                     title: 'Turnos aceitos',
                     actionLabel: 'Ver todos',
-                    onAction: () => Navigator.pushNamed(
-                        context, AppRoutes.turnosDisponiveis),
+                    onAction: () => NavConfig.irParaSecao(
+                      context,
+                      AppRoutes.turnosDisponiveis,
+                      argumentos: const MeusTurnosArgs(focarAceitos: true),
+                    ),
                     child: _buildAceitosDesktop(provider, aceitos),
                   ),
                 ],

@@ -51,6 +51,16 @@ class TurnoApi {
     return list.map((e) => Turno.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  /// Um turno pelo id — GET /api/turnos/{id}.
+  ///
+  /// A notificação carrega só o id do turno, e as telas de detalhe recebem o
+  /// objeto por argumento de rota. Sem este método, tocar numa notificação de
+  /// turno só podia marcá-la como lida: não havia como montar o destino.
+  Future<Turno> buscarTurno(int turnoId) async {
+    final data = await _client.get('/turnos/$turnoId');
+    return Turno.fromJson(data as Map<String, dynamic>);
+  }
+
   Future<List<Turno>> listarTurnosLojista(int lojistId) async {
     final list = await _client.get('/turnos?lojistId=$lojistId') as List<dynamic>;
     return list.map((e) => Turno.fromJson(e as Map<String, dynamic>)).toList();

@@ -3,8 +3,14 @@ import 'package:provider/provider.dart';
 
 import '../../models/notificacao.dart';
 import '../../presentation/providers/notificacao_provider.dart';
+import '../../models/turno.dart';
+import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
+import '../../routes/abrir_avaliacao.dart';
+import '../../routes/nav_config.dart';
+import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import '../notas_fiscais/notas_fiscais_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
@@ -44,11 +50,74 @@ class _NotificacoesScreenState extends State<NotificacoesScreen> {
     await context.read<NotificacaoProvider>().marcarTodasLidas(id);
   }
 
-  void _abrir(Notificacao n) {
+  /// Leva ao lugar onde a notificação pode ser resolvida.
+  ///
+  /// Antes este método só marcava como lida: a notificação carrega o id do
+  /// turno, mas as telas de detalhe recebem o objeto `Turno` por argumento, e
+  /// não havia como buscá-lo. Com `TurnoApi.buscarTurno` isso deixou de ser
+  /// verdade.
+  ///
+  /// O destino sai do `referenciaTipo`, que o backend preenche com um de três
+  /// valores. Tipo desconhecido não inventa destino — marca como lida e fica
+  /// por isso, que é o comportamento honesto para uma notificação que esta
+  /// versão do app não sabe interpretar.
+  Future<void> _abrir(Notificacao n) async {
     context.read<NotificacaoProvider>().marcarLida(n.id);
-    // A notificação aponta para um turno, mas só carrega o id — as telas de
-    // detalhe recebem o objeto Turno por argumento. Até existir uma rota que
-    // busque o turno pelo id, o toque apenas marca como lida.
+
+    final id = n.referenciaId;
+    if (id == null) return;
+
+    switch (n.referenciaTipo) {
+      case 'turno':
+        await _abrirTurno(n, id);
+      case 'carteira':
+        // O referenciaId aqui é o do TURNO que gerou o crédito, não o de uma
+        // carteira — o dinheiro não tem tela própria por lançamento. O destino
+        // é o saldo do papel.
+        final ehLojista =
+            context.read<AuthService>().usuario?.tipo == TipoUsuario.lojista;
+        NavConfig.irParaSecao(context,
+            ehLojista ? AppRoutes.saldoLojista : AppRoutes.carteira);
+      case 'nota_fiscal':
+        await Navigator.pushNamed(context, AppRoutes.notasFiscais,
+            arguments: NotasFiscaisArgs(notaId: id));
+      default:
+        break;
+    }
+  }
+
+  /// Notificação de turno: abre o detalhe — ou, quando ela é justamente o
+  /// pedido de avaliação, a própria avaliação daquele turno.
+  Future<void> _abrirTurno(Notificacao n, int turnoId) async {
+    final turno = await _buscarTurno(turnoId);
+    if (turno == null || !mounted) return;
+
+    if (n.tipo == 'avaliacao_pendente') {
+      await abrirAvaliacao(context, turno);
+      return;
+    }
+
+    final ehLojista =
+        context.read<AuthService>().usuario?.tipo == TipoUsuario.lojista;
+    await Navigator.pushNamed(
+      context,
+      ehLojista ? AppRoutes.turnoLojista : AppRoutes.detalheTurno,
+      arguments: turno,
+    );
+  }
+
+  Future<Turno?> _buscarTurno(int turnoId) async {
+    try {
+      return await context.read<ApiService>().turnos.buscarTurno(turnoId);
+    } catch (_) {
+      if (!mounted) return null;
+      // Turno apagado ou fora do alcance desta conta: a notificação fica lida,
+      // e o usuário sabe por que não foi a lugar nenhum.
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Não foi possível abrir este turno.'),
+      ));
+      return null;
+    }
   }
 
   @override
