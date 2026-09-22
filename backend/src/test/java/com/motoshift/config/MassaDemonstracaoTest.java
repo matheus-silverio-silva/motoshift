@@ -243,7 +243,12 @@ class MassaDemonstracaoTest {
     void massaFechaNasInvariantes() {
         massa.resetar();
 
-        consistencia.verificarConsistencia().exigirConsistente();
+        // So as contas da massa: este mesmo arquivo grava, de proposito, uma
+        // conta "real" com saldo sem recarga de origem — dado que o ledger
+        // nunca criaria e que o reset nao pode tocar. Ela nao e assunto desta
+        // invariante, e conferir o banco inteiro faria o resultado depender da
+        // ordem dos metodos.
+        consistencia.verificarConsistencia(idsDaMassa()).exigirConsistente();
 
         // E a história que a massa conta precisa ter todos os capítulos: sem
         // recarga não há origem para o dinheiro, sem reserva não há lastro, sem
@@ -260,6 +265,10 @@ class MassaDemonstracaoTest {
             assertThat(c.getSaldoBloqueado().signum())
                     .as("bloqueado de %s", u.getEmail()).isNotNegative();
         }
+    }
+
+    private List<Long> idsDaMassa() {
+        return contasDaMassa().stream().map(Usuario::getId).collect(Collectors.toList());
     }
 
     private java.util.Set<TipoTransacao> tiposDaMassa() {

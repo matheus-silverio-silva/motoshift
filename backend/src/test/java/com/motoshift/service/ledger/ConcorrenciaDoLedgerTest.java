@@ -126,7 +126,11 @@ class ConcorrenciaDoLedgerTest {
                     .count();
             assertThat(pagamentos).isEqualTo(TURNOS);
 
-            consistencia.verificarConsistencia().exigirConsistente();
+            // As duas contas deste teste, e so elas: o banco de teste e
+            // compartilhado, e conferir tudo tornaria o verde refem da ordem
+            // das classes.
+            consistencia.verificarConsistencia(
+                    List.of(lojista.getId(), entregador.getId())).exigirConsistente();
         });
     }
 

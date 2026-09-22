@@ -151,7 +151,7 @@ class ReservaELiquidacaoTest {
         assertThat(contarPorTipo(doTurno, TipoTransacao.PAGAMENTO_RECEBIDO)).isEqualTo(2);
         assertThat(contarPorTipo(doTurno, TipoTransacao.LIBERACAO_RESERVA)).isEqualTo(1);
 
-        consistencia.verificarConsistencia().exigirConsistente();
+        conferirOCenario();
     }
 
     @Test
@@ -230,7 +230,7 @@ class ReservaELiquidacaoTest {
         assertThat(c.getSaldoBloqueado()).isEqualByComparingTo("0.00");
         assertThat(lancamento("liberacao:turno:" + t.getId() + ":cancelamento").getValor())
                 .isEqualByComparingTo("240.00");
-        consistencia.verificarConsistencia().exigirConsistente();
+        conferirOCenario();
     }
 
     @Test
@@ -244,7 +244,7 @@ class ReservaELiquidacaoTest {
         Carteira c = carteira(lojista);
         assertThat(c.getSaldoDisponivel()).isEqualByComparingTo("1000.00");
         assertThat(c.getSaldoBloqueado()).isEqualByComparingTo("0.00");
-        consistencia.verificarConsistencia().exigirConsistente();
+        conferirOCenario();
     }
 
     @Test
@@ -285,10 +285,27 @@ class ReservaELiquidacaoTest {
         assertThat(carteira(entregador).getSaldoDisponivel()).isEqualByComparingTo("120.00");
         assertThat(carteira(lojista).getSaldoDisponivel()).isEqualByComparingTo("380.00");
         assertThat(carteira(lojista).getSaldoBloqueado()).isEqualByComparingTo("0.00");
-        consistencia.verificarConsistencia().exigirConsistente();
+        conferirOCenario();
     }
 
     // -- Apoio ---------------------------------------------------------------
+
+    /** As tres invariantes, para as contas DESTE cenario.
+     *
+     * <p>Restrito de proposito: o banco de teste e compartilhado, e ha classes
+     * que gravam sem passar pelo ledger — conta anterior ao ledger, saldo sem
+     * recarga de origem. Conferir o banco inteiro faria este teste passar ou
+     * falhar conforme a ordem em que o surefire resolvesse rodar as classes,
+     * que e o que ele fez: verde num runner, vermelho em outro, mesmo commit.
+     *
+     * <p>O recorte e fechado — os dois lados de todo pagamento daqui estao
+     * nele —, que e a condicao para a invariante (c) valer num subconjunto.
+     */
+    private void conferirOCenario() {
+        consistencia.verificarConsistencia(List.of(
+                lojista.getId(), entregador.getId(), outroEntregador.getId()))
+                .exigirConsistente();
+    }
 
     private Usuario conta(String tipo) {
         Usuario u = new Usuario();

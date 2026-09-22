@@ -82,7 +82,10 @@ class RetencaoNaFonteTest {
 
         // A plataforma continua sem criar nem destruir dinheiro: o que saiu,
         // saiu para o fisco, pela retenção.
-        consistencia.verificarConsistencia().exigirConsistente();
+        // As duas partes do pagamento, e so elas: recorte fechado, que e a
+        // condicao para a invariante (c) valer num subconjunto.
+        consistencia.verificarConsistencia(List.of(lojista, entregador))
+                .exigirConsistente();
     }
 
     @Test

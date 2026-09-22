@@ -308,7 +308,10 @@ class LedgerServiceTest {
                 "Vaga não preenchida", Movimento.MotivoLiberacao.SOBRA));
         ledger.aplicar(Movimento.saque(ENTREGADOR, reais("100.00"), "pix@teste.com", 9L));
 
-        consistencia.verificarConsistencia().exigirConsistente();
+        // As duas contas fixas deste teste: o banco e compartilhado com
+        // classes que gravam saldo fora do ledger de proposito.
+        consistencia.verificarConsistencia(java.util.List.of(LOJISTA, ENTREGADOR))
+                .exigirConsistente();
 
         // O dinheiro que entrou (500) menos o que saiu (100) esta nas carteiras.
         assertThat(carteira(LOJISTA).getSaldoTotal()).isEqualByComparingTo("380.00");
@@ -325,6 +328,9 @@ class LedgerServiceTest {
         assertThat(carteira(ENTREGADOR).getSaldoDisponivel()).isEqualByComparingTo("200.00");
         // As duas linhas continuam no extrato: o saque aconteceu de verdade.
         assertThat(transacaoRepo.findByUsuarioIdOrderByCriadoEmDesc(ENTREGADOR)).hasSize(3);
-        consistencia.verificarConsistencia().exigirConsistente();
+        // As duas contas fixas deste teste: o banco e compartilhado com
+        // classes que gravam saldo fora do ledger de proposito.
+        consistencia.verificarConsistencia(java.util.List.of(LOJISTA, ENTREGADOR))
+                .exigirConsistente();
     }
 }

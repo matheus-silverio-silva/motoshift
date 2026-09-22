@@ -11,10 +11,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Confere, lendo o banco inteiro, que a plataforma nao perdeu nem inventou
@@ -78,11 +80,36 @@ public class ConsistenciaService {
 
     @Transactional(readOnly = true)
     public Resultado verificarConsistencia() {
-        List<String> problemas = new ArrayList<>();
+        return verificarConsistencia(null);
+    }
 
-        List<Carteira> carteiras = carteiraRepo.findAll();
+    /**
+     * A mesma conferencia, restrita a um conjunto de usuarios ({@code null} =
+     * o banco inteiro).
+     *
+     * <p>Serve para perguntar "esta carteira fecha?" sem varrer o banco, e e o
+     * que os testes usam: o banco de teste e compartilhado por todas as
+     * classes, e ha cenarios que gravam de proposito dados que o ledger nunca
+     * teria criado — conta anterior ao ledger, saldo sem recarga de origem.
+     * Conferir o banco inteiro faria o resultado de um teste depender de qual
+     * classe rodou antes dele.
+     *
+     * <p><b>Cuidado com (c) num recorte.</b> Ela so vale para um conjunto
+     * FECHADO: se uma transferencia tem uma perna dentro do recorte e a outra
+     * fora, o total nao fecha e o defeito e do recorte, nao do ledger. Passe
+     * as duas partes de cada pagamento.
+     */
+    @Transactional(readOnly = true)
+    public Resultado verificarConsistencia(Collection<Long> usuarios) {
+        List<String> problemas = new ArrayList<>();
+        Set<Long> escopo = usuarios == null ? null : Set.copyOf(usuarios);
+
+        List<Carteira> carteiras = carteiraRepo.findAll().stream()
+                .filter(c -> escopo == null || escopo.contains(c.getUsuarioId()))
+                .toList();
         List<Transacao> lancamentos = transacaoRepo.findAll().stream()
                 .filter(t -> t.getStatus() == StatusTransacao.CONCLUIDO)
+                .filter(t -> escopo == null || escopo.contains(t.getUsuarioId()))
                 .toList();
 
         // (a) nenhum saldo negativo

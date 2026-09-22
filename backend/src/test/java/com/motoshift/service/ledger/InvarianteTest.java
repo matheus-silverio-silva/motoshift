@@ -113,7 +113,12 @@ class InvarianteTest {
         assertThat(aplicadas).isGreaterThan(OPERACOES / 2);
         assertThat(recusadas).isLessThan(OPERACOES);
 
-        consistencia.verificarConsistencia().exigirConsistente();
+        // Restrito as contas do sorteio: o banco de teste e compartilhado, e
+        // outras classes gravam nele de proposito dados que o ledger nunca
+        // teria criado. Conferir o banco inteiro tornaria este teste refem da
+        // ordem das classes.
+        consistencia.verificarConsistencia(idsDe(lojistas, entregadores))
+                .exigirConsistente();
 
         // E a conferência explícita, escrita aqui de novo: a invariante não
         // pode depender só do método que ela deveria estar verificando.
@@ -126,6 +131,14 @@ class InvarianteTest {
      * <p>Se as duas conferências compartilhassem o código, elas concordariam
      * mesmo estando as duas erradas.
      */
+    /** Os ids das contas do sorteio — o recorte fechado da conferencia. */
+    private static List<Long> idsDe(List<Usuario> lojistas, List<Usuario> entregadores) {
+        List<Long> ids = new ArrayList<>();
+        lojistas.forEach(u -> ids.add(u.getId()));
+        entregadores.forEach(u -> ids.add(u.getId()));
+        return ids;
+    }
+
     private void conferirNaMao(List<Usuario> lojistas, List<Usuario> entregadores) {
         List<Usuario> todos = new ArrayList<>(lojistas);
         todos.addAll(entregadores);

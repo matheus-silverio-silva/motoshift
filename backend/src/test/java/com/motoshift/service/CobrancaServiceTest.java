@@ -167,7 +167,9 @@ class CobrancaServiceTest {
 
         assertThat(saque.getStatus()).isEqualTo(StatusCobranca.CONCLUIDO);
         assertThat(disponivel()).isEqualByComparingTo("300.00");
-        consistencia.verificarConsistencia().exigirConsistente();
+        // So esta conta: o banco de teste e compartilhado, e outras classes
+        // gravam nele saldo que nao veio do ledger. Ver o Javadoc do metodo.
+        consistencia.verificarConsistencia(List.of(usuario.getId())).exigirConsistente();
     }
 
     @Test
@@ -188,7 +190,9 @@ class CobrancaServiceTest {
         assertThat(extrato()).extracting(Transacao::getTipo)
                 .containsExactlyInAnyOrder(TipoTransacao.RECARGA,
                         TipoTransacao.SAQUE, TipoTransacao.ESTORNO);
-        consistencia.verificarConsistencia().exigirConsistente();
+        // So esta conta: o banco de teste e compartilhado, e outras classes
+        // gravam nele saldo que nao veio do ledger. Ver o Javadoc do metodo.
+        consistencia.verificarConsistencia(List.of(usuario.getId())).exigirConsistente();
     }
 
     @Test
