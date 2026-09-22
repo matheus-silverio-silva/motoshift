@@ -9,6 +9,7 @@ import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
+import '../../widgets/documento/botao_documento.dart';
 import 'extrato_filtros.dart';
 import 'lancamento_tile.dart';
 
@@ -266,6 +267,10 @@ class _ExtratoScreenState extends State<ExtratoScreen> {
                     AppRoutes.lancamento,
                     arguments: t,
                   ),
+                  // Gera o documento sem passar pelo detalhe: no extrato de um
+                  // mês inteiro, exigir dois toques por linha para pegar a nota
+                  // de cada turno é o que faz ninguém pegar.
+                  onDocumento: () => gerarEAbrirDocumento(context, t),
                 ),
             ],
           );

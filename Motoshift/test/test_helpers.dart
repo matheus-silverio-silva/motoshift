@@ -20,6 +20,7 @@ import 'package:provider/provider.dart';
 
 import 'package:moto_shift/models/carteira.dart';
 import 'package:moto_shift/models/cobranca.dart';
+import 'package:moto_shift/models/documento_fiscal.dart';
 import 'package:moto_shift/models/extrato_filtro.dart';
 import 'package:moto_shift/models/nota_fiscal.dart';
 import 'package:moto_shift/models/perfil_publico.dart';
@@ -346,6 +347,87 @@ Map<String, dynamic> fakeDashboardLojista() => {
 /// Cobre os dois lados do dinheiro e os dois casos do sinal: lançamentos com
 /// `natureza` gravada (o fluxo novo) e um sem ela (linha anterior à V12), que
 /// é o que prova que a tela mostra valor neutro em vez de chutar um lado.
+/// Uma NFS-e simulada, do jeito que o backend a devolve.
+///
+/// [retidos] escolhe a política de tributo: falso (padrão) é o valor
+/// aproximado, com líquido igual ao valor do serviço; verdadeiro é a retenção
+/// na fonte, com o líquido menor.
+NotaFiscal fakeNotaFiscal({bool retidos = false, bool cancelada = false}) {
+  const base = 200.0;
+  const iss = 10.0;
+  const irrf = 3.0;
+  return NotaFiscal(
+    id: 77,
+    turnoId: 202,
+    numero: 12,
+    serie: 'A1',
+    codigoVerificacao: 'A1B2-C3D4',
+    prestadorId: 1,
+    prestadorNome: 'Ricardo Souza',
+    prestadorDocumentoTipo: 'CPF',
+    prestadorCidade: 'Curitiba/PR',
+    tomadorId: 2,
+    tomadorNome: 'Hamburgueria da Cláudia',
+    tomadorDocumentoTipo: 'CNPJ',
+    tomadorDocumento: '**.345.678/0001-**',
+    tomadorCidade: 'Curitiba/PR',
+    descricaoServico: 'Serviço de entrega em turno agendado — Turno Noite. '
+        'Data: 14/08/2025, das 18:00 às 22:00. Região: Batel, Curitiba.',
+    competencia: DateTime(2025, 8, 14, 18),
+    valorServico: base,
+    issAliquota: 0.05,
+    issValor: iss,
+    irrfAliquota: 0.015,
+    irrfValor: irrf,
+    totalTributos: iss + irrf,
+    valorLiquido: retidos ? base - iss - irrf : base,
+    tributosRetidos: retidos,
+    emitidaEm: DateTime(2025, 8, 15, 9, 30),
+    canceladaEm: cancelada ? DateTime(2025, 8, 16, 10) : null,
+    cancelada: cancelada,
+    motivoCancelamento: cancelada ? 'Emitida por engano' : null,
+    papel: 'prestador',
+    transacaoId: 92,
+    operacaoId: '2f1c9c30-0000-4000-8000-000000000001',
+  );
+}
+
+Comprovante fakeComprovante({
+  TipoDocumento tipo = TipoDocumento.reciboRecarga,
+}) {
+  return Comprovante(
+    tipo: tipo,
+    titulo: tipo.titulo,
+    numero: 'RC-00000091',
+    codigoAutenticacao: 'AAAA-BBBB-CCCC-DDDD',
+    transacaoId: 91,
+    operacaoId: null,
+    valor: 500,
+    credito: true,
+    descricao: 'Recarga via Pix',
+    dataHora: DateTime(2025, 8, 15, 9),
+    titularNome: 'Ricardo Souza',
+    titularDocumentoTipo: 'CPF',
+    titularCidade: 'Curitiba/PR',
+    saldoDisponivelApos: 820,
+    detalhes: const [
+      LinhaComprovante('Forma de pagamento', 'Pix'),
+      LinhaComprovante('Situação', 'Pagamento confirmado'),
+      LinhaComprovante('Crédito em', 'Saldo disponível'),
+    ],
+  );
+}
+
+DocumentoFiscal fakeDocumentoNota({bool retidos = false}) =>
+    DocumentoFiscal.daNota(fakeNotaFiscal(retidos: retidos));
+
+DocumentoFiscal fakeDocumentoComprovante() => DocumentoFiscal(
+      tipo: TipoDocumento.reciboRecarga,
+      transacaoId: 91,
+      marca: DocumentoFiscal.marcaPadrao,
+      comprovante: fakeComprovante(),
+    );
+
 List<Transacao> fakeExtrato() {
   final dia = DateTime(
       dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
@@ -359,6 +441,9 @@ List<Transacao> fakeExtrato() {
       descricao: 'Recarga via Pix',
       criadoEm: dia.add(const Duration(hours: 9)),
       saldoDisponivelApos: 820,
+      // Todo lançamento concluído tem documento; a recarga, um recibo.
+      documentoDisponivel: true,
+      tipoDocumento: TipoDocumento.reciboRecarga,
     ),
     Transacao(
       id: 92,
@@ -369,6 +454,10 @@ List<Transacao> fakeExtrato() {
       natureza: NaturezaTransacao.credito,
       valor: 120,
       descricao: 'Turno finalizado: Hamburgueria da Cláudia',
+      // Pagamento de turno: gera NFS-e, e esta já foi emitida (nota 77).
+      documentoDisponivel: true,
+      tipoDocumento: TipoDocumento.nfse,
+      documentoId: 77,
       criadoEm: dia.subtract(const Duration(days: 1, hours: 4)),
       operacaoId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
       saldoDisponivelApos: 320,
@@ -688,8 +777,30 @@ class FakeCarteiraApi extends CarteiraApi {
 
   int _proximaCobranca = 900;
 
+  /// Documentos gerados pela tela — o teste confere qual lançamento foi pedido.
+  final List<int> documentosGerados = [];
+
   @override
   Future<Carteira> buscarCarteira(int motoboyId) async => fakeCarteira();
+
+  @override
+  Future<DocumentoFiscal> gerarDocumento(int transacaoId) async {
+    documentosGerados.add(transacaoId);
+    return _documentoDe(transacaoId);
+  }
+
+  @override
+  Future<DocumentoFiscal> buscarDocumento(int transacaoId) async =>
+      _documentoDe(transacaoId);
+
+  /// A regra do backend em miniatura: pagamento de turno vira NFS-e, o resto
+  /// vira comprovante.
+  DocumentoFiscal _documentoDe(int transacaoId) {
+    final lancamento = fakeExtrato().where((t) => t.id == transacaoId).firstOrNull;
+    return lancamento?.tipoDocumento == TipoDocumento.nfse
+        ? fakeDocumentoNota()
+        : fakeDocumentoComprovante();
+  }
 
   @override
   Future<PaginaDoExtrato> buscarExtrato({

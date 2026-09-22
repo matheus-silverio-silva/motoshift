@@ -32,6 +32,7 @@ import 'views/notas_fiscais/notas_fiscais_screen.dart';
 import 'views/notificacoes/notificacoes_screen.dart';
 import 'views/saldo_lojista/saldo_lojista_screen.dart';
 import 'views/avaliar_entregadores/avaliar_entregadores_screen.dart';
+import 'views/documento_fiscal/documento_fiscal_screen.dart';
 import 'views/extrato/extrato_screen.dart';
 import 'views/extrato/lancamento_detalhe_screen.dart';
 import 'views/recarga/recarga_screen.dart';
@@ -199,6 +200,10 @@ Map<String, WidgetBuilder> rotasDoApp() => {
             ),
           );
         },
+        // Sem papel: o documento é de quem é o lançamento, e o backend
+        // recusa (403) o lançamento de outra pessoa.
+        AppRoutes.documentoFiscal:
+            (_) => const AuthGuard(child: DocumentoFiscalScreen()),
         AppRoutes.relatorioFinanceiro:
             (_) => const AuthGuard(child: RelatoriosFinanceirosScreen()),
 

@@ -6,6 +6,7 @@ import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
+import '../../widgets/documento/botao_documento.dart';
 
 /// Detalhe de um lançamento.
 ///
@@ -65,7 +66,19 @@ class LancamentoDetalheScreen extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
+        // O documento deste lançamento: NFS-e para pagamento de turno, recibo
+        // ou comprovante para o resto. O botão some quando não há documento
+        // (lançamento não concluído, Pix ainda pendente).
+        if (lancamento.documentoDisponivel) ...[
+          if (lancamento.documentoEmitido) ...[
+            const Align(alignment: Alignment.center, child: SeloNotaEmitida()),
+            const SizedBox(height: 8),
+          ],
+          BotaoDocumento(lancamento: lancamento),
+          const SizedBox(height: 16),
+        ] else
+          const SizedBox(height: 8),
         _bloco([
           _linha('Descrição', lancamento.descricao),
           _linha('Data', _dataHora(lancamento.criadoEm)),
@@ -125,7 +138,11 @@ class LancamentoDetalheScreen extends StatelessWidget {
       TipoTransacao.turno ||
       TipoTransacao.entrega =>
         lancamento.valor,
-      TipoTransacao.saque || TipoTransacao.reserva => -lancamento.valor,
+      TipoTransacao.saque ||
+      TipoTransacao.reserva ||
+      TipoTransacao.retencaoIss ||
+      TipoTransacao.retencaoIrrf =>
+        -lancamento.valor,
       // Pagamento enviado sai do bloqueado: o disponível não muda.
       TipoTransacao.pagamentoEnviado || TipoTransacao.desconhecido => 0.0,
     };

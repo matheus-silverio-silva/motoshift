@@ -32,7 +32,8 @@ class AppNavDrawer extends StatelessWidget {
     if (usuario == null) return const SizedBox.shrink();
 
     final secao = NavConfig.secaoDe(
-        rotaDaSecao ?? ModalRoute.of(context)?.settings.name);
+        rotaDaSecao ?? ModalRoute.of(context)?.settings.name,
+        papel: usuario.tipo);
 
     return Drawer(
       width: AppSidebar.width,

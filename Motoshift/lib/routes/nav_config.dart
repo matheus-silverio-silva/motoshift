@@ -70,9 +70,18 @@ class NavConfig {
   ///
   /// Devolve `null` para rota que não pertence a seção nenhuma (login, splash,
   /// detalhe de turno): nada fica destacado, que é o correto.
-  static String? secaoDe(String? rota) {
+  ///
+  /// Com [papel], a sub-página do dinheiro destaca a seção de dinheiro DAQUELE
+  /// papel: o Extrato e o documento fiscal são da Carteira para o entregador e
+  /// do Saldo para o lojista. Sem isso o lojista, no Extrato, via "Carteira"
+  /// selecionada — um item que nem existe no menu dele — e nada destacado.
+  static String? secaoDe(String? rota, {TipoUsuario? papel}) {
     if (rota == null) return null;
-    return _subPaginas[rota] ?? (_ehSecao(rota) ? rota : null);
+    final secao = _subPaginas[rota] ?? (_ehSecao(rota) ? rota : null);
+    if (secao == AppRoutes.carteira && papel == TipoUsuario.lojista) {
+      return AppRoutes.saldoLojista;
+    }
+    return secao;
   }
 
   static bool _ehSecao(String rota) =>
@@ -84,6 +93,8 @@ class NavConfig {
     AppRoutes.extrato: AppRoutes.carteira,
     AppRoutes.lancamento: AppRoutes.carteira,
     AppRoutes.recarga: AppRoutes.carteira,
+    // O documento de um lançamento abre a partir do extrato.
+    AppRoutes.documentoFiscal: AppRoutes.carteira,
     AppRoutes.dadosPessoais: AppRoutes.perfil,
     AppRoutes.cnhVeiculo: AppRoutes.perfil,
     // Perfil de outra conta também pertence à seção Perfil: é a mesma ideia

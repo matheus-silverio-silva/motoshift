@@ -1,6 +1,9 @@
+import 'documento_fiscal.dart';
+
 /// Tipos que o backend emite, em `Transacao.tipo`:
 ///   recarga | reserva | liberacao_reserva | pagamento_enviado
 ///   | pagamento_recebido | saque | bonus | estorno
+///   | retencao_iss | retencao_irrf (só com a retenção na fonte ligada)
 /// ("turno" é o legado dos créditos anteriores à liquidação automática.)
 TipoTransacao _parseTipo(String raw) {
   return switch (raw.toLowerCase()) {
@@ -14,6 +17,8 @@ TipoTransacao _parseTipo(String raw) {
     'pagamento_enviado' => TipoTransacao.pagamentoEnviado,
     'pagamento_recebido' => TipoTransacao.pagamentoRecebido,
     'estorno' => TipoTransacao.estorno,
+    'retencao_iss' => TipoTransacao.retencaoIss,
+    'retencao_irrf' => TipoTransacao.retencaoIrrf,
     _ => TipoTransacao.desconhecido,
   };
 }
@@ -71,6 +76,21 @@ class Transacao {
   final double? saldoDisponivelApos;
   final double? saldoBloqueadoApos;
 
+  /// Se dá para gerar o documento deste lançamento agora — NFS-e para
+  /// pagamento de turno, recibo ou comprovante para o resto. Falso para o que
+  /// não concluiu e para saque com Pix ainda pendente.
+  final bool documentoDisponivel;
+
+  /// Que documento este lançamento gera; nulo quando não há.
+  final TipoDocumento? tipoDocumento;
+
+  /// Id da NFS-e, quando já emitida. Comprovante não tem: é derivado do
+  /// lançamento a cada pedido.
+  final int? documentoId;
+
+  /// A NFS-e deste pagamento já foi gerada.
+  bool get documentoEmitido => documentoId != null;
+
   const Transacao({
     this.id,
     required this.motoboyId,
@@ -85,6 +105,9 @@ class Transacao {
     this.operacaoId,
     this.saldoDisponivelApos,
     this.saldoBloqueadoApos,
+    this.documentoDisponivel = false,
+    this.tipoDocumento,
+    this.documentoId,
   });
 
   factory Transacao.fromJson(Map<String, dynamic> json) {
@@ -106,6 +129,9 @@ class Transacao {
       operacaoId: json['operacaoId'] as String?,
       saldoDisponivelApos: (json['saldoDisponivelApos'] as num?)?.toDouble(),
       saldoBloqueadoApos: (json['saldoBloqueadoApos'] as num?)?.toDouble(),
+      documentoDisponivel: json['documentoDisponivel'] == true,
+      tipoDocumento: TipoDocumento.parse(json['tipoDocumento'] as String?),
+      documentoId: (json['documentoId'] as num?)?.toInt(),
     );
   }
 
@@ -146,6 +172,11 @@ enum TipoTransacao {
   pagamentoRecebido,
   estorno,
 
+  /// ISS e IRRF retidos na fonte sobre um pagamento recebido — só existem com
+  /// `motoshift.fiscal.reter-na-fonte=true` no backend.
+  retencaoIss,
+  retencaoIrrf,
+
   /// Tipo que o backend emitiu e este app ainda não conhece. Existe para o
   /// extrato não fingir saber a direção do dinheiro.
   desconhecido;
@@ -162,6 +193,8 @@ enum TipoTransacao {
       TipoTransacao.pagamentoEnviado => 'Pagamento enviado',
       TipoTransacao.pagamentoRecebido => 'Pagamento recebido',
       TipoTransacao.estorno => 'Estorno',
+      TipoTransacao.retencaoIss => 'ISS retido na fonte',
+      TipoTransacao.retencaoIrrf => 'IRRF retido na fonte',
       TipoTransacao.desconhecido => 'Lançamento',
     };
   }
@@ -172,6 +205,8 @@ enum TipoTransacao {
       TipoTransacao.liberacaoReserva => 'liberacao_reserva',
       TipoTransacao.pagamentoEnviado => 'pagamento_enviado',
       TipoTransacao.pagamentoRecebido => 'pagamento_recebido',
+      TipoTransacao.retencaoIss => 'retencao_iss',
+      TipoTransacao.retencaoIrrf => 'retencao_irrf',
       _ => name,
     };
   }
@@ -193,7 +228,9 @@ enum TipoTransacao {
   bool? get credito => switch (this) {
         TipoTransacao.saque ||
         TipoTransacao.reserva ||
-        TipoTransacao.pagamentoEnviado =>
+        TipoTransacao.pagamentoEnviado ||
+        TipoTransacao.retencaoIss ||
+        TipoTransacao.retencaoIrrf =>
           false,
         TipoTransacao.desconhecido => null,
         _ => true,

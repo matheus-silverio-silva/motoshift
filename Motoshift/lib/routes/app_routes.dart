@@ -37,6 +37,8 @@ class AppRoutes {
   static const String extrato           = '/extrato';
   static const String lancamento        = '/extrato/lancamento';
   static const String recarga           = '/recarga';
+  /// Documento fiscal SIMULADO de um lançamento — NFS-e ou comprovante.
+  static const String documentoFiscal   = '/documento';
   static const String relatorioFinanceiro = '/relatorio-financeiro';
 
   // ── Sub-páginas (alcançadas de dentro de outra tela) ─────────────────────

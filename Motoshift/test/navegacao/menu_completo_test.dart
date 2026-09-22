@@ -42,6 +42,7 @@ void main() {
     AppRoutes.avaliacao,
     AppRoutes.avaliarEntregadores,
     AppRoutes.lancamento,
+    AppRoutes.documentoFiscal,
     AppRoutes.perfilPublico,
     // Sub-páginas alcançadas de dentro de outra tela — o NavConfig as mapeia
     // para a seção que as contém (ver NavConfig.secaoDe).

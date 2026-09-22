@@ -1,5 +1,6 @@
 import '../../models/carteira.dart';
 import '../../models/cobranca.dart';
+import '../../models/documento_fiscal.dart';
 import '../../models/extrato_filtro.dart';
 import '../../models/resumo_financeiro.dart';
 import '../../models/transacao.dart';
@@ -146,5 +147,21 @@ class CarteiraApi {
     final partes = parametros.entries
         .map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}');
     return '?${partes.join('&')}';
+  }
+
+  // ── Documento de um lançamento (SIMULADO) ───────────────────────────────
+
+  /// Gera — ou devolve, se já existir — o documento do lançamento: NFS-e para
+  /// pagamento de turno, recibo ou comprovante para o resto. Idempotente: o
+  /// backend devolve a mesma nota e o mesmo comprovante a cada chamada.
+  Future<DocumentoFiscal> gerarDocumento(int transacaoId) async {
+    final data = await _client.post('/carteira/transacoes/$transacaoId/documento', {});
+    return DocumentoFiscal.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// O documento já gerado. NFS-e ainda não gerada responde 404.
+  Future<DocumentoFiscal> buscarDocumento(int transacaoId) async {
+    final data = await _client.get('/carteira/transacoes/$transacaoId/documento');
+    return DocumentoFiscal.fromJson(data as Map<String, dynamic>);
   }
 }

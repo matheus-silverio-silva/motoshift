@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/transacao.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/documento/botao_documento.dart';
 
 /// Uma linha do extrato.
 ///
@@ -13,11 +14,16 @@ class LancamentoTile extends StatelessWidget {
   const LancamentoTile({
     required this.lancamento,
     this.onTap,
+    this.onDocumento,
     super.key,
   });
 
   final Transacao lancamento;
   final VoidCallback? onTap;
+
+  /// Gera (ou abre) o documento do lançamento. Sem isto, a linha só leva ao
+  /// detalhe — é o que acontece nas telas que ainda não oferecem documento.
+  final VoidCallback? onDocumento;
 
   @override
   Widget build(BuildContext context) {
@@ -67,11 +73,33 @@ class LancamentoTile extends StatelessWidget {
                         const SizedBox(width: 6),
                         _selo(lancamento.status.label),
                       ],
+                      // Indicador de documento já emitido — só a NFS-e tem,
+                      // porque comprovante é derivado e não se emite.
+                      if (lancamento.documentoEmitido) ...[
+                        const SizedBox(width: 6),
+                        const SeloNotaEmitida(),
+                      ],
                     ],
                   ),
                 ],
               ),
             ),
+            if (onDocumento != null && lancamento.documentoDisponivel) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                key: const Key('extrato-documento'),
+                onPressed: onDocumento,
+                tooltip: lancamento.tipoDocumento?.acao ?? 'Gerar documento',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(
+                  lancamento.tipoDocumento?.ehNota == true
+                      ? Icons.receipt_long_outlined
+                      : Icons.description_outlined,
+                  size: 18,
+                  color: AppColors.muted,
+                ),
+              ),
+            ],
             const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -132,6 +160,9 @@ class LancamentoTile extends StatelessWidget {
       TipoTransacao.entrega =>
         Icons.two_wheeler_outlined,
       TipoTransacao.estorno => Icons.undo_rounded,
+      TipoTransacao.retencaoIss ||
+      TipoTransacao.retencaoIrrf =>
+        Icons.account_balance_outlined,
       TipoTransacao.bonus => Icons.card_giftcard_rounded,
       TipoTransacao.desconhecido => Icons.receipt_long_outlined,
     };

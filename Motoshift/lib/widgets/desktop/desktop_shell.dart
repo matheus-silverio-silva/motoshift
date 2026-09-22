@@ -55,7 +55,8 @@ class DesktopShell extends StatelessWidget {
     // A secao destacada, e nao a rota crua: sub-pagina marca a secao que a
     // contem (o Extrato marca "Carteira"). Ver NavConfig.secaoDe.
     final secao = NavConfig.secaoDe(
-        selectedRoute ?? ModalRoute.of(context)?.settings.name);
+        selectedRoute ?? ModalRoute.of(context)?.settings.name,
+        papel: usuario?.tipo);
 
     final podeVoltar = showBack ?? Navigator.of(context).canPop();
 

@@ -34,7 +34,7 @@ class AppBottomNav extends StatelessWidget {
     if (papel == null) return const SizedBox.shrink();
 
     final itens = NavConfig.barraInferior(papel);
-    final secao = NavConfig.secaoDe(rotaAtual);
+    final secao = NavConfig.secaoDe(rotaAtual, papel: papel);
 
     return Container(
       decoration: const BoxDecoration(

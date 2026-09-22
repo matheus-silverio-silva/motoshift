@@ -108,8 +108,13 @@ void main() {
 
         expect(app.paginas, [secao, AppRoutes.extrato]);
         if (largura == desktop) {
+          // O destaque é a seção de dinheiro DO PAPEL: Carteira para o
+          // entregador, Saldo para o lojista. Sem o papel, o Extrato do
+          // lojista marcava "Carteira", item que não existe no menu dele — e
+          // nada ficava destacado.
           final lateral = tester.widget<AppSidebar>(find.byType(AppSidebar));
-          expect(lateral.selectedRoute, NavConfig.secaoDe(AppRoutes.extrato));
+          expect(lateral.selectedRoute, secao);
+          expect(NavConfig.itens(papel).map((i) => i.route), contains(secao));
         }
       });
     }
