@@ -22,7 +22,9 @@ import 'package:moto_shift/models/carteira.dart';
 import 'package:moto_shift/models/cobranca.dart';
 import 'package:moto_shift/models/documento_fiscal.dart';
 import 'package:moto_shift/models/extrato_filtro.dart';
+import 'package:moto_shift/models/informe_anual.dart';
 import 'package:moto_shift/models/nota_fiscal.dart';
+import 'package:moto_shift/models/nota_fiscal_filtro.dart';
 import 'package:moto_shift/models/perfil_publico.dart';
 import 'package:moto_shift/models/resumo_financeiro.dart';
 import 'package:moto_shift/models/transacao.dart';
@@ -998,15 +1000,108 @@ class FakeNotificacaoApi extends NotificacaoApi {
 /// testes não responde, e cada chamada esperava o timeout do ApiClient. O
 /// PendenciasProvider consulta as notas a cada carregamento, então todo
 /// teste que tocasse o menu pagava ~20 s por isso.
+/// Notas fiscais falsas, com memória do que a tela pediu.
+///
+/// Guarda [ultimoFiltro] porque é isso que os testes de filtro precisam
+/// prender: a tela manda o filtro à API, em vez de baixar tudo e peneirar na
+/// memória — o contrário volta a crescer sem limite com o tempo de uso.
 class FakeNotaFiscalApi extends NotaFiscalApi {
   FakeNotaFiscalApi() : super(ApiClient());
 
-  @override
-  Future<List<NotaFiscal>> listar() async => const [];
+  NotaFiscalFiltro? ultimoFiltro;
+  int? ultimaPagina;
+  int? ultimoTamanho;
+  int? anoPedidoNoResumo;
+  int exportacoesDoResumo = 0;
+
+  /// A lista e o total são independentes de propósito: assim um teste pede
+  /// "2 de 7" e vê o botão de carregar mais.
+  List<NotaFiscal> notas = const [];
+  int total = 0;
+  List<NotaFiscalPendente> listaPendentes = const [];
+  InformeAnual informe = fakeInformeAnual();
 
   @override
-  Future<List<NotaFiscalPendente>> pendentes() async => const [];
+  Future<PaginaDeNotas> listar({
+    NotaFiscalFiltro filtro = const NotaFiscalFiltro(),
+    int? pagina,
+    int tamanho = 20,
+  }) async {
+    ultimoFiltro = filtro;
+    ultimaPagina = pagina;
+    ultimoTamanho = tamanho;
+    return PaginaDeNotas(notas: notas.take(tamanho).toList(), total: total);
+  }
+
+  @override
+  Future<InformeAnual> resumo({int? ano}) async {
+    anoPedidoNoResumo = ano;
+    return informe;
+  }
+
+  @override
+  Future<String> exportarResumo({int? ano}) async {
+    exportacoesDoResumo++;
+    return 'ano;total\n$ano;1200,00\n';
+  }
+
+  @override
+  Future<List<NotaFiscalPendente>> pendentes() async => listaPendentes;
 }
+
+/// Informe anual falso: dois meses com movimento, duas fontes pagadoras e um
+/// pagamento ainda sem nota — o caso que a tela precisa saber contar.
+InformeAnual fakeInformeAnual({
+  int? ano,
+  String papel = 'prestador',
+  bool retido = false,
+}) {
+  return InformeAnual(
+    ano: ano ?? DateTime.now().year,
+    papel: papel,
+    titulo: papel == 'prestador'
+        ? 'Informe de rendimentos'
+        : 'Informe de serviços tomados',
+    total: 1200,
+    issRetido: retido ? 60 : 0,
+    irrfRetido: retido ? 18 : 0,
+    pagamentos: 6,
+    notasEmitidas: 5,
+    contrapartes: [
+      const ContraparteDoInforme(
+        contraparteId: 2,
+        nome: 'Hamburgueria da Cláudia',
+        documentoTipo: 'CNPJ',
+        documento: '**.345.678/0001-**',
+        total: 800,
+        issRetido: 0,
+        irrfRetido: 0,
+        pagamentos: 4,
+        notasEmitidas: 4,
+      ),
+      const ContraparteDoInforme(
+        contraparteId: 5,
+        nome: 'Pizzaria do Bairro',
+        documentoTipo: 'CNPJ',
+        total: 400,
+        issRetido: 0,
+        irrfRetido: 0,
+        pagamentos: 2,
+        notasEmitidas: 1,
+      ),
+    ],
+    meses: [
+      for (var m = 1; m <= 12; m++)
+        MesDoInforme(
+          mes: m,
+          total: m == 8 ? 800 : (m == 9 ? 400 : 0),
+          pagamentos: m == 8 ? 4 : (m == 9 ? 2 : 0),
+        ),
+    ],
+    marca: 'DOCUMENTO SIMULADO — SEM VALOR FISCAL',
+  );
+}
+
 
 /// Perfil público de outra conta. Devolve o fake do papel pedido — id 2 é a
 /// lojista, qualquer outro é o entregador.
@@ -1660,3 +1755,16 @@ const List<int> _pngTransparente1x1 = <int>[
   0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, // IEND
   0xAE, 0x42, 0x60, 0x82,
 ];
+
+/// Faz o canal `flutter/platform` responder dentro do relógio falso do teste.
+///
+/// Sem isto, `Clipboard.setData` só é respondido fora do `pump`, e a tela que
+/// espera a cópia terminar fica girando o spinner para sempre — `pumpAndSettle`
+/// estoura em vez de falhar a asserção. Quem exercita "Exportar CSV" chama
+/// isto antes do toque.
+void fingirAreaDeTransferencia(WidgetTester tester) {
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+    SystemChannels.platform,
+    (call) async => null,
+  );
+}

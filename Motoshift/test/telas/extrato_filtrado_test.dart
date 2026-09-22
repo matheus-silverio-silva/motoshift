@@ -158,7 +158,9 @@ void main() {
     expect(find.text('Recarga via Pix'), findsOneWidget);
   });
 
-  testWidgets('exportar usa os mesmos filtros da tela', (tester) async {
+  testWidgets('exportar usa os mesmos filtros da tela e entrega o conteúdo',
+      (tester) async {
+    fingirAreaDeTransferencia(tester);
     await abrirExtrato(tester);
 
     await tester.tap(find.byKey(const Key('extrato-abrir-filtros')));
@@ -171,6 +173,9 @@ void main() {
     await tester.tap(find.byKey(const Key('extrato-exportar')));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('exportados'), findsOneWidget);
+    // O botão baixava o CSV e dizia "N exportados" sem entregar nada: o
+    // conteúdo morria na memória do app. Agora o aviso diz onde ele está.
+    expect(find.textContaining('Cole numa planilha'), findsOneWidget);
+    expect(find.textContaining('extrato.csv'), findsOneWidget);
   });
 }

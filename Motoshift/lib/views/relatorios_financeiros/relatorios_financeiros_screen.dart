@@ -7,6 +7,7 @@ import '../../models/resumo_financeiro.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/exportar_csv.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/desktop/content_grid.dart';
@@ -84,11 +85,7 @@ class _RelatoriosFinanceirosScreenState
             filtro: ExtratoFiltro(dataInicio: de, dataFim: ate),
           );
       if (!mounted) return;
-      final linhas = csv.isEmpty ? 0 : csv.trim().split('\n').length - 1;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('$linhas lançamento(s) exportados.'),
-        backgroundColor: AppColors.good,
-      ));
+      await entregarCsv(context, csv, nomeSugerido: 'relatorio.csv');
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

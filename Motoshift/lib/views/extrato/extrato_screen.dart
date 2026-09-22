@@ -8,6 +8,7 @@ import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
+import '../../utils/exportar_csv.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/documento/botao_documento.dart';
 import 'extrato_filtros.dart';
@@ -131,11 +132,8 @@ class _ExtratoScreenState extends State<ExtratoScreen> {
           .carteira
           .exportarExtratoCsv(filtro: _filtro);
       if (!mounted) return;
-      final linhas = csv.isEmpty ? 0 : csv.trim().split('\n').length - 1;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('$linhas lançamento(s) exportados.'),
-        backgroundColor: AppColors.good,
-      ));
+      // Entrega o conteúdo, em vez de só dizer que exportou: ver entregarCsv.
+      await entregarCsv(context, csv, nomeSugerido: 'extrato.csv');
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
