@@ -49,12 +49,15 @@ flowchart LR
     Bloq -- "liberacao_reserva<br/>(cancelar, expirar, vaga vazia)" --> Disp
     Bloq -- "pagamento_enviado / pagamento_recebido<br/>(finalizar)" --> Ent
     Ent -- "saque" --> Fora
+    Ent -- "retencao_iss / retencao_irrf<br/>(só com reter-na-fonte)" --> Fora
     Fora -- "estorno<br/>(saque recusado)" --> Ent
 ```
 
-**Só duas setas atravessam a fronteira da plataforma:** `recarga` e `saque` (e o
-`estorno`, que desfaz um saque recusado). Tudo o mais é transferência interna. É
-disso que sai a terceira invariante, na seção 6.
+**Poucas setas atravessam a fronteira da plataforma:** `recarga` e `saque` (e o
+`estorno`, que desfaz um saque recusado), mais as retenções na fonte, que só
+existem quando `motoshift.fiscal.reter-na-fonte` está ligado — ver
+[`FISCAL.md`](FISCAL.md). Tudo o mais é transferência interna. É disso que sai a
+terceira invariante, na seção 6.
 
 ### As quatro etapas
 
@@ -241,6 +244,8 @@ a mesma que está codificada em `service/ledger/Movimento.java`, em um lugar só
 | `saque` | débito | −v | 0 | **−v** | — | `saque:{cobrancaId}` |
 | `estorno` | crédito | +v | 0 | **+v** | — | `estorno:saque:{cobrancaId}` |
 | `bonus` | crédito | +v | 0 | **+v** | — | (não emitido hoje) |
+| `retencao_iss` | débito | −v | 0 | **−v** | — | `liquidacao:inscricao:{id}:retencao-iss` |
+| `retencao_irrf` | débito | −v | 0 | **−v** | — | `liquidacao:inscricao:{id}:retencao-irrf` |
 
 `{motivo}` ∈ `cancelamento` | `expiracao` | `sobra`.
 
@@ -266,7 +271,11 @@ Somando a coluna sobre **todas as carteiras**:
 - `reserva` e `liberacao_reserva` valem 0 — são internas à mesma carteira;
 - `pagamento_enviado` (−v no lojista) e `pagamento_recebido` (+v no entregador)
   se anulam, porque são as duas pernas do mesmo evento e têm o mesmo `valor`;
-- sobram `recarga` (+), `saque` (−) e `estorno` (+).
+- sobram `recarga` (+), `saque` (−), `estorno` (+) e as retenções (−).
+
+As retenções só existem com `motoshift.fiscal.reter-na-fonte` ligado, e são
+dinheiro saindo da plataforma como o saque: o destino é o fisco, que aqui é
+simulado e não tem carteira. Ver [`FISCAL.md`](FISCAL.md).
 
 Daí a invariante (c).
 
@@ -306,11 +315,14 @@ dos deltas dos lançamentos **concluídos** dele.
 ```
 Σ (disponível + bloqueado) de todas as carteiras
     = Σ recargas concluídas − Σ saques concluídos + Σ estornos
+      + Σ bônus − Σ retenções na fonte
 ```
 
-> **Como é garantida:** pela tabela da seção 5. Só `recarga`, `saque` e `estorno`
-> têm Δ total diferente de zero, e os três nascem em um arquivo só —
-> `CobrancaService`, que é a única porta para fora.
+> **Como é garantida:** pela tabela da seção 5. Só `recarga`, `saque`,
+> `estorno`, `bonus` e as duas retenções têm Δ total diferente de zero. Os três
+> primeiros nascem em um arquivo só — `CobrancaService`, a única porta para
+> fora —, e as retenções em outro, `PagamentoTurnoService`, na mesma transação
+> do pagamento que as originou.
 
 ---
 
@@ -406,7 +418,9 @@ debita é o ledger.
 | Recarga e saque | `service/CobrancaService.java` |
 | Fronteira com o mundo de fora | `service/gateway/GatewayPagamento.java` |
 | Extrato, resumo, fluxo, CSV | `service/ExtratoService.java` |
-| Schema | `db/migration/V12__ledger_financeiro.sql`, `V13__remove_dupla_confirmacao.sql` |
+| Que documento cada lançamento gera | `service/fiscal/TipoDocumento.java` — ver [`FISCAL.md`](FISCAL.md) |
+| Retenção na fonte e alíquotas | `service/fiscal/CalculoTributario.java` |
+| Schema | `db/migration/V12__ledger_financeiro.sql`, `V13__remove_dupla_confirmacao.sql`, `V14__fiscal_por_lancamento.sql` |
 
 ### Testes que sustentam este documento
 
@@ -418,4 +432,5 @@ debita é o ledger.
 | Liquidações simultâneas na mesma carteira | `ConcorrenciaDoLedgerTest` |
 | 120 operações sorteadas mantêm (a), (b) e (c) | `InvarianteTest` |
 | Cada filtro do extrato, isolado e combinado | `ExtratoServiceTest` |
+| Retenção: bruto no extrato, líquido na nota | `service/fiscal/RetencaoNaFonteTest` |
 | A massa de demonstração fecha nas invariantes | `MassaDemonstracaoTest` |
