@@ -30,6 +30,13 @@ class NotaFiscal {
     this.canceladaEm,
     this.cancelada = false,
     this.motivoCancelamento,
+    this.prestadorDocumentoTipo = 'CPF',
+    this.tomadorDocumentoTipo = 'CNPJ',
+    this.prestadorCidade,
+    this.tomadorCidade,
+    this.tributosRetidos = false,
+    this.transacaoId,
+    this.operacaoId,
   });
 
   final int id;
@@ -63,6 +70,23 @@ class NotaFiscal {
   final DateTime? canceladaEm;
   final bool cancelada;
   final String? motivoCancelamento;
+
+  /// "CPF" ou "CNPJ". O número vem mascarado do backend, e é nulo quando o
+  /// cadastro não tem o documento — o do entregador, que guarda a CNH e não o
+  /// CPF. A tela diz "não informado" em vez de inventar.
+  final String prestadorDocumentoTipo;
+  final String tomadorDocumentoTipo;
+  final String? prestadorCidade;
+  final String? tomadorCidade;
+
+  /// `true`: ISS e IRRF saíram do pagamento (há retenção no extrato).
+  /// `false`: são o valor aproximado dos tributos, só informativo, e o líquido
+  /// é o próprio valor do serviço.
+  final bool tributosRetidos;
+
+  /// O pagamento_recebido documentado e a operação do extrato.
+  final int? transacaoId;
+  final String? operacaoId;
 
   /// `prestador` (entregador) ou `tomador` (lojista), do ponto de vista de
   /// quem pediu a nota ao backend.
@@ -107,6 +131,13 @@ class NotaFiscal {
       cancelada: json['cancelada'] == true,
       motivoCancelamento: json['motivoCancelamento'] as String?,
       papel: json['papel'] as String? ?? 'tomador',
+      prestadorDocumentoTipo: json['prestadorDocumentoTipo'] as String? ?? 'CPF',
+      tomadorDocumentoTipo: json['tomadorDocumentoTipo'] as String? ?? 'CNPJ',
+      prestadorCidade: json['prestadorCidade'] as String?,
+      tomadorCidade: json['tomadorCidade'] as String?,
+      tributosRetidos: json['tributosRetidos'] == true,
+      transacaoId: (json['transacaoId'] as num?)?.toInt(),
+      operacaoId: json['operacaoId'] as String?,
     );
   }
 }

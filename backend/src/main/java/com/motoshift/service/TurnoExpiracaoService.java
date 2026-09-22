@@ -7,6 +7,7 @@ import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.repository.ContagemPorTurno;
 import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
+import com.motoshift.service.ledger.Movimento.MotivoLiberacao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -24,12 +25,22 @@ import java.util.Map;
  * Vencimento automático de turnos (SCRUM-19).
  *
  * Regras deliberadas:
- *  - Turno ABERTO que ninguém aceitou e cujo início já passou → EXPIRADO.
+ *  - Turno ABERTO que ninguém aceitou e cujo início já passou → EXPIRADO, e a
+ *    reserva volta inteira ao disponível do lojista.
  *  - Turno ABERTO parcialmente preenchido cujo início já passou → ACEITO
- *    (fecha as vagas remanescentes; quem já entrou continua valendo).
+ *    (fecha as vagas remanescentes; quem já entrou continua valendo). A reserva
+ *    permanece bloqueada: o turno vai acontecer, e o que sobrar das vagas
+ *    vazias é devolvido na finalização, quando se sabe quem trabalhou.
  *  - Turno ACEITO/EM_ANDAMENTO cujo fim já passou → NÃO muda de status.
- *    Finalizar dispara transação e pagamento; isso é decisão humana, o job só
- *    cobra o lojista via notificação.
+ *    Finalizar transfere dinheiro entre carteiras; isso é decisão humana, o job
+ *    só cobra a finalização via notificação.
+ *
+ * <p><b>Este job move dinheiro</b> (a liberação da reserva), então ele é um dos
+ * lugares onde a colisão otimista na carteira é possível — o lojista pode estar
+ * publicando outro turno no mesmo instante. Cada expiração roda dentro da
+ * transação do job e, se a carteira for disputada, o job inteiro falha e a
+ * próxima execução (5 minutos depois) refaz o trabalho: as chaves de
+ * idempotência garantem que o que já foi liberado não é liberado de novo.
  *
  * <p><b>Com réplica, os jobs rodariam em todas as instâncias.</b> Hoje isso é
  * inofensivo — {@code criarUnica} deduplica a notificação, e as mudanças de
@@ -59,13 +70,16 @@ public class TurnoExpiracaoService {
     private final TurnoRepository turnoRepo;
     private final TurnoInscricaoRepository inscricaoRepo;
     private final NotificacaoService notificacoes;
+    private final PagamentoTurnoService pagamentos;
 
     public TurnoExpiracaoService(TurnoRepository turnoRepo,
                                  TurnoInscricaoRepository inscricaoRepo,
-                                 NotificacaoService notificacoes) {
+                                 NotificacaoService notificacoes,
+                                 PagamentoTurnoService pagamentos) {
         this.turnoRepo = turnoRepo;
         this.inscricaoRepo = inscricaoRepo;
         this.notificacoes = notificacoes;
+        this.pagamentos = pagamentos;
     }
 
     /** Turnos abertos cujo horário de início já passou. */
@@ -83,6 +97,10 @@ public class TurnoExpiracaoService {
             if (ativas == 0) {
                 t.setStatus(StatusTurno.EXPIRADO);
                 t.setExpiradoEm(agora);
+                // Ninguem aceitou: o dinheiro reservado na publicacao volta
+                // inteiro ao disponivel do lojista. Sem isto, um turno que
+                // expirou deixaria o saldo preso para sempre.
+                pagamentos.liberarReserva(t, MotivoLiberacao.EXPIRACAO);
                 turnoRepo.save(t);
                 expirados++;
                 notificacoes.criarUnica(t.getLojistId(), "turno_expirado",
@@ -91,7 +109,10 @@ public class TurnoExpiracaoService {
                                 + "Republique com mais antecedencia ou revise o valor.",
                         "turno", t.getId());
             } else {
-                // Parcialmente preenchido: fecha para novos aceites, mas o turno vale.
+                // Parcialmente preenchido: fecha para novos aceites, mas o turno
+                // vale — e por isso a reserva CONTINUA bloqueada. O que sobrar
+                // das vagas vazias volta na finalizacao (liberacao_reserva com
+                // motivo "sobra"), que e quando se sabe quem trabalhou.
                 t.setStatus(StatusTurno.ACEITO);
                 turnoRepo.save(t);
                 fechados++;

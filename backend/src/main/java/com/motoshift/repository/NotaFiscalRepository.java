@@ -5,14 +5,22 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
-public interface NotaFiscalRepository extends JpaRepository<NotaFiscal, Long> {
+public interface NotaFiscalRepository extends JpaRepository<NotaFiscal, Long>,
+        org.springframework.data.jpa.repository.JpaSpecificationExecutor<NotaFiscal> {
 
     Optional<NotaFiscal> findByTurnoIdAndPrestadorId(Long turnoId, Long prestadorId);
 
     List<NotaFiscal> findByTurnoId(Long turnoId);
+
+    /** A nota de um pagamento_recebido — no máximo uma (índice único da V14). */
+    Optional<NotaFiscal> findByTransacaoId(Long transacaoId);
+
+    /** Notas de vários turnos de uma vez: o extrato marca "nota emitida" sem N+1. */
+    List<NotaFiscal> findByTurnoIdIn(Collection<Long> turnoIds);
 
     /**
      * Notas em que o usuário aparece — como prestador (entregador) ou como

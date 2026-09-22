@@ -1,9 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:moto_shift/app.dart';
 import 'package:moto_shift/models/usuario.dart';
 import 'package:moto_shift/routes/app_routes.dart';
+import 'package:moto_shift/routes/nav_config.dart';
 import 'package:moto_shift/views/dashboard_motoboy/dashboard_motoboy_screen.dart';
-import 'package:moto_shift/widgets/desktop/app_sidebar.dart';
 
 import '../test_helpers.dart';
 
@@ -15,15 +16,21 @@ import '../test_helpers.dart';
 /// do Perfil. O primeiro teste é o que impede a regressão silenciosa: uma tela
 /// nova que entre no app sem entrada no menu derruba a suíte aqui, e não seis
 /// meses depois quando alguém reclamar que "não acha".
+///
+/// <h3>A lista de rotas deixou de ser mantida à mão</h3>
+/// Ela era uma constante neste arquivo, e o próprio comentário admitia a
+/// fraqueza: "quem acrescentar uma rota sem acrescentá-la aqui não quebra
+/// nada". Foi exatamente o que aconteceu — /extrato e /relatorio-financeiro
+/// entraram no app com tela pronta e nenhum ponto de entrada, e este teste não
+/// viu. Agora ele lê [rotasDoApp], o mesmo registro que o `MaterialApp` usa.
 void main() {
   setUpAll(setupGoldenTests);
 
   /// Rotas que o menu NÃO deve listar, com o motivo.
   ///
   /// Duas famílias, e só duas: o que não é do aplicativo logado (login,
-  /// cadastro, splash…) e o que precisa de um turno escolhido antes — não há
-  /// como abrir "avaliar entregador" a partir de um menu sem dizer de qual
-  /// turno.
+  /// cadastro, splash…) e o que precisa de um argumento — não há como abrir
+  /// "avaliar entregador" a partir de um menu sem dizer de qual turno.
   const foraDoMenu = <String>{
     AppRoutes.splash,
     AppRoutes.login,
@@ -34,13 +41,15 @@ void main() {
     AppRoutes.turnoLojista,
     AppRoutes.avaliacao,
     AppRoutes.avaliarEntregadores,
-    // Sub-páginas alcançadas de dentro de outra tela.
-    AppRoutes.sacarPix,
+    AppRoutes.lancamento,
+    AppRoutes.documentoFiscal,
+    AppRoutes.perfilPublico,
+    // Sub-páginas alcançadas de dentro de outra tela — o NavConfig as mapeia
+    // para a seção que as contém (ver NavConfig.secaoDe).
     AppRoutes.dadosPessoais,
     AppRoutes.cnhVeiculo,
-    // Legadas: apontam para as mesmas telas dos itens que já estão no menu.
-    AppRoutes.meusTurnos,
-    AppRoutes.agendarTurno,
+    AppRoutes.extrato,
+    AppRoutes.recarga,
   };
 
   /// Rotas exclusivas de um papel — não podem aparecer no menu do outro.
@@ -56,30 +65,39 @@ void main() {
     AppRoutes.carteira,
   };
 
-  List<String> rotasDe(List<SidebarSection> sections) =>
-      [for (final s in sections) for (final i in s.items) i.route];
+  List<String> rotasDe(TipoUsuario papel) =>
+      [for (final i in NavConfig.itens(papel)) i.route];
 
   test('toda rota do app logado está no menu de algum papel', () {
     final noMenu = {
-      ...rotasDe(SidebarItems.lojista()),
-      ...rotasDe(SidebarItems.motoboy()),
+      ...rotasDe(TipoUsuario.lojista),
+      ...rotasDe(TipoUsuario.motoboy),
     };
 
-    final esperadas = _todasAsRotas.difference(foraDoMenu);
+    // A fonte é o registro real de rotas, não uma cópia mantida à mão.
+    final esperadas = rotasDoApp().keys.toSet().difference(foraDoMenu);
     final ausentes = esperadas.difference(noMenu);
 
     expect(
       ausentes,
       isEmpty,
-      reason: 'Rotas sem entrada no menu lateral: $ausentes. '
-          'Acrescente o item em SidebarItems ou liste a rota em foraDoMenu '
+      reason: 'Rotas sem entrada no menu: $ausentes. '
+          'Acrescente o item em NavConfig ou liste a rota em foraDoMenu '
           'com o motivo.',
     );
   });
 
+  test('toda rota listada em foraDoMenu existe de verdade', () {
+    // Sem isto, apagar uma rota e esquecer de tirá-la da lista de exceções
+    // deixaria o primeiro teste mais frouxo sem ninguém perceber.
+    final registradas = rotasDoApp().keys.toSet();
+    expect(foraDoMenu.difference(registradas), isEmpty,
+        reason: 'foraDoMenu lista rota que não existe mais.');
+  });
+
   test('o menu de cada papel só oferece o que aquele papel pode abrir', () {
-    final lojista = rotasDe(SidebarItems.lojista()).toSet();
-    final motoboy = rotasDe(SidebarItems.motoboy()).toSet();
+    final lojista = rotasDe(TipoUsuario.lojista).toSet();
+    final motoboy = rotasDe(TipoUsuario.motoboy).toSet();
 
     expect(lojista.intersection(soDoMotoboy), isEmpty,
         reason: 'O menu do lojista oferece rota exclusiva do entregador.');
@@ -92,18 +110,58 @@ void main() {
   });
 
   test('avaliações e notas fiscais estão no menu dos DOIS papéis', () {
-    for (final sections in [SidebarItems.lojista(), SidebarItems.motoboy()]) {
-      final rotas = rotasDe(sections);
+    for (final papel in TipoUsuario.values) {
+      final rotas = rotasDe(papel);
       expect(rotas, contains(AppRoutes.minhasAvaliacoes));
       expect(rotas, contains(AppRoutes.notasFiscais));
     }
   });
 
   test('nenhum item aparece duas vezes no mesmo menu', () {
-    for (final sections in [SidebarItems.lojista(), SidebarItems.motoboy()]) {
-      final rotas = rotasDe(sections);
+    for (final papel in TipoUsuario.values) {
+      final rotas = rotasDe(papel);
       expect(rotas.length, rotas.toSet().length,
           reason: 'Rota repetida no menu: $rotas');
+    }
+  });
+
+  test('a barra inferior tem exatamente quatro itens, e todos são do menu', () {
+    for (final papel in TipoUsuario.values) {
+      final barra = NavConfig.barraInferior(papel);
+
+      // Quatro é o limite do desenho: com cinco, o rótulo de 8px não cabe em
+      // 390px de largura.
+      expect(barra, hasLength(4),
+          reason: 'A barra inferior de $papel não tem quatro itens.');
+
+      // Um atalho que não está no menu seria um destino sem página de origem.
+      expect(rotasDe(papel), containsAll([for (final i in barra) i.route]));
+    }
+  });
+
+  test('a seção de uma sub-página é um item do menu do papel', () {
+    // O destaque do menu deriva daqui; se a seção apontasse para uma rota que
+    // não é item, a sub-página não destacaria nada — que era o caso do Saldo
+    // (marcava "Carteira", item que só existe no menu do entregador).
+    const subPaginas = {
+      AppRoutes.extrato: TipoUsuario.motoboy,
+      AppRoutes.dadosPessoais: TipoUsuario.motoboy,
+      AppRoutes.cnhVeiculo: TipoUsuario.motoboy,
+    };
+
+    subPaginas.forEach((rota, papel) {
+      final secao = NavConfig.secaoDe(rota);
+      expect(secao, isNotNull, reason: '$rota não tem seção.');
+      expect(rotasDe(papel), contains(secao),
+          reason: 'A seção de $rota não é item do menu de $papel.');
+    });
+  });
+
+  test('a seção de uma rota de seção é ela mesma', () {
+    for (final papel in TipoUsuario.values) {
+      for (final rota in rotasDe(papel)) {
+        expect(NavConfig.secaoDe(rota), rota);
+      }
     }
   });
 
@@ -128,38 +186,3 @@ void main() {
     expect(find.text('Notificações'), findsOneWidget);
   });
 }
-
-/// Todas as constantes de [AppRoutes], lidas uma a uma.
-///
-/// Não há reflexão em Dart compilado para web, então a lista é manual — e é
-/// justamente por isso que o teste acima vale: quem acrescentar uma rota sem
-/// acrescentá-la aqui não quebra nada, mas quem a acrescentar aqui sem pôr no
-/// menu, sim. O primeiro caso é pego na revisão; o segundo, pelo CI.
-const _todasAsRotas = <String>{
-  AppRoutes.splash,
-  AppRoutes.login,
-  AppRoutes.cadastro,
-  AppRoutes.esqueceuSenha,
-  AppRoutes.dashboardMotoboy,
-  AppRoutes.dashboardLojista,
-  AppRoutes.publicarTurno,
-  AppRoutes.turnoLojista,
-  AppRoutes.turnosLojista,
-  AppRoutes.turnosDisponiveis,
-  AppRoutes.detalheTurno,
-  AppRoutes.carteira,
-  AppRoutes.agenda,
-  AppRoutes.notasFiscais,
-  AppRoutes.avaliacao,
-  AppRoutes.perfil,
-  AppRoutes.notificacoes,
-  AppRoutes.saldoLojista,
-  AppRoutes.avaliarEntregadores,
-  AppRoutes.meusTurnos,
-  AppRoutes.agendarTurno,
-  AppRoutes.sacarPix,
-  AppRoutes.dadosPessoais,
-  AppRoutes.cnhVeiculo,
-  AppRoutes.minhasAvaliacoes,
-  AppRoutes.historicoTurnos,
-};

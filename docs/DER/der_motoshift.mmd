@@ -6,6 +6,7 @@ erDiagram
     USUARIOS ||--o{ AVALIACOES : "avalia (avaliador_id)"
     USUARIOS ||--o{ AVALIACOES : "e avaliado (avaliado_id)"
     USUARIOS ||--o{ TRANSACOES : "movimenta"
+    USUARIOS ||--o{ COBRANCAS : "recarrega e saca"
     USUARIOS ||--o{ NOTIFICACOES : "recebe"
     USUARIOS ||--o{ NOTAS_FISCAIS : "presta (prestador_id)"
     USUARIOS ||--o{ NOTAS_FISCAIS : "toma (tomador_id)"
@@ -13,6 +14,7 @@ erDiagram
     TURNOS   ||--o{ AVALIACOES : "gera"
     TURNOS   ||--o{ TRANSACOES : "origina"
     TURNOS   ||--o{ NOTAS_FISCAIS : "documenta"
+    TRANSACOES ||--o| NOTAS_FISCAIS : "pagamento documentado por"
 
     USUARIOS {
         BIGINT id PK "IDENTITY"
@@ -69,9 +71,7 @@ erDiagram
         BIGINT turno_id FK "NOT NULL - turnos.id"
         BIGINT motoboy_id FK "NOT NULL - usuarios.id"
         VARCHAR status "NOT NULL - aceito|finalizado|cancelado"
-        VARCHAR pagamento_status "null|pendente|pago"
-        TIMESTAMP lojista_confirmou_em "dupla confirmacao"
-        TIMESTAMP motoboy_confirmou_em "dupla confirmacao"
+        VARCHAR pagamento_status "null|pendente|pago - pago na finalizacao"
         TIMESTAMP criado_em "NOT NULL"
         UNIQUE uk_turno_motoboy UK "(turno_id, motoboy_id)"
     }
@@ -105,12 +105,28 @@ erDiagram
         BIGINT contraparte_id FK "usuarios.id - outro lado"
         BIGINT motoboy_id "legado - nullable"
         BIGINT turno_id FK "turnos.id"
-        VARCHAR tipo "NOT NULL - CHECK: recarga|reserva|liberacao_reserva|pagamento_enviado|pagamento_recebido|saque|bonus|estorno"
+        VARCHAR tipo "NOT NULL - CHECK: recarga|reserva|liberacao_reserva|pagamento_enviado|pagamento_recebido|saque|bonus|estorno|retencao_iss|retencao_irrf"
         NUMERIC valor "NOT NULL - 12,2"
         VARCHAR descricao ""
+        VARCHAR natureza "NOT NULL V12 - CHECK: credito|debito - sinal da tela"
         VARCHAR status "NOT NULL - CHECK: pendente|concluido|falhou|estornado"
-        VARCHAR idempotency_key UK "NOT NULL desde a V10 - anti-duplicacao"
+        UUID operacao_id "V12 - une os dois lados de uma transferencia"
+        NUMERIC saldo_disponivel_apos "V12 - foto do saldo 12,2"
+        NUMERIC saldo_bloqueado_apos "V12 - foto do bloqueado 12,2"
+        VARCHAR idempotency_key UK "NOT NULL V10, deterministica V12"
         TIMESTAMP criado_em "NOT NULL"
+    }
+
+    COBRANCAS {
+        BIGINT id PK "IDENTITY"
+        BIGINT usuario_id FK "NOT NULL - usuarios.id"
+        VARCHAR tipo "NOT NULL - CHECK: recarga|saque"
+        NUMERIC valor "NOT NULL - CHECK maior que zero - 12,2"
+        VARCHAR status "NOT NULL - CHECK: pendente|concluido|falhou"
+        VARCHAR codigo_pix "copia-e-cola na recarga, chave no saque"
+        TIMESTAMP criada_em "NOT NULL"
+        TIMESTAMP concluida_em "quando o gateway respondeu"
+        VARCHAR idempotency_key UK "NOT NULL - idempotencia do pedido"
     }
 
     NOTIFICACOES {
@@ -129,6 +145,8 @@ erDiagram
     NOTAS_FISCAIS {
         BIGINT id PK "IDENTITY"
         BIGINT turno_id FK "NOT NULL - turnos.id"
+        BIGINT transacao_id FK "transacoes.id - o pagamento que a nota documenta"
+        UUID operacao_id "operacao do ledger, quando veio de um pagamento"
         BIGINT prestador_id FK "NOT NULL - usuarios.id (entregador)"
         BIGINT tomador_id FK "NOT NULL - usuarios.id (lojista)"
         BIGINT emitida_por_id FK "NOT NULL - quem disparou a emissao"
@@ -142,8 +160,11 @@ erDiagram
         NUMERIC irrf_aliquota "NOT NULL - 6,4"
         NUMERIC irrf_valor "NOT NULL - 12,2"
         NUMERIC valor_liquido "NOT NULL - 12,2"
+        BOOLEAN tributos_retidos "NOT NULL - retido na fonte ou so informativo"
+        TIMESTAMP competencia "NOT NULL - data do servico"
         TIMESTAMP emitida_em "NOT NULL"
         TIMESTAMP cancelada_em "so o prestador cancela"
         VARCHAR motivo_cancelamento "255"
         UNIQUE uk_nota_turno_prestador UK "(turno_id, prestador_id)"
+        UNIQUE uk_nota_transacao UK "(transacao_id) - uma nota por pagamento"
     }

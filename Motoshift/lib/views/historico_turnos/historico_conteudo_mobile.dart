@@ -22,7 +22,6 @@ class HistoricoConteudoMobile extends StatelessWidget {
     required this.onRecarregar,
     required this.onAbrirTurno,
     required this.onAvaliar,
-    required this.onPagar,
     super.key,
   });
 
@@ -34,9 +33,7 @@ class HistoricoConteudoMobile extends StatelessWidget {
   final ValueChanged<Turno> onAbrirTurno;
   final ValueChanged<Turno> onAvaliar;
 
-  /// Confirmar pagamento (lojista) ou recebimento (motoboy). Para turno
-  /// multi-vaga do lojista, quem hospeda abre o painel por entregador.
-  final ValueChanged<Turno> onPagar;
+  // onPagar saiu: não há mais pagamento a confirmar pelo app.
 
   @override
   Widget build(BuildContext context) {
@@ -243,18 +240,11 @@ class HistoricoConteudoMobile extends StatelessWidget {
       pill = PillVariant.ghost;
       pillLabel = t.status.label;
     } else if (aguardaPagto) {
+      // Pendente só existe em turno do modelo antigo, quando o crédito
+      // dependia de as duas partes confirmarem. Os rótulos que diziam de quem
+      // era a vez saíram junto com os botões.
       pill = PillVariant.amber;
-      if (isLojista) {
-        pillLabel = t.lojistaJaConfirmou
-            ? 'Aguardando motoboy'
-            : 'A confirmar';
-      } else {
-        pillLabel = t.motoboyJaConfirmou
-            ? 'Aguardando lojista'
-            : (t.lojistaJaConfirmou
-                ? 'Confirme recebimento'
-                : 'A receber');
-      }
+      pillLabel = 'Pagamento pendente';
     } else if (t.pagamentoStatus == PagamentoStatus.pago) {
       pill = PillVariant.good;
       pillLabel = 'Pago';
@@ -262,11 +252,6 @@ class HistoricoConteudoMobile extends StatelessWidget {
       pill = PillVariant.ghost;
       pillLabel = 'Finalizado';
     }
-
-    final podeConfirmarPgto = aguardaPagto &&
-        (isLojista
-            ? resumo.lojistaPrecisaConfirmar(t)
-            : resumo.motoboyPrecisaConfirmar(t));
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -284,19 +269,21 @@ class HistoricoConteudoMobile extends StatelessWidget {
             pillVariant: pill,
             onTap: () => onAbrirTurno(t),
           ),
-          if (aguardaPagto && !podeConfirmarPgto)
-            _buildEsperandoOutraParte(t),
-          if (precisaAvaliar || podeConfirmarPgto)
-            _buildAcoes(t, precisaAvaliar, podeConfirmarPgto),
+          if (aguardaPagto) _buildPagamentoDoModeloAntigo(),
+          if (precisaAvaliar) _buildAcoes(t),
         ],
       ),
     );
   }
 
-  Widget _buildEsperandoOutraParte(Turno t) {
-    final texto = isLojista
-        ? 'Você confirmou. Aguardando o motoboy confirmar o recebimento.'
-        : 'Você confirmou. Aguardando o lojista confirmar o pagamento.';
+  /// Aviso de turno finalizado cujo pagamento nunca liquidou.
+  ///
+  /// Só alcança turnos de antes da liquidação automática, quando o crédito
+  /// dependia de as duas partes confirmarem e uma delas não confirmou. O texto
+  /// deixou de pedir uma confirmação que não existe mais.
+  Widget _buildPagamentoDoModeloAntigo() {
+    const texto = 'Pagamento do modelo antigo, que dependia de confirmação '
+        'manual e ficou pendente. Turnos finalizados agora são pagos na hora.';
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
       child: Container(
@@ -324,81 +311,39 @@ class HistoricoConteudoMobile extends StatelessWidget {
     );
   }
 
-  Widget _buildAcoes(
-      Turno t, bool podeAvaliar, bool podePagar) {
-    final labelPgto = isLojista
-        ? 'Confirmar pagamento'
-        : 'Confirmar recebimento';
-    final iconPgto = isLojista
-        ? Icons.payments_rounded
-        : Icons.check_circle_rounded;
-
+  /// A única ação que sobrou no card: avaliar.
+  ///
+  /// O botão de confirmar pagamento/recebimento saiu daqui. Ele existia para
+  /// que cada parte declarasse, depois do turno, que o dinheiro tinha mudado
+  /// de mãos fora do app — e era isso que liberava o crédito. Com a liquidação
+  /// automática, finalizar já transfere, e não sobrou nada a declarar.
+  Widget _buildAcoes(Turno t) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
-      child: Row(
-        children: [
-          if (podeAvaliar) ...[
-            Expanded(
-              child: GestureDetector(
-                onTap: () => onAvaliar(t),
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  padding: const EdgeInsets.symmetric(vertical: 11),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.amberSoft,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                        color: AppColors.amber.withOpacity(0.4),
-                        width: 1.5),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.star_outline_rounded,
-                          size: 14, color: AppColors.onTertiaryContainer),
-                      const SizedBox(width: 6),
-                      Text('Avaliar',
-                          style: tsJakarta(12, FontWeight.w700,
-                              color: AppColors.onTertiaryContainer)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            if (podePagar) const SizedBox(width: 8),
-          ],
-          if (podePagar)
-            Expanded(
-              child: GestureDetector(
-                onTap: () => onPagar(t),
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  padding: const EdgeInsets.symmetric(vertical: 11),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(iconPgto,
-                          size: 14, color: Colors.white),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(labelPgto,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: tsJakarta(12, FontWeight.w700,
-                                color: Colors.white)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
+      child: GestureDetector(
+        onTap: () => onAvaliar(t),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.amberSoft,
+            borderRadius: BorderRadius.circular(10),
+            border:
+                Border.all(color: AppColors.amber.withOpacity(0.4), width: 1.5),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.star_outline_rounded,
+                  size: 14, color: AppColors.onTertiaryContainer),
+              const SizedBox(width: 6),
+              Text('Avaliar',
+                  style: tsJakarta(12, FontWeight.w700,
+                      color: AppColors.onTertiaryContainer)),
+            ],
+          ),
+        ),
       ),
     );
   }

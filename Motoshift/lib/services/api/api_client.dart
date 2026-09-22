@@ -64,6 +64,40 @@ class ApiClient {
     return _enviar(() => http.get(_uri(path), headers: _headers));
   }
 
+  /// GET que também devolve o total do header `X-Total-Count`.
+  ///
+  /// As listagens paginadas do backend respondem um array JSON e mandam o
+  /// total num header — formato escolhido para que o app antigo, que não
+  /// pagina, continue lendo a mesma resposta. Sem o total, a rolagem infinita
+  /// não sabe quando parar e pediria páginas vazias para sempre.
+  Future<({dynamic dados, int total})> getPaginado(String path) async {
+    final http.Response response;
+    try {
+      response = await http.get(_uri(path), headers: _headers).timeout(_timeout);
+    } catch (_) {
+      throw const ApiException(0, 'Sem conexao com o servidor');
+    }
+    final dados = _tratar(response);
+    final total = int.tryParse(response.headers['x-total-count'] ?? '') ??
+        (dados is List ? dados.length : 0);
+    return (dados: dados, total: total);
+  }
+
+  /// GET de um corpo que não é JSON — hoje, só o CSV do extrato.
+  Future<String> getTexto(String path) async {
+    final http.Response response;
+    try {
+      response = await http.get(_uri(path), headers: _headers).timeout(_timeout);
+    } catch (_) {
+      throw const ApiException(0, 'Sem conexao com o servidor');
+    }
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return utf8.decode(response.bodyBytes);
+    }
+    _tratar(response); // lança com a mensagem do backend
+    return '';
+  }
+
   Future<dynamic> post(String path, Map<String, dynamic> body) async {
     return _enviar(() =>
         http.post(_uri(path), headers: _headers, body: jsonEncode(body)));

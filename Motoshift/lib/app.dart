@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'presentation/providers/turno_provider.dart';
 import 'presentation/providers/turno_selecionado_provider.dart';
 import 'presentation/providers/notificacao_provider.dart';
+import 'presentation/providers/pendencias_provider.dart';
 import 'routes/app_routes.dart';
 import 'services/api_service.dart';
 import 'services/auth_service.dart';
@@ -19,6 +20,7 @@ import 'views/carteira/carteira_screen.dart';
 import 'views/agenda/agenda_screen.dart';
 import 'views/avaliacao/avaliacao_screen.dart';
 import 'views/perfil/perfil_screen.dart';
+import 'views/perfil_publico/perfil_publico_screen.dart';
 import 'views/detalhe_turno/detalhe_turno_screen.dart';
 import 'views/turno_lojista/turno_lojista_screen.dart';
 import 'views/turnos_lojista_lista/turnos_lojista_lista_screen.dart';
@@ -30,9 +32,16 @@ import 'views/notas_fiscais/notas_fiscais_screen.dart';
 import 'views/notificacoes/notificacoes_screen.dart';
 import 'views/saldo_lojista/saldo_lojista_screen.dart';
 import 'views/avaliar_entregadores/avaliar_entregadores_screen.dart';
-import 'views/stubs/stub_screens.dart';
+import 'views/documento_fiscal/documento_fiscal_screen.dart';
+import 'views/extrato/extrato_screen.dart';
+import 'views/extrato/lancamento_detalhe_screen.dart';
+import 'views/recarga/recarga_screen.dart';
+import 'views/relatorios_financeiros/relatorios_financeiros_screen.dart';
+import 'views/recuperar_senha/recuperar_senha_screen.dart';
 import 'widgets/auth_guard.dart';
 import 'models/usuario.dart';
+import 'models/extrato_filtro.dart';
+import 'models/transacao.dart';
 
 class MotoShiftApp extends StatelessWidget {
   const MotoShiftApp({super.key});
@@ -66,6 +75,14 @@ class MotoShiftApp extends StatelessWidget {
           create: (ctx) => NotificacaoProvider(ctx.read<ApiService>()),
           update: (_, api, prev) => prev ?? NotificacaoProvider(api),
         ),
+
+        // O que falta depois do turno — avaliação e nota fiscal. Fonte única
+        // do painel do início, da central de Avaliações, do selo do menu e do
+        // bloco "O que falta" do detalhe do turno.
+        ChangeNotifierProxyProvider<ApiService, PendenciasProvider>(
+          create: (ctx) => PendenciasProvider(ctx.read<ApiService>()),
+          update: (_, api, prev) => prev ?? PendenciasProvider(api),
+        ),
       ],
       child: MaterialApp(
         title: 'Moto Shift',
@@ -79,81 +96,131 @@ class MotoShiftApp extends StatelessWidget {
           GlobalCupertinoLocalizations.delegate,
         ],
         initialRoute: AppRoutes.splash,
-        routes: {
-          // ── Públicas (sem guard) ──────────────────────────────────────────
-          AppRoutes.splash:    (_) => const SplashScreen(),
-          AppRoutes.login:     (_) => const LoginScreen(),
-          AppRoutes.cadastro:  (_) => const CadastroScreen(),
-          AppRoutes.esqueceuSenha: (_) => const EsqueceuSenhaScreen(),
-
-          // ── Dashboards (protegidas por papel) ─────────────────────────────
-          AppRoutes.dashboardMotoboy: (_) => const AuthGuard(
-                papel: TipoUsuario.motoboy,
-                child: DashboardMotoboyScreen(),
-              ),
-          AppRoutes.dashboardLojista: (_) => const AuthGuard(
-                papel: TipoUsuario.lojista,
-                child: DashboardLojistScreen(),
-              ),
-
-          // ── Fluxo Lojista (papel lojista) ─────────────────────────────────
-          AppRoutes.publicarTurno: (_) => const AuthGuard(
-                papel: TipoUsuario.lojista,
-                child: AgendarTurnoScreen(),
-              ),
-          AppRoutes.turnoLojista: (_) => const AuthGuard(
-                papel: TipoUsuario.lojista,
-                child: TurnoLojistScreen(),
-              ),
-          AppRoutes.turnosLojista: (_) => const AuthGuard(
-                papel: TipoUsuario.lojista,
-                child: TurnosLojistaListaScreen(),
-              ),
-
-          // ── Fluxo Motoboy (papel motoboy) ─────────────────────────────────
-          AppRoutes.turnosDisponiveis: (_) => const AuthGuard(
-                papel: TipoUsuario.motoboy,
-                child: MeusTurnosScreen(),
-              ),
-          AppRoutes.detalheTurno: (_) => const AuthGuard(
-                child: DetalheTurnoScreen(),
-              ),
-          AppRoutes.carteira: (_) => const AuthGuard(
-                papel: TipoUsuario.motoboy,
-                child: CarteiraScreen(),
-              ),
-
-          // ── Compartilhadas (qualquer autenticado) ─────────────────────────
-          AppRoutes.agenda:    (_) => const AuthGuard(child: AgendaScreen()),
-          AppRoutes.avaliacao: (_) => const AuthGuard(child: AvaliacaoScreen()),
-          AppRoutes.perfil:    (_) => const AuthGuard(child: PerfilScreen()),
-          AppRoutes.notificacoes:
-              (_) => const AuthGuard(child: NotificacoesScreen()),
-          // Sem papel: a nota tem dois lados, e cada um vê a mesma tela do
-          // seu. O backend recorta pelo usuário do token.
-          AppRoutes.notasFiscais:
-              (_) => const AuthGuard(child: NotasFiscaisScreen()),
-          AppRoutes.saldoLojista: (_) => const AuthGuard(
-                papel: TipoUsuario.lojista,
-                child: SaldoLojistaScreen(),
-              ),
-          AppRoutes.avaliarEntregadores:
-              (_) => const AuthGuard(child: AvaliarEntregadoresScreen()),
-
-          // ── Perfil — sub-páginas (qualquer autenticado) ───────────────────
-          AppRoutes.dadosPessoais:    (_) => const AuthGuard(child: DadosPessoaisScreen()),
-          AppRoutes.cnhVeiculo:       (_) => const AuthGuard(child: CnhVeiculoScreen()),
-          AppRoutes.minhasAvaliacoes: (_) => const AuthGuard(child: MinhasAvaliacoesScreen()),
-          AppRoutes.historicoTurnos:  (_) => const AuthGuard(child: HistoricoTurnosScreen()),
-          AppRoutes.sacarPix:         (_) => const AuthGuard(papel: TipoUsuario.motoboy, child: SacarPixScreen()),
-
-          // ── Legadas (protegidas) ──────────────────────────────────────────
-          // /historico e /solicitar-servico sairam junto com as telas: eram da
-          // geracao anterior da UI e ninguem navegava para elas.
-          AppRoutes.meusTurnos:       (_) => const AuthGuard(child: MeusTurnosScreen()),
-          AppRoutes.agendarTurno:     (_) => const AuthGuard(child: AgendarTurnoScreen()),
-        },
+        routes: rotasDoApp(),
       ),
     );
   }
 }
+
+/// O registro de rotas do aplicativo.
+///
+/// Extraído de dentro do `MaterialApp` para poder ser lido por teste: o
+/// `menu_completo_test` confere que toda rota daqui tem entrada no menu de
+/// algum papel. Enquanto a lista de rotas era mantida à mão no teste, ele
+/// prometia mais do que entregava — quem acrescentasse uma rota sem
+/// acrescentá-la lá não quebrava nada, e foi assim que /extrato e
+/// /relatorio-financeiro passaram a existir sem nenhum ponto de entrada.
+Map<String, WidgetBuilder> rotasDoApp() => {
+        AppRoutes.splash:    (_) => const SplashScreen(),
+        AppRoutes.login:     (_) => const LoginScreen(),
+        AppRoutes.cadastro:  (_) => const CadastroScreen(),
+        AppRoutes.esqueceuSenha: (_) => const RecuperarSenhaScreen(),
+
+        // ── Dashboards (protegidas por papel) ─────────────────────────────
+        AppRoutes.dashboardMotoboy: (_) => const AuthGuard(
+              papel: TipoUsuario.motoboy,
+              child: DashboardMotoboyScreen(),
+            ),
+        AppRoutes.dashboardLojista: (_) => const AuthGuard(
+              papel: TipoUsuario.lojista,
+              child: DashboardLojistScreen(),
+            ),
+
+        // ── Fluxo Lojista (papel lojista) ─────────────────────────────────
+        AppRoutes.publicarTurno: (_) => const AuthGuard(
+              papel: TipoUsuario.lojista,
+              child: AgendarTurnoScreen(),
+            ),
+        AppRoutes.turnoLojista: (_) => const AuthGuard(
+              papel: TipoUsuario.lojista,
+              child: TurnoLojistScreen(),
+            ),
+        AppRoutes.turnosLojista: (_) => const AuthGuard(
+              papel: TipoUsuario.lojista,
+              child: TurnosLojistaListaScreen(),
+            ),
+
+        // ── Fluxo Motoboy (papel motoboy) ─────────────────────────────────
+        AppRoutes.turnosDisponiveis: (_) => const AuthGuard(
+              papel: TipoUsuario.motoboy,
+              child: MeusTurnosScreen(),
+            ),
+        AppRoutes.detalheTurno: (_) => const AuthGuard(
+              child: DetalheTurnoScreen(),
+            ),
+        AppRoutes.carteira: (_) => const AuthGuard(
+              papel: TipoUsuario.motoboy,
+              child: CarteiraScreen(),
+            ),
+
+        // ── Compartilhadas (qualquer autenticado) ─────────────────────────
+        AppRoutes.agenda:    (_) => const AuthGuard(child: AgendaScreen()),
+        AppRoutes.avaliacao: (_) => const AuthGuard(child: AvaliacaoScreen()),
+        AppRoutes.perfil:    (_) => const AuthGuard(child: PerfilScreen()),
+        AppRoutes.notificacoes:
+            (_) => const AuthGuard(child: NotificacoesScreen()),
+        // Sem papel: a nota tem dois lados, e cada um vê a mesma tela do
+        // seu. O backend recorta pelo usuário do token.
+        AppRoutes.notasFiscais:
+            (_) => const AuthGuard(child: NotasFiscaisScreen()),
+        AppRoutes.saldoLojista: (_) => const AuthGuard(
+              papel: TipoUsuario.lojista,
+              child: SaldoLojistaScreen(),
+            ),
+        AppRoutes.avaliarEntregadores:
+            (_) => const AuthGuard(child: AvaliarEntregadoresScreen()),
+
+        // ── Financeiro (qualquer autenticado) ─────────────────────────────
+        // Sem papel: a pergunta "o que entrou e o que saiu" é a mesma para os
+        // dois perfis, e o backend recorta pelo usuário do token. O lojista
+        // recarrega para publicar; o entregador, para nada — mas nada impede,
+        // e uma regra a mais aqui seria regra sem motivo.
+        AppRoutes.extrato: (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+          return AuthGuard(
+            child: ExtratoScreen(
+              filtroInicial: args is ExtratoFiltro ? args : null,
+            ),
+          );
+        },
+        AppRoutes.lancamento: (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+          if (args is! Transacao) {
+            // Rota aberta sem o lançamento (deep link, por exemplo): o
+            // extrato é o lugar de onde ela deveria ter vindo.
+            return const AuthGuard(child: ExtratoScreen());
+          }
+          return AuthGuard(child: LancamentoDetalheScreen(lancamento: args));
+        },
+        AppRoutes.recarga: (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+          return AuthGuard(
+            child: RecargaScreen(
+              valorSugerido: args is double ? args : null,
+            ),
+          );
+        },
+        // Sem papel: o documento é de quem é o lançamento, e o backend
+        // recusa (403) o lançamento de outra pessoa.
+        AppRoutes.documentoFiscal:
+            (_) => const AuthGuard(child: DocumentoFiscalScreen()),
+        AppRoutes.relatorioFinanceiro:
+            (_) => const AuthGuard(child: RelatoriosFinanceirosScreen()),
+
+        // ── Perfil — sub-páginas (qualquer autenticado) ───────────────────
+        AppRoutes.perfilPublico:    (_) => const AuthGuard(child: PerfilPublicoScreen()),
+        AppRoutes.dadosPessoais:    (_) => const AuthGuard(child: DadosPessoaisScreen()),
+        AppRoutes.cnhVeiculo:       (_) => const AuthGuard(child: CnhVeiculoScreen()),
+        AppRoutes.minhasAvaliacoes: (_) => const AuthGuard(child: MinhasAvaliacoesScreen()),
+        AppRoutes.historicoTurnos:  (_) => const AuthGuard(child: HistoricoTurnosScreen()),
+
+        // /meus-turnos, /agendar-turno e /sacar-pix sairam daqui.
+        //
+        // As duas primeiras eram apelidos: registravam AS MESMAS telas de
+        // /turnos-disponiveis e /publicar-turno, e nenhum ponto do app
+        // navegava para elas. Duas rotas para a mesma tela fazem o destaque
+        // do menu depender de por qual delas o usuario chegou.
+        //
+        // A terceira era um stub "em breve" enquanto a Carteira ja tinha o
+        // saque funcionando — o botao do dashboard agora abre a Carteira.
+    };

@@ -51,6 +51,16 @@ class TurnoApi {
     return list.map((e) => Turno.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  /// Um turno pelo id — GET /api/turnos/{id}.
+  ///
+  /// A notificação carrega só o id do turno, e as telas de detalhe recebem o
+  /// objeto por argumento de rota. Sem este método, tocar numa notificação de
+  /// turno só podia marcá-la como lida: não havia como montar o destino.
+  Future<Turno> buscarTurno(int turnoId) async {
+    final data = await _client.get('/turnos/$turnoId');
+    return Turno.fromJson(data as Map<String, dynamic>);
+  }
+
   Future<List<Turno>> listarTurnosLojista(int lojistId) async {
     final list = await _client.get('/turnos?lojistId=$lojistId') as List<dynamic>;
     return list.map((e) => Turno.fromJson(e as Map<String, dynamic>)).toList();
@@ -83,21 +93,13 @@ class TurnoApi {
     return Turno.fromJson(data as Map<String, dynamic>);
   }
 
-  Future<Turno> confirmarPagamentoLojista(int turnoId, int lojistaId,
-      {int? motoboyId}) async {
-    final data = await _client.put('/turnos/$turnoId/confirmar-pagamento-lojista', {
-      'lojistaId': lojistaId,
-      if (motoboyId != null) 'motoboyId': motoboyId,
-    });
-    return Turno.fromJson(data as Map<String, dynamic>);
-  }
-
-  Future<Turno> confirmarRecebimentoMotoboy(int turnoId, int motoboyId) async {
-    final data = await _client.put(
-        '/turnos/$turnoId/confirmar-recebimento-motoboy',
-        {'motoboyId': motoboyId});
-    return Turno.fromJson(data as Map<String, dynamic>);
-  }
+  // confirmarPagamentoLojista e confirmarRecebimentoMotoboy sairam daqui.
+  //
+  // A dupla confirmacao deixou de existir: o lojista compromete o valor ao
+  // publicar o turno e a finalizacao transfere o que ja estava reservado, na
+  // mesma transacao. Nao ha o que declarar depois — e uma confirmacao que nao
+  // decide nada so adiava o pagamento de quem trabalhou. As rotas
+  // correspondentes tambem sairam do backend.
 
   /// Entregadores inscritos num turno multi-vaga, com status de pagamento.
   Future<List<Map<String, dynamic>>> listarInscritos(int turnoId) async {

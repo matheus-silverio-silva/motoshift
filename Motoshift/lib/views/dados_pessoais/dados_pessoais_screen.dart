@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
-import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
@@ -118,7 +117,6 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
           : 'A CNH não muda depois do cadastro',
       // Sub-página do Perfil: mantém "Perfil" aceso na sidebar em vez de
       // deixar o desktop sem nenhum item destacado.
-      desktopSelectedRoute: AppRoutes.perfil,
       desktopBody: _buildDesktop(usuario, isLojista),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(18, 18, 18, 40),

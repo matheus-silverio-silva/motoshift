@@ -2,6 +2,7 @@ package com.motoshift.config;
 
 import com.motoshift.entity.Avaliacao;
 import com.motoshift.entity.Carteira;
+import com.motoshift.service.ledger.ConsistenciaService;
 import com.motoshift.entity.StatusInscricao;
 import com.motoshift.entity.StatusPagamento;
 import com.motoshift.entity.StatusTransacao;
@@ -55,6 +56,7 @@ class MassaDemonstracaoTest {
     @Autowired private TransacaoRepository transacaoRepo;
     @Autowired private AvaliacaoRepository avaliacaoRepo;
     @Autowired private NotificacaoRepository notificacaoRepo;
+    @Autowired private ConsistenciaService consistencia;
 
     @Test
     @DisplayName("sem MOTOSHIFT_SEED_RESET o boot nao apaga nem cria nada")
@@ -116,6 +118,7 @@ class MassaDemonstracaoTest {
         tx.setContraparteId(loja.getId());
         tx.setTurnoId(turno.getId());
         tx.setTipo(TipoTransacao.PAGAMENTO_RECEBIDO);
+        tx.setNatureza(com.motoshift.entity.NaturezaTransacao.CREDITO);
         tx.setStatus(StatusTransacao.CONCLUIDO);
         tx.setValor(new BigDecimal("80.00"));
         tx.setIdempotencyKey("teste-real:" + UUID.randomUUID());
@@ -220,21 +223,61 @@ class MassaDemonstracaoTest {
         assertThat(notificacaoRepo.findTop50ByUsuarioIdOrderByCriadoEmDesc(claudia)).isNotEmpty();
     }
 
+    /**
+     * A massa tem de passar na mesma conferência que o banco de produção.
+     *
+     * <p>Antes este teste somava o extrato à mão, com uma regrinha própria
+     * ("saque é negativo, o resto é positivo"). Isso funcionava quando havia
+     * dois tipos de lançamento, e deixaria de valer no primeiro tipo novo — que
+     * é exatamente o que aconteceu: reserva e liberação movem dinheiro entre os
+     * bolsos da mesma carteira e pagamento_enviado sai do bloqueado.
+     *
+     * <p>Agora a conferência é a do próprio sistema
+     * ({@link ConsistenciaService#verificarConsistencia()}), o que testa duas
+     * coisas de uma vez: que a massa é coerente e que a conferência funciona
+     * sobre dados de verdade. Se a massa passar a inventar saldo, isto falha —
+     * e falha dizendo qual conta e por quanto.
+     */
     @Test
-    @DisplayName("o saldo de cada carteira e exatamente o que o extrato da massa soma")
-    void saldoBateComExtrato() {
+    @DisplayName("a massa fecha nas tres invariantes do ledger")
+    void massaFechaNasInvariantes() {
         massa.resetar();
 
-        for (Usuario u : contasDaMassa()) {
-            BigDecimal extrato = transacaoRepo.findByUsuarioIdOrderByCriadoEmDesc(u.getId()).stream()
-                    .filter(t -> t.getStatus() == StatusTransacao.CONCLUIDO)
-                    .map(t -> t.getTipo() == TipoTransacao.SAQUE ? t.getValor().negate() : t.getValor())
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // So as contas da massa: este mesmo arquivo grava, de proposito, uma
+        // conta "real" com saldo sem recarga de origem — dado que o ledger
+        // nunca criaria e que o reset nao pode tocar. Ela nao e assunto desta
+        // invariante, e conferir o banco inteiro faria o resultado depender da
+        // ordem dos metodos.
+        consistencia.verificarConsistencia(idsDaMassa()).exigirConsistente();
 
-            BigDecimal saldo = carteiraRepo.findByUsuarioId(u.getId()).orElseThrow().getSaldoDisponivel();
-            assertThat(saldo).as("saldo de %s", u.getEmail()).isEqualByComparingTo(extrato);
-            assertThat(saldo.signum()).as("saldo de %s", u.getEmail()).isNotNegative();
+        // E a história que a massa conta precisa ter todos os capítulos: sem
+        // recarga não há origem para o dinheiro, sem reserva não há lastro, sem
+        // liberação a demonstração nunca mostra dinheiro voltando.
+        assertThat(tiposDaMassa())
+                .contains(TipoTransacao.RECARGA, TipoTransacao.RESERVA,
+                          TipoTransacao.PAGAMENTO_ENVIADO, TipoTransacao.PAGAMENTO_RECEBIDO,
+                          TipoTransacao.LIBERACAO_RESERVA, TipoTransacao.SAQUE);
+
+        for (Usuario u : contasDaMassa()) {
+            Carteira c = carteiraRepo.findByUsuarioId(u.getId()).orElseThrow();
+            assertThat(c.getSaldoDisponivel().signum())
+                    .as("disponivel de %s", u.getEmail()).isNotNegative();
+            assertThat(c.getSaldoBloqueado().signum())
+                    .as("bloqueado de %s", u.getEmail()).isNotNegative();
         }
+    }
+
+    private List<Long> idsDaMassa() {
+        return contasDaMassa().stream().map(Usuario::getId).collect(Collectors.toList());
+    }
+
+    private java.util.Set<TipoTransacao> tiposDaMassa() {
+        java.util.Set<Long> ids = contasDaMassa().stream()
+                .map(Usuario::getId).collect(Collectors.toSet());
+        return transacaoRepo.findAll().stream()
+                .filter(t -> ids.contains(t.getUsuarioId()))
+                .map(Transacao::getTipo)
+                .collect(Collectors.toSet());
     }
 
     // ── Apoio ────────────────────────────────────────────────────────────────

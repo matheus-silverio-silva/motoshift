@@ -1,132 +1,143 @@
 import 'package:flutter/material.dart' hide StepState;
 import 'package:provider/provider.dart';
 import '../../models/turno.dart';
-import '../../models/usuario.dart';
-import '../../presentation/providers/turno_provider.dart';
+import '../../presentation/providers/pendencias_provider.dart';
+import '../../routes/abrir_avaliacao.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
+import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/app_buttons.dart';
+import '../perfil_publico/perfil_publico_screen.dart';
+import '../../widgets/acoes_do_turno.dart';
 import '../../widgets/desktop/info_tile_grid.dart';
 import '../../widgets/mapa_turno.dart';
+import '../../widgets/o_que_falta.dart';
 import '../../widgets/timeline_stepper.dart';
 
 /// Conteúdo do turno visto pelo lojista (tela 8), sem scaffold em volta.
 ///
 /// Serve à rota `/turno-lojista` do mobile e ao painel direito do
-/// master-detail do desktop, incluindo o cancelamento. [onCancelado] decide o
-/// que acontece depois: `pop` no mobile, recarregar a lista no desktop.
+/// master-detail do desktop. [onMudou] decide o que acontece depois de uma
+/// ação que muda o turno — `pop` no mobile, recarregar a lista no desktop.
+///
+/// O parâmetro se chamava `onCancelado` porque cancelar era a única coisa que
+/// o lojista podia fazer aqui. Agora ele também finaliza e avalia, e as três
+/// pedem a mesma reação de quem hospeda.
 class TurnoLojistaConteudo extends StatefulWidget {
   const TurnoLojistaConteudo({
     required this.turno,
-    this.onCancelado,
+    this.onMudou,
     this.desktop = false,
     super.key,
   });
 
   final Turno turno;
-  final VoidCallback? onCancelado;
+  final VoidCallback? onMudou;
   final bool desktop;
 
   @override
   State<TurnoLojistaConteudo> createState() => _TurnoLojistaConteudoState();
 }
 
+/// Um entregador do turno, do jeito que o card precisa dele.
+typedef _Inscrito = ({int id, String nome, double? nota, String status});
+
 class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
-  bool _cancelando = false;
-  Usuario? _motoboyUsuario;
-  int? _motoboyCarregado;
+  /// Todos os entregadores do turno, e não só `turno.motoboyId`.
+  ///
+  /// O campo do turno guarda um id só — o primeiro que aceitou. Num turno de
+  /// três vagas o lojista via um entregador e nenhuma pista de que havia mais
+  /// dois, nem como chegar ao perfil deles. `GET /turnos/{id}/inscritos`
+  /// devolve a lista inteira com o status de cada inscrição.
+  List<_Inscrito> _inscritos = const [];
+  int? _turnoCarregado;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _sincronizarMotoboy());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _sincronizarInscritos());
   }
 
   @override
   void didUpdateWidget(TurnoLojistaConteudo oldWidget) {
     super.didUpdateWidget(oldWidget);
     // No desktop o mesmo widget é reaproveitado quando a seleção muda, então
-    // o entregador precisa ser recarregado — não basta buscar no initState.
-    if (oldWidget.turno.motoboyId != widget.turno.motoboyId) {
-      _sincronizarMotoboy();
-    }
+    // a lista precisa ser recarregada — não basta buscar no initState.
+    if (oldWidget.turno.id != widget.turno.id) _sincronizarInscritos();
   }
 
-  Future<void> _sincronizarMotoboy() async {
-    final motoboyId = widget.turno.motoboyId;
-    if (motoboyId == null) {
-      if (mounted && _motoboyUsuario != null) {
-        setState(() {
-          _motoboyUsuario = null;
-          _motoboyCarregado = null;
-        });
-      }
-      return;
-    }
-    if (_motoboyCarregado == motoboyId) return;
+  Future<void> _sincronizarInscritos() async {
+    final turnoId = widget.turno.id;
+    if (turnoId == null || _turnoCarregado == turnoId) return;
 
+    final api = context.read<ApiService>();
     try {
-      final api = context.read<ApiService>();
-      final usuario = await api.auth.buscarUsuario(motoboyId);
+      final lista = await api.turnos.listarInscritos(turnoId);
+      // A nota vem do perfil público, uma consulta por inscrito. São poucos —
+      // no máximo o número de vagas — e é a rota que a LGPD deixou de pé.
+      final inscritos = await Future.wait(lista.map((m) async {
+        final id = (m['motoboyId'] as num).toInt();
+        final nome = m['nome'] as String? ?? 'Entregador';
+        double? nota;
+        try {
+          nota = (await api.usuarios.buscarPerfilPublico(id)).score;
+        } catch (_) {
+          nota = null;
+        }
+        return (
+          id: id,
+          nome: nome,
+          nota: nota,
+          status: m['status'] as String? ?? '',
+        );
+      }));
+
       if (!mounted) return;
       setState(() {
-        _motoboyUsuario = usuario;
-        _motoboyCarregado = motoboyId;
+        _inscritos = inscritos;
+        _turnoCarregado = turnoId;
       });
     } catch (_) {
-      // silencia — exibe fallback com ID
+      // Turno legado, sem inscrições: cai no id solto do turno, que é o que
+      // existia antes das vagas. Sem isto o lojista deixaria de ver o
+      // entregador que ele já via.
+      final motoboyId = widget.turno.motoboyId;
+      if (!mounted || motoboyId == null) return;
+      setState(() {
+        _inscritos = [
+          (id: motoboyId, nome: 'Motoboy #$motoboyId', nota: null, status: '')
+        ];
+        _turnoCarregado = turnoId;
+      });
     }
   }
 
-  Future<void> _cancelar() async {
-    final turno = widget.turno;
-    if (turno.id == null) return;
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Cancelar turno',
-            style: tsBricolage(17, FontWeight.w800, color: AppColors.ink)),
-        content: Text(
-          'Deseja realmente cancelar este turno?',
-          style: tsJakarta(13, FontWeight.w400, color: AppColors.muted),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Voltar',
-                style: tsJakarta(13, FontWeight.w600, color: AppColors.muted)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Cancelar turno',
-                style: tsJakarta(13, FontWeight.w700, color: AppColors.error)),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true || !mounted) return;
+  /// O lojista ainda deve nota a alguém deste turno?
+  bool get _podeAvaliar => context
+      .watch<PendenciasProvider>()
+      .avaliacoesDoTurno(widget.turno.id)
+      .isNotEmpty;
 
-    setState(() => _cancelando = true);
-    final ok = await context.read<TurnoProvider>().cancelarTurno(turno.id!);
+  Future<void> _avaliar(Turno turno) async {
+    await abrirAvaliacao(context, turno);
     if (!mounted) return;
-    setState(() => _cancelando = false);
+    context
+        .read<PendenciasProvider>()
+        .carregar(context.read<AuthService>().usuario);
+  }
 
-    if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Turno cancelado.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      widget.onCancelado?.call();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Erro ao cancelar turno. Tente novamente.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+  /// O que dizer embaixo do nome do entregador.
+  ///
+  /// O card dizia "Turno aceito" para todo mundo, inclusive depois de o turno
+  /// ter sido finalizado ou de a inscrição daquela pessoa ter sido cancelada.
+  String _rotuloDaInscricao(String statusInscricao, StatusTurno statusTurno) {
+    if (statusInscricao.toUpperCase() == 'FINALIZADO' ||
+        statusTurno == StatusTurno.finalizado) {
+      return 'Turno concluído';
     }
+    if (statusTurno == StatusTurno.emAndamento) return 'Em andamento';
+    if (statusTurno == StatusTurno.cancelado) return 'Turno cancelado';
+    return 'Turno aceito';
   }
 
   @override
@@ -140,17 +151,24 @@ class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
       else
         _GridInfo(turno: turno),
       SizedBox(height: widget.desktop ? 16 : 12),
-      // O lojista via a região só como texto: nada mostrava de onde o turno
-      // que ele publicou realmente parte, nem a área que o entregador cobre.
+      // O que falta fica antes do mapa: é a única parte da tela que pede uma
+      // ação, e depois do turno encerrado é a razão de o lojista ter aberto
+      // esta tela. Some sozinho quando não há pendência.
+      OQueFalta(
+        turno: turno,
+        margem: EdgeInsets.only(bottom: widget.desktop ? 16 : 12),
+      ),
       MapaTurno(turno: turno, altura: widget.desktop ? 220 : 170),
       SizedBox(height: widget.desktop ? 16 : 12),
       _StatusTimeline(status: turno.status),
-      if (turno.motoboyId != null) ...[
+      for (final inscrito in _inscritos) ...[
         const SizedBox(height: 12),
         _MotoboyCard(
-          motoboyId: turno.motoboyId!,
-          nome: _motoboyUsuario?.nome,
-          nota: _motoboyUsuario?.score,
+          motoboyId: inscrito.id,
+          nome: inscrito.nome,
+          nota: inscrito.nota,
+          statusLabel: _rotuloDaInscricao(inscrito.status, turno.status),
+          onAvaliar: _podeAvaliar ? () => _avaliar(turno) : null,
         ),
       ],
     ];
@@ -170,10 +188,10 @@ class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
               ),
             ),
             const SizedBox(height: 16),
-            _Acao(
+            AcoesDoTurno(
               turno: turno,
-              cancelando: _cancelando,
-              onCancelar: _cancelar,
+              emLinha: true,
+              onMudou: widget.onMudou,
             ),
           ],
         ),
@@ -197,11 +215,7 @@ class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
               top: BorderSide(color: AppColors.line, width: 1.5),
             ),
           ),
-          child: _Acao(
-            turno: turno,
-            cancelando: _cancelando,
-            onCancelar: _cancelar,
-          ),
+          child: AcoesDoTurno(turno: turno, onMudou: widget.onMudou),
         ),
       ],
     );
@@ -444,13 +458,22 @@ class _StatusTimeline extends StatelessWidget {
 class _MotoboyCard extends StatelessWidget {
   const _MotoboyCard({
     required this.motoboyId,
+    required this.statusLabel,
     this.nome,
     this.nota,
+    this.onAvaliar,
   });
 
   final int motoboyId;
   final String? nome;
   final double? nota;
+
+  /// O estado desta inscrição, em palavras — "Turno aceito", "Em andamento",
+  /// "Turno concluído".
+  final String statusLabel;
+
+  /// Só existe quando o turno acabou e a nota deste entregador ainda falta.
+  final VoidCallback? onAvaliar;
   // GET /usuarios/{id} de outra conta já traz veiculoModelo e veiculoCor no
   // perfil público; mostrá-los aqui é mudança de layout (e de golden), não de
   // contrato.
@@ -499,7 +522,7 @@ class _MotoboyCard extends StatelessWidget {
                       const SizedBox(width: 6),
                     ],
                     Text(
-                      'Turno aceito',
+                      statusLabel,
                       style: tsJakarta(10, FontWeight.w400,
                           color: AppColors.muted),
                     ),
@@ -508,18 +531,20 @@ class _MotoboyCard extends StatelessWidget {
               ],
             ),
           ),
-          GestureDetector(
-            onTap: () {},
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: AppColors.tealSoft,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text('Contatar',
-                  style: tsJakarta(11, FontWeight.w700,
-                      color: AppColors.tealDeep)),
+          // Era "Contatar", com onTap vazio. A saída óbvia seria abrir o
+          // telefone do entregador — mas o PerfilPublicoResponse não devolve
+          // telefone nem e-mail, e não por esquecimento: foram cortados por
+          // LGPD. Expor o número só para este botão desfaria essa decisão.
+          if (onAvaliar != null) ...[
+            _BotaoDoCard(rotulo: 'Avaliar', destaque: true, onTap: onAvaliar!),
+            const SizedBox(width: 6),
+          ],
+          _BotaoDoCard(
+            rotulo: 'Ver perfil',
+            onTap: () => Navigator.pushNamed(
+              context,
+              AppRoutes.perfilPublico,
+              arguments: PerfilPublicoArgs(usuarioId: motoboyId, nome: nome),
             ),
           ),
         ],
@@ -528,40 +553,36 @@ class _MotoboyCard extends StatelessWidget {
   }
 }
 
-// ── Ação ────────────────────────────────────────────────────────────────────
-class _Acao extends StatelessWidget {
-  const _Acao({
-    required this.turno,
-    required this.cancelando,
-    required this.onCancelar,
+/// Botão pequeno do card do entregador.
+class _BotaoDoCard extends StatelessWidget {
+  const _BotaoDoCard({
+    required this.rotulo,
+    required this.onTap,
+    this.destaque = false,
   });
-  final Turno turno;
-  final bool cancelando;
-  final VoidCallback onCancelar;
+
+  final String rotulo;
+  final VoidCallback onTap;
+  final bool destaque;
 
   @override
   Widget build(BuildContext context) {
-    final podeCancelar = turno.status == StatusTurno.aberto ||
-        turno.status == StatusTurno.aceito;
-
-    if (podeCancelar) {
-      return GhostButton(
-        label: cancelando ? 'Cancelando...' : 'Cancelar turno',
-        danger: true,
-        onPressed: cancelando ? null : onCancelar,
-      );
-    }
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        color: AppColors.surface2,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Center(
-        child: Text(
-          'Turno ${turno.status.label.toLowerCase()}',
-          style: tsJakarta(13, FontWeight.w600, color: AppColors.muted),
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 44),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: destaque ? AppColors.amberSoft : AppColors.tealSoft,
+          borderRadius: BorderRadius.circular(10),
         ),
+        child: Text(rotulo,
+            style: tsJakarta(11, FontWeight.w700,
+                color: destaque
+                    ? AppColors.onTertiaryContainer
+                    : AppColors.tealDeep)),
       ),
     );
   }

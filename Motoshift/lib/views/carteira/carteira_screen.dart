@@ -8,13 +8,23 @@ import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
-import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_header.dart';
+import '../../widgets/empty_state.dart';
 import '../../widgets/desktop/app_topbar.dart';
 import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/desktop/panel_card.dart';
 import '../../widgets/section_title.dart';
 import '../../widgets/wallet_widgets.dart';
+
+/// Estado inicial pedido a Carteira ao abri-la.
+///
+/// Existe para que o "Sacar via Pix" do inicio leve direto ao dialogo de saque
+/// — antes ele ia para um stub separado, com o mesmo nome e nenhuma funcao.
+class CarteiraArgs {
+  const CarteiraArgs({this.abrirSaque = false});
+
+  final bool abrirSaque;
+}
 
 class CarteiraScreen extends StatefulWidget {
   const CarteiraScreen({super.key, this.agora});
@@ -39,10 +49,25 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _carregar());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _carregar();
+      if (!mounted) return;
+      // Chegou pelo "Sacar via Pix" do início: abre o diálogo já na chegada,
+      // em vez de deixar o usuário procurar o botão na tela que ele pediu
+      // justamente para sacar.
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is CarteiraArgs && args.abrirSaque) _solicitarSaque();
+    });
+  }
+
+  /// Sub-página da Carteira: empilha, e voltar devolve para cá.
+  Future<void> _abrirExtrato() async {
+    await Navigator.pushNamed(context, AppRoutes.extrato);
+    if (mounted) _carregar();
   }
 
   Future<void> _carregar() async {
+
     final auth = context.read<AuthService>();
     final api = context.read<ApiService>();
     final id = auth.usuario?.id;
@@ -120,7 +145,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     if (id == null) return;
 
     try {
-      await api.carteira.solicitarSaque(id, valor);
+      await api.carteira.solicitarSaque(valor);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Transferência solicitada com sucesso!'),
@@ -144,37 +169,19 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     }
   }
 
-  void _onNav(int i) {
-    switch (i) {
-      case 0:
-        Navigator.pushReplacementNamed(
-            context, AppRoutes.dashboardMotoboy);
-      case 1:
-        Navigator.pushReplacementNamed(
-            context, AppRoutes.turnosDisponiveis);
-      case 2:
-        break;
-      case 3:
-        Navigator.pushReplacementNamed(context, AppRoutes.perfil);
-    }
-  }
+  // O _onNav desta tela saiu: era um dos sete switches identicos de barra
+  // inferior. Ver NavConfig — a tela agora informa so a secao em que esta.
 
   @override
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
-      header: AppHeader.back(
-        title: 'Carteira Digital',
-        onBack: () => Navigator.pushReplacementNamed(
-            context, AppRoutes.dashboardMotoboy),
-      ),
-      bottomNav: AppBottomNav(
-        userType: UserType.motoboy,
-        currentIndex: 2,
-        onTap: _onNav,
-      ),
-      desktopTitle: 'Carteira digital',
+      // Sem onBack: a Carteira e uma secao, entao o canto esquerdo mostra o
+      // menu. O override que havia aqui forcava uma seta que voltava para o
+      // inicio — atalho de uma tela so, que a gaveta resolve para todas.
+      header: AppHeader.back(title: 'Carteira'),
+      desktopTitle: 'Carteira',
       desktopSubtitle: _subtituloDesktop(),
-      desktopSelectedRoute: AppRoutes.carteira,
+      rotaDaSecao: AppRoutes.carteira,
       desktopPrimaryAction: TopbarPrimaryButton(
         label: 'Sacar via Pix',
         icon: Icons.qr_code_rounded,
@@ -202,22 +209,13 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
   Widget _erroView() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.wifi_off_rounded,
-                size: 44, color: AppColors.muted),
-            const SizedBox(height: 12),
-            Text(_erro!,
-                textAlign: TextAlign.center,
-                style: tsJakarta(13, FontWeight.w400,
-                    color: AppColors.muted)),
-            const SizedBox(height: 14),
-            TextButton(
-                onPressed: _carregar,
-                child: const Text('Tentar novamente')),
-          ],
+        padding: const EdgeInsets.all(24),
+        child: EmptyState(
+          icon: Icons.wifi_off_rounded,
+          titulo: 'Não foi possível carregar',
+          subtitulo: _erro,
+          acaoLabel: 'Tentar novamente',
+          onAcao: _carregar,
         ),
       ),
     );
@@ -258,7 +256,9 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
                 balance:
                     'R\$ ${saldo.toStringAsFixed(2).replaceAll('.', ',')}',
                 onWithdraw: _solicitarSaque,
-                onExtract: _carregar,
+                // Rotulado "Extrato", mas chamava _carregar: prometia o extrato
+                // e só recarregava o saldo.
+                onExtract: _abrirExtrato,
               ),
               const SizedBox(height: 16),
               IntrinsicHeight(
@@ -287,7 +287,22 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
             padding: const EdgeInsets.all(22),
             gap: 14,
             trailing: _buildFiltroExtrato(),
-            child: _buildExtratoDesktop(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildExtratoDesktop(),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    key: const Key('carteira-extrato-completo'),
+                    onPressed: _abrirExtrato,
+                    child: Text('Ver extrato completo',
+                        style: tsJakarta(12, FontWeight.w700,
+                            color: AppColors.teal)),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -379,13 +394,16 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     final saldoStr =
         'R\$ ${saldo.toStringAsFixed(2).replaceAll('.', ',')}';
 
-    return ListView(
+    return RefreshIndicator(
+      onRefresh: _carregar,
+      color: AppColors.teal,
+      child: ListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
       children: [
         WalletHero(
           balance: saldoStr,
           onWithdraw: _solicitarSaque,
-          onExtract: _carregar,
+          onExtract: _abrirExtrato,
         ),
         const SizedBox(height: 12),
         // Stats
@@ -406,10 +424,15 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
             ),
           ],
         ),
+        // "Extrato", e não "Histórico": Histórico é a seção dos turnos
+        // encerrados, e o mesmo nome para duas coisas fazia a pessoa procurar
+        // os turnos aqui. A ação leva ao extrato completo — com filtros,
+        // detalhe de cada lançamento e exportação —, que estava registrado
+        // no app sem nenhum botão até ele. Atualizar virou puxar a lista.
         SectionTitle(
-          title: 'Histórico',
-          action: 'Atualizar',
-          onAction: _carregar,
+          title: 'Extrato',
+          action: 'Ver completo',
+          onAction: _abrirExtrato,
         ),
         if (transacoes.isEmpty)
           Container(
@@ -446,6 +469,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
                 .toList(),
           ),
       ],
+      ),
     );
   }
 

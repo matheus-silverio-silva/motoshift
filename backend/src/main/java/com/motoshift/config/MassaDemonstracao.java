@@ -2,11 +2,14 @@ package com.motoshift.config;
 
 import com.motoshift.entity.Avaliacao;
 import com.motoshift.entity.Carteira;
+import com.motoshift.entity.Cobranca;
 import com.motoshift.entity.Notificacao;
 import com.motoshift.entity.StatusInscricao;
 import com.motoshift.entity.StatusPagamento;
 import com.motoshift.entity.StatusTransacao;
 import com.motoshift.entity.StatusTurno;
+import com.motoshift.entity.StatusCobranca;
+import com.motoshift.entity.TipoCobranca;
 import com.motoshift.entity.TipoTransacao;
 import com.motoshift.entity.Transacao;
 import com.motoshift.entity.Turno;
@@ -14,6 +17,7 @@ import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.entity.Usuario;
 import com.motoshift.repository.AvaliacaoRepository;
 import com.motoshift.repository.CarteiraRepository;
+import com.motoshift.repository.CobrancaRepository;
 import com.motoshift.repository.TransacaoRepository;
 import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
@@ -21,6 +25,9 @@ import com.motoshift.repository.UsuarioRepository;
 import com.motoshift.service.NotaFiscalService;
 import com.motoshift.service.NotificacaoService;
 import com.motoshift.service.PagamentoTurnoService;
+import com.motoshift.service.ledger.LedgerService;
+import com.motoshift.service.ledger.Movimento;
+import com.motoshift.service.ledger.Movimento.MotivoLiberacao;
 import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,6 +98,13 @@ public class MassaDemonstracao {
     private final NotaFiscalService notasFiscais;
     private final PasswordEncoder encoder;
 
+    // A massa nao inventa mais saldo. Recarga, reserva, liquidacao e saque
+    // passam pelos mesmos servicos do fluxo real — e por isso ela termina
+    // passando em ConsistenciaService.verificarConsistencia().
+    private final CobrancaRepository cobrancaRepo;
+    private final LedgerService ledger;
+    private final PagamentoTurnoService pagamentos;
+
     public MassaDemonstracao(EntityManager em,
                              UsuarioRepository usuarioRepo,
                              TurnoRepository turnoRepo,
@@ -100,7 +114,10 @@ public class MassaDemonstracao {
                              AvaliacaoRepository avaliacaoRepo,
                              NotificacaoService notificacoes,
                              NotaFiscalService notasFiscais,
-                             PasswordEncoder encoder) {
+                             PasswordEncoder encoder,
+                             CobrancaRepository cobrancaRepo,
+                             LedgerService ledger,
+                             PagamentoTurnoService pagamentos) {
         this.em = em;
         this.usuarioRepo = usuarioRepo;
         this.turnoRepo = turnoRepo;
@@ -111,6 +128,9 @@ public class MassaDemonstracao {
         this.notificacoes = notificacoes;
         this.notasFiscais = notasFiscais;
         this.encoder = encoder;
+        this.cobrancaRepo = cobrancaRepo;
+        this.ledger = ledger;
+        this.pagamentos = pagamentos;
     }
 
     // ══ Reset ═════════════════════════════════════════════════════════════
@@ -147,6 +167,7 @@ public class MassaDemonstracao {
         n.put("notas_fiscais",    contar("select count(n) from NotaFiscal n where n.id in :notas", e));
         n.put("avaliacoes",       contar("select count(a) from Avaliacao a" + ONDE_AVALIACAO, e));
         n.put("transacoes",       contar("select count(t) from Transacao t" + ONDE_TRANSACAO, e));
+        n.put("cobrancas",        contar("select count(c) from Cobranca c" + ONDE_COBRANCA, e));
         n.put("turno_inscricoes", contar("select count(i) from TurnoInscricao i" + ONDE_INSCRICAO, e));
         n.put("notificacoes",     contar("select count(n) from Notificacao n" + ONDE_NOTIFICACAO, e));
         n.put("turnos",           contar("select count(t) from Turno t where t.id in :turnos", e));
@@ -161,6 +182,9 @@ public class MassaDemonstracao {
     private static final String ONDE_TRANSACAO =
             " where t.usuarioId in :demo or t.contraparteId in :demo or t.turnoId in :turnos"
           + " or t.motoboyId in :demo";
+    // Cobranca so tem um dono, entao o escopo e mais simples que o da transacao.
+    private static final String ONDE_COBRANCA =
+            " where c.usuarioId in :demo";
     private static final String ONDE_INSCRICAO =
             " where i.turnoId in :turnos or i.motoboyId in :demo";
     private static final String ONDE_NOTIFICACAO =
@@ -181,6 +205,7 @@ public class MassaDemonstracao {
         n.put("notas_fiscais",    executar("delete from NotaFiscal n where n.id in :notas", e));
         n.put("avaliacoes",       executar("delete from Avaliacao a" + ONDE_AVALIACAO, e));
         n.put("transacoes",       executar("delete from Transacao t" + ONDE_TRANSACAO, e));
+        n.put("cobrancas",        executar("delete from Cobranca c" + ONDE_COBRANCA, e));
         n.put("turno_inscricoes", executar("delete from TurnoInscricao i" + ONDE_INSCRICAO, e));
         n.put("notificacoes",     executar("delete from Notificacao n" + ONDE_NOTIFICACAO, e));
         n.put("turnos",           executar("delete from Turno t where t.id in :turnos", e));
@@ -240,14 +265,18 @@ public class MassaDemonstracao {
     // ══ Criação ═══════════════════════════════════════════════════════════
 
     /**
-     * Cria a massa inteira. Não é transacional por si: no boot de dev cada
-     * gravação vale sozinha, e uma nota fiscal que falhe não impede o app de
-     * subir. Chamado por {@link #resetar()}, roda dentro da transação dele.
+     * Cria a massa inteira, numa transação só.
+     *
+     * <p>Passou a ser transacional quando o dinheiro passou a ser de verdade.
+     * Antes cada gravação valia sozinha — uma nota fiscal que falhasse não
+     * impedia o app de subir. Agora a massa recarrega carteiras, reserva
+     * turnos e liquida pagamentos pelo {@link LedgerService}: uma falha no meio
+     * deixaria saldo bloqueado sem turno, ou turno sem lastro. Tudo ou nada.
      */
+    @Transactional
     public void popular() {
         LocalDateTime agora = LocalDateTime.now();
         LocalDate hoje = agora.toLocalDate();
-        Saldos saldos = new Saldos();
 
         // ── Lojistas ─────────────────────────────────────────────────────────
 
@@ -281,9 +310,21 @@ public class MassaDemonstracao {
                 "11122233344", "A", hoje.plusYears(3), hoje.minusYears(34).minusDays(33),
                 "São Paulo", "SP", "Honda PCX 150", "JKL-4G56", hoje.getYear() - 2, "Azul", 5.0, null);
 
+        // ── Recargas ─────────────────────────────────────────────────────────
+        // Primeiro o dinheiro entra, depois os turnos o consomem. Esta é a
+        // ordem do fluxo real e é o que faz a massa fechar em
+        // verificarConsistencia(): tudo o que as carteiras somam no fim entrou
+        // por aqui. O valor é folgado de propósito — o lojista da demonstração
+        // precisa conseguir publicar mais um turno na frente da banca.
+        recarga(claudia,  "4000.00", agora.minusDays(30));
+        recarga(fernando, "3000.00", agora.minusDays(28));
+        recarga(ana,      "3000.00", agora.minusDays(25));
+        recarga(maria,    "1500.00", agora.minusDays(10));
+
         // ── Turnos ABERTOS ───────────────────────────────────────────────────
         // Início sempre no futuro; o job de vencimento só age em aberto que já
-        // começou.
+        // começou. Todo turno publicado reserva valor × vagas na carteira do
+        // lojista — inclusive estes, que ainda não têm entregador.
 
         LocalDateTime em3h = redondo(agora.plusHours(3));
         LocalDateTime em5h = redondo(agora.plusHours(5));
@@ -322,32 +363,39 @@ public class MassaDemonstracao {
         //   nenhuma          → os dois veem em "A avaliar"
 
         Turno t8 = pago(claudia, ricardo, "Turno Concluído — Hamburgueria da Cláudia",
-                "Água Verde, Curitiba", agora.minusDays(7), "120.00", 8.0, saldos);
+                "Água Verde, Curitiba", agora.minusDays(7), "120.00", 8.0);
         Turno t9 = pago(fernando, ricardo, "Turno Concluído — Pizzaria do Fernando",
-                "Batel, Curitiba", agora.minusDays(15), "100.00", 5.0, saldos);
+                "Batel, Curitiba", agora.minusDays(15), "100.00", 5.0);
         Turno t10 = pago(ana, lucas, "Turno Concluído — Farmácia Ana",
-                "Centro Cívico, Curitiba", agora.minusDays(3), "110.00", 6.0, saldos);
+                "Centro Cívico, Curitiba", agora.minusDays(3), "110.00", 6.0);
         Turno t11 = pago(claudia, thiago, "Turno Concluído — Hamburgueria da Cláudia",
-                "Água Verde, Curitiba", agora.minusDays(20), "120.00", 8.0, saldos);
+                "Água Verde, Curitiba", agora.minusDays(20), "120.00", 8.0);
         Turno t12 = pago(fernando, lucas, "Turno Concluído — Pizzaria do Fernando",
-                "Batel, Curitiba", agora.minusDays(10), "100.00", 5.0, saldos);
+                "Batel, Curitiba", agora.minusDays(10), "100.00", 5.0);
         Turno t13 = pago(ana, ricardo, "Turno Manhã — Farmácia Ana",
-                "Centro Cívico, Curitiba", agora.minusDays(2), "95.00", 5.0, saldos);
+                "Centro Cívico, Curitiba", agora.minusDays(2), "95.00", 5.0);
         Turno t14 = pago(claudia, lucas, "Turno Noite — Hamburgueria da Cláudia",
-                "Água Verde, Curitiba", agora.minusDays(1), "130.00", 8.0, saldos);
+                "Água Verde, Curitiba", agora.minusDays(1), "130.00", 8.0);
+        Turno t15 = pago(claudia, ricardo, "Turno Madrugada — Hamburgueria da Cláudia",
+                "Água Verde, Curitiba", agora.minusDays(5), "125.00", 8.0);
+        Turno t16 = pago(fernando, thiago, "Turno Tarde — Pizzaria do Fernando",
+                "Batel, Curitiba", agora.minusDays(4), "95.00", 5.0);
+        Turno t17 = pago(ana, lucas, "Turno Concluído — Farmácia Ana",
+                "Centro Cívico, Curitiba", agora.minusDays(6), "110.00", 6.0);
 
-        // ── Finalizados com pagamento PENDENTE ───────────────────────────────
-        // As combinações de quem já confirmou. Os dois confirmados não existe
-        // aqui: seria PAGO, e a liquidação já teria acontecido.
+        // Não há mais "finalizado com pagamento pendente" na massa, e não é
+        // omissão: com a liquidação automática, turno finalizado é turno pago.
+        // O estado que existia aqui — dívida reconhecida esperando dois cliques
+        // — deixou de ser alcançável.
 
-        Turno t15 = pendente(claudia, ricardo, "Turno Concluído — Hamburgueria da Cláudia",
-                "Água Verde, Curitiba", agora.minusDays(5), "125.00", 8.0, false, false);
-        Turno t16 = pendente(fernando, thiago, "Turno Tarde — Pizzaria do Fernando",
-                "Batel, Curitiba", agora.minusDays(4), "95.00", 5.0, true, false);
-        Turno t17 = pendente(ana, lucas, "Turno Concluído — Farmácia Ana",
-                "Centro Cívico, Curitiba", agora.minusDays(6), "110.00", 6.0, false, true);
-        pendente(claudia, thiago, "Turno Madrugada — Hamburgueria da Cláudia",
-                "Água Verde, Curitiba", agora.minusDays(8), "140.00", 8.0, false, false);
+        // ── Finalizado com vaga sobrando ─────────────────────────────────────
+        // Duas vagas, um entregador: R$ 240 foram reservados, R$ 120 foram
+        // transferidos e R$ 120 voltaram ao disponível da Cláudia como
+        // liberacao_reserva. É o caso que prova que a sobra não fica presa.
+
+        Turno t18 = pagoComVagaSobrando(claudia, lucas,
+                "Turno Dupla — Hamburgueria da Cláudia", "Água Verde, Curitiba",
+                agora.minusDays(9), "120.00", 8.0);
 
         // ── Cancelados ───────────────────────────────────────────────────────
         // O ScoreService conta como tardio o cancelamento feito a menos de 1h
@@ -363,21 +411,33 @@ public class MassaDemonstracao {
                 "Turno cancelado", "Água Verde, Curitiba", thiagoCancelou, thiagoCancelou.plusHours(4),
                 "120.00", 8.0, StatusTurno.CANCELADO);
 
-        // ── Saque ────────────────────────────────────────────────────────────
-        // Depois de t9 e t8 creditados (R$ 220), nunca deixando saldo negativo.
+        // ── Expirado ─────────────────────────────────────────────────────────
+        // Publicado, ninguém aceitou, o início passou: é o que o job de
+        // vencimento faz. A reserva voltou inteira ao disponível da Ana.
 
-        saque(ricardo, "200.00", agora.minusDays(6), "ricardo@pix.com", saldos);
+        expirado(ana, "Turno Expirado — Farmácia Ana", "Centro Cívico, Curitiba",
+                agora.minusDays(2), "110.00", 6.0);
 
-        // ── Carteiras ────────────────────────────────────────────────────────
-        // Saldo = soma do extrato criado acima, e não um número à parte: é o
-        // que mantém "saldo" e "extrato" contando a mesma história.
+        // ── Saques ───────────────────────────────────────────────────────────
+        // Depois dos créditos do Ricardo, e nunca deixando saldo negativo.
 
-        // Toda conta tem carteira, como no cadastro (AuthService.registrar).
+        saque(ricardo, "200.00", agora.minusDays(6), "ricardo@pix.com");
+        saque(lucas, "150.00", agora.minusDays(2), "lucas@pix.com");
+
+        // ── Chaves Pix e carteiras vazias ────────────────────────────────────
+        //
+        // O saldo NÃO é escrito aqui. Ele é o que sobrou de recarga, reserva,
+        // liquidação e saque — o ledger já o manteve enquanto a história acima
+        // acontecia. Antes a massa somava um número à parte e o gravava na
+        // carteira, o que exigia que dois lugares concordassem; agora só existe
+        // um lugar. Resta garantir que toda conta tenha carteira, como no
+        // cadastro (AuthService.registrar), e registrar as chaves Pix.
+
+        chavePix(ricardo, "ricardo@pix.com");
+        chavePix(lucas, "lucas@pix.com");
         for (Usuario u : List.of(claudia, fernando, ana, maria, thiago, carlos)) {
-            carteira(u, saldos.de(u), null);
+            carteiraVazia(u);
         }
-        carteira(ricardo, saldos.de(ricardo), "ricardo@pix.com");
-        carteira(lucas, saldos.de(lucas), "lucas@pix.com");
 
         // ── Avaliações ───────────────────────────────────────────────────────
 
@@ -490,13 +550,22 @@ public class MassaDemonstracao {
     private Turno turno(Usuario lojista, Usuario motoboy, String titulo, String descricao,
                         String regiao, LocalDateTime inicio, LocalDateTime fim,
                         String valor, double raio, StatusTurno status) {
-        return turno(lojista, motoboy, titulo, descricao, regiao, inicio, fim, valor, raio, status, null);
+        return turno(lojista, motoboy, titulo, descricao, regiao, inicio, fim, valor, raio,
+                status, null, 1);
     }
 
     private Turno turno(Usuario lojista, Usuario motoboy, String titulo, String descricao,
                         String regiao, LocalDateTime inicio, LocalDateTime fim,
                         String valor, double raio, StatusTurno status,
                         StatusPagamento pagamento) {
+        return turno(lojista, motoboy, titulo, descricao, regiao, inicio, fim, valor, raio,
+                status, pagamento, 1);
+    }
+
+    private Turno turno(Usuario lojista, Usuario motoboy, String titulo, String descricao,
+                        String regiao, LocalDateTime inicio, LocalDateTime fim,
+                        String valor, double raio, StatusTurno status,
+                        StatusPagamento pagamento, int vagas) {
         Turno t = new Turno();
         t.setLojistId(lojista.getId());
         t.setMotoboyId(motoboy == null ? null : motoboy.getId());
@@ -515,44 +584,72 @@ public class MassaDemonstracao {
         t.setEndereco(regiao);
         t.setStatus(status);
         t.setPagamentoStatus(pagamento);
+        t.setVagas(vagas);
         Turno salvo = turnoRepo.save(t);
 
-        // Todo turno com entregador tem inscrição — é o formato pós-V5, e sem
-        // ela confirmar pagamento na massa estouraria 500.
+        // Publicar reserva. Vale para TODO turno, inclusive os que já nasceram
+        // finalizados aqui: a história tem de passar pelos mesmos estados do
+        // fluxo real, senão a liquidação logo adiante tiraria do bloqueado um
+        // dinheiro que nunca foi bloqueado.
+        pagamentos.reservar(salvo);
+        redatarDinheiroDoTurno(salvo, inicio);
+
+        // Todo turno com entregador tem inscrição — é o formato pós-V5, e é
+        // pela inscrição que a liquidação é chaveada.
         if (motoboy != null) {
-            inscricao(salvo, motoboy, statusDaInscricao(status), null, null, null);
+            inscricao(salvo, motoboy, statusDaInscricao(status), null);
         }
         return salvo;
     }
 
+    /** Turno que aconteceu e foi pago: reserva na publicação, liquidação no fim. */
     private Turno pago(Usuario lojista, Usuario motoboy, String titulo, String regiao,
-                       LocalDateTime inicio, String valor, double raio, Saldos saldos) {
+                       LocalDateTime inicio, String valor, double raio) {
         LocalDateTime fim = inicio.plusHours(4);
         Turno t = turno(lojista, motoboy, titulo, "Turno concluído", regiao, inicio, fim,
                 valor, raio, StatusTurno.FINALIZADO, StatusPagamento.PAGO);
-        inscricao(t, motoboy, StatusInscricao.FINALIZADO, StatusPagamento.PAGO,
-                fim.plusHours(1), fim.plusHours(2));
-        pagamento(t, motoboy, StatusTransacao.CONCLUIDO, fim);
-        saldos.creditar(motoboy, t.getValorEstimado());
+        TurnoInscricao ins = inscricao(t, motoboy, StatusInscricao.FINALIZADO, StatusPagamento.PENDENTE);
+
+        pagamentos.liquidar(t, List.of(ins));
+        redatarDinheiroDoTurno(t, fim);
         return t;
     }
 
-    private Turno pendente(Usuario lojista, Usuario motoboy, String titulo, String regiao,
-                           LocalDateTime inicio, String valor, double raio,
-                           boolean lojistaConfirmou, boolean motoboyConfirmou) {
+    /**
+     * Turno de duas vagas com um entregador só.
+     *
+     * Metade da reserva vira pagamento e metade volta ao lojista como
+     * liberacao_reserva — o caso que mostra, no extrato da demonstração, que
+     * vaga vazia não deixa dinheiro preso.
+     */
+    private Turno pagoComVagaSobrando(Usuario lojista, Usuario motoboy, String titulo,
+                                      String regiao, LocalDateTime inicio, String valor,
+                                      double raio) {
         LocalDateTime fim = inicio.plusHours(4);
-        Turno t = turno(lojista, motoboy, titulo, "Turno concluído", regiao, inicio, fim,
-                valor, raio, StatusTurno.FINALIZADO, StatusPagamento.PENDENTE);
-        inscricao(t, motoboy, StatusInscricao.FINALIZADO, StatusPagamento.PENDENTE,
-                lojistaConfirmou ? fim.plusHours(1) : null,
-                motoboyConfirmou ? fim.plusHours(2) : null);
-        pagamento(t, motoboy, StatusTransacao.PENDENTE, fim);
+        Turno t = turno(lojista, motoboy, titulo, "Turno concluído com uma vaga em aberto",
+                regiao, inicio, fim, valor, raio, StatusTurno.FINALIZADO, StatusPagamento.PAGO, 2);
+        TurnoInscricao ins = inscricao(t, motoboy, StatusInscricao.FINALIZADO, StatusPagamento.PENDENTE);
+
+        pagamentos.liquidar(t, List.of(ins));
+        redatarDinheiroDoTurno(t, fim);
         return t;
     }
 
-    private void inscricao(Turno t, Usuario motoboy, StatusInscricao status,
-                           StatusPagamento pagamento,
-                           LocalDateTime lojistaConfirmou, LocalDateTime motoboyConfirmou) {
+    /** Publicado, ninguém aceitou, o início passou: o job expira e devolve a reserva. */
+    private Turno expirado(Usuario lojista, String titulo, String regiao,
+                           LocalDateTime inicio, String valor, double raio) {
+        Turno t = turno(lojista, null, titulo, "Turno que venceu sem entregador", regiao,
+                inicio, inicio.plusHours(4), valor, raio, StatusTurno.EXPIRADO);
+        t.setExpiradoEm(inicio);
+        turnoRepo.save(t);
+
+        pagamentos.liberarReserva(t, MotivoLiberacao.EXPIRACAO);
+        redatarDinheiroDoTurno(t, inicio);
+        return t;
+    }
+
+    private TurnoInscricao inscricao(Turno t, Usuario motoboy, StatusInscricao status,
+                                     StatusPagamento pagamento) {
         TurnoInscricao ins = inscricaoRepo
                 .findByTurnoIdAndMotoboyId(t.getId(), motoboy.getId())
                 .orElseGet(TurnoInscricao::new);
@@ -560,9 +657,7 @@ public class MassaDemonstracao {
         ins.setMotoboyId(motoboy.getId());
         ins.setStatus(status);
         ins.setPagamentoStatus(pagamento);
-        ins.setLojistaConfirmouEm(lojistaConfirmou);
-        ins.setMotoboyConfirmouEm(motoboyConfirmou);
-        inscricaoRepo.save(ins);
+        return inscricaoRepo.save(ins);
     }
 
     /** O mesmo mapeamento da V5: só os estados terminais têm correspondência. */
@@ -601,60 +696,93 @@ public class MassaDemonstracao {
 
     // ── Dinheiro ─────────────────────────────────────────────────────────────
 
-    /** Lançamento do pagamento de um turno, com a chave que o fluxo real usa. */
-    private void pagamento(Turno t, Usuario motoboy, StatusTransacao status, LocalDateTime quando) {
-        Transacao tx = new Transacao();
-        tx.setUsuarioId(motoboy.getId());
-        tx.setContraparteId(t.getLojistId());
-        tx.setTurnoId(t.getId());
-        tx.setTipo(TipoTransacao.PAGAMENTO_RECEBIDO);
-        tx.setValor(t.getValorEstimado());
-        tx.setDescricao((status == StatusTransacao.PENDENTE ? "Turno aguardando pagamento: " : "Turno finalizado: ")
-                + t.getTitulo());
-        tx.setStatus(status);
-        tx.setIdempotencyKey(PagamentoTurnoService.chaveDoPagamento(t.getId(), motoboy.getId()));
-        // Datado no fim do turno, e não "agora": é o que dá mais de uma barra ao
-        // gráfico mensal e deixa "ganhos do mês" com um recorte de verdade.
+    /**
+     * Recarga concluída: a cobrança no gateway e o crédito no disponível.
+     *
+     * É por aqui que o dinheiro da demonstração entra na plataforma — e é o
+     * único jeito. Enquanto a massa gravava saldo direto na carteira, o número
+     * que ela mostrava não tinha origem nenhuma no extrato.
+     */
+    private void recarga(Usuario u, String valor, LocalDateTime quando) {
+        Cobranca cobranca = new Cobranca();
+        cobranca.setUsuarioId(u.getId());
+        cobranca.setTipo(TipoCobranca.RECARGA);
+        cobranca.setValor(new BigDecimal(valor));
+        cobranca.setStatus(StatusCobranca.CONCLUIDO);
+        cobranca.setCodigoPix(codigoPixFicticio(u.getId(), quando));
+        cobranca.setCriadaEm(quando);
+        cobranca.setConcluidaEm(quando);
+        cobranca.setIdempotencyKey("massa:recarga:" + u.getId() + ":" + quando.toLocalDate());
+        cobrancaRepo.save(cobranca);
+
+        Transacao tx = ledger.aplicar(
+                Movimento.recarga(u.getId(), cobranca.getValor(), cobranca.getId()));
+        redatar(tx, quando);
+    }
+
+    private void saque(Usuario u, String valor, LocalDateTime quando, String pix) {
+        Cobranca cobranca = new Cobranca();
+        cobranca.setUsuarioId(u.getId());
+        cobranca.setTipo(TipoCobranca.SAQUE);
+        cobranca.setValor(new BigDecimal(valor));
+        cobranca.setStatus(StatusCobranca.CONCLUIDO);
+        cobranca.setCodigoPix(pix);
+        cobranca.setCriadaEm(quando);
+        cobranca.setConcluidaEm(quando);
+        cobranca.setIdempotencyKey("massa:saque:" + u.getId() + ":" + quando.toLocalDate());
+        cobrancaRepo.save(cobranca);
+
+        Transacao tx = ledger.aplicar(
+                Movimento.saque(u.getId(), cobranca.getValor(), pix, cobranca.getId()));
+        redatar(tx, quando);
+    }
+
+    /** Código copia-e-cola falso, estável entre execuções. */
+    private static String codigoPixFicticio(Long usuarioId, LocalDateTime quando) {
+        return "00020126580014BR.GOV.BCB.PIX0136motoshift-demo-"
+                + usuarioId + "-" + quando.toLocalDate() + "5204000053039865802BR";
+    }
+
+    /**
+     * Carimba um lançamento no passado.
+     *
+     * <p>O ledger data tudo como "agora" — e deve mesmo: quem move dinheiro não
+     * escolhe a data. Mas uma demonstração em que os vinte lançamentos têm o
+     * mesmo minuto não tem gráfico mensal, não tem "ganhos do mês" com recorte
+     * e não tem extrato agrupado por dia. Então a massa — e só ela — reescreve
+     * a data depois, pelo mesmo motivo que o comentário de
+     * {@code Transacao.setCriadoEm} já registrava.
+     */
+    private void redatar(Transacao tx, LocalDateTime quando) {
         tx.setCriadoEm(quando);
         transacaoRepo.save(tx);
     }
 
-    private void saque(Usuario u, String valor, LocalDateTime quando, String pix, Saldos saldos) {
-        Transacao tx = new Transacao();
-        tx.setUsuarioId(u.getId());
-        tx.setTipo(TipoTransacao.SAQUE);
-        tx.setValor(new BigDecimal(valor));
-        tx.setDescricao("Transferência Pix — " + pix);
-        tx.setStatus(StatusTransacao.CONCLUIDO);
-        tx.setIdempotencyKey("saque:" + u.getId() + ":massa-demonstracao");
-        tx.setCriadoEm(quando);
-        transacaoRepo.save(tx);
-        saldos.debitar(u, tx.getValor());
+    /** Todos os lançamentos de um turno, datados junto com o que aconteceu. */
+    private void redatarDinheiroDoTurno(Turno t, LocalDateTime quando) {
+        for (Transacao tx : transacaoRepo.findByTurnoId(t.getId())) {
+            if (tx.getCriadoEm() == null || tx.getCriadoEm().isAfter(quando)) {
+                redatar(tx, quando);
+            }
+        }
     }
 
-    private void carteira(Usuario u, BigDecimal saldo, String pix) {
+    /** Conta sem movimento nenhum também tem carteira — como no cadastro. */
+    private void carteiraVazia(Usuario u) {
+        if (carteiraRepo.existsByUsuarioId(u.getId())) return;
         Carteira c = new Carteira();
         c.setUsuarioId(u.getId());
-        c.setSaldoDisponivel(saldo);
-        c.setChavePix(pix);
         carteiraRepo.save(c);
     }
 
-    /** Acumula o saldo que o extrato criado implica, por conta. */
-    private static final class Saldos {
-        private final Map<Long, BigDecimal> porConta = new HashMap<>();
-
-        void creditar(Usuario u, BigDecimal valor) {
-            porConta.merge(u.getId(), valor, BigDecimal::add);
-        }
-
-        void debitar(Usuario u, BigDecimal valor) {
-            porConta.merge(u.getId(), valor.negate(), BigDecimal::add);
-        }
-
-        BigDecimal de(Usuario u) {
-            return porConta.getOrDefault(u.getId(), BigDecimal.ZERO);
-        }
+    private void chavePix(Usuario u, String pix) {
+        Carteira c = carteiraRepo.findByUsuarioId(u.getId()).orElseGet(() -> {
+            Carteira nova = new Carteira();
+            nova.setUsuarioId(u.getId());
+            return nova;
+        });
+        c.setChavePix(pix);
+        carteiraRepo.save(c);
     }
 
     // ── Avaliações, notas e notificações ─────────────────────────────────────

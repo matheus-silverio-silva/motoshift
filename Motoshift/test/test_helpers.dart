@@ -19,20 +19,31 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
 import 'package:moto_shift/models/carteira.dart';
+import 'package:moto_shift/models/cobranca.dart';
+import 'package:moto_shift/models/documento_fiscal.dart';
+import 'package:moto_shift/models/extrato_filtro.dart';
+import 'package:moto_shift/models/informe_anual.dart';
+import 'package:moto_shift/models/nota_fiscal.dart';
+import 'package:moto_shift/models/nota_fiscal_filtro.dart';
+import 'package:moto_shift/models/perfil_publico.dart';
+import 'package:moto_shift/models/resumo_financeiro.dart';
 import 'package:moto_shift/models/transacao.dart';
 import 'package:moto_shift/models/turno.dart';
 import 'package:moto_shift/models/usuario.dart';
 import 'package:moto_shift/presentation/providers/turno_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_selecionado_provider.dart';
 import 'package:moto_shift/presentation/providers/notificacao_provider.dart';
+import 'package:moto_shift/presentation/providers/pendencias_provider.dart';
 import 'package:moto_shift/services/api/agenda_api.dart';
 import 'package:moto_shift/services/api/api_client.dart';
 import 'package:moto_shift/services/api/auth_api.dart';
+import 'package:moto_shift/services/api/nota_fiscal_api.dart';
 import 'package:moto_shift/services/api/avaliacao_api.dart';
 import 'package:moto_shift/services/api/carteira_api.dart';
 import 'package:moto_shift/services/api/dashboard_api.dart';
 import 'package:moto_shift/services/api/notificacao_api.dart';
 import 'package:moto_shift/services/api/turno_api.dart';
+import 'package:moto_shift/services/api/usuario_api.dart';
 import 'package:moto_shift/services/api_service.dart';
 import 'package:moto_shift/services/auth_service.dart';
 import 'package:moto_shift/theme/app_theme.dart';
@@ -219,8 +230,6 @@ List<Turno> fakeMeusTurnos({DateTime? ancora}) {
       raioEntregaKm: 8,
       status: StatusTurno.finalizado,
       pagamentoStatus: PagamentoStatus.pago,
-      lojistaConfirmouEm: hoje.subtract(const Duration(days: 7)),
-      motoboyConfirmouEm: hoje.subtract(const Duration(days: 7)),
     ),
     Turno(
       id: 203,
@@ -307,8 +316,6 @@ List<Turno> fakeTurnosLojista({DateTime? ancora}) {
       raioEntregaKm: 8,
       status: StatusTurno.finalizado,
       pagamentoStatus: PagamentoStatus.pago,
-      lojistaConfirmouEm: hoje.subtract(const Duration(days: 5)),
-      motoboyConfirmouEm: hoje.subtract(const Duration(days: 5)),
     ),
   ];
 }
@@ -337,6 +344,202 @@ Map<String, dynamic> fakeDashboardLojista() => {
 /// Antes vinha sem transações, e o golden da carteira mostrava só o estado
 /// vazio — ou seja, `_formatarData` ("Hoje, 14:30" / "Ontem, ..." / "12/08,
 /// ...") não era exercitado por teste nenhum. Não quebrava, e viraria falha no
+/// Um extrato variado, com os tipos que o filtro oferece.
+///
+/// Cobre os dois lados do dinheiro e os dois casos do sinal: lançamentos com
+/// `natureza` gravada (o fluxo novo) e um sem ela (linha anterior à V12), que
+/// é o que prova que a tela mostra valor neutro em vez de chutar um lado.
+/// Uma NFS-e simulada, do jeito que o backend a devolve.
+///
+/// [retidos] escolhe a política de tributo: falso (padrão) é o valor
+/// aproximado, com líquido igual ao valor do serviço; verdadeiro é a retenção
+/// na fonte, com o líquido menor.
+NotaFiscal fakeNotaFiscal({bool retidos = false, bool cancelada = false}) {
+  const base = 200.0;
+  const iss = 10.0;
+  const irrf = 3.0;
+  return NotaFiscal(
+    id: 77,
+    turnoId: 202,
+    numero: 12,
+    serie: 'A1',
+    codigoVerificacao: 'A1B2-C3D4',
+    prestadorId: 1,
+    prestadorNome: 'Ricardo Souza',
+    prestadorDocumentoTipo: 'CPF',
+    prestadorCidade: 'Curitiba/PR',
+    tomadorId: 2,
+    tomadorNome: 'Hamburgueria da Cláudia',
+    tomadorDocumentoTipo: 'CNPJ',
+    tomadorDocumento: '**.345.678/0001-**',
+    tomadorCidade: 'Curitiba/PR',
+    descricaoServico: 'Serviço de entrega em turno agendado — Turno Noite. '
+        'Data: 14/08/2025, das 18:00 às 22:00. Região: Batel, Curitiba.',
+    competencia: DateTime(2025, 8, 14, 18),
+    valorServico: base,
+    issAliquota: 0.05,
+    issValor: iss,
+    irrfAliquota: 0.015,
+    irrfValor: irrf,
+    totalTributos: iss + irrf,
+    valorLiquido: retidos ? base - iss - irrf : base,
+    tributosRetidos: retidos,
+    emitidaEm: DateTime(2025, 8, 15, 9, 30),
+    canceladaEm: cancelada ? DateTime(2025, 8, 16, 10) : null,
+    cancelada: cancelada,
+    motivoCancelamento: cancelada ? 'Emitida por engano' : null,
+    papel: 'prestador',
+    transacaoId: 92,
+    operacaoId: '2f1c9c30-0000-4000-8000-000000000001',
+  );
+}
+
+Comprovante fakeComprovante({
+  TipoDocumento tipo = TipoDocumento.reciboRecarga,
+}) {
+  return Comprovante(
+    tipo: tipo,
+    titulo: tipo.titulo,
+    numero: 'RC-00000091',
+    codigoAutenticacao: 'AAAA-BBBB-CCCC-DDDD',
+    transacaoId: 91,
+    operacaoId: null,
+    valor: 500,
+    credito: true,
+    descricao: 'Recarga via Pix',
+    dataHora: DateTime(2025, 8, 15, 9),
+    titularNome: 'Ricardo Souza',
+    titularDocumentoTipo: 'CPF',
+    titularCidade: 'Curitiba/PR',
+    saldoDisponivelApos: 820,
+    detalhes: const [
+      LinhaComprovante('Forma de pagamento', 'Pix'),
+      LinhaComprovante('Situação', 'Pagamento confirmado'),
+      LinhaComprovante('Crédito em', 'Saldo disponível'),
+    ],
+  );
+}
+
+DocumentoFiscal fakeDocumentoNota({bool retidos = false}) =>
+    DocumentoFiscal.daNota(fakeNotaFiscal(retidos: retidos));
+
+DocumentoFiscal fakeDocumentoComprovante() => DocumentoFiscal(
+      tipo: TipoDocumento.reciboRecarga,
+      transacaoId: 91,
+      marca: DocumentoFiscal.marcaPadrao,
+      comprovante: fakeComprovante(),
+    );
+
+List<Transacao> fakeExtrato() {
+  final dia = DateTime(
+      dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
+  return [
+    Transacao(
+      id: 91,
+      motoboyId: 1,
+      tipo: TipoTransacao.recarga,
+      natureza: NaturezaTransacao.credito,
+      valor: 500,
+      descricao: 'Recarga via Pix',
+      criadoEm: dia.add(const Duration(hours: 9)),
+      saldoDisponivelApos: 820,
+      // Todo lançamento concluído tem documento; a recarga, um recibo.
+      documentoDisponivel: true,
+      tipoDocumento: TipoDocumento.reciboRecarga,
+    ),
+    Transacao(
+      id: 92,
+      motoboyId: 1,
+      contraparteId: 2,
+      turnoId: 202,
+      tipo: TipoTransacao.pagamentoRecebido,
+      natureza: NaturezaTransacao.credito,
+      valor: 120,
+      descricao: 'Turno finalizado: Hamburgueria da Cláudia',
+      // Pagamento de turno: gera NFS-e, e esta já foi emitida (nota 77).
+      documentoDisponivel: true,
+      tipoDocumento: TipoDocumento.nfse,
+      documentoId: 77,
+      criadoEm: dia.subtract(const Duration(days: 1, hours: 4)),
+      operacaoId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      saldoDisponivelApos: 320,
+    ),
+    Transacao(
+      id: 93,
+      motoboyId: 1,
+      tipo: TipoTransacao.saque,
+      natureza: NaturezaTransacao.debito,
+      valor: 200,
+      descricao: 'Transferência Pix — ricardo@pix.com',
+      criadoEm: dia.subtract(const Duration(days: 2, hours: 3)),
+      saldoDisponivelApos: 200,
+    ),
+    // Sem natureza: linha do histórico, anterior à coluna existir.
+    Transacao(
+      id: 94,
+      motoboyId: 1,
+      turnoId: 201,
+      tipo: TipoTransacao.desconhecido,
+      valor: 45,
+      descricao: 'Lançamento antigo sem natureza',
+      criadoEm: dia.subtract(const Duration(days: 3, hours: 2)),
+    ),
+  ];
+}
+
+ResumoFinanceiro fakeResumoFinanceiro() {
+  final dia = DateTime(
+      dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
+  return ResumoFinanceiro(
+    dataInicio: dia.subtract(const Duration(days: 29)),
+    dataFim: dia,
+    entradas: 620,
+    saidas: 200,
+    liquido: 420,
+    disponivel: 820,
+    bloqueado: 360,
+    aReceber: 240,
+    comprometido: 360,
+    reservasAbertas: const [
+      ReservaAberta(turnoId: 301, titulo: 'Turno Noite — Hamburgueria', valor: 240),
+      ReservaAberta(turnoId: 302, titulo: 'Turno Manhã — Farmácia Ana', valor: 120),
+    ],
+    porTipo: const [
+      TotalPorTipo(
+          tipo: TipoTransacao.recarga,
+          natureza: NaturezaTransacao.credito,
+          total: 500,
+          quantidade: 1),
+      TotalPorTipo(
+          tipo: TipoTransacao.saque,
+          natureza: NaturezaTransacao.debito,
+          total: 200,
+          quantidade: 1),
+    ],
+  );
+}
+
+List<PontoDeFluxo> fakeFluxo() {
+  final dia = DateTime(
+      dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
+  return [
+    PontoDeFluxo(
+        inicio: dia.subtract(const Duration(days: 2)),
+        rotulo: '10/08',
+        entradas: 0,
+        saidas: 200,
+        liquido: -200),
+    PontoDeFluxo(
+        inicio: dia.subtract(const Duration(days: 1)),
+        rotulo: '11/08',
+        entradas: 120,
+        saidas: 0,
+        liquido: 120),
+    PontoDeFluxo(
+        inicio: dia, rotulo: '12/08', entradas: 500, saidas: 0, liquido: 500),
+  ];
+}
+
 /// dia em que alguém acrescentasse dados aqui.
 ///
 /// Os três lançamentos cobrem os três ramos do formatador, de propósito. As
@@ -347,7 +550,7 @@ Carteira fakeCarteira() {
       dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
   return Carteira(
     motoboyId: 1,
-    saldoAtual: 320,
+    saldoDisponivel: 320,
     ganhosMensais: 1850,
     atualizadoEm: dia.add(const Duration(hours: 14, minutes: 30)),
     transacoes: [
@@ -504,6 +707,37 @@ class FakeTurnoApi extends TurnoApi {
   Future<List<Turno>> listarTurnosDisponiveis({DateTime? data}) async =>
       fakeTurnosDisponiveis();
 
+  /// Qualquer turno dos fakes, pelo id — é o que a notificação usa para
+  /// montar o destino.
+  @override
+  Future<Turno> buscarTurno(int turnoId) async {
+    final todos = [
+      ...fakeTurnosDisponiveis(),
+      ...fakeMeusTurnos(),
+      ...fakeTurnosLojista(),
+    ];
+    for (final t in todos) {
+      if (t.id == turnoId) return t;
+    }
+    throw const ApiException(404, 'Turno não encontrado.');
+  }
+
+  /// Um inscrito por turno: o entregador dos fakes.
+  ///
+  /// Sem este override a tela do lojista cairia no `catch` de
+  /// `_sincronizarInscritos`, que tenta a rede de verdade — e o card do
+  /// entregador só apareceria depois de o socket desistir, ou seja, nunca
+  /// dentro de um golden.
+  @override
+  Future<List<Map<String, dynamic>>> listarInscritos(int turnoId) async => [
+        {
+          'motoboyId': 1,
+          'nome': 'Ricardo Souza',
+          'status': 'ACEITO',
+          'pagamentoStatus': 'PAGO',
+        },
+      ];
+
   @override
   Future<List<Turno>> listarTurnosLojista(int lojistId) async =>
       fakeTurnosLojista();
@@ -527,11 +761,141 @@ class FakeTurnoApi extends TurnoApi {
       fakeTurnosDisponiveis();
 }
 
+/// Carteira falsa, com o extrato filtrado no próprio fake.
+///
+/// O filtro é aplicado aqui, e não ignorado, porque é exatamente o que o teste
+/// de extrato precisa verificar: que a tela manda o filtro certo e desenha o
+/// que voltou. Um fake que devolvesse tudo faria o teste passar mesmo se a tela
+/// parasse de filtrar.
 class FakeCarteiraApi extends CarteiraApi {
   FakeCarteiraApi() : super(ApiClient());
 
+  /// Registro do que a tela pediu — para o teste conferir o filtro enviado.
+  final List<ExtratoFiltro> filtrosRecebidos = [];
+
+  /// Cobranças criadas, para o teste de recarga acompanhar o fluxo.
+  final List<Cobranca> recargasCriadas = [];
+  final List<int> confirmacoes = [];
+
+  int _proximaCobranca = 900;
+
+  /// Documentos gerados pela tela — o teste confere qual lançamento foi pedido.
+  final List<int> documentosGerados = [];
+
   @override
   Future<Carteira> buscarCarteira(int motoboyId) async => fakeCarteira();
+
+  @override
+  Future<DocumentoFiscal> gerarDocumento(int transacaoId) async {
+    documentosGerados.add(transacaoId);
+    return _documentoDe(transacaoId);
+  }
+
+  @override
+  Future<DocumentoFiscal> buscarDocumento(int transacaoId) async =>
+      _documentoDe(transacaoId);
+
+  /// A regra do backend em miniatura: pagamento de turno vira NFS-e, o resto
+  /// vira comprovante.
+  DocumentoFiscal _documentoDe(int transacaoId) {
+    final lancamento = fakeExtrato().where((t) => t.id == transacaoId).firstOrNull;
+    return lancamento?.tipoDocumento == TipoDocumento.nfse
+        ? fakeDocumentoNota()
+        : fakeDocumentoComprovante();
+  }
+
+  @override
+  Future<PaginaDoExtrato> buscarExtrato({
+    ExtratoFiltro filtro = const ExtratoFiltro(),
+    int pagina = 0,
+    int tamanho = 20,
+  }) async {
+    filtrosRecebidos.add(filtro);
+
+    final todos = fakeExtrato();
+    final filtrados = todos.where((t) {
+      if (filtro.tipos.isNotEmpty && !filtro.tipos.contains(t.tipo)) {
+        return false;
+      }
+      if (filtro.natureza != null && t.natureza != filtro.natureza) {
+        return false;
+      }
+      if (filtro.busca != null && filtro.busca!.isNotEmpty) {
+        if (!t.descricao.toLowerCase().contains(filtro.busca!.toLowerCase())) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+
+    final de = pagina * tamanho;
+    final ate = (de + tamanho).clamp(0, filtrados.length);
+    return (
+      itens: de >= filtrados.length ? <Transacao>[] : filtrados.sublist(de, ate),
+      total: filtrados.length,
+    );
+  }
+
+  @override
+  Future<ResumoFinanceiro> buscarResumo({
+    DateTime? dataInicio,
+    DateTime? dataFim,
+  }) async =>
+      fakeResumoFinanceiro();
+
+  @override
+  Future<List<PontoDeFluxo>> buscarFluxo({
+    String agrupamento = 'dia',
+    DateTime? dataInicio,
+    DateTime? dataFim,
+  }) async =>
+      fakeFluxo();
+
+  @override
+  Future<String> exportarExtratoCsv({
+    ExtratoFiltro filtro = const ExtratoFiltro(),
+  }) async =>
+      'data;tipo;valor\n01/09/2026 12:00;recarga;500.00\n';
+
+  @override
+  Future<Cobranca> criarRecarga(double valor) async {
+    final c = Cobranca(
+      id: _proximaCobranca++,
+      tipo: TipoCobranca.recarga,
+      valor: valor,
+      status: StatusCobranca.pendente,
+      codigoPix: '00020126580014BR.GOV.BCB.PIX0136motoshift-demo-fake',
+      criadaEm: dataAncoraGolden,
+    );
+    recargasCriadas.add(c);
+    return c;
+  }
+
+  @override
+  Future<Cobranca> confirmarRecarga(int cobrancaId) async {
+    confirmacoes.add(cobrancaId);
+    final pendente = recargasCriadas.firstWhere((c) => c.id == cobrancaId);
+    return Cobranca(
+      id: pendente.id,
+      tipo: pendente.tipo,
+      valor: pendente.valor,
+      status: StatusCobranca.concluido,
+      codigoPix: pendente.codigoPix,
+      criadaEm: pendente.criadaEm,
+      concluidaEm: dataAncoraGolden,
+    );
+  }
+
+  @override
+  Future<Cobranca> solicitarSaque(double valor) async => Cobranca(
+        id: _proximaCobranca++,
+        tipo: TipoCobranca.saque,
+        valor: valor,
+        status: StatusCobranca.concluido,
+        codigoPix: 'entregador@pix.com',
+        criadaEm: dataAncoraGolden,
+        concluidaEm: dataAncoraGolden,
+      );
 
   @override
   Future<List<Map<String, dynamic>>> buscarGrafico(int motoboyId,
@@ -582,13 +946,34 @@ class FakeAvaliacaoApi extends AvaliacaoApi {
   @override
   Future<List<int>> buscarTurnosAvaliados(int usuarioId) async => [1, 2];
 
+  /// Turnos 1 e 2 já avaliados; os demais ainda devem uma nota.
+  ///
+  /// É a mesma seleção de [buscarTurnosAvaliados], agora expressa do lado
+  /// certo: a tela pergunta "quem falta neste turno", e não "quais turnos já
+  /// toquei". Um pendente por turno — o caso multi-vaga tem fake próprio,
+  /// em `avaliacao_multivaga_test.dart`.
+  static const _jaAvaliados = {1, 2};
+
   @override
-  Future<bool> verificarPendente(int turnoId, int usuarioId) async => false;
+  Future<bool> verificarPendente(int turnoId, int usuarioId) async =>
+      !_jaAvaliados.contains(turnoId);
 
   @override
   Future<({bool precisaAvaliar, List<Map<String, dynamic>> pendentes})>
-      buscarAvaliacoesPendentes(int turnoId, int usuarioId) async =>
-          (precisaAvaliar: false, pendentes: <Map<String, dynamic>>[]);
+      buscarAvaliacoesPendentes(int turnoId, int usuarioId) async {
+    if (_jaAvaliados.contains(turnoId)) {
+      return (precisaAvaliar: false, pendentes: <Map<String, dynamic>>[]);
+    }
+    // A outra parte do turno: o lojista (id 2) deve nota ao entregador, e o
+    // entregador (id 1) à loja.
+    final contraparte = usuarioId == 2
+        ? {'usuarioId': 1, 'nome': 'Ricardo Souza'}
+        : {'usuarioId': 2, 'nome': 'Cláudia Oliveira'};
+    return (
+      precisaAvaliar: true,
+      pendentes: <Map<String, dynamic>>[contraparte],
+    );
+  }
 }
 
 class FakeNotificacaoApi extends NotificacaoApi {
@@ -609,6 +994,138 @@ class FakeNotificacaoApi extends NotificacaoApi {
   }
 }
 
+/// Notas fiscais vazias.
+///
+/// Sem fake, `pendentes()` saía para a rede de verdade — o mock de HTTP dos
+/// testes não responde, e cada chamada esperava o timeout do ApiClient. O
+/// PendenciasProvider consulta as notas a cada carregamento, então todo
+/// teste que tocasse o menu pagava ~20 s por isso.
+/// Notas fiscais falsas, com memória do que a tela pediu.
+///
+/// Guarda [ultimoFiltro] porque é isso que os testes de filtro precisam
+/// prender: a tela manda o filtro à API, em vez de baixar tudo e peneirar na
+/// memória — o contrário volta a crescer sem limite com o tempo de uso.
+class FakeNotaFiscalApi extends NotaFiscalApi {
+  FakeNotaFiscalApi() : super(ApiClient());
+
+  NotaFiscalFiltro? ultimoFiltro;
+  int? ultimaPagina;
+  int? ultimoTamanho;
+  int? anoPedidoNoResumo;
+  int exportacoesDoResumo = 0;
+
+  /// A lista e o total são independentes de propósito: assim um teste pede
+  /// "2 de 7" e vê o botão de carregar mais.
+  List<NotaFiscal> notas = const [];
+  int total = 0;
+  List<NotaFiscalPendente> listaPendentes = const [];
+  InformeAnual informe = fakeInformeAnual();
+
+  @override
+  Future<PaginaDeNotas> listar({
+    NotaFiscalFiltro filtro = const NotaFiscalFiltro(),
+    int? pagina,
+    int tamanho = 20,
+  }) async {
+    ultimoFiltro = filtro;
+    ultimaPagina = pagina;
+    ultimoTamanho = tamanho;
+    return PaginaDeNotas(notas: notas.take(tamanho).toList(), total: total);
+  }
+
+  @override
+  Future<InformeAnual> resumo({int? ano}) async {
+    anoPedidoNoResumo = ano;
+    return informe;
+  }
+
+  @override
+  Future<String> exportarResumo({int? ano}) async {
+    exportacoesDoResumo++;
+    return 'ano;total\n$ano;1200,00\n';
+  }
+
+  @override
+  Future<List<NotaFiscalPendente>> pendentes() async => listaPendentes;
+}
+
+/// Informe anual falso: dois meses com movimento, duas fontes pagadoras e um
+/// pagamento ainda sem nota — o caso que a tela precisa saber contar.
+InformeAnual fakeInformeAnual({
+  int? ano,
+  String papel = 'prestador',
+  bool retido = false,
+}) {
+  return InformeAnual(
+    ano: ano ?? DateTime.now().year,
+    papel: papel,
+    titulo: papel == 'prestador'
+        ? 'Informe de rendimentos'
+        : 'Informe de serviços tomados',
+    total: 1200,
+    issRetido: retido ? 60 : 0,
+    irrfRetido: retido ? 18 : 0,
+    pagamentos: 6,
+    notasEmitidas: 5,
+    contrapartes: [
+      const ContraparteDoInforme(
+        contraparteId: 2,
+        nome: 'Hamburgueria da Cláudia',
+        documentoTipo: 'CNPJ',
+        documento: '**.345.678/0001-**',
+        total: 800,
+        issRetido: 0,
+        irrfRetido: 0,
+        pagamentos: 4,
+        notasEmitidas: 4,
+      ),
+      const ContraparteDoInforme(
+        contraparteId: 5,
+        nome: 'Pizzaria do Bairro',
+        documentoTipo: 'CNPJ',
+        total: 400,
+        issRetido: 0,
+        irrfRetido: 0,
+        pagamentos: 2,
+        notasEmitidas: 1,
+      ),
+    ],
+    meses: [
+      for (var m = 1; m <= 12; m++)
+        MesDoInforme(
+          mes: m,
+          total: m == 8 ? 800 : (m == 9 ? 400 : 0),
+          pagamentos: m == 8 ? 4 : (m == 9 ? 2 : 0),
+        ),
+    ],
+    marca: 'DOCUMENTO SIMULADO — SEM VALOR FISCAL',
+  );
+}
+
+
+/// Perfil público de outra conta. Devolve o fake do papel pedido — id 2 é a
+/// lojista, qualquer outro é o entregador.
+class FakeUsuarioApi extends UsuarioApi {
+  FakeUsuarioApi() : super(ApiClient());
+
+  @override
+  Future<PerfilPublico> buscarPerfilPublico(int usuarioId) async {
+    final u = usuarioId == 2 ? fakeLojista() : fakeMotoboy();
+    return PerfilPublico(
+      id: u.id!,
+      nome: u.nome,
+      tipo: u.tipo.name,
+      cidade: u.cidade,
+      estado: u.estado,
+      score: u.score,
+      mediaAvaliacao: u.mediaAvaliacao,
+      veiculoModelo: u.veiculoModelo,
+      veiculoCor: u.veiculoCor,
+      nomeFantasia: u.nomeFantasia,
+    );
+  }
+}
+
 /// O ApiService dos testes: mesma montagem do de produção, com cada domínio
 /// trocado pelo seu fake.
 class FakeApiService extends ApiService {
@@ -621,6 +1138,14 @@ class FakeApiService extends ApiService {
   @override
   TurnoApi get turnos => _turnos;
   final TurnoApi _turnos = FakeTurnoApi();
+
+  @override
+  UsuarioApi get usuarios => _usuarios;
+  final UsuarioApi _usuarios = FakeUsuarioApi();
+
+  @override
+  NotaFiscalApi get notasFiscais => _notasFiscais;
+  final NotaFiscalApi _notasFiscais = FakeNotaFiscalApi();
 
   @override
   CarteiraApi get carteira => _carteira;
@@ -678,8 +1203,6 @@ List<Turno> fakeTurnosEncerradosFixos() {
       raioEntregaKm: 8,
       status: StatusTurno.finalizado,
       pagamentoStatus: PagamentoStatus.pago,
-      lojistaConfirmouEm: base.subtract(const Duration(days: 7)),
-      motoboyConfirmouEm: base.subtract(const Duration(days: 7)),
     ),
     Turno(
       id: 403,
@@ -791,6 +1314,9 @@ Future<void> pumpGolden(
           value: selecaoProv),
       ChangeNotifierProvider<NotificacaoProvider>(
         create: (_) => NotificacaoProvider(api),
+      ),
+      ChangeNotifierProvider<PendenciasProvider>(
+        create: (_) => PendenciasProvider(api),
       ),
     ],
     child: MaterialApp(
@@ -1229,3 +1755,16 @@ const List<int> _pngTransparente1x1 = <int>[
   0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, // IEND
   0xAE, 0x42, 0x60, 0x82,
 ];
+
+/// Faz o canal `flutter/platform` responder dentro do relógio falso do teste.
+///
+/// Sem isto, `Clipboard.setData` só é respondido fora do `pump`, e a tela que
+/// espera a cópia terminar fica girando o spinner para sempre — `pumpAndSettle`
+/// estoura em vez de falhar a asserção. Quem exercita "Exportar CSV" chama
+/// isto antes do toque.
+void fingirAreaDeTransferencia(WidgetTester tester) {
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+    SystemChannels.platform,
+    (call) async => null,
+  );
+}

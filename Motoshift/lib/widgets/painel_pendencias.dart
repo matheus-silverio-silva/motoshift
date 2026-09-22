@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/turno.dart';
-import '../models/usuario.dart';
+import '../presentation/providers/pendencias_provider.dart';
 import '../routes/app_routes.dart';
-import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 
@@ -15,8 +13,10 @@ import '../theme/app_theme.dart';
 /// painel só é montado quando há pendência — sem nada a fazer, ele não existe,
 /// e o início continua limpo.
 ///
-/// Carrega os próprios dados e engole falha de rede de propósito: é um resumo
-/// auxiliar, e derrubar o início por causa dele seria desproporcional.
+/// Os números vêm do [PendenciasProvider], e não de uma consulta própria: o
+/// painel contava turnos a avaliar por `/avaliacoes/feitas`, que devolve ids
+/// distintos de turno, e portanto dizia "1 turno para avaliar" quando o
+/// lojista ainda devia nota a três entregadores.
 class PainelPendencias extends StatefulWidget {
   const PainelPendencias({super.key});
 
@@ -25,64 +25,24 @@ class PainelPendencias extends StatefulWidget {
 }
 
 class _PainelPendenciasState extends State<PainelPendencias> {
-  int _avaliacoes = 0;
-  int _notas = 0;
-  bool _pronto = false;
-
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _carregar());
-  }
-
-  Future<void> _carregar() async {
-    final auth = context.read<AuthService>();
-    final api = context.read<ApiService>();
-    final usuario = auth.usuario;
-    if (usuario?.id == null) return;
-
-    final avaliacoes = await _contarAvaliacoes(api, usuario!);
-    final notas = await _contarNotas(api);
-
-    if (!mounted) return;
-    setState(() {
-      _avaliacoes = avaliacoes;
-      _notas = notas;
-      _pronto = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context
+          .read<PendenciasProvider>()
+          .garantirCarregado(context.read<AuthService>().usuario);
     });
-  }
-
-  /// Turnos finalizados que este usuário ainda não avaliou — a mesma regra da
-  /// central de avaliações.
-  Future<int> _contarAvaliacoes(ApiService api, Usuario usuario) async {
-    try {
-      final id = usuario.id!;
-      final turnos = usuario.tipo == TipoUsuario.lojista
-          ? await api.turnos.listarTurnosLojista(id)
-          : await api.turnos.listarMeusTurnos(id);
-      final avaliados = (await api.avaliacoes.buscarTurnosAvaliados(id)).toSet();
-      return turnos
-          .where((t) =>
-              t.status == StatusTurno.finalizado &&
-              t.id != null &&
-              !avaliados.contains(t.id))
-          .length;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  Future<int> _contarNotas(ApiService api) async {
-    try {
-      return (await api.notasFiscais.pendentes()).length;
-    } catch (_) {
-      return 0;
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_pronto || (_avaliacoes == 0 && _notas == 0)) {
+    final pendencias = context.watch<PendenciasProvider>();
+    final avaliacoes = pendencias.quantidadeAvaliacoes;
+    final notas = pendencias.quantidadeNotas;
+
+    if (!pendencias.carregado || (avaliacoes == 0 && notas == 0)) {
       return const SizedBox.shrink();
     }
 
@@ -104,24 +64,26 @@ class _PainelPendenciasState extends State<PainelPendencias> {
               style: tsJakarta(9, FontWeight.w700, color: AppColors.muted)
                   .copyWith(letterSpacing: 0.9)),
           const SizedBox(height: 10),
-          if (_avaliacoes > 0)
+          // "Avaliações", e não "turnos": num turno de três vagas o lojista
+          // deve três notas, e contar o turno uma vez escondia duas delas.
+          if (avaliacoes > 0)
             _Pendencia(
               icone: Icons.star_outline_rounded,
               cor: AppColors.amber,
-              titulo: _avaliacoes == 1
-                  ? '1 turno para avaliar'
-                  : '$_avaliacoes turnos para avaliar',
+              titulo: avaliacoes == 1
+                  ? '1 avaliação a fazer'
+                  : '$avaliacoes avaliações a fazer',
               subtitulo: 'A nota entra na reputação dos dois lados.',
               onTap: () => _abrir(AppRoutes.minhasAvaliacoes),
             ),
-          if (_avaliacoes > 0 && _notas > 0) const SizedBox(height: 8),
-          if (_notas > 0)
+          if (avaliacoes > 0 && notas > 0) const SizedBox(height: 8),
+          if (notas > 0)
             _Pendencia(
               icone: Icons.receipt_long_outlined,
               cor: AppColors.teal,
-              titulo: _notas == 1
+              titulo: notas == 1
                   ? '1 nota fiscal a emitir'
-                  : '$_notas notas fiscais a emitir',
+                  : '$notas notas fiscais a emitir',
               subtitulo: 'Turnos concluídos sem NFS-e.',
               onTap: () => _abrir(AppRoutes.notasFiscais),
             ),
@@ -134,7 +96,11 @@ class _PainelPendenciasState extends State<PainelPendencias> {
   /// precisa voltar para lá depois de resolver a pendência.
   Future<void> _abrir(String rota) async {
     await Navigator.pushNamed(context, rota);
-    if (mounted) _carregar();
+    if (!mounted) return;
+    // Recarrega ao voltar: a pendência pode ter sido resolvida lá dentro.
+    context
+        .read<PendenciasProvider>()
+        .carregar(context.read<AuthService>().usuario);
   }
 }
 

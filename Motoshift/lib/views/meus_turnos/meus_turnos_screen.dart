@@ -2,12 +2,14 @@ import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/turno.dart';
+import '../../presentation/providers/pendencias_provider.dart';
 import '../../presentation/providers/turno_provider.dart';
+import '../../presentation/providers/turno_selecionado_provider.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import 'package:latlong2/latlong.dart';
-import '../avaliacao/avaliacao_screen.dart';
+import '../../routes/abrir_avaliacao.dart';
 import 'filtros_turnos_sheet.dart';
 import 'turnos_cards.dart';
 import 'turnos_conteudo_desktop.dart';
@@ -16,13 +18,25 @@ import '../../widgets/mapa_raio.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/breakpoints.dart';
 import '../../widgets/adaptive_scaffold.dart';
-import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/desktop/app_topbar.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/section_title.dart';
 import '../../widgets/shift_card.dart';
 import '../../widgets/status_pill.dart';
+
+/// Estado inicial da seção "Turnos" — ver [NavConfig.irParaSecao].
+class MeusTurnosArgs {
+  const MeusTurnosArgs({this.focarAceitos = false});
+
+  /// Abre a lista já posicionada nos turnos que a pessoa aceitou.
+  ///
+  /// Quem pede isto é o "Ver todos" de **Turnos aceitos** no dashboard do
+  /// entregador. Sem o parâmetro ele abria esta tela no topo, em "Turnos
+  /// disponíveis", com os aceitos abaixo da dobra: o link prometia a lista
+  /// completa dos aceitos e entregava a lista dos disponíveis.
+  final bool focarAceitos;
+}
 
 class MeusTurnosScreen extends StatefulWidget {
   const MeusTurnosScreen({super.key, this.agora});
@@ -52,6 +66,19 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
   /// não é "vazia", ela é "não sei onde você está".
   FalhaLocalizacao? _falhaLocalizacao;
 
+  // ── Foco nos aceitos (MeusTurnosArgs.focarAceitos) ───────────────────────
+  final ScrollController _scroll = ScrollController();
+  final GlobalKey _chaveAceitos = GlobalKey();
+
+  /// O foco é uma posição inicial, não um modo: acontece uma vez, e daí em
+  /// diante a rolagem é de quem está lendo.
+  bool _jaFocou = false;
+
+  MeusTurnosArgs? get _args {
+    final a = ModalRoute.of(context)?.settings.arguments;
+    return a is MeusTurnosArgs ? a : null;
+  }
+
   bool get _porPerto => _lat != null && _lng != null;
 
   bool get _hasFilters =>
@@ -65,6 +92,12 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _carregar());
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
   }
 
   Future<void> _carregar() async {
@@ -355,18 +388,8 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     return 'Boa noite,';
   }
 
-  void _onNav(int i) {
-    switch (i) {
-      case 0:
-        Navigator.pushReplacementNamed(context, AppRoutes.dashboardMotoboy);
-      case 1:
-        break;
-      case 2:
-        Navigator.pushReplacementNamed(context, AppRoutes.carteira);
-      case 3:
-        Navigator.pushReplacementNamed(context, AppRoutes.perfil);
-    }
-  }
+  // O _onNav desta tela saiu: era um dos sete switches identicos de barra
+  // inferior. Ver NavConfig — a tela agora informa so a secao em que esta.
 
   @override
   Widget build(BuildContext context) {
@@ -382,14 +405,11 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         name: nome,
         avatarInitials: initials,
       ),
-      bottomNav: AppBottomNav(
-        userType: UserType.motoboy,
-        currentIndex: 1,
-        onTap: _onNav,
-      ),
       body: Consumer<TurnoProvider>(
         builder: (context, provider, _) {
+          _talvezFocarAceitos(provider);
           return ListView(
+            controller: _scroll,
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
             children: [
               _buildControleRaio(provider.turnosDisponiveis),
@@ -408,14 +428,14 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
           );
         },
       ),
-      desktopTitle: 'Turnos disponíveis',
+      desktopTitle: 'Turnos',
       // O `watch` só é registrado quando o subtítulo vai mesmo ser usado. Se
       // ficasse solto aqui, o celular — que nem tem topbar — passaria a
       // rebuildar a tela inteira a cada notifyListeners() do provider.
       desktopSubtitle: context.isDesktop
           ? _subtituloDesktop(context.watch<TurnoProvider>())
           : null,
-      desktopSelectedRoute: AppRoutes.turnosDisponiveis,
+      rotaDaSecao: AppRoutes.turnosDisponiveis,
       desktopPrimaryAction: TopbarSecondaryButton(
         label: _hasFilters ? 'Filtros ativos' : 'Filtrar',
         icon: Icons.tune_rounded,
@@ -460,6 +480,58 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
   /// acontecendo) — a mesma seleção que o mobile mostra em "Meus turnos".
   List<Turno> _turnosAceitos(TurnoProvider provider) =>
       provider.meusTurnos.proximos(hoje: widget.agora);
+
+  // ── Foco nos aceitos ──────────────────────────────────────────────────────
+
+  /// Posiciona a tela nos turnos aceitos quando ela foi aberta por
+  /// [MeusTurnosArgs.focarAceitos].
+  ///
+  /// Espera os dados: com a lista ainda carregando não há seção para focar
+  /// nem turno para selecionar, e o foco seria gasto à toa — por isso o
+  /// [_jaFocou] só é marcado quando o foco de fato acontece.
+  void _talvezFocarAceitos(TurnoProvider provider) {
+    if (_jaFocou || _args?.focarAceitos != true || provider.carregando) return;
+    final aceitos = _turnosAceitos(provider);
+    if (aceitos.isEmpty) return;
+    _jaFocou = true;
+
+    if (context.isDesktop) {
+      // No desktop a coluna da esquerda já abre com "Meus turnos" no topo; o
+      // que faltava era o painel da direita, que dizia "Selecione um turno"
+      // depois de a pessoa ter pedido justamente para ver os aceitos.
+      final primeiro = aceitos.first.id;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          context.read<TurnoSelecionadoProvider>().selecionar(primeiro);
+        }
+      });
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => _rolarAteAceitos());
+  }
+
+  /// Rola o celular até a seção dos aceitos, em dois passos.
+  ///
+  /// O `jumpTo` vem primeiro porque a seção é o último bloco da lista:
+  /// enquanto o viewport não a constrói, o [GlobalKey] não tem contexto para
+  /// o `ensureVisible` agarrar. Com ela montada, o `ensureVisible` termina o
+  /// serviço alinhando o título no topo — o `jumpTo` sozinho pararia no fim
+  /// da rolagem, que corta o título quando a seção é alta.
+  void _rolarAteAceitos() {
+    if (!mounted || !_scroll.hasClients) return;
+    _scroll.jumpTo(_scroll.position.maxScrollExtent);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final alvo = _chaveAceitos.currentContext;
+      if (!mounted || alvo == null) return;
+      Scrollable.ensureVisible(
+        alvo,
+        alignment: 0.02,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
+  }
 
 
   Widget _buildDisponiveisSection(
@@ -586,6 +658,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     if (ativo == null && proximos.isEmpty) return const SizedBox.shrink();
 
     return Column(
+      key: _chaveAceitos,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (ativo != null) ...[
@@ -598,7 +671,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         ],
         if (proximos.isNotEmpty) ...[
           SectionTitle(
-            title: 'Próximos turnos',
+            title: 'Turnos aceitos',
             action: '${proximos.length} agendado(s)',
           ),
           ...proximos
@@ -631,8 +704,16 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     final ok = await provider.finalizarTurno(turno.id!);
     if (!mounted) return;
     if (ok) {
-      await _mostrarDialogAvaliacao(turno);
+      // Terceiro dos cinco caminhos até a avaliação — e o terceiro que
+      // passava `nomeAvaliado: turno.titulo`, mostrando "Turno Noite —
+      // Hamburgueria" onde deveria estar o nome da loja. Ver abrirAvaliacao.
+      await abrirAvaliacao(context, turno);
+      if (!mounted) return;
       _carregar();
+      // O selo do menu e o painel do início contam a mesma pendência.
+      context
+          .read<PendenciasProvider>()
+          .carregar(context.read<AuthService>().usuario);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -653,22 +734,6 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     if (ok) _carregar();
   }
 
-  Future<void> _mostrarDialogAvaliacao(Turno turno) async {
-    final auth = context.read<AuthService>();
-    final motoboyId = auth.usuario?.id;
-    if (motoboyId == null) return;
-
-    await Navigator.pushNamed(
-      context,
-      AppRoutes.avaliacao,
-      arguments: AvaliacaoArgs(
-        turnoId: turno.id!,
-        avaliadorId: motoboyId,
-        avaliadoId: turno.lojistId,
-        nomeAvaliado: turno.titulo,
-      ),
-    );
-  }
 
   void _abrirFiltros() {
     showModalBottomSheet(

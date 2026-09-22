@@ -8,9 +8,9 @@ import com.motoshift.security.JwtAuthFilter;
 import com.motoshift.security.JwtService;
 import com.motoshift.security.RespostaDeErro;
 import com.motoshift.security.SecurityConfig;
-import com.motoshift.service.PagamentoTurnoService;
 import com.motoshift.service.TurnoConsultaService;
 import com.motoshift.service.TurnoService;
+import com.motoshift.service.ledger.RetentativaOtimista;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -46,7 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest(TurnoController.class)
 @Import({SecurityConfig.class, JwtAuthFilter.class, JwtService.class,
-         RespostaDeErro.class, ApiExceptionHandler.class})
+         RespostaDeErro.class, ApiExceptionHandler.class, RetentativaOtimista.class})
 @ActiveProfiles("test")
 class TurnoControllerTest {
 
@@ -56,7 +56,10 @@ class TurnoControllerTest {
 
     @MockBean private TurnoService service;
     @MockBean private TurnoConsultaService consultas;
-    @MockBean private PagamentoTurnoService pagamentos;
+    // Nao e mock: o retry e um laco de tres tentativas sem estado e sem I/O, e
+    // mocka-lo faria o teste passar mesmo se o controller parasse de chamar o
+    // service.
+    @Autowired private RetentativaOtimista retentativa;
 
     @Test
     @DisplayName("publicar turno usa o id do token e ignora o lojistId do corpo")

@@ -1,145 +1,16 @@
 import 'package:flutter/material.dart';
-import '../../routes/app_routes.dart';
+import '../../routes/nav_config.dart';
 import '../../theme/app_theme.dart';
 
-/// Item de navegação da barra lateral.
-class SidebarItem {
-  const SidebarItem({
-    required this.icon,
-    required this.label,
-    required this.route,
-    this.badge,
-  });
-
-  final IconData icon;
-  final String label;
-  final String route;
-  final String? badge;
-}
-
-/// Um grupo de itens sob um rótulo ("OPERAÇÃO", "FINANCEIRO"…).
-class SidebarSection {
-  const SidebarSection({required this.label, required this.items});
-
-  final String label;
-  final List<SidebarItem> items;
-}
-
-/// O menu do aplicativo, por papel — a lista completa, não um resumo.
-///
-/// A versão anterior tinha cinco itens por papel e tudo o mais vivia dentro do
-/// Perfil: as avaliações do lojista, por exemplo, estavam a três toques de
-/// distância e sem nenhuma entrada no menu. Quem não soubesse que a tela
-/// existia não a encontrava.
-///
-/// Agora toda tela alcançável sem argumento de rota tem uma entrada aqui, em
-/// quatro grupos: o que o usuário faz (operação), o dinheiro, a reputação e a
-/// conta. Telas que precisam de um turno específico (avaliar um entregador,
-/// detalhe do turno) continuam de fora — não há como abri-las do menu sem
-/// escolher o turno antes.
-class SidebarItems {
-  SidebarItems._();
-
-  static List<SidebarSection> lojista({String? badgeNotificacoes}) => [
-        SidebarSection(label: 'OPERAÇÃO', items: [
-          const SidebarItem(
-              icon: Icons.home_outlined,
-              label: 'Início',
-              route: AppRoutes.dashboardLojista),
-          const SidebarItem(
-              icon: Icons.calendar_month_outlined,
-              label: 'Agenda',
-              route: AppRoutes.agenda),
-          const SidebarItem(
-              icon: Icons.local_shipping_outlined,
-              label: 'Turnos',
-              route: AppRoutes.turnosLojista),
-          const SidebarItem(
-              icon: Icons.add_box_outlined,
-              label: 'Publicar turno',
-              route: AppRoutes.publicarTurno),
-        ]),
-        const SidebarSection(label: 'FINANCEIRO', items: [
-          SidebarItem(
-              icon: Icons.account_balance_wallet_outlined,
-              label: 'Saldo',
-              route: AppRoutes.saldoLojista),
-          SidebarItem(
-              icon: Icons.receipt_long_outlined,
-              label: 'Notas fiscais',
-              route: AppRoutes.notasFiscais),
-        ]),
-        const SidebarSection(label: 'REPUTAÇÃO', items: [
-          SidebarItem(
-              icon: Icons.star_outline_rounded,
-              label: 'Avaliações',
-              route: AppRoutes.minhasAvaliacoes),
-        ]),
-        SidebarSection(label: 'CONTA', items: [
-          SidebarItem(
-              icon: Icons.notifications_outlined,
-              label: 'Notificações',
-              route: AppRoutes.notificacoes,
-              badge: badgeNotificacoes),
-          const SidebarItem(
-              icon: Icons.history_rounded,
-              label: 'Histórico',
-              route: AppRoutes.historicoTurnos),
-          const SidebarItem(
-              icon: Icons.person_outline_rounded,
-              label: 'Perfil',
-              route: AppRoutes.perfil),
-        ]),
-      ];
-
-  static List<SidebarSection> motoboy({String? badgeNotificacoes}) => [
-        SidebarSection(label: 'OPERAÇÃO', items: [
-          const SidebarItem(
-              icon: Icons.home_outlined,
-              label: 'Início',
-              route: AppRoutes.dashboardMotoboy),
-          const SidebarItem(
-              icon: Icons.two_wheeler_outlined,
-              label: 'Turnos',
-              route: AppRoutes.turnosDisponiveis),
-          const SidebarItem(
-              icon: Icons.calendar_month_outlined,
-              label: 'Agenda',
-              route: AppRoutes.agenda),
-        ]),
-        const SidebarSection(label: 'FINANCEIRO', items: [
-          SidebarItem(
-              icon: Icons.account_balance_wallet_outlined,
-              label: 'Carteira',
-              route: AppRoutes.carteira),
-          SidebarItem(
-              icon: Icons.receipt_long_outlined,
-              label: 'Notas fiscais',
-              route: AppRoutes.notasFiscais),
-        ]),
-        const SidebarSection(label: 'REPUTAÇÃO', items: [
-          SidebarItem(
-              icon: Icons.star_outline_rounded,
-              label: 'Avaliações',
-              route: AppRoutes.minhasAvaliacoes),
-        ]),
-        SidebarSection(label: 'CONTA', items: [
-          SidebarItem(
-              icon: Icons.notifications_outlined,
-              label: 'Notificações',
-              route: AppRoutes.notificacoes,
-              badge: badgeNotificacoes),
-          const SidebarItem(
-              icon: Icons.history_rounded,
-              label: 'Histórico',
-              route: AppRoutes.historicoTurnos),
-          const SidebarItem(
-              icon: Icons.person_outline_rounded,
-              label: 'Perfil',
-              route: AppRoutes.perfil),
-        ]),
-      ];
-}
+// As classes SidebarItem, SidebarSection e SidebarItems viviam aqui e
+// definiam o menu do desktop. Elas saíram para o NavConfig: o mesmo menu
+// precisava valer para a barra lateral, para a gaveta do celular e para a
+// barra inferior, e enquanto a definição morava no widget do desktop, os
+// outros dois a copiavam — foi assim que a barra inferior acabou com um
+// switch próprio em sete telas.
+//
+// Este arquivo voltou a ser só o desenho da barra: recebe as seções prontas e
+// as pinta.
 
 /// Barra lateral de 240px com gradiente teal → tealDeep (135°).
 /// Logo, grupos de navegação e, no rodapé, o bloco do usuário e "Sair".
@@ -153,6 +24,7 @@ class AppSidebar extends StatelessWidget {
     required this.userSubtitle,
     required this.userInitials,
     this.selectedRoute,
+    this.badges = const {},
     this.onSelect,
     this.onLogout,
     super.key,
@@ -160,19 +32,25 @@ class AppSidebar extends StatelessWidget {
 
   static const double width = 240;
 
-  final List<SidebarSection> sections;
+  final List<NavSection> sections;
   final String userName;
   final String userSubtitle;
   final String userInitials;
 
-  /// Rota destacada; por padrão comparada com [SidebarItem.route].
+  /// Rota destacada — a SEÇÃO, não necessariamente a rota atual: quem está no
+  /// Extrato vê "Carteira" marcada. Ver [NavConfig.secaoDe].
   final String? selectedRoute;
 
-  /// Substitui a navegação padrão (pushReplacementNamed) quando informado.
-  final ValueChanged<SidebarItem>? onSelect;
+  /// Contadores por tipo de badge, já resolvidos por quem tem os providers.
+  /// O widget não busca nada: ele desenha o que recebe.
+  final Map<NavBadge, String?> badges;
+
+  /// Substitui a navegação padrão ([NavConfig.irParaSecao]) quando informado —
+  /// a gaveta usa isto para se fechar antes de navegar.
+  final ValueChanged<NavItem>? onSelect;
   final VoidCallback? onLogout;
 
-  // Tons translúcidos sobre o gradiente, conforme o canvas.
+  // Tons translucidos sobre o gradiente, conforme o canvas.
   static const Color _navLabel = Color(0xB3BFE5E3); // rgba(191,229,227,.7)
   static const Color _itemFg = Color(0xD1EAFFFD); // rgba(234,255,253,.82)
   static const Color _itemBgActive = Color(0x2EFFFFFF); // rgba(255,255,255,.18)
@@ -211,6 +89,7 @@ class AppSidebar extends StatelessWidget {
                         for (final item in section.items) ...[
                           _SidebarTile(
                             item: item,
+                            badge: badges[item.badge],
                             selected: item.route == selectedRoute,
                             onTap: () => _handleTap(context, item),
                           ),
@@ -230,13 +109,15 @@ class AppSidebar extends StatelessWidget {
     );
   }
 
-  void _handleTap(BuildContext context, SidebarItem item) {
+  void _handleTap(BuildContext context, NavItem item) {
     if (onSelect != null) {
       onSelect!(item);
       return;
     }
-    if (item.route == selectedRoute) return;
-    Navigator.pushReplacementNamed(context, item.route);
+    // Item de menu e troca de secao: substitui a pilha inteira. Antes era
+    // pushReplacementNamed, que troca so o topo — e deixava a tela nova sem
+    // pilha E sem gaveta, com uma seta de voltar que dava pop na ultima rota.
+    NavConfig.irParaSecao(context, item.route);
   }
 
   Widget _buildLogo() {
@@ -366,9 +247,13 @@ class _SidebarTile extends StatelessWidget {
     required this.item,
     required this.selected,
     required this.onTap,
+    this.badge,
   });
 
-  final SidebarItem item;
+  final NavItem item;
+
+  /// Texto do contador, ja resolvido. Null = sem badge.
+  final String? badge;
   final bool selected;
   final VoidCallback onTap;
 
@@ -400,7 +285,7 @@ class _SidebarTile extends StatelessWidget {
                         color: fg),
                   ),
                 ),
-                if (item.badge != null)
+                if (badge != null)
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -409,7 +294,7 @@ class _SidebarTile extends StatelessWidget {
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
-                      item.badge!,
+                      badge!,
                       style: tsJakarta(10, FontWeight.w800,
                           color: AppColors.onTertiary),
                     ),

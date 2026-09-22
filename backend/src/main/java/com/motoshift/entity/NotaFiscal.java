@@ -3,6 +3,7 @@ package com.motoshift.entity;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * Nota fiscal de serviço (NFS-e) de um turno concluído.
@@ -12,8 +13,14 @@ import java.time.LocalDateTime;
  * digital nem RPS — o objetivo é registrar quem prestou, quem tomou, quanto
  * custou o serviço e quanto disso é imposto, com a numeração e o código de
  * verificação que um documento desses tem. Trocar isto por uma emissão real é
- * substituir {@link com.motoshift.service.NotaFiscalService} por um cliente do
- * provedor municipal; o modelo de dados abaixo já é o que ele precisaria.
+ * implementar {@link com.motoshift.service.fiscal.EmissorDeNotas} com um
+ * cliente do provedor municipal; o modelo de dados abaixo já é o que ele
+ * precisaria.
+ *
+ * <p><b>Documenta um pagamento, não um turno.</b> Desde a V14 a nota aponta
+ * para o {@code pagamento_recebido} do extrato ({@link #transacaoId}): a base
+ * de cálculo é o que de fato entrou na carteira, e a nota não pode existir sem
+ * esse lançamento concluído.
  *
  * <p><b>Quem é quem.</b> Em uma entrega agendada o serviço é prestado pelo
  * entregador e tomado pelo lojista — sempre nessa direção, mesmo quando é o
@@ -34,7 +41,8 @@ import java.time.LocalDateTime;
     indexes = {
         @Index(name = "ix_nota_prestador", columnList = "prestadorId, emitidaEm"),
         @Index(name = "ix_nota_tomador",   columnList = "tomadorId, emitidaEm"),
-        @Index(name = "ix_nota_turno",     columnList = "turnoId")
+        @Index(name = "ix_nota_turno",     columnList = "turnoId"),
+        @Index(name = "ix_nota_competencia", columnList = "competencia")
     }
 )
 public class NotaFiscal {
@@ -98,9 +106,37 @@ public class NotaFiscal {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal irrfValor;
 
-    /** Valor do serviço menos as retenções. */
+    /**
+     * O que o prestador recebeu depois das retenções.
+     *
+     * <p>Igual a {@link #valorServico} quando {@link #tributosRetidos} é falso:
+     * os tributos da nota são então informativos e o dinheiro chegou inteiro.
+     * Até a V14 este campo descontava ISS e IRRF que nunca tinham sido
+     * retidos, e a nota discordava do extrato.
+     */
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal valorLiquido;
+
+    /**
+     * Se ISS e IRRF saíram do pagamento (há lançamentos de retenção no
+     * extrato) ou são o valor aproximado dos tributos, só informativo.
+     *
+     * <p>Gravado na emissão a partir dos lançamentos, e não da configuração:
+     * trocar {@code motoshift.fiscal.reter-na-fonte} não muda notas passadas.
+     */
+    @Column(nullable = false)
+    private boolean tributosRetidos;
+
+    /** O pagamento_recebido que esta nota documenta. Nulo só em notas anteriores à V14 sem pagamento no extrato. */
+    @Column(unique = true)
+    private Long transacaoId;
+
+    /** Operação do extrato — a mesma do pagamento_enviado do lojista. */
+    private UUID operacaoId;
+
+    /** Data do serviço (início do turno). Gravada na emissão: editar o turno depois não muda o documento. */
+    @Column(nullable = false)
+    private LocalDateTime competencia;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime emitidaEm;
@@ -170,5 +206,17 @@ public class NotaFiscal {
     public void setCanceladaEm(LocalDateTime t) { this.canceladaEm = t; }
 
     public String getMotivoCancelamento() { return motivoCancelamento; }
+
+    public boolean isTributosRetidos() { return tributosRetidos; }
+    public void setTributosRetidos(boolean tributosRetidos) { this.tributosRetidos = tributosRetidos; }
+
+    public Long getTransacaoId() { return transacaoId; }
+    public void setTransacaoId(Long transacaoId) { this.transacaoId = transacaoId; }
+
+    public UUID getOperacaoId() { return operacaoId; }
+    public void setOperacaoId(UUID operacaoId) { this.operacaoId = operacaoId; }
+
+    public LocalDateTime getCompetencia() { return competencia; }
+    public void setCompetencia(LocalDateTime competencia) { this.competencia = competencia; }
     public void setMotivoCancelamento(String m) { this.motivoCancelamento = m; }
 }

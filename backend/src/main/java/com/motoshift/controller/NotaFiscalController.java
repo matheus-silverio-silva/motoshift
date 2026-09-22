@@ -1,14 +1,20 @@
 package com.motoshift.controller;
 
+import com.motoshift.dto.InformeAnualResponse;
+import com.motoshift.dto.NotaFiscalFiltro;
 import com.motoshift.dto.NotaFiscalPendenteResponse;
 import com.motoshift.dto.NotaFiscalResponse;
 import com.motoshift.security.UsuarioAutenticado;
 import com.motoshift.service.NotaFiscalService;
+import com.motoshift.service.fiscal.InformeRendimentosService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -29,17 +35,62 @@ import java.util.Map;
 public class NotaFiscalController {
 
     private final NotaFiscalService service;
+    private final InformeRendimentosService informes;
 
-    public NotaFiscalController(NotaFiscalService service) {
+    public NotaFiscalController(NotaFiscalService service, InformeRendimentosService informes) {
         this.service = service;
+        this.informes = informes;
     }
 
-    @Operation(summary = "Minhas notas fiscais",
-            description = "Notas em que o usuário é prestador (entregador) ou tomador (lojista).")
-    @ApiResponse(responseCode = "200", description = "Lista de notas")
+    @Operation(summary = "Minhas notas fiscais (SIMULADAS)",
+            description = "Notas em que o usuário é prestador (entregador) ou tomador (lojista), "
+                    + "da competência mais recente para a mais antiga. Filtros: papel "
+                    + "(prestador|tomador), competenciaDe/competenciaAte (data do serviço, "
+                    + "yyyy-MM-dd), status (emitida|cancelada), contraparteId, turnoId. "
+                    + "Paginação opcional, como no resto da API: com ?pagina=0&tamanho=20 o total "
+                    + "vai no header X-Total-Count; sem pagina, a lista inteira.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Lista de notas"),
+        @ApiResponse(responseCode = "400", description = "Filtro inválido")
+    })
     @GetMapping
-    public List<NotaFiscalResponse> listar(@AuthenticationPrincipal UsuarioAutenticado atual) {
-        return service.listarDoUsuario(atual.id());
+    public ResponseEntity<List<NotaFiscalResponse>> listar(
+            NotaFiscalFiltro filtro,
+            @RequestParam(required = false) Integer pagina,
+            @RequestParam(required = false) Integer tamanho,
+            @AuthenticationPrincipal UsuarioAutenticado atual) {
+        Pageable pedido = Paginacao.pedido(pagina, tamanho);
+        var notas = service.listar(atual.id(), filtro, pedido);
+        return pedido == null ? ResponseEntity.ok(notas.getContent()) : Paginacao.resposta(notas);
+    }
+
+    @Operation(summary = "Informe anual (SIMULADO)",
+            description = "Para o entregador, informe de rendimentos: o que recebeu no ano, por "
+                    + "fonte pagadora e por mês, com o IRRF e o ISS retidos. Para o lojista, "
+                    + "o total de serviços tomados por prestador. A base é o extrato (data do "
+                    + "crédito), e não as notas: pagamento sem nota ainda conta como rendimento.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Informe do ano"),
+        @ApiResponse(responseCode = "400", description = "Ano fora do intervalo")
+    })
+    @GetMapping("/resumo")
+    public InformeAnualResponse resumo(@RequestParam(required = false) Integer ano,
+                                       @AuthenticationPrincipal UsuarioAutenticado atual) {
+        return informes.informe(atual.id(), atual.isLojista(), ano);
+    }
+
+    @Operation(summary = "Exportar o informe anual em CSV (SIMULADO)",
+            description = "O mesmo informe de /resumo, separado por ';'.")
+    @ApiResponse(responseCode = "200", description = "Arquivo CSV")
+    @GetMapping("/resumo/exportar")
+    public ResponseEntity<String> exportarResumo(@RequestParam(required = false) Integer ano,
+                                                 @AuthenticationPrincipal UsuarioAutenticado atual) {
+        int oAno = ano == null ? java.time.Year.now().getValue() : ano;
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"informe-" + oAno + ".csv\"")
+                .contentType(new MediaType("text", "csv", java.nio.charset.StandardCharsets.UTF_8))
+                .body(informes.exportarCsv(atual.id(), atual.isLojista(), oAno));
     }
 
     @Operation(summary = "Turnos a emitir",

@@ -46,6 +46,11 @@ dependencies:
 
   # Localização — filtro de turnos por raio (tela 18)
   geolocator: ^13.0.2
+  # Documentos fiscais SIMULADOS — PDF e impressão. Os dois funcionam no
+  # Flutter web: printing abre o diálogo de impressão do navegador e baixa o
+  # arquivo. Ver docs/financeiro/FISCAL.md.
+  pdf: ^3.12.0
+  printing: ^5.14.3
 
 dev_dependencies:
   flutter_test:
@@ -54,3 +59,11 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Fonte do PDF. As fontes padrão do PDF (Helvetica e cia.) só cobrem
+  # Latin-1: "—" e aspas curvas saem quebrados. A Roboto (Apache-2.0, veio do
+  # próprio SDK do Flutter) vai embutida para o documento sair igual na tela,
+  # no arquivo e nos testes, sem depender de baixar fonte na hora.
+  assets:
+    - assets/fonts/pdf/Roboto-Regular.ttf
+    - assets/fonts/pdf/Roboto-Bold.ttf

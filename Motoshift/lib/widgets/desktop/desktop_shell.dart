@@ -3,7 +3,10 @@ import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
 import '../../presentation/providers/notificacao_provider.dart';
 import '../../routes/app_routes.dart';
+import '../../routes/nav_config.dart';
+import '../../presentation/providers/pendencias_provider.dart';
 import '../../services/auth_service.dart';
+import '../app_nav_drawer.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/iniciais.dart';
 import 'app_sidebar.dart';
@@ -48,16 +51,12 @@ class DesktopShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
     final usuario = auth.usuario;
-    final ehLojista = usuario?.tipo == TipoUsuario.lojista;
 
-    final naoLidas = context.watch<NotificacaoProvider>().naoLidas;
-    final badge = naoLidas == 0 ? null : (naoLidas > 9 ? '9+' : '$naoLidas');
-
-    final sections = ehLojista
-        ? SidebarItems.lojista(badgeNotificacoes: badge)
-        : SidebarItems.motoboy(badgeNotificacoes: badge);
-    final rotaAtual =
-        selectedRoute ?? ModalRoute.of(context)?.settings.name;
+    // A secao destacada, e nao a rota crua: sub-pagina marca a secao que a
+    // contem (o Extrato marca "Carteira"). Ver NavConfig.secaoDe.
+    final secao = NavConfig.secaoDe(
+        selectedRoute ?? ModalRoute.of(context)?.settings.name,
+        papel: usuario?.tipo);
 
     final podeVoltar = showBack ?? Navigator.of(context).canPop();
 
@@ -66,8 +65,10 @@ class DesktopShell extends StatelessWidget {
       body: Row(
         children: [
           AppSidebar(
-            sections: sections,
-            selectedRoute: rotaAtual,
+            sections: NavConfig.secoes(
+                usuario?.tipo ?? TipoUsuario.motoboy),
+            selectedRoute: secao,
+            badges: badgesDoMenu(context),
             userName: usuario?.nome ?? '',
             userSubtitle: _subtitleDoUsuario(usuario),
             userInitials: iniciaisDe(usuario?.nome),
@@ -141,6 +142,7 @@ class DesktopShell extends StatelessWidget {
       ),
     );
     if (confirm == true && context.mounted) {
+      context.read<PendenciasProvider>().limpar();
       context.read<AuthService>().logout();
       Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (_) => false);
     }

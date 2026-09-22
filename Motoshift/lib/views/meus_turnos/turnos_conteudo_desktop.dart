@@ -109,7 +109,7 @@ class TurnosConteudoDesktop extends StatelessWidget {
                   key: ValueKey(selecionado.id),
                   turno: selecionado,
                   desktop: true,
-                  onAceito: () {
+                  onMudou: () {
                     selecao.limpar();
                     onAceito();
                   },
@@ -152,7 +152,7 @@ class TurnosConteudoDesktop extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       children: [
         if (aceitos.isNotEmpty) ...[
-          _tituloSecao('Meus turnos'),
+          _tituloSecao('Turnos aceitos'),
           for (final t in aceitos) ...[
             _linhaAceita(t, selecao),
             const SizedBox(height: 8),

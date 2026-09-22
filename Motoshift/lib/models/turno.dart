@@ -40,8 +40,12 @@ class Turno {
   final int vagasPreenchidas;  // quantas já foram aceitas
   final StatusTurno status;
   final PagamentoStatus pagamentoStatus;
-  final DateTime? lojistaConfirmouEm;
-  final DateTime? motoboyConfirmouEm;
+  // lojistaConfirmouEm e motoboyConfirmouEm sairam do modelo.
+  //
+  // Guardavam a dupla confirmacao — cada parte declarando que o dinheiro tinha
+  // mudado de maos fora do app. A liquidacao passou a ser automatica: o lojista
+  // compromete o valor ao publicar e a finalizacao transfere o que ja estava
+  // reservado. O backend deixou de enviar as duas chaves (V13).
   final double? distanciaPercorridaKm;
   final int? totalEntregas;
 
@@ -71,17 +75,12 @@ class Turno {
     this.vagasPreenchidas = 0,
     this.status = StatusTurno.aberto,
     this.pagamentoStatus = PagamentoStatus.naoAplicavel,
-    this.lojistaConfirmouEm,
-    this.motoboyConfirmouEm,
     this.distanciaPercorridaKm,
     this.totalEntregas,
     this.distanciaKm,
     this.criadoEm,
     this.atualizadoEm,
   });
-
-  bool get lojistaJaConfirmou => lojistaConfirmouEm != null;
-  bool get motoboyJaConfirmou => motoboyConfirmouEm != null;
 
   factory Turno.fromJson(Map<String, dynamic> json) {
     return Turno(
@@ -102,12 +101,6 @@ class Turno {
       vagasPreenchidas: (json['vagasPreenchidas'] as num?)?.toInt() ?? 0,
       status: _parseStatus(json['status'] as String),
       pagamentoStatus: _parsePagamento(json['pagamentoStatus'] as String?),
-      lojistaConfirmouEm: json['lojistaConfirmouEm'] != null
-          ? DateTime.parse(json['lojistaConfirmouEm'] as String)
-          : null,
-      motoboyConfirmouEm: json['motoboyConfirmouEm'] != null
-          ? DateTime.parse(json['motoboyConfirmouEm'] as String)
-          : null,
       distanciaPercorridaKm: json['distanciaPercorridaKm'] != null
           ? (json['distanciaPercorridaKm'] as num).toDouble()
           : null,

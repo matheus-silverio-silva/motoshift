@@ -6,6 +6,7 @@ import '../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/validators.dart';
+import '../recuperar_senha/recuperar_senha_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -189,8 +190,13 @@ class _LoginScreenState extends State<LoginScreen> {
           Align(
             alignment: Alignment.centerRight,
             child: GestureDetector(
-              onTap: () =>
-                  Navigator.pushNamed(context, AppRoutes.esqueceuSenha),
+              // Leva junto o e-mail digitado: e o identificador da conta no
+              // backend, e e o que a tela de recuperacao pede para copiar.
+              onTap: () => Navigator.pushNamed(
+                context,
+                AppRoutes.esqueceuSenha,
+                arguments: RecuperarSenhaArgs(email: _emailCtrl.text),
+              ),
               child: Text('Esqueci minha senha',
                   style: tsJakarta(10.5, FontWeight.w700,
                       color: AppColors.teal)),

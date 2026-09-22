@@ -8,6 +8,7 @@ import 'api/ia_api.dart';
 import 'api/nota_fiscal_api.dart';
 import 'api/notificacao_api.dart';
 import 'api/turno_api.dart';
+import 'api/usuario_api.dart';
 
 export 'api/api_client.dart' show ApiException;
 
@@ -40,6 +41,7 @@ class ApiService {
   late final AgendaApi agenda = AgendaApi(client);
   late final DashboardApi dashboard = DashboardApi(client);
   late final IaApi ia = IaApi(client);
+  late final UsuarioApi usuarios = UsuarioApi(client);
 
   ApiService({ApiClient? client}) : client = client ?? ApiClient();
 

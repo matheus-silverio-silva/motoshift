@@ -12,7 +12,8 @@
 --  ela rodar, todo turno com motoboy tem inscricao, e o codigo do fallback pode
 --  morrer (vai no mesmo commit). As colunas do turno continuam existindo e
 --  populadas — quem estiver rodando a versao anterior do backend nao quebra.
---  Quem as remove e a V6, num deploy posterior.
+--  Quem as removeu do turno foi a V6, no deploy seguinte; as de
+--  turno_inscricoes cairam na V13, junto com a dupla confirmacao inteira.
 --
 --  IDEMPOTENTE: o NOT EXISTS deixa rodar duas vezes sem duplicar. Vale tambem
 --  como rede contra o uk_turno_motoboy (turno_id, motoboy_id), que abortaria a

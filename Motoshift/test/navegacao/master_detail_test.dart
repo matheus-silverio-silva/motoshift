@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 
 import 'package:moto_shift/models/turno.dart';
 import 'package:moto_shift/presentation/providers/notificacao_provider.dart';
+import 'package:moto_shift/presentation/providers/pendencias_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_selecionado_provider.dart';
 import 'package:moto_shift/routes/app_routes.dart';
@@ -71,6 +72,9 @@ Future<TurnoSelecionadoProvider> _montar(
         ChangeNotifierProvider<TurnoSelecionadoProvider>.value(value: selecao),
         ChangeNotifierProvider<NotificacaoProvider>(
           create: (_) => NotificacaoProvider(api),
+        ),
+        ChangeNotifierProvider<PendenciasProvider>(
+          create: (_) => PendenciasProvider(api),
         ),
       ],
       child: MaterialApp(
@@ -194,7 +198,7 @@ void main() {
       espiao: espiao,
     );
 
-    expect(find.text('MEUS TURNOS'), findsOneWidget,
+    expect(find.text('TURNOS ACEITOS'), findsOneWidget,
         reason: 'a lista do desktop precisa da seção dos turnos aceitos');
     expect(find.textContaining('Turno Ativo — Hamburgueria'), findsWidgets);
   });
@@ -234,6 +238,6 @@ void main() {
 
     expect(find.byType(DetalheTurnoScreen), findsOneWidget);
     expect(espiao.rotas, isNot(contains(AppRoutes.turnosDisponiveis)));
-    expect(find.text('Detalhes do Turno'), findsOneWidget);
+    expect(find.text('Detalhes do turno'), findsOneWidget);
   });
 }

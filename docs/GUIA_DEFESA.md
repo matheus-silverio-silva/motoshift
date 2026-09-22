@@ -101,7 +101,10 @@ Android) ou `localhost:8080`.
 - *Conflito de horário:* `TurnoRepository.existeConflitoDeAgenda()` — olha as
   inscrições ativas do entregador (inclusive em turno multi-vaga que segue
   "aberto"); se houver sobreposição, retorna HTTP 409.
-- *Crédito na carteira:* só ocorre quando **lojista E motoboy** confirmam (dupla confirmação).
+- *Crédito na carteira:* acontece na **finalização do turno**, na mesma transação que o encerra —
+  o valor sai do saldo **bloqueado** do lojista (reservado quando ele publicou) e entra no
+  **disponível** do entregador. Não há confirmação a dar: o compromisso foi assumido na publicação.
+  A dupla confirmação manual que existia aqui foi removida (V13) — ver `docs/financeiro/FLUXO-FINANCEIRO.md`.
 - *Penalidade de score:* cancelamento com menos de 1h subtrai 0.5 (mínimo 0.0).
 
 ---

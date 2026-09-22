@@ -11,7 +11,6 @@ import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/serie_diaria.dart';
 import '../../widgets/adaptive_scaffold.dart';
-import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/desktop/app_topbar.dart';
 import '../../widgets/desktop/content_grid.dart';
@@ -72,18 +71,8 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
     return 'Boa noite,';
   }
 
-  void _onNav(int i) {
-    switch (i) {
-      case 0:
-        break;
-      case 1:
-        Navigator.pushReplacementNamed(context, AppRoutes.agenda);
-      case 2:
-        Navigator.pushReplacementNamed(context, AppRoutes.turnosLojista);
-      case 3:
-        Navigator.pushReplacementNamed(context, AppRoutes.perfil);
-    }
-  }
+  // O _onNav desta tela saiu: era um dos sete switches identicos de barra
+  // inferior. Ver NavConfig — a tela agora informa so a secao em que esta.
 
   // ── Métricas ──────────────────────────────────────────────────────────────
 
@@ -141,11 +130,6 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
         onNotificacoes: () =>
             Navigator.pushNamed(context, AppRoutes.notificacoes),
       ),
-      bottomNav: AppBottomNav(
-        userType: UserType.lojista,
-        currentIndex: 0,
-        onTap: _onNav,
-      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 32),
         children: [
@@ -164,7 +148,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
       ),
       desktopTitle: 'Início',
       desktopSubtitle: '${_greeting()} $nome · ${_dataExtenso()}',
-      desktopSelectedRoute: AppRoutes.dashboardLojista,
+      rotaDaSecao: AppRoutes.dashboardLojista,
       desktopPrimaryAction: TopbarPrimaryButton(
         label: 'Publicar turno',
         icon: Icons.add,
@@ -411,7 +395,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
             const Icon(Icons.add_rounded, color: AppColors.onTertiaryContainer, size: 18),
             const SizedBox(width: 7),
             Text(
-              'Publicar novo turno',
+              'Publicar turno',
               style: tsJakarta(
                 13,
                 FontWeight.w700,

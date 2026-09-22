@@ -12,8 +12,6 @@ Turno _turno({
   PagamentoStatus pagamento = PagamentoStatus.naoAplicavel,
   double valor = 100,
   Duration duracao = const Duration(hours: 4),
-  bool lojistaConfirmou = false,
-  bool motoboyConfirmou = false,
 }) {
   final inicio = DateTime(2026, 8, 19, 8);
   return Turno(
@@ -27,13 +25,11 @@ Turno _turno({
     raioEntregaKm: 5,
     status: status,
     pagamentoStatus: pagamento,
-    lojistaConfirmouEm: lojistaConfirmou ? inicio : null,
-    motoboyConfirmouEm: motoboyConfirmou ? inicio : null,
   );
 }
 
-HistoricoResumo _resumo(List<Turno> turnos, {Set<int> avaliados = const {}}) =>
-    HistoricoResumo(turnos: turnos, avaliados: avaliados);
+HistoricoResumo _resumo(List<Turno> turnos, {Set<int> aAvaliar = const {}}) =>
+    HistoricoResumo(turnos: turnos, aAvaliar: aAvaliar);
 
 void main() {
   group('Contagem por estado', () {
@@ -73,22 +69,27 @@ void main() {
   });
 
   group('Avaliação', () {
-    test('turno já avaliado sai da fila', () {
+    test('a fila é a dos turnos que o backend diz estarem pendentes', () {
       final turnos = [
         _turno(id: 1, status: StatusTurno.finalizado),
         _turno(id: 2, status: StatusTurno.finalizado),
       ];
 
-      expect(_resumo(turnos).qtdAvaliar, 2);
-      expect(_resumo(turnos, avaliados: {1}).qtdAvaliar, 1);
-      expect(_resumo(turnos, avaliados: {1, 2}).qtdAvaliar, 0);
+      expect(_resumo(turnos, aAvaliar: {1, 2}).qtdAvaliar, 2);
+      expect(_resumo(turnos, aAvaliar: {2}).qtdAvaliar, 1);
+      expect(_resumo(turnos, aAvaliar: const {}).qtdAvaliar, 0);
     });
 
     test('cancelado e expirado nunca entram na fila de avaliação', () {
-      final r = _resumo([
-        _turno(id: 1, status: StatusTurno.cancelado),
-        _turno(id: 2, status: StatusTurno.expirado),
-      ]);
+      // Os dois ids estão na lista de pendentes de propósito: o que os tira
+      // da fila tem de ser o status, e não a ausência deles no conjunto.
+      final r = _resumo(
+        [
+          _turno(id: 1, status: StatusTurno.cancelado),
+          _turno(id: 2, status: StatusTurno.expirado),
+        ],
+        aAvaliar: {1, 2},
+      );
       expect(r.qtdAvaliar, 0);
     });
   });
@@ -119,23 +120,25 @@ void main() {
       expect(r.totalGanho, 100);
     });
 
-    test('quem já confirmou sai da lista de quem precisa confirmar', () {
+    // O teste 'quem ja confirmou sai da lista de quem precisa confirmar' saiu
+    // daqui junto com lojistaPrecisaConfirmar e motoboyPrecisaConfirmar: a
+    // dupla confirmacao deixou de existir. O que restou de 'aguardando
+    // pagamento' e historico do modelo antigo, coberto pelo teste abaixo.
+    test('turno finalizado e pendente continua visivel como historico', () {
       final pendente = _turno(
         id: 1,
         status: StatusTurno.finalizado,
         pagamento: PagamentoStatus.pendente,
       );
-      final lojistaJa = _turno(
+      final pago = _turno(
         id: 2,
         status: StatusTurno.finalizado,
-        pagamento: PagamentoStatus.pendente,
-        lojistaConfirmou: true,
+        pagamento: PagamentoStatus.pago,
       );
-      final r = _resumo([pendente, lojistaJa]);
+      final r = _resumo([pendente, pago]);
 
-      expect(r.lojistaPrecisaConfirmar(pendente), isTrue);
-      expect(r.lojistaPrecisaConfirmar(lojistaJa), isFalse);
-      expect(r.motoboyPrecisaConfirmar(lojistaJa), isTrue);
+      expect(r.aguardandoPagamento(pendente), isTrue);
+      expect(r.aguardandoPagamento(pago), isFalse);
     });
   });
 

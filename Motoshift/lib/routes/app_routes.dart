@@ -31,12 +31,26 @@ class AppRoutes {
   static const String avaliarEntregadores =
       '/avaliar-entregadores';                                     // tela 19
 
-  // ── Legadas (mantidas para compatibilidade até remoção) ──────────────────
-  static const String meusTurnos        = '/meus-turnos';
-  static const String agendarTurno      = '/agendar-turno';
+  // ── Financeiro ───────────────────────────────────────────────────────────
+  // Servem aos dois perfis: a pergunta "quanto entrou, quanto saiu, o que está
+  // comprometido" é a mesma para lojista e entregador, só muda o sinal.
+  static const String extrato           = '/extrato';
+  static const String lancamento        = '/extrato/lancamento';
+  static const String recarga           = '/recarga';
+  /// Documento fiscal SIMULADO de um lançamento — NFS-e ou comprovante.
+  static const String documentoFiscal   = '/documento';
+  static const String relatorioFinanceiro = '/relatorio-financeiro';
 
-  // ── Stubs (sub-páginas do perfil / fluxos secundários) ───────────────────
-  static const String sacarPix          = '/sacar-pix';
+  // ── Sub-páginas (alcançadas de dentro de outra tela) ─────────────────────
+  //
+  // /meus-turnos e /agendar-turno saíram: eram apelidos de /turnos-disponiveis
+  // e /publicar-turno, registrados para as MESMAS telas. Ninguém navegava para
+  // elas — só o teste as listava —, e duas rotas para a mesma tela fazem o
+  // destaque do menu depender de por qual delas o usuário chegou.
+  //
+  // /sacar-pix saiu junto com a SacarPixScreen: era um stub "em breve" enquanto
+  // a Carteira já tinha o saque funcionando.
+  static const String perfilPublico     = '/perfil-publico';
   static const String dadosPessoais     = '/dados-pessoais';
   static const String cnhVeiculo        = '/cnh-veiculo';
   static const String minhasAvaliacoes  = '/minhas-avaliacoes';

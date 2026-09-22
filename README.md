@@ -52,7 +52,7 @@ estabilidade financeira para ambos os lados.
 │   ├── lib/
 │   │   ├── models/           # Modelos que as telas consomem
 │   │   ├── presentation/     # Providers (estado compartilhado)
-│   │   ├── routes/           # Nomes de rota
+│   │   ├── routes/           # Nomes de rota e NavConfig (menu e regra de navegação)
 │   │   ├── services/
 │   │   │   ├── api/          # ApiClient (transporte) + uma API por domínio
 │   │   │   ├── api_service   # Monta as APIs de domínio sobre um cliente só
@@ -66,6 +66,9 @@ estabilidade financeira para ambos os lados.
 │   └── stitch/               # Exports do Stitch da 1ª iteração — referência
 │
 ├── docs/                     # Auditoria, guia de defesa, planos e requisitos
+│   ├── DER/                  # Modelo de dados e rastreabilidade das migrações
+│   ├── financeiro/           # Ciclo do dinheiro (FLUXO-FINANCEIRO) e os documentos fiscais simulados (FISCAL)
+│   └── ux/                   # Navegação: mapa, regra seção × sub-página, nomes, pós-turno
 ├── scripts/                  # Utilitários de linha de comando
 └── .github/workflows/        # CI: mvn test, flutter analyze, flutter test
 ```
@@ -80,6 +83,11 @@ aparecer na revisão:
 - **A identidade do usuário nunca vem do corpo da requisição.** Ela sai do JWT,
   no `security/`. Os `lojistId`/`motoboyId` que o app ainda envia são ignorados
   pelo backend.
+- **Nenhuma tela monta o próprio menu.** O menu, a barra inferior e o destaque
+  vêm de `lib/routes/nav_config.dart`; a tela informa só em que seção está.
+  Item de menu troca a pilha inteira, detalhe empilha — a regra, o mapa e a
+  tabela de nomes estão em [`docs/ux/NAVEGACAO.md`](docs/ux/NAVEGACAO.md), e
+  `test/navegacao/` falha quando alguma tela foge dela.
 
 
 ## ⚙️ Como Rodar Localmente
@@ -166,6 +174,8 @@ Roda com o perfil `prod` (PostgreSQL). Variáveis principais:
 | `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | sim | Conexão com o PostgreSQL (o plugin do Railway já as injeta) |
 | `ANTHROPIC_API_KEY` | sim | Chave da API Anthropic para as funcionalidades de IA |
 | `MOTOSHIFT_CORS_ORIGINS` | **sim** | Origens liberadas no CORS, separadas por vírgula (ex.: `https://motoshift.up.railway.app`). Sem default: o antigo `*` liberava qualquer origem quando a variável era esquecida. Agora o boot falha, o healthcheck do Railway recusa o deploy e a versão anterior continua no ar |
+| `MOTOSHIFT_FISCAL_CHAVE` | **sim** | Chave do HMAC que autentica os comprovantes (recarga, Pix, movimentação). Sem ela o boot falha: o código de autenticação viraria um hash que qualquer um refaz. Trocar a chave muda o código de todos os comprovantes já emitidos |
+| `MOTOSHIFT_FISCAL_RETER_NA_FONTE` | não | `true` faz a liquidação reter ISS e IRRF do entregador, como lançamentos próprios no extrato; padrão `false`, com os tributos apenas informativos na nota. Ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |
 | `JWT_EXPIRACAO_HORAS` | não | Validade do token; padrão 168 (7 dias) |
 | `PORT` | não | Porta do servidor (injetada automaticamente pelo Railway) |
 
@@ -244,12 +254,24 @@ nova. Para testar o reset localmente, suba com `MOTOSHIFT_SEED_RESET=confirmo`.
 | PUT | /api/turnos/{id}/cancelar | Cancelar turno |
 | GET | /api/dashboard/motoboy/{id} | Métricas do Motoboy |
 | GET | /api/dashboard/lojista/{id} | Métricas do Lojista |
-| GET | /api/carteira/{id} | Saldo e ganhos |
+| GET | /api/carteira/{id} | Saldo, ganhos e a primeira página do extrato |
+| GET | /api/carteira/extrato | Extrato filtrado e paginado (período, tipo, natureza, turno, contraparte, valor, busca) |
+| GET | /api/carteira/extrato/exportar | O mesmo extrato em CSV, sem paginação |
+| GET | /api/carteira/resumo | Entradas, saídas, líquido, disponível, bloqueado, a receber e comprometido |
+| GET | /api/carteira/fluxo | Série de fluxo de caixa por dia, semana ou mês |
+| POST | /api/carteira/recargas | Abre uma cobrança Pix simulada (não credita) |
+| POST | /api/carteira/recargas/{id}/confirmar | Simula o webhook e credita o saldo (idempotente) |
+| POST | /api/carteira/saques | Saque via Pix — estorna sozinho se o gateway recusar |
+| GET | /api/carteira/cobrancas | Recargas e saques do usuário |
 | GET | /api/sugestoes/turnos/{id} | Sugestões por IA |
 | GET | /api/relatorio/motoboy/{id} | Relatório financeiro por IA |
 | GET | /api/relatorio/lojista/{id} | Relatório operacional por IA |
 | GET | /api/score/{id}/analise | Análise de score por IA |
-| GET | /api/notas-fiscais | Notas fiscais do usuário (como prestador ou tomador) |
+| POST | /api/carteira/transacoes/{id}/documento | Gera o documento do lançamento — NFS-e, recibo ou comprovante (idempotente) |
+| GET | /api/carteira/transacoes/{id}/documento | O documento já gerado desse lançamento |
+| GET | /api/notas-fiscais | Notas fiscais do usuário, com filtros (papel, situação, competência, contraparte) e paginação |
+| GET | /api/notas-fiscais/resumo | Informe anual simulado — por contraparte e por mês |
+| GET | /api/notas-fiscais/resumo/exportar | O mesmo informe em CSV |
 | GET | /api/notas-fiscais/pendentes | Turnos concluídos ainda sem nota |
 | POST | /api/notas-fiscais | Emitir NFS-e do turno (lojista ou motoboy) |
 | PUT | /api/notas-fiscais/{id}/cancelar | Cancelar a nota (só o prestador) |
@@ -276,45 +298,67 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | RF01 | Conta bloqueada por 15 min após 5 tentativas de login falhas |
 | RF02 | Dashboard com métricas em tempo real |
 | RF03 | Lojista exige CNPJ; Motoboy exige CNH no cadastro |
-| RF04 | Turno deve ser agendado com mínimo 2h de antecedência |
+| RF04 | Turno deve ser agendado com mínimo 2h de antecedência, e **publicar reserva** `valor × vagas` do saldo do lojista — sem lastro, 422 dizendo quanto falta |
 | RF05 | Motoboy não pode aceitar turno com conflito de horário |
-| RF06 | Finalização do turno credita automaticamente na carteira |
-| RF07 | Cancelamento com menos de 1h de antecedência penaliza o score |
+| RF06 | Finalização do turno **transfere** o valor reservado: sai do bloqueado do lojista, entra no disponível do entregador, na mesma transação. A sobra das vagas vazias volta |
+| RF07 | Cancelamento com menos de 1h de antecedência penaliza o score. A reserva volta inteira ao lojista, sem multa financeira |
+| RF12 | O dinheiro entra por recarga (Pix simulado) e sai por saque; a plataforma não cria nem destrói saldo — ver [`docs/financeiro/FLUXO-FINANCEIRO.md`](docs/financeiro/FLUXO-FINANCEIRO.md) |
 | RF08 | Sugestão inteligente de turnos via IA |
 | RF09 | Relatório financeiro/operacional mensal via IA |
 | RF10 | Turno publicado guarda o ponto de partida (lat/lng), que alimenta o filtro por distância e o mapa das duas pontas |
-| RF11 | Turno finalizado gera NFS-e — entregador é o prestador, lojista é o tomador, e qualquer um dos dois pode emitir |
+| RF11 | Turno finalizado gera NFS-e — entregador é o prestador, lojista é o tomador, e qualquer um dos dois pode emitir. Todo lançamento do extrato gera o documento correspondente (nota, recibo ou comprovante), sempre simulado — ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |
 
 ---
 
-## 🧾 Nota Fiscal de Serviço (NFS-e)
+## 🧾 Documentos fiscais (NFS-e, recibos e comprovantes)
 
-Todo turno **finalizado** pode virar uma nota fiscal de serviço. O documento é
-um só e sempre na mesma direção — **o entregador presta, o lojista toma** —,
-mas os dois lados veem a mesma tela, os dois podem disparar a emissão e a nota
-aparece na lista de ambos. Não existe "nota do lojista" separada: uma segunda
-nota, em sentido contrário, documentaria um serviço que não houve.
+**Cada lançamento concluído do extrato tem um documento**, do entregador e do
+lojista, com um botão "Gerar documento" na linha e no detalhe:
 
-Um turno com várias vagas gera **uma nota por entregador** (a unicidade no
-banco é do par `turno + prestador`). A emissão é idempotente: pedir de novo
-devolve a nota que já existe, em vez de criar outra.
+| Lançamento | Documento |
+|---|---|
+| `pagamento_recebido` / `pagamento_enviado` | **NFS-e** — a mesma nota para os dois lados |
+| `recarga` | Recibo de recarga |
+| `saque` (Pix concluído) | Comprovante de Pix |
+| `reserva`, `liberacao_reserva`, `estorno`, retenções | Comprovante de movimentação |
 
-### Tributos
+**Reserva e liberação não são serviço prestado**: são o lojista movendo o
+próprio dinheiro entre os dois bolsos da carteira. Geram comprovante, nunca
+nota — emitir NFS-e nesse caso documentaria um serviço inexistente. NFS-e
+existe para uma coisa só: o pagamento de um **turno concluído**.
 
-Dois, de propósito — o suficiente para mostrar a mecânica de base de cálculo,
-retenção e valor líquido:
+A nota é emitida a partir do **pagamento**, não do turno, e guarda o
+`transacao_id`: é o que impede a nota e o extrato de contarem histórias
+diferentes. O documento é um só e sempre na mesma direção — o entregador
+presta, o lojista toma —, os dois podem disparar a emissão e a nota aparece na
+lista de ambos. Um turno com várias vagas gera **uma nota por entregador**, e a
+emissão é idempotente: pedir de novo devolve a que já existe.
+
+Só as partes do lançamento veem o documento (terceiro leva 403), CPF e CNPJ
+saem mascarados, e **cancelar a nota não estorna dinheiro** — o serviço foi
+prestado e o pagamento está no extrato.
+
+### Tributos e retenção
 
 | Tributo | Alíquota padrão | Propriedade |
 |---------|-----------------|-------------|
-| ISS | 5% | `motoshift.nf.iss-aliquota` |
-| IRRF | 1,5% | `motoshift.nf.irrf-aliquota` |
+| ISS | 5% | `motoshift.fiscal.iss-aliquota` |
+| IRRF | 1,5% | `motoshift.fiscal.irrf-aliquota` |
 
-> ⚠️ **Escopo.** É um documento interno da plataforma, com a *estrutura* de uma
-> NFS-e (numeração por prestador, série, código de verificação, discriminação
-> de tributos). Não há transmissão à prefeitura, RPS nem certificado digital, e
-> as alíquotas são de exemplo. Uma emissão real trocaria o
-> `NotaFiscalService` por um cliente do provedor municipal — o modelo de dados
-> já é o que ele precisaria.
+Com `motoshift.fiscal.reter-na-fonte=false` (padrão), os tributos são
+informativos (Lei 12.741/2012) e o líquido da nota é o que o extrato creditou.
+Com `true`, a liquidação gera dois lançamentos `retencao_*` na mesma operação e
+o líquido da nota é o crédito menos as retenções. As duas políticas são
+testadas.
+
+> ⚠️ **Escopo: tudo aqui é SIMULAÇÃO.** Não há transmissão à prefeitura ou à
+> Receita, RPS, nem certificado digital, e as alíquotas são de exemplo. Todo
+> documento leva, visível — em tela e como marca d'água no PDF —, a marca
+> **DOCUMENTO SIMULADO — SEM VALOR FISCAL**. A fronteira com a "prefeitura"
+> está isolada em `EmissorDeNotas`: uma emissão real trocaria o
+> `EmissorSimulado` por um cliente ABRASF sem mexer no modelo de dados. O que
+> faltaria, em detalhe, está em
+> [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md).
 
 ---
 

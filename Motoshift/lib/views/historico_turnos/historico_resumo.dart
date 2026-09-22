@@ -12,31 +12,39 @@ import '../../models/turno.dart';
 class HistoricoResumo {
   const HistoricoResumo({
     required this.turnos,
-    required this.avaliados,
+    required this.aAvaliar,
   });
 
   /// Só turnos encerrados — quem carrega já filtra por `!status.ativo`.
   final List<Turno> turnos;
 
-  /// Ids de turnos que este usuário já avaliou.
-  final Set<int> avaliados;
+  /// Ids de turnos em que este usuário **ainda deve** uma avaliação.
+  ///
+  /// Era o conjunto inverso — os turnos já avaliados, de `/avaliacoes/feitas`.
+  /// Aquela rota devolve ids distintos de turno, então bastava avaliar um
+  /// entregador para o turno inteiro sair da lista: num turno de três vagas,
+  /// dois entregadores ficavam sem nota e sem como recebê-la. Quem responde
+  /// isso corretamente é o PendenciasProvider, por turno.
+  final Set<int> aAvaliar;
 
   // ── Predicados ────────────────────────────────────────────────────────────
 
   bool precisaAvaliar(Turno t) =>
-      t.status == StatusTurno.finalizado && !avaliados.contains(t.id);
+      t.status == StatusTurno.finalizado && aAvaliar.contains(t.id);
 
+  /// Turno finalizado cujo pagamento não liquidou.
+  ///
+  /// Com a liquidação automática este estado não é mais alcançável: finalizar
+  /// transfere o dinheiro na mesma transação, e o turno sai de lá já PAGO. O
+  /// predicado continua porque o histórico tem turnos da época em que o
+  /// pagamento dependia de dois cliques e alguém não clicou — eles precisam
+  /// aparecer em algum lugar, ainda que ninguém possa mais resolvê-los pelo app.
+  ///
+  /// As funções `lojistaPrecisaConfirmar` e `motoboyPrecisaConfirmar` saíram
+  /// junto com os botões que elas habilitavam.
   bool aguardandoPagamento(Turno t) =>
       t.status == StatusTurno.finalizado &&
       t.pagamentoStatus == PagamentoStatus.pendente;
-
-  /// Lojista precisa confirmar que enviou o pagamento.
-  bool lojistaPrecisaConfirmar(Turno t) =>
-      aguardandoPagamento(t) && !t.lojistaJaConfirmou;
-
-  /// Motoboy precisa confirmar que recebeu o pagamento.
-  bool motoboyPrecisaConfirmar(Turno t) =>
-      aguardandoPagamento(t) && !t.motoboyJaConfirmou;
 
   bool _pago(Turno t) =>
       t.status == StatusTurno.finalizado &&

@@ -3,9 +3,9 @@ package com.motoshift.controller;
 import com.motoshift.dto.TurnoRequest;
 import com.motoshift.dto.TurnoResponse;
 import com.motoshift.security.UsuarioAutenticado;
-import com.motoshift.service.PagamentoTurnoService;
 import com.motoshift.service.TurnoConsultaService;
 import com.motoshift.service.TurnoService;
+import com.motoshift.service.ledger.RetentativaOtimista;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -25,31 +25,46 @@ import java.util.Map;
 @Tag(name = "Turnos", description = "Gerenciamento de turnos de entrega (RF04-RF07)")
 public class TurnoController {
 
-    // Tres servicos e nao um: o TurnoService de 604 linhas foi dividido por
+    // Dois servicos e nao um: o TurnoService de 604 linhas foi dividido por
     // responsabilidade, e o controller passa a dizer qual delas esta chamando.
     private final TurnoService service;
     private final TurnoConsultaService consultas;
-    private final PagamentoTurnoService pagamentos;
+
+    /**
+     * As tres rotas que movem dinheiro passam por aqui.
+     *
+     * <p>O retry mora no controller porque e ele que abre a transacao: quando o
+     * @Version da carteira falha, a transacao inteira ja esta condenada, e
+     * repetir so o trecho do ledger commitaria uma metade. Ver
+     * {@link RetentativaOtimista}.
+     */
+    private final RetentativaOtimista retentativa;
 
     public TurnoController(TurnoService service,
                            TurnoConsultaService consultas,
-                           PagamentoTurnoService pagamentos) {
+                           RetentativaOtimista retentativa) {
         this.service = service;
         this.consultas = consultas;
-        this.pagamentos = pagamentos;
+        this.retentativa = retentativa;
     }
 
-    @Operation(summary = "Publicar turno", description = "Lojista cria turno com antecedência mínima de 2h (RF04).")
+    @Operation(summary = "Publicar turno",
+            description = "Lojista cria turno com antecedência mínima de 2h (RF04). "
+                    + "Publicar RESERVA o custo total (valor × vagas): o dinheiro sai do "
+                    + "saldo disponível e fica bloqueado até o turno ser finalizado, "
+                    + "cancelado ou expirar. Turno sem lastro não é publicado.")
     @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "Turno criado"),
-        @ApiResponse(responseCode = "400", description = "Antecedência insuficiente ou dados inválidos")
+        @ApiResponse(responseCode = "201", description = "Turno criado e valor reservado"),
+        @ApiResponse(responseCode = "400", description = "Antecedência insuficiente ou dados inválidos"),
+        @ApiResponse(responseCode = "422", description = "Saldo insuficiente para reservar o turno — "
+                + "a mensagem diz quanto falta")
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TurnoResponse criar(@Valid @RequestBody TurnoRequest req,
                                @AuthenticationPrincipal UsuarioAutenticado atual) {
         atual.exigirTipo("lojista");
-        return service.criar(req, atual.id());
+        return retentativa.executar("publicar turno", () -> service.criar(req, atual.id()));
     }
 
     @Operation(summary = "Listar turnos",
@@ -138,48 +153,39 @@ public class TurnoController {
         return service.aceitar(id, atual.id());
     }
 
-    @Operation(summary = "Finalizar turno", description = "Marca turno como finalizado e credita valor na carteira (RF06).")
+    @Operation(summary = "Finalizar turno",
+            description = "Encerra o turno e LIQUIDA o pagamento na mesma transação: para cada "
+                    + "entregador que trabalhou, o valor sai do saldo bloqueado do lojista e "
+                    + "entra no disponível do entregador. O que foi reservado para vagas não "
+                    + "preenchidas volta ao disponível do lojista. Qualquer um dos dois "
+                    + "participantes pode finalizar — o dinheiro já estava reservado desde a "
+                    + "publicação, então finalizar só transfere o que o lojista comprometeu. "
+                    + "Repetir a chamada não paga duas vezes (RF06).")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Turno finalizado"),
+        @ApiResponse(responseCode = "200", description = "Turno finalizado e pagamentos liquidados"),
+        @ApiResponse(responseCode = "403", description = "Usuário não participa do turno"),
         @ApiResponse(responseCode = "404", description = "Turno não encontrado"),
         @ApiResponse(responseCode = "409", description = "Turno já encerrado")
     })
     @PutMapping("/{id}/finalizar")
     public TurnoResponse finalizar(@PathVariable Long id,
                                    @AuthenticationPrincipal UsuarioAutenticado atual) {
-        return service.finalizar(id, atual.id());
+        return retentativa.executar("finalizar turno", () -> service.finalizar(id, atual.id()));
     }
 
-    @Operation(summary = "Cancelar turno", description = "Cancela turno. Penaliza score do motoboy se < 1h antes do início (RF07).")
+    @Operation(summary = "Cancelar turno",
+            description = "Cancela o turno e devolve a reserva inteira ao saldo disponível do "
+                    + "lojista. Penaliza o score do motoboy se < 1h antes do início; não há "
+                    + "multa financeira (RF07).")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Turno cancelado"),
+        @ApiResponse(responseCode = "200", description = "Turno cancelado e reserva liberada"),
         @ApiResponse(responseCode = "404", description = "Turno não encontrado"),
         @ApiResponse(responseCode = "409", description = "Turno já encerrado")
     })
     @PutMapping("/{id}/cancelar")
     public TurnoResponse cancelar(@PathVariable Long id,
                                   @AuthenticationPrincipal UsuarioAutenticado atual) {
-        return service.cancelar(id, atual.id());
-    }
-
-    @Operation(summary = "Lojista confirma pagamento",
-            description = "Lojista declara que enviou o pagamento. Efetiva quando motoboy também confirmar.")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Confirmação registrada"),
-        @ApiResponse(responseCode = "403", description = "Usuário não é o lojista do turno"),
-        @ApiResponse(responseCode = "404", description = "Turno não encontrado"),
-        @ApiResponse(responseCode = "409", description = "Turno não finalizado, já pago ou já confirmado")
-    })
-    @PutMapping("/{id}/confirmar-pagamento-lojista")
-    public TurnoResponse confirmarPagamentoLojista(
-            @PathVariable Long id,
-            @RequestBody Map<String, Long> body,
-            @AuthenticationPrincipal UsuarioAutenticado atual) {
-        // Quem confirma vem do token; do corpo sobra so o motoboyId, que aqui
-        // nao e identidade e sim qual entregador do turno esta sendo pago.
-        atual.exigirTipo("lojista");
-        return pagamentos.confirmarPagamentoLojista(
-                id, atual.id(), body.get("motoboyId"));
+        return retentativa.executar("cancelar turno", () -> service.cancelar(id, atual.id()));
     }
 
     @Operation(summary = "Listar inscritos do turno",
@@ -190,19 +196,15 @@ public class TurnoController {
         return consultas.listarInscritos(id, atual.id());
     }
 
-    @Operation(summary = "Motoboy confirma recebimento",
-            description = "Motoboy declara que recebeu. Efetiva quando lojista também confirmar.")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Confirmação registrada"),
-        @ApiResponse(responseCode = "403", description = "Usuário não é o motoboy do turno"),
-        @ApiResponse(responseCode = "404", description = "Turno não encontrado"),
-        @ApiResponse(responseCode = "409", description = "Turno não finalizado, já pago ou já confirmado")
-    })
-    @PutMapping("/{id}/confirmar-recebimento-motoboy")
-    public TurnoResponse confirmarRecebimentoMotoboy(
-            @PathVariable Long id,
-            @AuthenticationPrincipal UsuarioAutenticado atual) {
-        atual.exigirTipo("motoboy");
-        return pagamentos.confirmarRecebimentoMotoboy(id, atual.id());
-    }
+    // As rotas PUT /{id}/confirmar-pagamento-lojista e
+    // PUT /{id}/confirmar-recebimento-motoboy foram removidas.
+    //
+    // Elas existiam porque o pagamento dependia de as duas partes declararem
+    // que o dinheiro tinha mudado de mãos fora do app. Com a liquidação
+    // automática não há o que declarar: o lojista compromete o valor ao
+    // publicar e a finalização transfere o que já estava reservado. Uma
+    // confirmação que não decide nada só adiaria o pagamento de quem trabalhou.
+    //
+    // A V13 removeu as colunas que as sustentavam (turno_inscricoes.
+    // lojista_confirmou_em / motoboy_confirmou_em).
 }

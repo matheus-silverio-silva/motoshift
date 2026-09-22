@@ -20,6 +20,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 /**
  * A prova de que a API esta fechada — o teste que faltava.
@@ -43,6 +44,14 @@ class SegurancaDaApiTest {
 
     @Autowired
     private ObjectMapper json;
+
+    @Autowired
+    private com.motoshift.service.CobrancaService cobrancas;
+
+    // Fora de uma requisição HTTP não há transação aberta; quem a abre para o
+    // preparo do cenário é este template.
+    @Autowired
+    private org.springframework.transaction.support.TransactionTemplate transacoes;
 
     @Test
     @DisplayName("rota privada sem token responde 401")
@@ -191,6 +200,55 @@ class SegurancaDaApiTest {
 
     // ── Helpers ──────────────────────────────────────────────
 
+    /**
+     * Recarrega pelo caminho real: cria a cobrança e confirma.
+     *
+     * <p>Poderia chamar o ledger direto, e a primeira versão deste helper fazia
+     * isso — passando o id do usuário como se fosse o id da cobrança. Isso
+     * gerava a chave {@code recarga:{id}}, que colide com a chave de uma
+     * cobrança de verdade de mesmo id criada por outro teste: a recarga era
+     * tratada como já aplicada e o saldo ficava zero, longe daqui. Ids de
+     * entidade não são intercambiáveis, mesmo quando são todos {@code Long}.
+     */
+    private void comSaldo(Conta conta) {
+        transacoes.executeWithoutResult(status -> {
+            Long cobranca = cobrancas
+                    .criarRecarga(conta.id(), new java.math.BigDecimal("5000.00"), null)
+                    .getId();
+            cobrancas.confirmarRecarga(conta.id(), cobranca);
+        });
+    }
+
+    @Test
+    @DisplayName("documento de lançamento: sem token 401, terceiro 403, dono 200 — e sempre simulado")
+    void documentoDeLancamento() throws Exception {
+        Conta dona = registrarLojista("docdona");
+        Conta intruso = registrarMotoboy("docintruso");
+        comSaldo(dona);
+
+        Long recarga = transacoes.execute(status -> transacaoRepo
+                .findByUsuarioIdOrderByCriadoEmDesc(dona.id()).stream()
+                .filter(t -> t.getTipo() == com.motoshift.entity.TipoTransacao.RECARGA)
+                .findFirst().orElseThrow().getId());
+        String rota = "/api/carteira/transacoes/" + recarga + "/documento";
+
+        mvc.perform(post(rota)).andExpect(status().isUnauthorized());
+
+        mvc.perform(post(rota).header(HttpHeaders.AUTHORIZATION, "Bearer " + intruso.token()))
+                .andExpect(status().isForbidden());
+        mvc.perform(get(rota).header(HttpHeaders.AUTHORIZATION, "Bearer " + intruso.token()))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(post(rota).header(HttpHeaders.AUTHORIZATION, "Bearer " + dona.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tipoDocumento").value("RECIBO_RECARGA"))
+                .andExpect(jsonPath("$.simulado").value(true))
+                .andExpect(jsonPath("$.marca").value("DOCUMENTO SIMULADO — SEM VALOR FISCAL"));
+    }
+
+    @Autowired
+    private com.motoshift.repository.TransacaoRepository transacaoRepo;
+
     private record Conta(long id, String token) {}
 
     private Conta registrarMotoboy(String apelido) throws Exception {
@@ -221,7 +279,17 @@ class SegurancaDaApiTest {
                          node.get("token").asText());
     }
 
+    /**
+     * Publica um turno, garantindo antes que o lojista tem com que pagá-lo.
+     *
+     * <p>Publicar passou a reservar valor × vagas, então uma conta recém-criada
+     * é recusada com 422 — corretamente. Este teste é sobre autorização, não
+     * sobre saldo: a recarga aqui é o equivalente a "dado o lojista com dinheiro
+     * em caixa". Quem cobre a regra de saldo é o {@code ReservaELiquidacaoTest}.
+     */
     private long publicarTurno(Conta lojista, Map<String, Object> corpo) throws Exception {
+        comSaldo(lojista);
+
         String criado = mvc.perform(post("/api/turnos")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + lojista.token())
                         .contentType(MediaType.APPLICATION_JSON)

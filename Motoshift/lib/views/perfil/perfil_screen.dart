@@ -4,10 +4,10 @@ import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
+import '../../presentation/providers/pendencias_provider.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
-import '../../widgets/app_bottom_nav.dart';
 import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/menu_row.dart';
 
@@ -97,35 +97,9 @@ class _PerfilScreenState extends State<PerfilScreen> {
     return meses < 0 ? 0 : meses;
   }
 
-  void _onNav(BuildContext context, int i, bool isLojista) {
-    if (isLojista) {
-      switch (i) {
-        case 0:
-          Navigator.pushReplacementNamed(
-              context, AppRoutes.dashboardLojista);
-        case 1:
-          Navigator.pushReplacementNamed(context, AppRoutes.agenda);
-        case 2:
-          Navigator.pushReplacementNamed(
-              context, AppRoutes.turnosLojista);
-        case 3:
-          break;
-      }
-    } else {
-      switch (i) {
-        case 0:
-          Navigator.pushReplacementNamed(
-              context, AppRoutes.dashboardMotoboy);
-        case 1:
-          Navigator.pushReplacementNamed(
-              context, AppRoutes.turnosDisponiveis);
-        case 2:
-          Navigator.pushReplacementNamed(context, AppRoutes.carteira);
-        case 3:
-          break;
-      }
-    }
-  }
+  // O _onNav que ficava aqui — dois switches de quatro casos, um por papel —
+  // saiu junto com os outros seis. A barra inferior e montada pelo
+  // AdaptiveScaffold a partir do NavConfig; a tela informa so a secao.
 
   @override
   Widget build(BuildContext context) {
@@ -144,15 +118,9 @@ class _PerfilScreenState extends State<PerfilScreen> {
         tipo: isLojista ? 'Lojista' : 'Motoboy',
         score: usuario?.score,
       ),
-      bottomNav: AppBottomNav(
-        userType:
-            isLojista ? UserType.lojista : UserType.motoboy,
-        currentIndex: 3,
-        onTap: (i) => _onNav(context, i, isLojista),
-      ),
       desktopTitle: 'Perfil',
       desktopSubtitle: isLojista ? 'Conta de lojista' : 'Conta de entregador',
-      desktopSelectedRoute: AppRoutes.perfil,
+      rotaDaSecao: AppRoutes.perfil,
       desktopBody: _buildDesktop(context, usuario, isLojista, nome, initials),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 14, 18, 40),
@@ -327,6 +295,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                   ),
                 );
                 if (confirm == true && context.mounted) {
+                  context.read<PendenciasProvider>().limpar();
                   context.read<AuthService>().logout();
                   Navigator.pushNamedAndRemoveUntil(
                     context,
