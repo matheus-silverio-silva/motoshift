@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+#
+# commit-msg — carimba a chave do Jira na mensagem do commit.
+#
+# O Jira so liga um commit a um card quando a chave (SCRUM-18) aparece na
+# mensagem. Este hook le a chave do nome da branch e a acrescenta sozinho,
+# para nao depender de lembrar na hora do commit.
+#
+# Regras:
+#   - branch sem chave (main, feat/algo)      -> nao mexe em nada
+#   - mensagem que ja cita a chave            -> nao duplica
+#   - merge, squash, fixup, amend com --no-edit -> nao mexe
+#   - assunto curto  -> a chave entra no fim da primeira linha: "(SCRUM-18)"
+#   - assunto longo  -> a chave entra como linha propria no fim da mensagem
+#
+# Ligado por: git config core.hooksPath .githooks
+# Para desligar: git config --unset core.hooksPath
+
+set -u
+
+msg_file="$1"
+[ -f "$msg_file" ] || exit 0
+
+# Merge/revert automatico e afins: nao mexe.
+case "${2:-}" in
+  merge|squash) exit 0 ;;
+esac
+if [ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then
+  exit 0
+fi
+
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')"
+[ -n "$branch" ] && [ "$branch" != "HEAD" ] || exit 0
+
+# Primeira chave no formato LETRAS-NUMERO encontrada no nome da branch.
+key="$(printf '%s' "$branch" | grep -oiE '[A-Z][A-Z0-9]+-[0-9]+' | head -n1 || true)"
+[ -n "$key" ] || exit 0
+key="$(printf '%s' "$key" | tr '[:lower:]' '[:upper:]')"
+
+# Ja citada em qualquer lugar da mensagem: nada a fazer.
+if grep -qiE "(^|[^A-Z0-9])$key([^0-9]|$)" "$msg_file"; then
+  exit 0
+fi
+
+subject="$(head -n1 "$msg_file")"
+
+# Commit vazio (git commit sem -m abortado) ou so comentario: nao mexe.
+case "$subject" in
+  ''|'#'*) exit 0 ;;
+esac
+
+# fixup!/squash! precisam do assunto intacto para o autosquash casar.
+case "$subject" in
+  fixup!*|squash!*|amend!*) exit 0 ;;
+esac
+
+tmp="$msg_file.jira"
+if [ "${#subject}" -le $((72 - ${#key} - 3)) ]; then
+  # Cabe no assunto: "feat(ui): algo (SCRUM-18)"
+  { printf '%s (%s)\n' "$subject" "$key"; tail -n +2 "$msg_file"; } > "$tmp"
+else
+  # Assunto ja longo: a chave vira uma linha propria no fim.
+  { cat "$msg_file"; printf '\n%s\n' "$key"; } > "$tmp"
+fi
+mv "$tmp" "$msg_file"
+exit 0

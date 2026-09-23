@@ -92,3 +92,7 @@ GoogleService-Info.plist
 
 # Artefatos de diagnostico gerados por golden tests que falham
 Motoshift/test/goldens/failures/
+
+# Local: configuracoes do Claude e copias de trabalho temporarias
+.claude/settings.local.json
+.claude/worktrees/
