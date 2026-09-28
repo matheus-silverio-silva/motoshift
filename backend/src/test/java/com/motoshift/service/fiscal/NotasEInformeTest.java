@@ -76,10 +76,10 @@ class NotasEInformeTest {
         Turno t1 = cenario.turnoPago(lojaA, "100.00", entregador);
         Turno t2 = cenario.turnoPago(lojaB, "80.00", entregador);
         Turno t3 = cenario.turnoPago(lojaA, "60.00", outroEntregador);
-        NotaFiscalResponse n1 = notas.emitir(t1.getId(), entregador, entregador).nota();
-        NotaFiscalResponse n2 = notas.emitir(t2.getId(), entregador, entregador).nota();
+        NotaFiscalResponse n1 = notas.emitir(t1.getId(), entregador, lojaA).nota();
+        NotaFiscalResponse n2 = notas.emitir(t2.getId(), entregador, lojaB).nota();
         NotaFiscalResponse n3 = notas.emitir(t3.getId(), outroEntregador, lojaA).nota();
-        notas.cancelar(n2.getId(), "teste", entregador);
+        notas.cancelar(n2.getId(), "teste", lojaB);
 
         assertThat(ids(entregador, filtro(f -> f.setPapel("prestador")))).containsExactlyInAnyOrder(n1.getId(), n2.getId());
         assertThat(ids(entregador, filtro(f -> f.setPapel("tomador")))).isEmpty();
@@ -102,7 +102,7 @@ class NotasEInformeTest {
     @DisplayName("o período filtra pela competência — a data do serviço, com o dia final inteiro")
     void periodoDeCompetencia() {
         Turno t = cenario.turnoPago(lojaA, "100.00", entregador);
-        NotaFiscalResponse n = notas.emitir(t.getId(), entregador, entregador).nota();
+        NotaFiscalResponse n = notas.emitir(t.getId(), entregador, lojaA).nota();
         LocalDate dia = t.getDataInicio().toLocalDate();
 
         assertThat(ids(entregador, filtro(f -> { f.setCompetenciaDe(dia); f.setCompetenciaAte(dia); })))
@@ -135,7 +135,7 @@ class NotasEInformeTest {
         Turno doAnoPassado = cenario.turnoPago(lojaB, "999.00", entregador);
         moverParaOAnoPassado(cenario.pagamentoRecebido(doAnoPassado, entregador));
         // Uma nota emitida, as outras não: o informe conta todas.
-        notas.emitir(t2.getId(), entregador, entregador);
+        notas.emitir(t2.getId(), entregador, lojaA);
 
         int ano = Year.now().getValue();
         InformeAnualResponse inf = informes.informe(entregador, false, ano);

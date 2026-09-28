@@ -268,7 +268,7 @@ class _ExtratoScreenState extends State<ExtratoScreen> {
                   // Gera o documento sem passar pelo detalhe: no extrato de um
                   // mês inteiro, exigir dois toques por linha para pegar a nota
                   // de cada turno é o que faz ninguém pegar.
-                  onDocumento: () => gerarEAbrirDocumento(context, t),
+                  onDocumento: () => abrirDocumentoDoLancamento(context, t),
                 ),
             ],
           );

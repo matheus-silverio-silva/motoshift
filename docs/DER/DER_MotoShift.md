@@ -212,7 +212,7 @@ deixaria de valer.
 | `operacao_id` | UUID | sim | A operação do ledger que gerou o pagamento (V14) — liga a nota às duas pernas e às retenções |
 | `prestador_id` | BIGINT | não | FK → `usuarios.id` — o entregador |
 | `tomador_id` | BIGINT | não | FK → `usuarios.id` — o lojista |
-| `emitida_por_id` | BIGINT | não | FK → `usuarios.id` — qual dos dois disparou a emissão |
+| `emitida_por_id` | BIGINT | não | FK → `usuarios.id` — quem disparou a emissão: o lojista (tomador), que é quem emite. Notas antigas podem ter o entregador |
 | `numero` | INTEGER | não | Sequencial por prestador |
 | `serie` | VARCHAR(8) | não | Série única (`A1`) neste MVP |
 | `codigo_verificacao` | VARCHAR(16) | não | Derivado dos dados da própria nota (SHA-256) |
@@ -224,7 +224,7 @@ deixaria de valer.
 | `valor_liquido` | NUMERIC(12,2) | não | Com retenção, serviço menos os tributos; sem ela, o próprio valor do serviço — que é o que o extrato creditou |
 | `competencia` | TIMESTAMP(6) | não | Data do serviço, isto é, o início do turno (V14). É por ela que se filtra a nota, não pela emissão |
 | `emitida_em` | TIMESTAMP(6) | não | — |
-| `cancelada_em`, `motivo_cancelamento` | TIMESTAMP / VARCHAR(255) | sim | Só o prestador cancela |
+| `cancelada_em`, `motivo_cancelamento` | TIMESTAMP / VARCHAR(255) | sim | Só o lojista (tomador) cancela — o mesmo lado que emite |
 
 ## Notas de modelagem
 

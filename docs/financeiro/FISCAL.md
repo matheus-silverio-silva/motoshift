@@ -35,8 +35,8 @@ A tabela está codificada em `service/fiscal/TipoDocumento.java`, num lugar só.
 
 | Lançamento | Documento | Quem pode ver |
 |---|---|---|
-| `pagamento_recebido` (entregador) | **NFS-e** | as duas partes |
-| `pagamento_enviado` (lojista) | **a MESMA NFS-e** | as duas partes |
+| `pagamento_recebido` (entregador) | **NFS-e** — só consulta, depois que o lojista emitir | as duas partes |
+| `pagamento_enviado` (lojista) | **a MESMA NFS-e** — é daqui que ela é emitida | as duas partes |
 | `recarga` | Recibo de recarga | o dono |
 | `saque`, Pix concluído | Comprovante de Pix | o dono |
 | `saque`, Pix recusado | Comprovante de movimentação | o dono |
@@ -63,6 +63,42 @@ Um comprovante de Pix emitido antes de o banco responder afirmaria uma
 transferência que ainda pode ser recusada. Enquanto a cobrança está `PENDENTE`,
 o lançamento não oferece documento; quando ela falha e o estorno entra, o que
 existe é um comprovante de movimentação, que é o que de fato aconteceu.
+
+---
+
+### Quem emite: o lojista, por conta do entregador
+
+O documento é sempre o mesmo — **o entregador é o prestador, o lojista é o
+tomador** —, mas quem dispara a emissão, e o cancelamento, é **só o lojista**.
+O entregador vê a nota, baixa o PDF e imprime; se pedir a emissão ou o
+cancelamento, leva **403** com uma mensagem que diz o que acontece
+("A nota fiscal é emitida pelo lojista que contratou o turno…"), tanto em
+`/api/notas-fiscais` quanto em `/api/carteira/transacoes/{id}/documento`.
+
+> **A pergunta da banca: a NFS-e não é do prestador?** No mundo real, sim: a
+> nota de serviço sai do CNPJ de quem presta — aqui, o entregador MEI, pelo
+> emissor nacional ou da prefeitura dele. O MotoShift inverte quem **clica**,
+> não quem **presta**: a plataforma emite por conta do entregador, a pedido do
+> tomador. As razões são práticas. É o lojista quem precisa do documento para
+> lançar a despesa e fechar o mês; é ele quem tem cadastro fiscal completo (o
+> entregador, hoje, nem tem CPF no cadastro — ver a seção 5); e deixar a
+> emissão com quem paga tira do entregador uma tarefa burocrática que não
+> muda nada no dinheiro dele. O modelo registra as duas coisas separadas:
+> `prestador_id` é quem prestou, `emitida_por_id` é quem pediu. Numa emissão
+> real, a plataforma precisaria de uma procuração/autorização do MEI no
+> emissor municipal ou nacional para emitir em nome dele — está na lista da
+> seção 7.
+
+Para o entregador, o que falta emitir não é pendência: é informação. A tela
+de notas mostra esses pagamentos como **"Aguardando emissão"**, sem botão, o
+detalhe do lançamento mostra **"Aguardando emissão pelo lojista"** no lugar do
+botão, e o app do entregador **nunca** faz o POST da NFS-e — abre a nota pelo
+GET. O extrato diz isso no próprio lançamento: o `pagamento_recebido` sem nota
+vem com `tipoDocumento = NFSE`, `documentoId = null` e
+`documentoDisponivel = false`. Quando a loja emite, o entregador recebe a
+notificação `nota_fiscal_emitida`; quando cancela, `nota_fiscal_cancelada`.
+Comprovantes (recarga, saque, movimentação) não mudaram: o dono de cada um
+continua gerando o seu.
 
 ---
 
@@ -137,8 +173,9 @@ usuário do token com o dono do lançamento (e, no pagamento, com a contraparte)
 Qualquer terceiro recebe **403**, inclusive para lançamentos que existem: um
 404 nesse caso ainda contaria que o lançamento existe.
 
-**Cancelar a nota não estorna dinheiro.** O cancelamento é do prestador, marca
-a nota como cancelada para as duas partes e **não devolve nada**: o serviço foi
+**Cancelar a nota não estorna dinheiro.** O cancelamento é do lojista — o
+mesmo lado que emite —, marca a nota como cancelada para as duas partes,
+avisa o entregador e **não devolve nada**: o serviço foi
 prestado e o pagamento aconteceu, e está no extrato. Anular o pagamento seria
 inventar um estorno que ninguém pediu. A numeração também não é reaproveitada —
 a sequência tem buracos, como em qualquer talão.
@@ -160,14 +197,18 @@ campo de CPF, que é o erro que qualquer preenchimento automático cometeria.
 
 | Método | Rota | O que faz |
 |---|---|---|
-| POST | `/api/carteira/transacoes/{id}/documento` | Emite — ou devolve, se já existir — o documento do lançamento |
-| GET | `/api/carteira/transacoes/{id}/documento` | O documento já existente, sem emitir |
+| POST | `/api/carteira/transacoes/{id}/documento` | Emite — ou devolve, se já existir — o documento do lançamento. NFS-e só pelo lojista (o entregador leva 403) |
+| GET | `/api/carteira/transacoes/{id}/documento` | O documento já existente, sem emitir. É por aqui que o entregador abre a nota dele; antes da emissão, 404 "Aguardando emissão pelo lojista" |
+| POST | `/api/notas-fiscais` | Emite a nota do turno — só o lojista |
+| PUT | `/api/notas-fiscais/{id}/cancelar` | Cancela a nota — só o lojista; não estorna dinheiro |
 | GET | `/api/notas-fiscais` | Notas com filtros (`papel`, `status`, `competenciaDe/Ate`, `contraparteId`, `turnoId`) e paginação opcional |
 | GET | `/api/notas-fiscais/resumo?ano=` | Informe anual simulado |
 | GET | `/api/notas-fiscais/resumo/exportar?ano=` | O mesmo informe em CSV |
 
-"Gerar" e "ver" são o mesmo pedido do ponto de vista de quem usa: como a
-emissão é idempotente, o POST devolve 201 na primeira vez e 200 depois.
+Para o lojista, "gerar" e "ver" são o mesmo pedido: como a emissão é
+idempotente, o POST devolve 201 na primeira vez e 200 depois. Para o
+entregador, a NFS-e é só GET: o POST dele é sempre um pedido de emissão, e
+continua 403 mesmo depois que a nota existe.
 
 A listagem segue a convenção de paginação do projeto: o corpo continua sendo um
 array, e o total vai no header `X-Total-Count`. Sem `pagina`, a resposta é a
@@ -203,6 +244,7 @@ números justamente para que a diferença apareça.
 | **RPS** (Recibo Provisório de Serviços) e seu lote | é o que se envia ao município; o número do RPS é diferente do número da nota |
 | **Webservice municipal** (padrão ABRASF) ou o **Ambiente Nacional da NFS-e** | cada município tem endpoint, layout e regras próprias; o número e o código de verificação passam a vir de lá |
 | **Cadastro real do prestador** (CPF/CNPJ, inscrição municipal, CNAE, item da lista de serviços da LC 116/2003) | hoje o entregador não tem sequer CPF no cadastro |
+| **Autorização do prestador para a plataforma emitir** em nome dele | aqui o lojista pede e a plataforma emite pelo entregador; no emissor real isso exige procuração ou credenciamento do MEI |
 | **Alíquota do município** e regime tributário (Simples, MEI) | as alíquotas aqui são de exemplo, fixas em configuração |
 | **Retenções conforme a lei** | a retenção implementada é uma simulação da mecânica, não a regra fiscal aplicável |
 | Consulta de situação, carta de correção, substituição | o ciclo de vida real de uma nota é maior que emitir e cancelar |
@@ -254,10 +296,12 @@ autoriza na hora.
 | Arquivo | O que prende |
 |---|---|
 | `service/fiscal/TipoDocumentoTest.java` | a tabela da seção 2, incluindo reserva sem nota |
-| `service/fiscal/DocumentoFiscalServiceTest.java` | idempotência, 403 para terceiro, saque pendente sem documento |
+| `service/fiscal/DocumentoFiscalServiceTest.java` | idempotência, 403 para terceiro e para o entregador que pede a NFS-e, "aguardando emissão" no extrato, saque pendente sem documento |
 | `service/fiscal/RetencaoNaFonteTest.java` | com retenção: o bruto no extrato, as duas saídas na mesma operação, a nota batendo com o saldo |
-| `service/NotaFiscalServiceTest.java` | sem retenção: tributo informativo, líquido = crédito do extrato; cancelar não estorna |
+| `service/NotaFiscalServiceTest.java` | sem retenção: tributo informativo, líquido = crédito do extrato; cancelar não estorna; só o lojista emite e cancela (403 para o entregador) e o entregador é avisado |
+| `controller/NotaFiscalControllerTest.java` | pelo HTTP: 403 para o entregador em emitir, cancelar e no POST do documento; o GET abre a nota dele |
 | `service/fiscal/NotasEInformeTest.java` | filtros, paginação e o informe pelo extrato |
 | `service/fiscal/DocumentoDaParteTest.java` | máscara de CPF/CNPJ e o entregador sem CPF |
 | `Motoshift/test/documento/documento_fiscal_test.dart` | marca sempre visível, PDF gerado, caminhos até o documento |
 | `Motoshift/test/fiscal/notas_fiscais_filtros_test.dart` | filtro indo para a API, paginação, informe e exportação |
+| `Motoshift/test/fiscal/quem_emite_test.dart` | entregador sem "Emitir" nem "Cancelar", "aguardando emissão" sem botão, nota aberta por GET |

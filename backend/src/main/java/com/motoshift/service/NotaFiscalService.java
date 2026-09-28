@@ -61,11 +61,16 @@ import java.util.stream.Collectors;
  * emissão — pelo turno ({@link #emitir}) e pelo lançamento do extrato
  * ({@link #emitirParaPagamento}) — terminam no mesmo lugar.
  *
- * <p><b>Os dois lados.</b> O documento é sempre o mesmo — o entregador presta,
- * o lojista toma —, mas qualquer um dos dois pode disparar a emissão. O
- * lojista chega a ela pelo pagamento_enviado dele, que tem a mesma operação do
- * pagamento_recebido do entregador. Não existe "nota do lojista" separada: uma
- * segunda nota documentaria um serviço que não houve.
+ * <p><b>Quem emite.</b> O documento é sempre o mesmo — o entregador presta,
+ * o lojista toma —, e quem dispara a emissão (e o cancelamento) é o lojista,
+ * o tomador do turno. No mundo real a NFS-e sai do prestador (o entregador
+ * MEI); aqui a plataforma a emite por conta dele, a pedido de quem pagou. É o
+ * lojista que precisa do documento para lançar a despesa, e é ele quem tem o
+ * cadastro fiscal completo (CNPJ) — o entregador nem tem CPF no cadastro. O
+ * entregador vê, baixa e imprime; pedir a emissão ou o cancelamento leva 403.
+ * O lojista chega à nota pelo pagamento_enviado dele, que tem a mesma operação
+ * do pagamento_recebido do entregador. Não existe "nota do lojista" separada:
+ * uma segunda nota documentaria um serviço que não houve.
  *
  * <p><b>Tributos.</b> ISS e IRRF — ver {@link CalculoTributario}. A nota não
  * decide se houve retenção: ela procura os lançamentos de retenção da mesma
@@ -121,8 +126,9 @@ public class NotaFiscalService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Turno não encontrado."));
 
-        Long prestador = resolverPrestador(turno, prestadorId, solicitanteId);
-        exigirParticipante(turno, prestador, solicitanteId);
+        exigirTomadorDoTurno(turno, prestadorId, solicitanteId);
+        Long prestador = resolverPrestador(turno, prestadorId);
+        exigirInscrito(turno, prestador);
 
         // A nota documenta um serviço prestado: antes de o turno terminar não
         // há o que declarar.
@@ -140,8 +146,12 @@ public class NotaFiscalService {
     /**
      * Emite (ou devolve) a NFS-e de um pagamento_recebido concluído.
      *
-     * <p>Idempotente de propósito: os dois lados veem o mesmo botão, e duas
-     * chamadas não podem gerar dois documentos para o mesmo serviço. A
+     * <p>Só o tomador — o lojista que pagou — pede a emissão. O entregador
+     * leva 403 mesmo quando a nota já existe: para ele o caminho é a consulta
+     * (GET), e o POST é sempre um pedido de emissão.
+     *
+     * <p>Idempotente de propósito: pedir de novo (dois cliques, a tela de
+     * notas e o extrato) não gera dois documentos para o mesmo serviço. A
      * unicidade está no banco (uma nota por pagamento, V14; uma por turno e
      * prestador, V7) — a busca abaixo é o caminho rápido, o índice é a
      * garantia.
@@ -158,7 +168,10 @@ public class NotaFiscalService {
         }
         Long prestador = pagamento.getUsuarioId();
         Long tomador = pagamento.getContraparteId();
-        if (!solicitanteId.equals(prestador) && !solicitanteId.equals(tomador)) {
+        if (solicitanteId.equals(prestador)) {
+            throw soOLojistaEmite();
+        }
+        if (!solicitanteId.equals(tomador)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Acesso negado: este pagamento não é seu.");
         }
@@ -185,7 +198,7 @@ public class NotaFiscalService {
                 : turnoRepo.findById(pagamento.getTurnoId()).orElse(null);
         NotaFiscal salva = notaRepo.save(montarNota(pagamento, turno, solicitanteId));
 
-        avisarAsPartes(salva, turno, solicitanteId);
+        avisarOEntregador(salva, turno);
         return new Emissao(montar(salva, solicitanteId), true);
     }
 
@@ -288,23 +301,23 @@ public class NotaFiscalService {
         return texto.length() <= 300 ? texto : texto.substring(0, 297) + "...";
     }
 
-    private void avisarAsPartes(NotaFiscal nota, Turno turno, Long solicitanteId) {
-        String titulo = "Nota fiscal emitida";
-        String mensagem = "A NFS-e nº " + nota.getNumero()
+    /**
+     * Quem pediu a emissão é sempre o lojista, e acabou de ver o resultado:
+     * quem precisa saber é o entregador, cuja nota estava "aguardando emissão".
+     */
+    private void avisarOEntregador(NotaFiscal nota, Turno turno) {
+        String loja = nomeDe(nota.getTomadorId());
+        String mensagem = loja + " emitiu a NFS-e nº " + nota.getNumero()
                 + (turno == null ? "" : " do turno \"" + turno.getTitulo() + "\"")
-                + " foi emitida.";
-        // Só o outro lado é notificado: quem clicou acabou de ver o resultado.
-        Long outro = solicitanteId.equals(nota.getPrestadorId())
-                ? nota.getTomadorId()
-                : nota.getPrestadorId();
-        notificacoes.criar(outro, "nota_fiscal_emitida", titulo, mensagem,
-                "nota_fiscal", nota.getId());
+                + ". Ela já está em Notas fiscais para baixar e imprimir.";
+        notificacoes.criar(nota.getPrestadorId(), "nota_fiscal_emitida",
+                "Nota fiscal emitida", mensagem, "nota_fiscal", nota.getId());
     }
 
     // ── Cancelamento ────────────────────────────────────────────────────────
 
     /**
-     * Cancela a nota. Só o prestador cancela — é dele o documento.
+     * Cancela a nota. Só o tomador cancela — o mesmo lado que emite.
      *
      * <p><b>Cancelar a nota NÃO estorna dinheiro.</b> A nota documenta um
      * pagamento que aconteceu; cancelar o documento não desfaz o pagamento, do
@@ -319,9 +332,14 @@ public class NotaFiscalService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Nota fiscal não encontrada."));
 
-        if (!nota.getPrestadorId().equals(solicitanteId)) {
+        if (nota.getPrestadorId().equals(solicitanteId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Apenas o prestador do serviço pode cancelar a nota fiscal.");
+                    "A nota fiscal é cancelada pelo lojista que a emitiu. "
+                            + "Se algo nela estiver errado, fale com a loja.");
+        }
+        if (!nota.getTomadorId().equals(solicitanteId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Acesso negado: esta nota fiscal não é sua.");
         }
         if (nota.isCancelada()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -330,12 +348,15 @@ public class NotaFiscalService {
 
         nota.setCanceladaEm(LocalDateTime.now());
         nota.setMotivoCancelamento(
-                motivo == null || motivo.isBlank() ? "Cancelada pelo prestador" : motivo.trim());
+                motivo == null || motivo.isBlank() ? "Cancelada pelo tomador" : motivo.trim());
         NotaFiscal salva = notaRepo.save(nota);
 
-        notificacoes.criar(salva.getTomadorId(), "nota_fiscal_cancelada",
+        // O entregador é quem não clicou: a nota dele mudou de situação.
+        notificacoes.criar(salva.getPrestadorId(), "nota_fiscal_cancelada",
                 "Nota fiscal cancelada",
-                "A NFS-e nº " + salva.getNumero() + " foi cancelada pelo prestador.",
+                nomeDe(salva.getTomadorId()) + " cancelou a NFS-e nº " + salva.getNumero()
+                        + ". O pagamento continua no seu extrato: cancelar a nota não "
+                        + "estorna dinheiro.",
                 "nota_fiscal", salva.getId());
 
         return montar(salva, solicitanteId);
@@ -391,8 +412,10 @@ public class NotaFiscalService {
 
     /**
      * Pagamentos de turno que ainda não geraram nota, do ponto de vista de
-     * quem pergunta. O lojista vê um item por entregador de cada turno seu; o
-     * entregador vê os turnos em que trabalhou.
+     * quem pergunta. O lojista vê um item por entregador de cada turno seu — é
+     * a lista do que ele tem a emitir. O entregador vê os turnos em que
+     * trabalhou e cuja nota o lojista ainda não emitiu: não é tarefa dele, é
+     * informação ("aguardando emissão").
      *
      * <p>Só entra o que tem pagamento concluído no extrato — é a condição da
      * emissão. Um turno finalizado antes do ledger, sem crédito registrado,
@@ -497,23 +520,40 @@ public class NotaFiscalService {
         return nomes;
     }
 
-    /** Se o pedido não disse quem prestou, o próprio solicitante é o entregador. */
-    private Long resolverPrestador(Turno turno, Long prestadorId, Long solicitanteId) {
+    /**
+     * Quem emite é o lojista do turno. O entregador recebe uma mensagem que
+     * diz o que fazer; quem não participou, a negativa de sempre.
+     */
+    private void exigirTomadorDoTurno(Turno turno, Long prestadorId, Long solicitanteId) {
+        if (solicitanteId.equals(turno.getLojistId())) return;
+
+        boolean ehEntregadorDoTurno = solicitanteId.equals(prestadorId)
+                || solicitanteId.equals(turno.getMotoboyId())
+                || (turno.getId() != null
+                    && inscricaoRepo.findByTurnoIdAndMotoboyId(turno.getId(), solicitanteId).isPresent());
+        if (ehEntregadorDoTurno) {
+            throw soOLojistaEmite();
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Acesso negado: você não participou deste turno.");
+    }
+
+    private static ResponseStatusException soOLojistaEmite() {
+        return new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "A nota fiscal é emitida pelo lojista que contratou o turno. "
+                        + "Ela aparece em Notas fiscais assim que a loja emitir.");
+    }
+
+    /** Sem prestador no pedido, vale o entregador principal do turno. */
+    private Long resolverPrestador(Turno turno, Long prestadorId) {
         if (prestadorId != null) return prestadorId;
-        if (!solicitanteId.equals(turno.getLojistId())) return solicitanteId;
         if (turno.getMotoboyId() != null) return turno.getMotoboyId();
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                 "Informe o entregador do turno para emitir a nota fiscal.");
     }
 
-    /** Emitir a nota de um serviço alheio não é possível: ou presta, ou toma. */
-    private void exigirParticipante(Turno turno, Long prestadorId, Long solicitanteId) {
-        boolean ehTomador = solicitanteId.equals(turno.getLojistId());
-        boolean ehPrestador = solicitanteId.equals(prestadorId);
-        if (!ehTomador && !ehPrestador) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Acesso negado: você não participou deste turno.");
-        }
+    /** A nota é de um entregador que trabalhou no turno, e de mais nenhum. */
+    private void exigirInscrito(Turno turno, Long prestadorId) {
         boolean inscrito = turno.getId() != null
                 && (inscricaoRepo.findByTurnoIdAndMotoboyId(turno.getId(), prestadorId).isPresent()
                     || prestadorId.equals(turno.getMotoboyId()));
@@ -521,6 +561,13 @@ public class NotaFiscalService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Este entregador não participou do turno.");
         }
+    }
+
+    private String nomeDe(Long usuarioId) {
+        return usuarioRepo.findById(usuarioId)
+                .map(u -> u.getNomeFantasia() != null && !u.getNomeFantasia().isBlank()
+                        ? u.getNomeFantasia() : u.getNome())
+                .orElse("O lojista");
     }
 
     NotaFiscalResponse montar(NotaFiscal n, Long solicitanteId) {

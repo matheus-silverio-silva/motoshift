@@ -798,7 +798,7 @@ public class MassaDemonstracao {
     }
 
     /**
-     * Nota de um turno da massa, emitida pelo entregador.
+     * Nota de um turno da massa, emitida pelo lojista — o único lado que emite.
      *
      * No boot de dev, uma falha aqui é só registrada: se a regra do serviço
      * mudar e o turno deixar de ser elegível, o app sobe sem as notas de
@@ -808,7 +808,7 @@ public class MassaDemonstracao {
      */
     private void emitirNota(Turno turno, Usuario motoboy) {
         try {
-            notasFiscais.emitir(turno.getId(), motoboy.getId(), motoboy.getId());
+            notasFiscais.emitir(turno.getId(), motoboy.getId(), turno.getLojistId());
         } catch (RuntimeException e) {
             log.warn("[massa] nota fiscal do turno {} nao emitida: {}", turno.getId(), e.getMessage());
         }

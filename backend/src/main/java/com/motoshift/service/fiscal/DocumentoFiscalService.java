@@ -25,9 +25,11 @@ import java.util.Optional;
  * <p>Um lançamento, um documento, decidido por {@link TipoDocumento}. Para o
  * pagamento de turno é a NFS-e, e a MESMA nos dois lados: o entregador chega
  * a ela pelo pagamento_recebido, o lojista pelo pagamento_enviado da mesma
- * operação, e os dois caem em {@link NotaFiscalService#emitirParaPagamento}.
- * Para o resto é um comprovante, derivado na hora pelo
- * {@link ComprovanteService}.
+ * operação. Emitir é do lojista — o POST do entregador sobre o
+ * pagamento_recebido cai em {@link NotaFiscalService#emitirParaPagamento} e
+ * leva 403; o entregador abre a nota pelo {@link #buscar}. Para o resto é um
+ * comprovante, derivado na hora pelo {@link ComprovanteService}, e o dono o
+ * gera como antes.
  *
  * <p><b>Quem pode.</b> Só o dono do lançamento. O extrato é privado — o id de
  * um lançamento alheio não abre nada, nem para a contraparte: o lojista vê a
@@ -61,6 +63,7 @@ public class DocumentoFiscalService {
     /**
      * Emite o documento, ou devolve o que já existe. Idempotente: gerar duas
      * vezes devolve o mesmo documento — a mesma nota, o mesmo comprovante.
+     * NFS-e só pelo lojista: o entregador leva 403 (ver a classe).
      */
     @Transactional
     public Resultado emitir(Long transacaoId, Long usuarioId) {
@@ -76,7 +79,7 @@ public class DocumentoFiscalService {
 
     /**
      * O documento que já existe, sem emitir nada. Comprovante sempre existe
-     * (é derivado); NFS-e só depois de gerada — antes, 404.
+     * (é derivado); NFS-e só depois de o lojista emiti-la — antes, 404.
      */
     @Transactional(readOnly = true)
     public DocumentoResponse buscar(Long transacaoId, Long usuarioId) {
@@ -92,7 +95,9 @@ public class DocumentoFiscalService {
                         : notaRepo.findByTurnoIdAndPrestadorId(recebido.getTurnoId(),
                                 recebido.getUsuarioId()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "A nota fiscal deste pagamento ainda não foi gerada."));
+                        t.getTipo() == TipoTransacao.PAGAMENTO_RECEBIDO
+                                ? "Aguardando emissão pelo lojista."
+                                : "A nota fiscal deste pagamento ainda não foi emitida."));
         return DocumentoResponse.deNota(t.getId(), notas.buscar(nota.getId(), usuarioId));
     }
 

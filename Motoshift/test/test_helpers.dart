@@ -354,7 +354,13 @@ Map<String, dynamic> fakeDashboardLojista() => {
 /// [retidos] escolhe a política de tributo: falso (padrão) é o valor
 /// aproximado, com líquido igual ao valor do serviço; verdadeiro é a retenção
 /// na fonte, com o líquido menor.
-NotaFiscal fakeNotaFiscal({bool retidos = false, bool cancelada = false}) {
+/// [papel] é o lado de quem abriu a nota: `prestador` (o entregador, que só
+/// vê) ou `tomador` (o lojista, que emite e cancela).
+NotaFiscal fakeNotaFiscal({
+  bool retidos = false,
+  bool cancelada = false,
+  String papel = 'prestador',
+}) {
   const base = 200.0;
   const iss = 10.0;
   const irrf = 3.0;
@@ -388,7 +394,7 @@ NotaFiscal fakeNotaFiscal({bool retidos = false, bool cancelada = false}) {
     canceladaEm: cancelada ? DateTime(2025, 8, 16, 10) : null,
     cancelada: cancelada,
     motivoCancelamento: cancelada ? 'Emitida por engano' : null,
-    papel: 'prestador',
+    papel: papel,
     transacaoId: 92,
     operacaoId: '2f1c9c30-0000-4000-8000-000000000001',
   );
@@ -782,6 +788,10 @@ class FakeCarteiraApi extends CarteiraApi {
   /// Documentos gerados pela tela — o teste confere qual lançamento foi pedido.
   final List<int> documentosGerados = [];
 
+  /// Documentos só consultados (GET). A NFS-e do entregador tem de vir por
+  /// aqui: quem emite é o lojista.
+  final List<int> documentosBuscados = [];
+
   @override
   Future<Carteira> buscarCarteira(int motoboyId) async => fakeCarteira();
 
@@ -792,8 +802,10 @@ class FakeCarteiraApi extends CarteiraApi {
   }
 
   @override
-  Future<DocumentoFiscal> buscarDocumento(int transacaoId) async =>
-      _documentoDe(transacaoId);
+  Future<DocumentoFiscal> buscarDocumento(int transacaoId) async {
+    documentosBuscados.add(transacaoId);
+    return _documentoDe(transacaoId);
+  }
 
   /// A regra do backend em miniatura: pagamento de turno vira NFS-e, o resto
   /// vira comprovante.

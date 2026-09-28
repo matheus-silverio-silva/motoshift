@@ -51,7 +51,8 @@ class NotaFiscalApi {
         .getTexto('/notas-fiscais/resumo/exportar${ano == null ? '' : '?ano=$ano'}');
   }
 
-  /// Turnos finalizados que ainda não geraram nota.
+  /// Pagamentos de turno que ainda não geraram nota. Para o lojista é o que
+  /// ele tem a emitir; para o entregador, o que aguarda a emissão pela loja.
   Future<List<NotaFiscalPendente>> pendentes() async {
     final list = await _client.get('/notas-fiscais/pendentes') as List<dynamic>;
     return list
@@ -59,8 +60,8 @@ class NotaFiscalApi {
         .toList();
   }
 
-  /// Emite a nota do turno. [prestadorId] só é necessário quando quem emite é
-  /// o lojista de um turno com mais de um entregador.
+  /// Emite a nota do turno. Só o lojista emite — o entregador leva 403.
+  /// [prestadorId] diz de qual entregador, num turno de várias vagas.
   Future<NotaFiscal> emitir(int turnoId, {int? prestadorId}) async {
     final data = await _client.post('/notas-fiscais', {
       'turnoId': turnoId,
@@ -74,7 +75,8 @@ class NotaFiscalApi {
     return NotaFiscal.fromJson(data as Map<String, dynamic>);
   }
 
-  /// Cancelamento é do prestador; o backend recusa o pedido do tomador.
+  /// Cancelamento é do lojista, o mesmo lado que emite; o backend recusa o
+  /// pedido do entregador.
   Future<NotaFiscal> cancelar(int id, {String? motivo}) async {
     final data = await _client.put('/notas-fiscais/$id/cancelar', {
       if (motivo != null) 'motivo': motivo,

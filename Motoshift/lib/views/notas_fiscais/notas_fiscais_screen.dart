@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import '../../models/informe_anual.dart';
 import '../../models/nota_fiscal.dart';
 import '../../models/nota_fiscal_filtro.dart';
+import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
@@ -26,8 +28,10 @@ class NotasFiscaisArgs {
 /// Notas fiscais de serviço — a mesma tela para os dois papéis.
 ///
 /// O entregador presta o serviço e o lojista o toma, então o documento é um
-/// só; o que muda é o lado em que cada um aparece nele. Ambos podem emitir, e
-/// é o backend que diz, em cada nota, qual é o papel de quem está olhando.
+/// só; o que muda é o lado em que cada um aparece nele. Quem emite e cancela é
+/// o lojista: para ele os pagamentos sem nota são "A emitir", com botão; para
+/// o entregador são "Aguardando emissão", sem botão — informação, não tarefa.
+/// É o backend que diz, em cada nota, qual é o papel de quem está olhando.
 class NotasFiscaisScreen extends StatefulWidget {
   const NotasFiscaisScreen({super.key});
 
@@ -46,6 +50,11 @@ class _NotasFiscaisScreenState extends State<NotasFiscaisScreen> {
 
   /// Turno sendo emitido agora — trava só o botão daquela linha.
   int? _emitindo;
+
+  /// Só o lojista emite. Lido do usuário da sessão, e não das pendências:
+  /// a tela precisa saber o papel mesmo quando não há nada pendente.
+  bool get _souLojista =>
+      context.read<AuthService>().usuario?.tipo == TipoUsuario.lojista;
 
   _Aba _aba = _Aba.notas;
 
@@ -214,10 +223,12 @@ class _NotasFiscaisScreenState extends State<NotasFiscaisScreen> {
   String _subtitulo() {
     final emitidas = _notas.where((n) => !n.cancelada).length;
     final partes = <String>[
-      if (_pendentes.isNotEmpty)
+      if (_pendentes.isNotEmpty && _souLojista)
         _pendentes.length == 1
             ? '1 turno a emitir'
             : '${_pendentes.length} turnos a emitir',
+      if (_pendentes.isNotEmpty && !_souLojista)
+        '${_pendentes.length} aguardando emissão',
       emitidas == 1 ? '1 nota emitida' : '$emitidas notas emitidas',
     ];
     final texto = partes.join(' · ');
@@ -260,8 +271,8 @@ class _NotasFiscaisScreenState extends State<NotasFiscaisScreen> {
             GridCol(
               span: 12,
               child: PanelCard(
-                title: 'A emitir',
-                subtitle: 'Turnos concluídos que ainda não têm nota fiscal',
+                title: _tituloPendentes,
+                subtitle: _subtituloPendentes,
                 child: Column(
                   children: [for (final p in _pendentes) _buildPendente(p)],
                 ),
@@ -294,7 +305,12 @@ class _NotasFiscaisScreenState extends State<NotasFiscaisScreen> {
         _barraDeFiltros(),
         const SizedBox(height: 16),
         if (_pendentes.isNotEmpty) ...[
-          _buildTituloSecao('A emitir', _pendentes.length),
+          _buildTituloSecao(_tituloPendentes, _pendentes.length),
+          if (!_souLojista) ...[
+            const SizedBox(height: 4),
+            Text(_subtituloPendentes,
+                style: tsJakarta(11, FontWeight.w400, color: AppColors.muted)),
+          ],
           const SizedBox(height: 10),
           for (final p in _pendentes) _buildPendente(p),
           const SizedBox(height: 22),
@@ -313,6 +329,12 @@ class _NotasFiscaisScreenState extends State<NotasFiscaisScreen> {
   }
 
   bool get _maisParaCarregar => _notas.length < _total;
+
+  String get _tituloPendentes => _souLojista ? 'A emitir' : 'Aguardando emissão';
+
+  String get _subtituloPendentes => _souLojista
+      ? 'Turnos concluídos que ainda não têm nota fiscal'
+      : 'Pagamentos recebidos cuja nota a loja ainda não emitiu';
 
   /// O que o filtro está deixando de fora, em uma linha — senão uma lista
   /// vazia parece "não tenho notas" quando é só o filtro apertado.
@@ -520,12 +542,14 @@ class _NotasFiscaisScreenState extends State<NotasFiscaisScreen> {
   }
 
   Widget _buildVazio() {
-    return const EmptyState(
+    return EmptyState(
       icon: Icons.receipt_long_outlined,
       titulo: 'Nenhuma nota fiscal ainda',
-      subtitulo:
-          'A nota de cada turno pode ser emitida assim que ele é finalizado. '
-          'Entregador e lojista veem o mesmo documento.',
+      subtitulo: _souLojista
+          ? 'Você emite a nota de cada turno assim que ele é finalizado. '
+              'O entregador recebe o mesmo documento.'
+          : 'A nota de cada turno é emitida pela loja depois que ele termina. '
+              'Ela aparece aqui para você baixar e imprimir.',
     );
   }
 
@@ -554,9 +578,10 @@ class _NotasFiscaisScreenState extends State<NotasFiscaisScreen> {
   Widget _buildPendente(NotaFiscalPendente p) {
     final data = DateFormat('dd/MM/yyyy', 'pt_BR').format(p.dataInicio);
     final emitindo = _emitindo == p.turnoId;
-    final rotuloLado = p.papel == 'prestador'
-        ? 'Tomador: ${p.contraparteNome}'
-        : 'Prestador: ${p.contraparteNome}';
+    final souLojista = _souLojista;
+    final rotuloLado = souLojista
+        ? 'Prestador: ${p.contraparteNome}'
+        : 'Tomador: ${p.contraparteNome}';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -564,7 +589,9 @@ class _NotasFiscaisScreenState extends State<NotasFiscaisScreen> {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.amber, width: 1.5),
+        // Âmbar é "falta você fazer": só para quem emite.
+        border: Border.all(
+            color: souLojista ? AppColors.amber : AppColors.line, width: 1.5),
       ),
       child: Row(
         children: [
@@ -592,30 +619,41 @@ class _NotasFiscaisScreenState extends State<NotasFiscaisScreen> {
             ),
           ),
           const SizedBox(width: 10),
-          TextButton(
-            onPressed: emitindo ? null : () => _emitir(p),
-            style: TextButton.styleFrom(
-              backgroundColor: AppColors.amber,
-              foregroundColor: AppColors.onTertiary,
-              disabledBackgroundColor: AppColors.surface3,
-              minimumSize: const Size(0, 44),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            child: emitindo
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppColors.muted),
-                  )
-                : Text('Emitir',
-                    style: tsJakarta(12.5, FontWeight.w700,
-                        color: AppColors.onTertiary)),
-          ),
+          if (souLojista)
+            _botaoEmitir(p, emitindo)
+          else
+            Text('Aguardando\na loja',
+                key: const Key('notas-aguardando-emissao'),
+                textAlign: TextAlign.right,
+                style: tsJakarta(10.5, FontWeight.w600, color: AppColors.muted)),
         ],
       ),
+    );
+  }
+
+  Widget _botaoEmitir(NotaFiscalPendente p, bool emitindo) {
+    return TextButton(
+      key: const Key('notas-emitir'),
+      onPressed: emitindo ? null : () => _emitir(p),
+      style: TextButton.styleFrom(
+        backgroundColor: AppColors.amber,
+        foregroundColor: AppColors.onTertiary,
+        disabledBackgroundColor: AppColors.surface3,
+        minimumSize: const Size(0, 44),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12)),
+      ),
+      child: emitindo
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: AppColors.muted),
+            )
+          : Text('Emitir',
+              style: tsJakarta(12.5, FontWeight.w700,
+                  color: AppColors.onTertiary)),
     );
   }
 

@@ -91,6 +91,15 @@ class Transacao {
   /// A NFS-e deste pagamento já foi gerada.
   bool get documentoEmitido => documentoId != null;
 
+  /// A NFS-e vista pelo entregador: o pagamento recebido dele. Ele consulta,
+  /// baixa e imprime; quem emite (e cancela) é o lojista.
+  bool get notaDoPrestador =>
+      tipoDocumento?.ehNota == true && tipo == TipoTransacao.pagamentoRecebido;
+
+  /// O lojista ainda não emitiu a nota deste pagamento. Não há o que abrir, e
+  /// não é o entregador quem resolve — a tela informa, sem botão.
+  bool get aguardandoEmissao => notaDoPrestador && !documentoEmitido;
+
   const Transacao({
     this.id,
     required this.motoboyId,

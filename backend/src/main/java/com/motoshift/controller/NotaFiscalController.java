@@ -93,10 +93,11 @@ public class NotaFiscalController {
                 .body(informes.exportarCsv(atual.id(), atual.isLojista(), oAno));
     }
 
-    @Operation(summary = "Turnos a emitir",
-            description = "Turnos finalizados que ainda não geraram nota. "
-                    + "O lojista recebe um item por entregador do turno.")
-    @ApiResponse(responseCode = "200", description = "Pendências de emissão")
+    @Operation(summary = "Turnos sem nota",
+            description = "Pagamentos de turno que ainda não geraram nota. Para o lojista é o que "
+                    + "ele tem a emitir, um item por entregador do turno; para o entregador é "
+                    + "informativo — a nota dele aguarda a emissão pelo lojista.")
+    @ApiResponse(responseCode = "200", description = "Pagamentos sem nota")
     @GetMapping("/pendentes")
     public List<NotaFiscalPendenteResponse> pendentes(
             @AuthenticationPrincipal UsuarioAutenticado atual) {
@@ -104,13 +105,15 @@ public class NotaFiscalController {
     }
 
     @Operation(summary = "Emitir nota fiscal",
-            description = "Emite a NFS-e do turno. Os dois lados podem emitir: o documento é "
-                    + "sempre o mesmo, com o entregador como prestador e o lojista como tomador. "
+            description = "Emite a NFS-e do turno. Só o lojista (tomador) emite; o documento "
+                    + "sai com o entregador como prestador e o lojista como tomador — a "
+                    + "plataforma emite por conta do prestador, a pedido de quem pagou. "
                     + "Idempotente — pedir de novo devolve a nota já emitida, com 200.")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Nota emitida"),
         @ApiResponse(responseCode = "200", description = "Nota já existia; devolvida como está"),
-        @ApiResponse(responseCode = "403", description = "Usuário não participou do turno"),
+        @ApiResponse(responseCode = "403",
+                description = "Quem pediu é o entregador (só o lojista emite) ou não participou do turno"),
         @ApiResponse(responseCode = "404", description = "Turno não encontrado"),
         @ApiResponse(responseCode = "409", description = "Turno ainda não finalizado")
     })
@@ -142,10 +145,11 @@ public class NotaFiscalController {
     }
 
     @Operation(summary = "Cancelar nota fiscal",
-            description = "Só o prestador do serviço cancela a própria nota.")
+            description = "Só o lojista (tomador), o mesmo lado que emite, cancela. "
+                    + "Cancelar não estorna o pagamento.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Nota cancelada"),
-        @ApiResponse(responseCode = "403", description = "Apenas o prestador pode cancelar"),
+        @ApiResponse(responseCode = "403", description = "Apenas o lojista do turno pode cancelar"),
         @ApiResponse(responseCode = "409", description = "Nota já cancelada")
     })
     @PutMapping("/{id}/cancelar")

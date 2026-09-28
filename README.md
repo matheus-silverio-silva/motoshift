@@ -272,9 +272,9 @@ nova. Para testar o reset localmente, suba com `MOTOSHIFT_SEED_RESET=confirmo`.
 | GET | /api/notas-fiscais | Notas fiscais do usuário, com filtros (papel, situação, competência, contraparte) e paginação |
 | GET | /api/notas-fiscais/resumo | Informe anual simulado — por contraparte e por mês |
 | GET | /api/notas-fiscais/resumo/exportar | O mesmo informe em CSV |
-| GET | /api/notas-fiscais/pendentes | Turnos concluídos ainda sem nota |
-| POST | /api/notas-fiscais | Emitir NFS-e do turno (lojista ou motoboy) |
-| PUT | /api/notas-fiscais/{id}/cancelar | Cancelar a nota (só o prestador) |
+| GET | /api/notas-fiscais/pendentes | Pagamentos de turno ainda sem nota — "a emitir" para o lojista, "aguardando emissão" para o entregador |
+| POST | /api/notas-fiscais | Emitir NFS-e do turno (só o lojista; o entregador leva 403) |
+| PUT | /api/notas-fiscais/{id}/cancelar | Cancelar a nota (só o lojista) |
 
 Documentação completa: `http://localhost:8080/swagger-ui.html`
 
@@ -306,14 +306,15 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | RF08 | Sugestão inteligente de turnos via IA |
 | RF09 | Relatório financeiro/operacional mensal via IA |
 | RF10 | Turno publicado guarda o ponto de partida (lat/lng), que alimenta o filtro por distância e o mapa das duas pontas |
-| RF11 | Turno finalizado gera NFS-e — entregador é o prestador, lojista é o tomador, e qualquer um dos dois pode emitir. Todo lançamento do extrato gera o documento correspondente (nota, recibo ou comprovante), sempre simulado — ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |
+| RF11 | Turno finalizado gera NFS-e — entregador é o prestador, lojista é o tomador, e **só o lojista emite e cancela**; o entregador vê, baixa e imprime. Todo lançamento do extrato gera o documento correspondente (nota, recibo ou comprovante), sempre simulado — ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |
 
 ---
 
 ## 🧾 Documentos fiscais (NFS-e, recibos e comprovantes)
 
 **Cada lançamento concluído do extrato tem um documento**, do entregador e do
-lojista, com um botão "Gerar documento" na linha e no detalhe:
+lojista, com um botão na linha e no detalhe — "Gerar documento" para o que é
+de quem olha gerar, "Ver nota fiscal" para a NFS-e que o lojista já emitiu:
 
 | Lançamento | Documento |
 |---|---|
@@ -330,9 +331,14 @@ existe para uma coisa só: o pagamento de um **turno concluído**.
 A nota é emitida a partir do **pagamento**, não do turno, e guarda o
 `transacao_id`: é o que impede a nota e o extrato de contarem histórias
 diferentes. O documento é um só e sempre na mesma direção — o entregador
-presta, o lojista toma —, os dois podem disparar a emissão e a nota aparece na
-lista de ambos. Um turno com várias vagas gera **uma nota por entregador**, e a
-emissão é idempotente: pedir de novo devolve a que já existe.
+presta, o lojista toma — e **quem emite e cancela é o lojista**. No mundo real
+a NFS-e sai do prestador (o entregador MEI); aqui a plataforma a emite por
+conta dele, a pedido do tomador, e a nota aparece na lista dos dois. O
+entregador vê, baixa o PDF e imprime; enquanto a loja não emite, o pagamento
+dele mostra "Aguardando emissão pelo lojista", sem botão, e ele é avisado
+quando a nota sai e quando é cancelada. Pedir a emissão ou o cancelamento pelo
+lado do entregador leva 403. Um turno com várias vagas gera **uma nota por
+entregador**, e a emissão é idempotente: pedir de novo devolve a que já existe.
 
 Só as partes do lançamento veem o documento (terceiro leva 403), CPF e CNPJ
 saem mascarados, e **cancelar a nota não estorna dinheiro** — o serviço foi

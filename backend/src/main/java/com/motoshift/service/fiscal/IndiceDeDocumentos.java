@@ -40,7 +40,11 @@ public class IndiceDeDocumentos {
     /**
      * O que o extrato mostra sobre o documento de um lançamento.
      *
-     * @param disponivel  dá para gerar agora
+     * @param disponivel  quem olha consegue abrir o documento agora — gerando,
+     *                    se for dele gerar. A NFS-e do pagamento_recebido ainda
+     *                    não emitida é {@code false}: quem emite é o lojista, e
+     *                    o entregador só a vê depois ("aguardando emissão", que
+     *                    o app lê de tipo NFSE sem {@code documentoId})
      * @param tipo        qual documento, quando há
      * @param documentoId id da NFS-e já emitida; nulo para comprovante, que é
      *                    derivado e não tem emissão
@@ -65,7 +69,10 @@ public class IndiceDeDocumentos {
             Long nota = tipo.get() == TipoDocumento.NFSE
                     ? notas.get(t.getTurnoId() + ":" + prestadorDe(t))
                     : null;
-            saida.put(t.getId(), new Info(true, tipo.get(), nota));
+            boolean aguardandoOLojista = tipo.get() == TipoDocumento.NFSE
+                    && t.getTipo() == TipoTransacao.PAGAMENTO_RECEBIDO
+                    && nota == null;
+            saida.put(t.getId(), new Info(!aguardandoOLojista, tipo.get(), nota));
         }
         return saida;
     }

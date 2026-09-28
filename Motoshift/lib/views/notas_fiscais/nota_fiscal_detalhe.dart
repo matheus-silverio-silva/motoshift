@@ -13,7 +13,7 @@ import '../../widgets/documento/nfse_view.dart';
 /// O layout saiu daqui para [NfseView] quando o extrato passou a abrir notas
 /// também — eram duas telas desenhando a mesma nota, e só uma delas ganhava
 /// cada correção. Aqui ficou o que é desta tela: o rodapé com baixar,
-/// imprimir e cancelar.
+/// imprimir e — só para o lojista, que é quem emite — cancelar.
 class NotaFiscalDetalhe extends StatefulWidget {
   const NotaFiscalDetalhe({
     required this.nota,
@@ -119,8 +119,9 @@ class _NotaFiscalDetalheState extends State<NotaFiscalDetalhe> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AcoesDocumento(documento: DocumentoFiscal.daNota(_nota)),
-        // Só o prestador cancela — é dele o documento.
-        if (!_nota.cancelada && _nota.souPrestador) ...[
+        // Só o lojista (tomador) cancela: é o mesmo lado que emite. O
+        // entregador vê, baixa e imprime; o backend recusaria o pedido dele.
+        if (!_nota.cancelada && !_nota.souPrestador) ...[
           const SizedBox(height: 6),
           _buildBotaoCancelar(),
         ],

@@ -64,9 +64,9 @@ public class CarteiraController {
 
     @Operation(summary = "Gerar o documento de um lançamento (SIMULADO)",
             description = "Emite — ou devolve, se já existir — o documento do lançamento: "
-                    + "NFS-e para pagamento de turno (a mesma nota nos dois lados: o "
-                    + "entregador pelo pagamento_recebido, o lojista pelo pagamento_enviado), "
-                    + "recibo para recarga, comprovante Pix para saque concluído e comprovante "
+                    + "NFS-e para pagamento de turno (a mesma nota nos dois lados, emitida "
+                    + "pelo lojista a partir do pagamento_enviado; o entregador consulta a "
+                    + "dele pelo GET e leva 403 no POST), recibo para recarga, comprovante Pix para saque concluído e comprovante "
                     + "de movimentação para o resto. Reserva e liberação não são serviço "
                     + "prestado e nunca geram nota. Idempotente. Tudo simulado: nenhuma "
                     + "transmissão à prefeitura ou à Receita, e o documento traz a marca "
@@ -74,7 +74,8 @@ public class CarteiraController {
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "NFS-e emitida agora"),
         @ApiResponse(responseCode = "200", description = "Documento que já existia (ou comprovante, que é derivado)"),
-        @ApiResponse(responseCode = "403", description = "O lançamento não é do usuário"),
+        @ApiResponse(responseCode = "403",
+                description = "O lançamento não é do usuário, ou é a NFS-e do entregador — só o lojista emite"),
         @ApiResponse(responseCode = "404", description = "Lançamento não encontrado"),
         @ApiResponse(responseCode = "409", description = "Lançamento sem documento ainda (não concluído, Pix pendente)")
     })
@@ -89,7 +90,8 @@ public class CarteiraController {
 
     @Operation(summary = "Consultar o documento de um lançamento (SIMULADO)",
             description = "O documento já gerado. Comprovante sempre existe (é derivado do "
-                    + "lançamento); NFS-e responde 404 até ser gerada pelo POST.")
+                    + "lançamento); NFS-e responde 404 até o lojista emiti-la. É por aqui que "
+                    + "o entregador abre a nota do pagamento dele.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Documento"),
         @ApiResponse(responseCode = "403", description = "O lançamento não é do usuário"),

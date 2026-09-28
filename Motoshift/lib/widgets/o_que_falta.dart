@@ -19,6 +19,10 @@ import '../theme/app_theme.dart';
 /// "Turno finalizado" e nenhuma saída.
 ///
 /// <h3>O que NÃO entra aqui</h3>
+/// A nota fiscal do entregador: quem emite é o lojista, e o que não depende
+/// do entregador não é "o que falta" para ele. [PendenciasProvider.notasDoTurno]
+/// já vem vazio nesse caso.
+///
 /// Pagamento. O dinheiro é reservado quando o turno é publicado e transferido
 /// na finalização, dentro da mesma transação — não há nada para a pessoa
 /// confirmar, e um botão sugerindo o contrário reintroduziria a dupla

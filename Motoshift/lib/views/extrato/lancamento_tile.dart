@@ -84,7 +84,11 @@ class LancamentoTile extends StatelessWidget {
                 ],
               ),
             ),
-            if (onDocumento != null && lancamento.documentoDisponivel) ...[
+            // A nota que o lojista ainda não emitiu não tem atalho: não há o
+            // que abrir, e o detalhe do lançamento explica por quê.
+            if (onDocumento != null &&
+                lancamento.documentoDisponivel &&
+                !lancamento.aguardandoEmissao) ...[
               const SizedBox(width: 4),
               IconButton(
                 key: const Key('extrato-documento'),

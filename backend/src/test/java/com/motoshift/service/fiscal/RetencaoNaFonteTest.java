@@ -93,7 +93,7 @@ class RetencaoNaFonteTest {
     void notaBateComARetencao() {
         Turno turno = cenario.turnoPago(lojista, "200.00", entregador);
 
-        NotaFiscalResponse nota = notas.emitir(turno.getId(), entregador, entregador).nota();
+        NotaFiscalResponse nota = notas.emitir(turno.getId(), entregador, lojista).nota();
 
         assertThat(nota.isTributosRetidos()).isTrue();
         assertThat(nota.getValorServico()).isEqualByComparingTo("200.00");

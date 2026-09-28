@@ -210,6 +210,18 @@ de análise é **estimativa** (reverte as penalizações da janela) e vai rotula
 como tal na resposta da API — medir de verdade exigiria uma tabela de eventos
 de score.
 
+**P: Quem emite a nota fiscal? A NFS-e não é do prestador?**
+R: No mundo real, sim: a NFS-e sai do CNPJ de quem presta — aqui, o entregador
+MEI. No MotoShift o documento continua com o entregador como **prestador** e o
+lojista como **tomador**, mas quem **pede** a emissão (e o cancelamento) é só o
+lojista: a plataforma emite por conta do entregador, a pedido de quem pagou. É
+o lojista quem precisa do documento para lançar a despesa e quem tem o
+cadastro fiscal completo; o entregador vê, baixa e imprime, e é avisado quando
+a nota sai. O modelo separa as duas coisas — `prestador_id` é quem prestou,
+`emitida_por_id` é quem pediu —, e o entregador que tenta emitir leva 403.
+Numa emissão real, a plataforma precisaria de autorização do MEI no emissor;
+isso e o resto do que faltaria estão em `docs/financeiro/FISCAL.md`.
+
 **P: E se a API da IA cair?**
 R: A análise de score continua respondendo os números, só sem o texto
 (`analiseDisponivel: false`). Relatório e sugestão respondem 503, porque ali a
