@@ -31,7 +31,12 @@ public class PerfilPublicoResponse {
     private String veiculoCor;
     private String nomeFantasia;
 
-    public static PerfilPublicoResponse from(Usuario u) {
+    /**
+     * @param score o score visível ({@code Reputacao.scoreVisivel}): só o
+     *              entregador com histórico tem. O lojista não tem score — o
+     *              5,0 que ele carregava era fixo e nunca mudava.
+     */
+    public static PerfilPublicoResponse from(Usuario u, Double score) {
         PerfilPublicoResponse r = new PerfilPublicoResponse();
         r.id = u.getId();
         r.nome = u.getNome();
@@ -39,7 +44,7 @@ public class PerfilPublicoResponse {
         r.fotoPerfil = u.getFotoPerfil();
         r.cidade = u.getCidade();
         r.estado = u.getEstado();
-        r.score = u.getScore();
+        r.score = score;
         r.mediaAvaliacao = u.getMediaAvaliacao();
         // Modelo e cor, sem placa: é o que ajuda a reconhecer o entregador que
         // chegou, sem virar dado de rastreio do veículo.

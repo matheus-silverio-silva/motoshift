@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/tags_de_avaliacao.dart';
+import '../../models/usuario.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/breakpoints.dart';
 import '../../widgets/app_buttons.dart';
@@ -35,11 +38,18 @@ class _AvaliacaoScreenState extends State<AvaliacaoScreen> {
   final _comentarioCtrl = TextEditingController();
   bool _enviando = false;
 
-  static const _tags = [
-    'Pontual', 'Organizado', 'Boa comunicação',
-    'Carga bem embalada', 'Pagamento correto',
-  ];
   final Set<String> _tagsSelected = {};
+
+  /// Quem avalia é a conta logada; quem é avaliado é o outro lado do turno.
+  /// O lojista avalia entregador, o entregador avalia loja — e cada um marca
+  /// o que o outro faz ([TagsDeAvaliacao]).
+  List<String> get _tags {
+    final avaliador = context.read<AuthService>().usuario?.tipo;
+    final avaliado = avaliador == TipoUsuario.lojista
+        ? TipoUsuario.motoboy
+        : TipoUsuario.lojista;
+    return TagsDeAvaliacao.para(avaliado);
+  }
 
   @override
   void dispose() {

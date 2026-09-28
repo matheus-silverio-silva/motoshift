@@ -39,7 +39,7 @@ public class ScoreService {
     private static final int JANELA_DIAS = 30;
 
     /** Penalidade por cancelar com menos de 1h de antecedencia (RF07). */
-    private static final double PENALIDADE_CANCELAMENTO_TARDIO = 0.5;
+    private static final double PENALIDADE_CANCELAMENTO_TARDIO = Reputacao.PENALIDADE_CANCELAMENTO_TARDIO;
 
     private static final DateTimeFormatter DIA_MES_ANO =
             DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -47,13 +47,16 @@ public class ScoreService {
     private final TurnoRepository turnoRepo;
     private final UsuarioRepository usuarioRepo;
     private final AnthropicService anthropic;
+    private final Reputacao reputacao;
 
     public ScoreService(TurnoRepository turnoRepo,
                         UsuarioRepository usuarioRepo,
-                        AnthropicService anthropic) {
+                        AnthropicService anthropic,
+                        Reputacao reputacao) {
         this.turnoRepo = turnoRepo;
         this.usuarioRepo = usuarioRepo;
         this.anthropic = anthropic;
+        this.reputacao = reputacao;
     }
 
     public Map<String, Object> analisar(Long motoboyId) {
@@ -66,7 +69,14 @@ public class ScoreService {
                     "Endpoint exclusivo para perfil motoboy.");
         }
 
-        double scoreAtual = motoboy.getScore() != null ? motoboy.getScore() : 5.0;
+        // Sem histórico não há reputação a analisar: o 5,0 é o ponto de partida
+        // da conta, não uma nota. A resposta diz isso, sem chamar a IA para
+        // comentar um número que nenhum evento produziu.
+        Double visivel = reputacao.scoreVisivel(motoboy);
+        if (visivel == null) {
+            return semHistorico();
+        }
+        double scoreAtual = visivel;
         LocalDateTime inicio30d = LocalDateTime.now().minusDays(JANELA_DIAS);
 
         List<Turno> todosTurnos = turnoRepo.findByMotoboyId(motoboyId);
@@ -85,7 +95,7 @@ public class ScoreService {
         // para a tela nao apresentar conta como registro. Medir de verdade pede
         // uma tabela de eventos de score — e ela daria substancia a esta mesma
         // tela, hoje montada a partir dos turnos.
-        double scoreAnterior = Math.min(5.0,
+        double scoreAnterior = Math.min(Reputacao.SCORE_INICIAL,
                 scoreAtual + canceladosTardios30d.size() * PENALIDADE_CANCELAMENTO_TARDIO);
         double variacao = Math.round((scoreAtual - scoreAnterior) * 10.0) / 10.0;
         String tendencia = variacao > 0 ? "up" : (variacao < 0 ? "down" : "stable");
@@ -129,6 +139,20 @@ public class ScoreService {
         result.put("analiseDisponivel", analise != null);
         result.put("ultimaAtualizacao", LocalDate.now().format(DIA_MES_ANO));
         result.put("eventos", ultimosEventos(todosTurnos));
+        result.put("novoNaPlataforma", false);
+        return result;
+    }
+
+    /** A análise de quem ainda não tem turno concluído nem cancelado. */
+    private Map<String, Object> semHistorico() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("scoreAtual", null);
+        result.put("novoNaPlataforma", true);
+        result.put("classificacao", "Novo na plataforma");
+        result.put("analise", null);
+        result.put("analiseDisponivel", false);
+        result.put("ultimaAtualizacao", LocalDate.now().format(DIA_MES_ANO));
+        result.put("eventos", List.of());
         return result;
     }
 

@@ -159,7 +159,7 @@ Usuario fakeLojista() => Usuario(
       telefone: '(41) 99111-2222',
       tipo: TipoUsuario.lojista,
       documentoFederal: '12.345.678/0001-90',
-      score: 5.0,
+      // Lojista não tem score: a API não manda o campo.
       mediaAvaliacao: 4.8,
       dataNascimento: DateTime(1985, 3, 12),
       cidade: 'Curitiba',
@@ -1344,6 +1344,7 @@ Future<void> pumpGolden(
   Duration settle = const Duration(milliseconds: 600),
   int? turnoSelecionado,
   ApiService? apiFake,
+  Usuario? usuario,
 }) async {
   // A ordem importa: `physicalSize` precisa ser calculado com o DPR final.
   // Fazendo o inverso (multiplicar pelo DPR padrão da view, 3.0, e só depois
@@ -1358,9 +1359,9 @@ Future<void> pumpGolden(
   // Telas que imprimem data absoluta precisam de um fake de data fixa, senão
   // o golden vira o dia junto com o calendário — ver [FakeApiHistorico].
   final api = apiFake ?? FakeApiService(tipoUsuario: tipoUsuario);
-  final usuario =
-      tipoUsuario == TipoUsuario.motoboy ? fakeMotoboy() : fakeLojista();
-  final auth = AuthService(api)..atualizarUsuarioLocal(usuario);
+  final logado = usuario ??
+      (tipoUsuario == TipoUsuario.motoboy ? fakeMotoboy() : fakeLojista());
+  final auth = AuthService(api)..atualizarUsuarioLocal(logado);
 
   final turnoProv = TurnoProvider(api);
   turnoProv.setDisponiveisExterno(fakeTurnosDisponiveis());

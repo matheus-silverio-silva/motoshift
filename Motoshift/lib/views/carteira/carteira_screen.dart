@@ -241,9 +241,11 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
   }
 
   Widget _buildDesktop() {
-    final saldo = _carteira?.saldoAtual ?? 0.0;
-    final ganhos = _carteira?.ganhosMensais ?? 0.0;
-    final media = _carteira?.mediaPorTurno ?? 0.0;
+    // Antes de a carteira chegar (ou se ela não chegar), traço — e não um
+    // "R$ 0,00" que parece saldo zerado.
+    final saldo = _moedaOuTraco(_carteira?.saldoAtual, casas: 2);
+    final ganhos = _moedaOuTraco(_carteira?.ganhosMensais);
+    final media = _moedaOuTraco(_carteira?.mediaPorTurno);
 
     return ContentGrid(
       children: [
@@ -253,8 +255,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               WalletHero(
-                balance:
-                    'R\$ ${saldo.toStringAsFixed(2).replaceAll('.', ',')}',
+                balance: saldo,
                 onWithdraw: _solicitarSaque,
                 // Rotulado "Extrato", mas chamava _carregar: prometia o extrato
                 // e só recarregava o saldo.
@@ -267,12 +268,11 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
                   children: [
                     Expanded(
                       child: _statTile(Icons.trending_up_rounded,
-                          'Ganhos mensais', 'R\$ ${ganhos.toStringAsFixed(0)}'),
+                          'Ganhos mensais', ganhos),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
-                      child: _statTile(Icons.speed_rounded, 'Média/turno',
-                          'R\$ ${media.toStringAsFixed(0)}'),
+                      child: _statTile(Icons.speed_rounded, 'Média/turno', media),
                     ),
                   ],
                 ),
@@ -386,13 +386,10 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
   }
 
   Widget _buildBody() {
-    final saldo = _carteira?.saldoAtual ?? 0.0;
-    final ganhos = _carteira?.ganhosMensais ?? 0.0;
-    final media = _carteira?.mediaPorTurno ?? 0.0;
+    final saldoStr = _moedaOuTraco(_carteira?.saldoAtual, casas: 2);
+    final ganhos = _moedaOuTraco(_carteira?.ganhosMensais);
+    final media = _moedaOuTraco(_carteira?.mediaPorTurno);
     final transacoes = _carteira?.transacoes ?? [];
-
-    final saldoStr =
-        'R\$ ${saldo.toStringAsFixed(2).replaceAll('.', ',')}';
 
     return RefreshIndicator(
       onRefresh: _carregar,
@@ -413,14 +410,14 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
               child: _statTile(
                   Icons.trending_up_rounded,
                   'Ganhos mensais',
-                  'R\$ ${ganhos.toStringAsFixed(0)}'),
+                  ganhos),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _statTile(
                   Icons.speed_rounded,
                   'Média/turno',
-                  'R\$ ${media.toStringAsFixed(0)}'),
+                  media),
             ),
           ],
         ),
@@ -472,6 +469,11 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
       ),
     );
   }
+
+  /// "R$ 1.234" (ou com centavos), e traço enquanto o valor não existe.
+  static String _moedaOuTraco(double? v, {int casas = 0}) => v == null
+      ? '—'
+      : 'R\$ ${v.toStringAsFixed(casas).replaceAll('.', ',')}';
 
   Widget _statTile(IconData icon, String label, String value) {
     return Container(

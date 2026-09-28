@@ -22,6 +22,9 @@ public interface TurnoInscricaoRepository extends JpaRepository<TurnoInscricao, 
 
     boolean existsByTurnoIdAndMotoboyIdAndStatus(Long turnoId, Long motoboyId, StatusInscricao status);
 
+    /** Trabalhou em algum turno, inclusive em vaga extra. */
+    boolean existsByMotoboyIdAndStatus(Long motoboyId, StatusInscricao status);
+
     Optional<TurnoInscricao> findByTurnoIdAndMotoboyId(Long turnoId, Long motoboyId);
 
     // ── Em lote ─────────────────────────────────────────────────────────────

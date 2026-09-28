@@ -27,15 +27,23 @@ public class AuthService {
     private final CarteiraService carteiras;
     private final PasswordEncoder encoder;
     private final JwtService jwt;
+    private final Reputacao reputacao;
 
     public AuthService(UsuarioRepository repo,
                        CarteiraService carteiras,
                        PasswordEncoder encoder,
-                       JwtService jwt) {
+                       JwtService jwt,
+                       Reputacao reputacao) {
         this.repo = repo;
         this.carteiras = carteiras;
         this.encoder = encoder;
         this.jwt = jwt;
+        this.reputacao = reputacao;
+    }
+
+    /** O perfil completo, com o score que se mostra — ver {@link Reputacao}. */
+    private UsuarioResponse resposta(Usuario u) {
+        return UsuarioResponse.from(u, reputacao.scoreVisivel(u));
     }
 
     /**
@@ -93,7 +101,7 @@ public class AuthService {
         // para que nenhum fluxo posterior precise lidar com carteira ausente.
         carteiras.obterOuCriar(salvo.getId());
 
-        return new AuthResponse(tokenPara(salvo), UsuarioResponse.from(salvo));
+        return new AuthResponse(tokenPara(salvo), resposta(salvo));
     }
 
     /**
@@ -146,17 +154,18 @@ public class AuthService {
         if (u.getTentativasLogin() > 0 || u.getBloqueadoAte() != null) {
             repo.liberarLogin(u.getId());
         }
-        return new AuthResponse(tokenPara(u), UsuarioResponse.from(u));
+        return new AuthResponse(tokenPara(u), resposta(u));
     }
 
     /** Perfil completo — so para o proprio usuario (ver UsuarioController). */
     public UsuarioResponse buscarPorId(Long id) {
-        return UsuarioResponse.from(carregar(id));
+        return resposta(carregar(id));
     }
 
     /** Perfil reduzido, o unico que uma conta ve de outra. */
     public PerfilPublicoResponse buscarPerfilPublico(Long id) {
-        return PerfilPublicoResponse.from(carregar(id));
+        Usuario u = carregar(id);
+        return PerfilPublicoResponse.from(u, reputacao.scoreVisivel(u));
     }
 
     private Usuario carregar(Long id) {
@@ -193,7 +202,7 @@ public class AuthService {
         if (body.get("nomeFantasia") instanceof String s) u.setNomeFantasia(s);
         if (body.get("enderecoComercial") instanceof String s) u.setEnderecoComercial(s);
 
-        return UsuarioResponse.from(repo.save(u));
+        return resposta(repo.save(u));
     }
 
     private String tokenPara(Usuario u) {

@@ -36,15 +36,18 @@ public class DashboardService {
     private final TurnoRepository turnoRepo;
     private final CarteiraRepository carteiraRepo;
     private final CarteiraService carteiraService;
+    private final Reputacao reputacao;
 
     public DashboardService(UsuarioRepository usuarioRepo,
                             TurnoRepository turnoRepo,
                             CarteiraRepository carteiraRepo,
-                            CarteiraService carteiraService) {
+                            CarteiraService carteiraService,
+                            Reputacao reputacao) {
         this.usuarioRepo = usuarioRepo;
         this.turnoRepo = turnoRepo;
         this.carteiraRepo = carteiraRepo;
         this.carteiraService = carteiraService;
+        this.reputacao = reputacao;
     }
 
     public Map<String, Object> doLojista(Long id) {
@@ -64,16 +67,17 @@ public class DashboardService {
                 .count();
 
         // Avaliação do próprio lojista: média das notas que ele recebeu,
-        // mantida por AvaliacaoController.atualizarMedia().
+        // mantida por AvaliacaoService.recalcularMedia().
         //
         // Antes este campo devolvia a média do `score` dos MOTOBOYS que
         // trabalharam para o lojista — dado de terceiros, num painel que o
         // lojista lê como sendo sobre ele. Além disso misturava dois
         // conceitos: `score` é reputação (começa em 5.0 e cai a cada
         // cancelamento tardio, RF07), não é avaliação.
-        double avaliacaoMedia = lojista.getMediaAvaliacao() != null
-                ? lojista.getMediaAvaliacao()
-                : 0.0;
+        //
+        // Nulo quando ninguém avaliou a loja ainda — não 0.0, que o app lia
+        // como "nota zero" em qualquer tela que esquecesse o caso.
+        Double avaliacaoMedia = lojista.getMediaAvaliacao();
 
         // Reputação média dos entregadores que atenderam este lojista.
         // Continua sendo útil, mas agora com nome próprio.
@@ -86,9 +90,9 @@ public class DashboardService {
                 .filter(t -> scorePorEntregador.containsKey(t.getMotoboyId()))
                 .mapToDouble(t -> scorePorEntregador.get(t.getMotoboyId()))
                 .average();
-        double reputacaoEntregadores = mediaOpt.isPresent()
+        Double reputacaoEntregadores = mediaOpt.isPresent()
                 ? Math.round(mediaOpt.getAsDouble() * 10.0) / 10.0
-                : 0.0;
+                : null;
 
         List<TurnoResponse> turnosRecentes = todosTurnos.stream()
                 .sorted((a, b) -> b.getCriadoEm().compareTo(a.getCriadoEm()))
@@ -158,9 +162,13 @@ public class DashboardService {
         // Duas métricas distintas, expostas com nomes distintos:
         //   score          — reputação (5.0 inicial, penalizada por cancelamento tardio)
         //   mediaAvaliacao — média das notas recebidas de lojistas
-        // Null quando o motoboy ainda não foi avaliado: a UI mostra "N/D" em
-        // vez de fingir uma nota que ninguém deu.
-        resp.put("score", java.util.Objects.requireNonNullElse(motoboy.getScore(), 5.0));
+        // As duas são nulas enquanto não há o que medir: sem turno encerrado
+        // o score é só o ponto de partida da conta ("Novo na plataforma"), e
+        // sem avaliação não há média. Antes o score vinha 5.0 por omissão, e
+        // uma conta criada agora abria o painel em "5.00 — Excelente".
+        Double score = reputacao.scoreVisivel(motoboy);
+        resp.put("score", score);
+        resp.put("novoNaPlataforma", score == null);
         resp.put("mediaAvaliacao", motoboy.getMediaAvaliacao());
         if (carteira != null) {
             // saldoAtual e mantido espelhando o disponivel: o app em producao le

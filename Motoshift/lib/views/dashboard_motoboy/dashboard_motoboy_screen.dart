@@ -82,7 +82,8 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
   // O _onNav desta tela saiu: era um dos sete switches identicos de barra
   // inferior. Ver NavConfig — a tela agora informa so a secao em que esta.
 
-  Color _scoreColor(double score) {
+  Color _scoreColor(double? score) {
+    if (score == null) return AppColors.muted;
     if (score >= 4.0) return AppColors.good;
     if (score >= 2.5) return AppColors.amber;
     return AppColors.error;
@@ -174,10 +175,13 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
 
   // ── Métricas ──────────────────────────────────────────────────────────────
 
-  double _score(AuthService auth) =>
-      (_dashData?['score'] as num?)?.toDouble() ??
-      auth.usuario?.score ??
-      5.0;
+  /// Nulo enquanto o entregador não tem histórico: o painel diz "Novo na
+  /// plataforma", e não "5.00 — Excelente" para uma conta que acabou de nascer.
+  /// Depois que o painel carrega, vale o que ele disse — inclusive nulo; o
+  /// score do login só cobre o instante antes disso.
+  double? _score(AuthService auth) => _dashData != null
+      ? (_dashData!['score'] as num?)?.toDouble()
+      : auth.usuario?.score;
 
   double get _saldo => (_dashData?['saldoAtual'] as num?)?.toDouble() ?? 0;
 
@@ -212,7 +216,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
                 icon: Icons.military_tech_outlined,
                 iconColor: AppColors.amber,
                 label: 'Score de reputação',
-                value: score.toStringAsFixed(2),
+                value: score == null ? '—' : score.toStringAsFixed(2),
                 sub: _scoreLabel(score),
                 subColor: _scoreColor(score),
               ),
@@ -342,6 +346,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
     final score = _score(auth);
     final scoreC = _scoreColor(score);
 
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -349,7 +354,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
           flex: 3,
           child: StatCard(
             label: 'Score de reputação',
-            value: score.toStringAsFixed(2),
+            value: score == null ? '—' : score.toStringAsFixed(2),
             sub: _scoreLabel(score),
             subColor: scoreC,
           ),
@@ -479,7 +484,8 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
     );
   }
 
-  String _scoreLabel(double score) {
+  String _scoreLabel(double? score) {
+    if (score == null) return 'Novo na plataforma';
     if (score >= 4.5) return 'Excelente';
     if (score >= 4.0) return 'Muito bom';
     if (score >= 3.0) return 'Bom';

@@ -128,9 +128,15 @@ class _PerfilPublicoScreenState extends State<PerfilPublicoScreen> {
           _linha(Icons.place_outlined, 'Cidade', p.localidade!),
         if (p.veiculo != null)
           _linha(Icons.two_wheeler_outlined, 'Veículo', p.veiculo!),
-        if (p.score != null)
-          _linha(Icons.shield_outlined, 'Reputação',
-              '${p.score!.toStringAsFixed(1).replaceAll('.', ',')} / 5'),
+        // Reputação é do entregador — o lojista não tem score. E entregador
+        // sem histórico não tem o que medir: "Novo na plataforma", não 5,0.
+        if (!p.ehLojista)
+          _linha(
+              Icons.shield_outlined,
+              'Reputação',
+              p.score == null
+                  ? 'Novo na plataforma'
+                  : '${p.score!.toStringAsFixed(1).replaceAll('.', ',')} / 5'),
         const SizedBox(height: 18),
         _avisoDePrivacidade(),
       ],

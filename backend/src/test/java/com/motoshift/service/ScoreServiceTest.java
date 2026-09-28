@@ -39,6 +39,7 @@ class ScoreServiceTest {
     @Mock private TurnoRepository turnoRepo;
     @Mock private UsuarioRepository usuarioRepo;
     @Mock private AnthropicService anthropic;
+    @Mock private Reputacao reputacao;
 
     @InjectMocks private ScoreService service;
 
@@ -46,6 +47,7 @@ class ScoreServiceTest {
     @DisplayName("IA fora do ar: os numeros saem mesmo assim, com a analise marcada como indisponivel")
     void iaIndisponivel_devolveMetricas() {
         when(usuarioRepo.findById(MOTOBOY)).thenReturn(Optional.of(motoboy(4.0)));
+        when(reputacao.scoreVisivel(any())).thenReturn(4.0);
         when(turnoRepo.findByMotoboyId(MOTOBOY)).thenReturn(List.of(
                 turno(StatusTurno.FINALIZADO, LocalDateTime.now().minusDays(3)),
                 canceladoTardio(LocalDateTime.now().minusDays(2))));
@@ -65,6 +67,7 @@ class ScoreServiceTest {
     @DisplayName("scoreAnterior vai rotulado como estimativa — nao e medicao")
     void scoreAnterior_saiComoEstimado() {
         when(usuarioRepo.findById(MOTOBOY)).thenReturn(Optional.of(motoboy(4.0)));
+        when(reputacao.scoreVisivel(any())).thenReturn(4.0);
         when(turnoRepo.findByMotoboyId(MOTOBOY)).thenReturn(List.of(
                 canceladoTardio(LocalDateTime.now().minusDays(1))));
         when(anthropic.chamarClaude(any(), any())).thenReturn("texto da analise");
@@ -76,6 +79,20 @@ class ScoreServiceTest {
         assertThat(resposta.get("scoreAnteriorEstimado")).isEqualTo(true);
         assertThat(resposta.get("analise")).isEqualTo("texto da analise");
         assertThat(resposta.get("analiseDisponivel")).isEqualTo(true);
+    }
+
+    @Test
+    @DisplayName("sem histórico não há score a analisar: 'Novo na plataforma', e a IA não é chamada")
+    void semHistorico_novoNaPlataforma() {
+        when(usuarioRepo.findById(MOTOBOY)).thenReturn(Optional.of(motoboy(5.0)));
+        when(reputacao.scoreVisivel(any())).thenReturn(null);
+
+        Map<String, Object> resposta = service.analisar(MOTOBOY);
+
+        assertThat(resposta.get("scoreAtual")).isNull();
+        assertThat(resposta.get("novoNaPlataforma")).isEqualTo(true);
+        assertThat(resposta.get("classificacao")).isEqualTo("Novo na plataforma");
+        org.mockito.Mockito.verifyNoInteractions(anthropic);
     }
 
     // ── Apoio ────────────────────────────────────────────────────────────────

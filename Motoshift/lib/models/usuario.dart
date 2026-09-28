@@ -8,7 +8,13 @@ class Usuario {
   final TipoUsuario tipo; // 'LOJISTA' | 'MOTOBOY'
   final String? documentoFederal; // CNPJ (lojista) ou CNH (motoboy)
   final String? fotoPerfil;
-  final double score;
+
+  /// Reputação do entregador (0 a 5). Nula para o lojista, que não tem score,
+  /// e para o entregador sem histórico — "Novo na plataforma", e não um 5,0
+  /// que nenhum turno produziu. Ver `Reputacao` no backend.
+  final double? score;
+
+  /// Média das avaliações recebidas. Nula enquanto ninguém avaliou.
   final double? mediaAvaliacao;
 
   // Dados pessoais
@@ -39,7 +45,7 @@ class Usuario {
     required this.tipo,
     this.documentoFederal,
     this.fotoPerfil,
-    this.score = 5.0,
+    this.score,
     this.mediaAvaliacao,
     this.dataNascimento,
     this.cidade,
@@ -75,7 +81,7 @@ class Usuario {
       tipo: TipoUsuario.values.byName((json['tipo'] as String).toLowerCase()),
       documentoFederal: json['documentoFederal'] as String?,
       fotoPerfil: json['fotoPerfil'] as String?,
-      score: (json['score'] as num?)?.toDouble() ?? 5.0,
+      score: (json['score'] as num?)?.toDouble(),
       mediaAvaliacao: (json['mediaAvaliacao'] as num?)?.toDouble(),
       dataNascimento: parseDate('dataNascimento'),
       cidade: json['cidade'] as String?,

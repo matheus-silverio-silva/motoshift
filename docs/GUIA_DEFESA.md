@@ -93,8 +93,8 @@ Android) ou `localhost:8080`.
 | RF03 | Cadastro: CNPJ (14 díg.) / CNH (11 díg.) | `AuthService.registrar()` | parcial |
 | RF04 | Publicar turno, antecedência mínima de 2h | `TurnoService.criar()` | ✅ |
 | RF05 | Reservar turno, sem conflito de horário | `TurnoService.aceitar()` | ✅ |
-| RF06 | Confirmação dupla credita a carteira (Wallet) | `TurnoService.finalizar()` + `confirmar*()` | — |
-| RF07 | Cancelar < 1h penaliza o score (−0.5) | `TurnoService.cancelar()` | — |
+| RF06 | Finalizar transfere o valor reservado para o entregador, na mesma transação | `TurnoService.finalizar()` + `PagamentoTurnoService.liquidar()` | ✅ |
+| RF07 | Cancelar < 1h penaliza o score do entregador (−0.5) | `TurnoService.cancelar()` + `Reputacao` | ✅ |
 
 **Regras de negócio mais "perguntáveis":**
 - *Antecedência de 2h:* `LocalDateTime.now().plusHours(2)` — turno antes disso é rejeitado (HTTP 400).
@@ -106,6 +106,7 @@ Android) ou `localhost:8080`.
   **disponível** do entregador. Não há confirmação a dar: o compromisso foi assumido na publicação.
   A dupla confirmação manual que existia aqui foi removida (V13) — ver `docs/financeiro/FLUXO-FINANCEIRO.md`.
 - *Penalidade de score:* cancelamento com menos de 1h subtrai 0.5 (mínimo 0.0).
+  A regra (valor inicial e penalidade) mora em `Reputacao`, num lugar só.
 
 ---
 
@@ -204,11 +205,18 @@ As entidades continuam com `Long` em vez de `@ManyToOne` porque o app nunca
 navega por objeto — integridade é do banco, navegação seria custo sem uso.
 
 **P: O que é o score?**
-R: Reputação do motoboy (0 a 5). Cancelamento tardio (<1h) penaliza em 0.5;
-avaliações dos lojistas alimentam a média. O "score de 30 dias atrás" da tela
-de análise é **estimativa** (reverte as penalizações da janela) e vai rotulado
-como tal na resposta da API — medir de verdade exigiria uma tabela de eventos
-de score.
+R: Reputação do **entregador** (0 a 5) — o lojista não tem score. Começa em
+5.0 e cada cancelamento tardio (<1h) tira 0.5; nenhum outro evento o muda, e
+ninguém o grava à mão (nem a massa de demonstração, que cancela pelo próprio
+`TurnoService`). Enquanto o entregador não tem histórico — nenhum turno
+concluído nem cancelado —, a API devolve o score **nulo** e o app diz "Novo na
+plataforma": 5.0 ali seria o ponto de partida da conta apresentado como
+reputação conquistada. A **avaliação** é outra coisa: a média das notas que a
+pessoa recebeu, recalculada por `AvaliacaoService` a cada avaliação e nula
+antes da primeira. No app, estrela é sempre avaliação, nunca score. O "score
+de 30 dias atrás" da tela de análise é **estimativa** (reverte as penalizações
+da janela) e vai rotulado como tal na resposta da API — medir de verdade
+exigiria uma tabela de eventos de score.
 
 **P: Quem emite a nota fiscal? A NFS-e não é do prestador?**
 R: No mundo real, sim: a NFS-e sai do CNPJ de quem presta — aqui, o entregador
@@ -248,7 +256,9 @@ agendados (hoje a saída é ligar os jobs em uma instância só).
 
 ### Glossário rápido
 - **Turno:** bloco de tempo que o lojista publica e o motoboy reserva.
-- **Wallet/Carteira:** saldo do motoboy, creditado ao concluir turnos.
-- **Score:** nota de reputação do motoboy.
+- **Wallet/Carteira:** saldo de cada conta. O lojista recarrega e reserva o
+  valor de cada turno publicado; o entregador recebe na finalização e saca.
+- **Score:** reputação do entregador; só aparece depois do primeiro turno.
+- **Avaliação:** média das notas recebidas, dos dois lados.
 - **DTO:** objeto que trafega entre app e API (não expõe a entidade do banco).
 - **Provider:** mecanismo de gerência de estado do Flutter usado no app.
