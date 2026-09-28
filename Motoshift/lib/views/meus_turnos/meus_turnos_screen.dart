@@ -54,7 +54,12 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
   String? _fHorarioFim;
   int? _fDiaSemana;
   double? _fRaioMax;
-  String _fOrdenarPor = 'valorAsc';
+
+  /// A ordem padrão é a da lista sem filtro (`GET /turnos/disponiveis`):
+  /// mais cedo primeiro. Era `valorAsc` — e o rádio que abria marcado dizia
+  /// "Maior valor" enquanto a lista vinha por data.
+  static const _ordemPadrao = 'dataInicio';
+  String _fOrdenarPor = _ordemPadrao;
 
   // ── Filtro por raio (tela 18) ────────────────────────────────────────────
   double? _lat;
@@ -65,6 +70,11 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
   /// Motivo de não ter localização. Fica visível na tela — sem posição a lista
   /// não é "vazia", ela é "não sei onde você está".
   FalhaLocalizacao? _falhaLocalizacao;
+
+  /// A busca com filtro falhou. A lista fica vazia com este aviso — e não
+  /// com a lista SEM filtro, que era o que o `catch` trazia enquanto a tela
+  /// continuava dizendo "perto de mim".
+  String? _erroDaBusca;
 
   // ── Foco nos aceitos (MeusTurnosArgs.focarAceitos) ───────────────────────
   final ScrollController _scroll = ScrollController();
@@ -86,7 +96,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
       _fHorarioFim != null ||
       _fDiaSemana != null ||
       _fRaioMax != null ||
-      _fOrdenarPor != 'valorAsc';
+      _fOrdenarPor != _ordemPadrao;
 
   @override
   void initState() {
@@ -114,6 +124,8 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     final api = context.read<ApiService>();
     final provider = context.read<TurnoProvider>();
 
+    if (_erroDaBusca != null) setState(() => _erroDaBusca = null);
+
     if (_hasFilters || _porPerto) {
       try {
         final lista = await api.turnos.listarTurnosDisponiveisComFiltros(
@@ -126,17 +138,78 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
           lat: _lat,
           lng: _lng,
           raioKm: _porPerto ? _raioKm : null,
-          ordenarPor: _porPerto
+          // Perto de mim sem ordem escolhida: o mais perto primeiro. Ordem
+          // escolhida na folha de filtros vale mesmo com a distância ligada.
+          ordenarPor: _porPerto && _fOrdenarPor == _ordemPadrao
               ? 'distanciaAsc'
-              : (_fOrdenarPor == 'valorAsc' ? null : _fOrdenarPor),
+              : _fOrdenarPor,
         );
         provider.setDisponiveisExterno(lista);
-      } catch (_) {
-        provider.carregarDisponiveis();
+      } catch (e) {
+        // Nunca a lista sem filtro no lugar da filtrada: ela parece a
+        // resposta certa e não é.
+        provider.setDisponiveisExterno(const []);
+        if (!mounted) return;
+        setState(() => _erroDaBusca = _porPerto
+            ? 'Não foi possível buscar os turnos perto de você.'
+            : 'Não foi possível aplicar os filtros.');
       }
     } else {
       provider.carregarDisponiveis();
     }
+  }
+
+  /// No lugar da lista quando a busca com filtro falhou: diz o que houve e
+  /// oferece a mesma busca de novo.
+  Widget _buildErroDaBusca() {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.errorContainer,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.cloud_off_rounded,
+              size: 20, color: AppColors.onErrorContainer),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _erroDaBusca!,
+                  style: tsJakarta(12.5, FontWeight.w700,
+                      color: AppColors.onErrorContainer),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'A lista não foi filtrada, então não é mostrada — tente de '
+                  'novo ou desligue o filtro.',
+                  style: tsJakarta(11.5, FontWeight.w400,
+                      color: AppColors.onErrorContainer, height: 1.4),
+                ),
+                const SizedBox(height: 4),
+                TextButton(
+                  onPressed: _carregarDisponiveis,
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 44),
+                    alignment: Alignment.centerLeft,
+                  ),
+                  child: Text('Tentar de novo',
+                      style: tsJakarta(12, FontWeight.w800,
+                          color: AppColors.onErrorContainer)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── Filtro por raio (tela 18) ────────────────────────────────────────────
@@ -147,8 +220,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
       _falhaLocalizacao = null;
     });
 
-    const servico = LocalizacaoService();
-    final resultado = await servico.posicaoAtual();
+    final resultado = await LocalizacaoService.of(context).posicaoAtual();
     if (!mounted) return;
 
     setState(() {
@@ -173,27 +245,18 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     _carregarDisponiveis();
   }
 
-  String get _mensagemFalha => switch (_falhaLocalizacao) {
-        FalhaLocalizacao.permissaoNegada =>
-          'Sem permissão de localização, não dá para ordenar por distância. '
-              'Você pode permitir e tentar de novo.',
-        FalhaLocalizacao.permissaoNegadaParaSempre =>
-          'A permissão de localização está bloqueada para o app. Libere nas '
-              'configurações do sistema para filtrar por raio.',
-        FalhaLocalizacao.servicoDesligado =>
-          'A localização do aparelho está desligada. Ligue o GPS para filtrar '
-              'por raio.',
-        _ => 'Não foi possível obter sua localização agora.',
-      };
+  String get _mensagemFalha =>
+      _falhaLocalizacao?.mensagem ?? FalhaLocalizacao.erro.mensagem;
 
   /// Faixa que aparece quando o usuário pediu "perto de mim" e não deu certo.
   /// Deixa explícito que a lista não está filtrada — em vez de mostrar um mapa
   /// vazio ou uma lista que parece filtrada e não está.
   Widget _buildFalhaLocalizacao() {
-    final podeTentarDeNovo =
-        _falhaLocalizacao == FalhaLocalizacao.permissaoNegada ||
-            _falhaLocalizacao == FalhaLocalizacao.servicoDesligado ||
-            _falhaLocalizacao == FalhaLocalizacao.erro;
+    final falha = _falhaLocalizacao ?? FalhaLocalizacao.erro;
+    final podeTentarDeNovo = falha.podeTentarDeNovo;
+    // Página fora de HTTPS: nem tentar de novo nem as configurações do
+    // aparelho resolvem — o texto já diz o que fazer.
+    final semAcao = falha == FalhaLocalizacao.contextoInseguro;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -225,19 +288,22 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
                   style: tsJakarta(11.5, FontWeight.w400,
                       color: AppColors.onTertiaryContainer, height: 1.4),
                 ),
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: podeTentarDeNovo
-                      ? _ativarPorPerto
-                      : () => const LocalizacaoService().abrirConfiguracoes(),
-                  child: Text(
-                    podeTentarDeNovo
-                        ? 'Tentar novamente'
-                        : 'Abrir configurações',
-                    style: tsJakarta(12, FontWeight.w800,
-                        color: AppColors.onTertiaryContainer),
+                if (!semAcao) ...[
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: podeTentarDeNovo
+                        ? _ativarPorPerto
+                        : () =>
+                            LocalizacaoService.of(context).abrirConfiguracoes(),
+                    child: Text(
+                      podeTentarDeNovo
+                          ? 'Tentar novamente'
+                          : 'Abrir configurações',
+                      style: tsJakarta(12, FontWeight.w800,
+                          color: AppColors.onTertiaryContainer),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -315,7 +381,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
                     ),
                   ),
                 ),
-                Text('${_raioKm.toStringAsFixed(0)} km',
+                Text('até ${_raioKm.toStringAsFixed(0)} km de você',
                     style: tsJakarta(12, FontWeight.w700,
                         color: AppColors.teal)),
               ],
@@ -352,7 +418,10 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         if (t.temCoordenada)
           MapaPonto(
             posicao: LatLng(t.latitude!, t.longitude!),
-            rotulo: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
+            // A mesma distância do card, vinda do backend.
+            rotulo: t.distanciaCurta == null
+                ? 'R\$ ${t.valorEstimado.toStringAsFixed(0)}'
+                : 'R\$ ${t.valorEstimado.toStringAsFixed(0)} · ${t.distanciaCurta}',
             icone: Icons.storefront_rounded,
             onTap: () => _abrirDetalhe(t),
           ),
@@ -376,7 +445,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
       _fHorarioFim = null;
       _fDiaSemana = null;
       _fRaioMax = null;
-      _fOrdenarPor = 'valorAsc';
+      _fOrdenarPor = _ordemPadrao;
     });
     _carregarDisponiveis();
   }
@@ -456,6 +525,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         raioKm: _raioKm,
         hasFilters: _hasFilters,
         onAceito: _carregar,
+        erroDaBusca: _erroDaBusca != null ? _buildErroDaBusca() : null,
       ),
     );
   }
@@ -612,7 +682,9 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
               ),
             ),
           ),
-        if (provider.carregando)
+        if (_erroDaBusca != null)
+          _buildErroDaBusca()
+        else if (provider.carregando)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 32),
             child: Center(

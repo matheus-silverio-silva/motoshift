@@ -40,12 +40,16 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
   final _regiaoCtrl = TextEditingController();
   bool _publicando = false;
 
-  /// Ponto de partida do turno. Começa no centro da cidade do lojista, tenta
-  /// subir para o GPS e termina onde ele tocar no mapa.
+  /// Ponto de partida do turno: a loja, se o lojista a marcou em "Dados
+  /// pessoais"; senão o GPS; senão o centro da cidade. Em qualquer caso, o
+  /// toque no mapa tem a palavra final.
   ///
   /// Era uma constante fixa em Maringá-PR, enquanto o turno era gravado com
   /// `regiao: 'São Paulo'` e sem coordenada nenhuma — o mapa mostrava um lugar,
   /// o turno dizia outro, e o filtro "perto de mim" não achava nenhum dos dois.
+  /// Depois passou a ser o GPS, que é onde o lojista está publicando — a casa
+  /// dele, o celular na rua —, com o endereço da loja no texto: pino e
+  /// endereço apontando para lugares diferentes.
   LatLng _centro = GeoReferencia.padrao;
 
   /// Origem do ponto atual — muda o texto de apoio abaixo do mapa.
@@ -61,13 +65,23 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _definirPontoInicial());
   }
 
-  /// Ordem de preferência para o ponto inicial: cidade do cadastro (imediato)
-  /// e, se o aparelho deixar, a posição real do GPS.
+  /// Ordem de preferência para o ponto inicial: a loja cadastrada, o GPS e,
+  /// enquanto o GPS não responde (ou se ele não responder), a cidade.
   Future<void> _definirPontoInicial() async {
     if (!mounted) return;
     final usuario = context.read<AuthService>().usuario;
 
     _regiaoCtrl.text = _regiaoDoCadastro(usuario);
+
+    // A loja marcada é o endereço que o texto diz: o GPS nem é consultado.
+    if (usuario != null && usuario.temPontoDaLoja) {
+      setState(() {
+        _centro = LatLng(usuario.latitude!, usuario.longitude!);
+        _origem = _OrigemDoPonto.loja;
+      });
+      return;
+    }
+
     if (GeoReferencia.conhece(usuario?.cidade)) {
       setState(() {
         _centro = GeoReferencia.daCidade(usuario?.cidade);
@@ -76,11 +90,14 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
     }
 
     setState(() => _buscandoGps = true);
-    final pos = await const LocalizacaoService().posicaoAtual();
+    final pos = await LocalizacaoService.of(context).posicaoAtual();
     if (!mounted) return;
     setState(() {
       _buscandoGps = false;
-      if (pos.temPosicao) {
+      // O GPS responde quando responde. Se o lojista tocou o mapa nesse meio
+      // tempo, o ponto dele vale mais que o do aparelho — antes o GPS chegava
+      // depois e movia o pino sem avisar.
+      if (pos.temPosicao && _origem.aceitaOGps) {
         _centro = LatLng(pos.latitude!, pos.longitude!);
         _origem = _OrigemDoPonto.gps;
       }
@@ -284,6 +301,53 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
     return confirmado ?? false;
   }
 
+  /// Pede ao lojista que confirme o ponto quando ele é só uma aproximação.
+  ///
+  /// "Marcar no mapa" devolve ao formulário; "Usar este ponto" aceita o que
+  /// está no mapa. Os dois são decisões conscientes — o que não pode é o
+  /// turno nascer no centro da cidade porque ninguém olhou para o mapa.
+  Future<bool> _confirmarPonto() async {
+    final cidade = context.read<AuthService>().usuario?.cidade?.trim();
+    final onde = _origem == _OrigemDoPonto.cidade && cidade != null && cidade.isNotEmpty
+        ? 'O mapa está no centro de $cidade, não no endereço da loja.'
+        : 'Não sabemos onde fica a sua loja, e o mapa está num ponto padrão.';
+
+    final usar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Confirme o ponto de partida',
+            style: tsBricolage(17, FontWeight.w800, color: AppColors.ink)),
+        content: Text(
+          '$onde O entregador vai até o ponto do mapa. Toque no mapa para '
+          'marcar o lugar certo — ou marque a loja uma vez em Dados pessoais '
+          'e ela passa a ser o ponto de todo turno.',
+          key: const Key('publicar-aviso-ponto'),
+          style: tsJakarta(12.5, FontWeight.w500,
+              color: AppColors.text, height: 1.45),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Marcar no mapa',
+                style: tsJakarta(13, FontWeight.w700, color: AppColors.teal)),
+          ),
+          FilledButton(
+            key: const Key('publicar-usar-ponto'),
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.teal),
+            child: const Text('Usar este ponto'),
+          ),
+        ],
+      ),
+    );
+    if (usar == true && mounted) {
+      setState(() => _origem = _OrigemDoPonto.escolhido);
+    }
+    return usar == true;
+  }
+
   Widget _linhaDoCusto(String rotulo, String valor,
       {String? detalhe, bool destaque = false}) {
     return Row(
@@ -385,6 +449,14 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       endereco: regiao,
       vagas: _vagas,
     );
+
+    // Ponto que ninguém confirmou — o centro da cidade, ou o marco zero de
+    // Curitiba quando nem a cidade é conhecida — não vira turno em silêncio.
+    if (_origem.precisaConfirmar && !await _confirmarPonto()) {
+      if (mounted) setState(() => _publicando = false);
+      return;
+    }
+    if (!mounted) return;
 
     // Publicar compromete dinheiro: o custo total sai do saldo disponível e
     // fica bloqueado até o turno encerrar. A confirmação mostra os dois
@@ -870,10 +942,21 @@ enum _OrigemDoPonto {
   padrao,
   cidade,
   gps,
+  loja,
   escolhido;
+
+  /// O GPS só substitui o que é palpite. Loja cadastrada e ponto tocado no
+  /// mapa são decisões do lojista.
+  bool get aceitaOGps =>
+      this == _OrigemDoPonto.padrao || this == _OrigemDoPonto.cidade;
+
+  /// Ponto que ninguém confirmou: publicar pergunta antes.
+  bool get precisaConfirmar =>
+      this == _OrigemDoPonto.padrao || this == _OrigemDoPonto.cidade;
 
   IconData get icone => switch (this) {
         _OrigemDoPonto.gps => Icons.my_location_rounded,
+        _OrigemDoPonto.loja => Icons.storefront_rounded,
         _OrigemDoPonto.escolhido => Icons.touch_app_outlined,
         _ => Icons.info_outline_rounded,
       };
@@ -881,6 +964,9 @@ enum _OrigemDoPonto {
   String get explicacao => switch (this) {
         _OrigemDoPonto.gps =>
           'Posição atual do aparelho. Toque no mapa para ajustar.',
+        _OrigemDoPonto.loja =>
+          'Ponto da sua loja, marcado em Dados pessoais. Toque no mapa para '
+              'ajustar só este turno.',
         _OrigemDoPonto.escolhido => 'Ponto escolhido por você no mapa.',
         _OrigemDoPonto.cidade =>
           'Centro aproximado da sua cidade. Toque no mapa para marcar o ponto exato.',

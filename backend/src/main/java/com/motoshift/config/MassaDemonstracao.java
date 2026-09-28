@@ -38,8 +38,8 @@ import java.util.Map;
  * Massa de demonstração: 8 contas e cinco meses de história contados pelos
  * mesmos serviços que o app usa.
  *
- * <p><b>A história.</b> Quatro lojas — três em Curitiba e o Mercado Andrade
- * em São Paulo — recarregam a carteira todo mês, publicam turnos toda semana e
+ * <p><b>A história.</b> Quatro lojas de Curitiba, cada uma com o ponto no
+ * mapa, recarregam a carteira todo mês, publicam turnos toda semana e
  * pagam os entregadores na finalização; os entregadores sacam uma vez por mês.
  * Os dois lados se avaliam, o lojista emite a nota de cada pagamento (uma já
  * foi cancelada), e os pagamentos da última semana ainda estão sem nota — "a
@@ -374,16 +374,22 @@ public class MassaDemonstracao {
         private void pessoas() {
             claudia = lojista("Cláudia Oliveira", "claudia@teste.com", "(41) 99111-2222",
                     "12.345.678/0001-90", hoje.minusYears(41).minusDays(80), "Curitiba", "PR",
-                    "Hamburgueria da Cláudia", "Av. Água Verde, 1200 — Água Verde, Curitiba/PR");
+                    "Hamburgueria da Cláudia", "Av. Água Verde, 1200 — Água Verde, Curitiba/PR",
+                    PONTO_AGUA_VERDE);
             fernando = lojista("Fernando Costa", "fernando@teste.com", "(41) 99333-4444",
                     "98.765.432/0001-10", hoje.minusYears(48).minusDays(210), "Curitiba", "PR",
-                    "Pizzaria do Fernando", "R. Comendador Araújo, 450 — Batel, Curitiba/PR");
+                    "Pizzaria do Fernando", "R. Comendador Araújo, 450 — Batel, Curitiba/PR",
+                    PONTO_BATEL);
             ana = lojista("Ana Souza", "ana@teste.com", "(41) 99555-6666",
                     "11.222.333/0001-44", hoje.minusYears(35).minusDays(150), "Curitiba", "PR",
-                    "Farmácia Ana", "R. XV de Novembro, 980 — Centro Cívico, Curitiba/PR");
-            maria = lojista("Maria Andrade", "lojista@teste.com", "(11) 91234-5678",
-                    "12.345.678/0001-99", hoje.minusYears(44).minusDays(30), "São Paulo", "SP",
-                    "Mercado Andrade", "Av. Paulista, 1500 — Bela Vista, São Paulo/SP");
+                    "Farmácia Ana", "R. XV de Novembro, 980 — Centro Cívico, Curitiba/PR",
+                    PONTO_CENTRO_CIVICO);
+            // Era de São Paulo, com a massa inteira em Curitiba: o "perto de
+            // mim" e o mapa de publicar partiam a 340 km de tudo.
+            maria = lojista("Maria Andrade", "lojista@teste.com", "(41) 91234-5678",
+                    "12.345.678/0001-99", hoje.minusYears(44).minusDays(30), "Curitiba", "PR",
+                    "Mercado Andrade", "Av. Sete de Setembro, 2775 — Rebouças, Curitiba/PR",
+                    PONTO_REBOUCAS);
 
             ricardo = motoboy("Ricardo Souza", "ricardo@teste.com", "(41) 98111-2222",
                     "12345678900", "A", hoje.plusYears(2).plusMonths(9), hoje.minusYears(31).minusDays(40),
@@ -394,9 +400,9 @@ public class MassaDemonstracao {
             thiago = motoboy("Thiago Alves", "thiago@teste.com", "(41) 98555-6666",
                     "55566677788", "A", hoje.plusMonths(7), hoje.minusYears(27).minusDays(290),
                     "Curitiba", "PR", "Honda Biz 125", "GHI-3F45", hoje.getYear() - 6, "Branca");
-            carlos = motoboy("Carlos Mendes", "motoboy@teste.com", "(11) 99876-5432",
+            carlos = motoboy("Carlos Mendes", "motoboy@teste.com", "(41) 99876-5432",
                     "11122233344", "A", hoje.plusYears(3), hoje.minusYears(34).minusDays(33),
-                    "São Paulo", "SP", "Honda PCX 150", "JKL-4G56", hoje.getYear() - 2, "Azul");
+                    "Curitiba", "PR", "Honda PCX 150", "JKL-4G56", hoje.getYear() - 2, "Azul");
 
             // Toda conta tem carteira, como no cadastro; a chave Pix do
             // entregador é o que o saque exige.
@@ -481,7 +487,7 @@ public class MassaDemonstracao {
         private Plano tardeDaMaria(int w, LocalDate dia) {
             LocalDateTime inicio = dia.atTime(14, 0);
             return new Plano(maria, "Turno Tarde — Mercado Andrade", "Entregas de compras do mercado",
-                    "Bela Vista, São Paulo", inicio, inicio.plusHours(4),
+                    "Rebouças, Curitiba", inicio, inicio.plusHours(4),
                     w % 3 == 0 ? "100.00" : "95.00", 1, List.of(carlos), w);
         }
 
@@ -555,7 +561,7 @@ public class MassaDemonstracao {
             // Avaliado pelos dois, nota ainda não emitida: "a emitir" para a
             // Maria, "aguardando emissão" para o Carlos.
             Plano mariaCarlos = new Plano(maria, "Turno Tarde — Mercado Andrade",
-                    "Entregas de compras do mercado", "Bela Vista, São Paulo",
+                    "Entregas de compras do mercado", "Rebouças, Curitiba",
                     dia3.atTime(14, 0), dia3.atTime(18, 0), "95.00", 1, List.of(carlos), 1);
             Turno t2 = publicarNoPassado(mariaCarlos);
             em(mariaCarlos.inicio().minusHours(20), () -> turnos.aceitar(t2.getId(), carlos.getId()));
@@ -632,7 +638,7 @@ public class MassaDemonstracao {
             carimbarTurno(anaLucas, ontem.plusHours(1), agora.minusHours(20));
 
             Turno mariaCarlos = publicar(maria, "Turno Confirmado — Mercado Andrade", "Entregas de compras do mercado",
-                    "Bela Vista, São Paulo", amanha.with(LocalTime.of(14, 0)), amanha.with(LocalTime.of(18, 0)),
+                    "Rebouças, Curitiba", amanha.with(LocalTime.of(14, 0)), amanha.with(LocalTime.of(18, 0)),
                     "95.00", 1, ontem.plusHours(2));
             em(agora.minusHours(19), () -> turnos.aceitar(mariaCarlos.getId(), carlos.getId()));
             carimbarTurno(mariaCarlos, ontem.plusHours(2), agora.minusHours(19));
@@ -670,7 +676,7 @@ public class MassaDemonstracao {
                     "Batel, Curitiba", depoisDeAmanha.with(LocalTime.of(10, 0)),
                     depoisDeAmanha.with(LocalTime.of(14, 0)), "105.00", 1, publicados.plusMinutes(4));
             Turno a6 = publicar(maria, "Turno Manhã — Mercado Andrade", "Reposição e entregas da manhã",
-                    "Bela Vista, São Paulo", depoisDeAmanha.with(LocalTime.of(9, 0)),
+                    "Rebouças, Curitiba", depoisDeAmanha.with(LocalTime.of(9, 0)),
                     depoisDeAmanha.with(LocalTime.of(13, 0)), "95.00", 1, publicados.plusMinutes(5));
             for (Turno t : List.of(a1, a2, a3, a4, a5, a6)) {
                 carimbarTurno(t, publicados, publicados);
@@ -704,13 +710,13 @@ public class MassaDemonstracao {
             t.setDataInicio(inicio);
             t.setDataFim(fim);
             t.setValorEstimado(new BigDecimal(valor));
-            t.setRaioEntregaKm(regiao.contains("Paulo") ? 6.0 : 8.0);
-            // Sem coordenada o turno não aparece no filtro por raio (SCRUM-18) e
-            // o mapa da tela de detalhe fica vazio.
-            double[] coord = coordenadaDaRegiao(regiao, titulo + inicio);
-            t.setLatitude(coord[0]);
-            t.setLongitude(coord[1]);
-            t.setEndereco(regiao);
+            t.setRaioEntregaKm(lojista == maria ? 6.0 : 8.0);
+            // O pino é a loja — o mesmo ponto que a publicação pelo app usa
+            // quando o lojista já marcou a loja em "Dados pessoais" (V15). Sem
+            // coordenada o turno não aparece no filtro por raio (SCRUM-18).
+            t.setLatitude(lojista.getLatitude());
+            t.setLongitude(lojista.getLongitude());
+            t.setEndereco(lojista.getEnderecoComercial());
             t.setStatus(StatusTurno.ABERTO);
             t.setVagas(vagas);
             Turno salvo = turnoRepo.save(t);
@@ -922,13 +928,16 @@ public class MassaDemonstracao {
 
     private Usuario lojista(String nome, String email, String telefone, String cnpj,
                             LocalDate nascimento, String cidade, String uf,
-                            String fantasia, String endereco) {
+                            String fantasia, String endereco, double[] ponto) {
         Usuario u = conta(nome, email, telefone, "lojista", cnpj);
         u.setDataNascimento(nascimento);
         u.setCidade(cidade);
         u.setEstado(uf);
         u.setNomeFantasia(fantasia);
         u.setEnderecoComercial(endereco);
+        // O ponto da loja no mapa (V15), como o lojista marcaria em "Dados pessoais".
+        u.setLatitude(ponto[0]);
+        u.setLongitude(ponto[1]);
         return usuarioRepo.save(u);
     }
 
@@ -963,24 +972,11 @@ public class MassaDemonstracao {
         return u;
     }
 
-    /**
-     * Coordenada aproximada do bairro, com um deslocamento determinístico
-     * derivado do título para que turnos do mesmo bairro não caiam no mesmo
-     * ponto exato.
-     */
-    private static double[] coordenadaDaRegiao(String regiao, String semente) {
-        double lat, lng;
-        String r = regiao == null ? "" : regiao.toLowerCase();
-        if (r.contains("agua verde") || r.contains("água verde")) { lat = -25.4560; lng = -49.2820; }
-        else if (r.contains("batel"))                             { lat = -25.4420; lng = -49.2900; }
-        else if (r.contains("civico") || r.contains("cívico"))    { lat = -25.4160; lng = -49.2690; }
-        else if (r.contains("bela vista") || r.contains("paulo")) { lat = -23.5614; lng = -46.6559; }
-        else                                                      { lat = -25.4284; lng = -49.2733; }
-
-        // Jitter de até ~600 m, estável entre execuções.
-        int h = semente == null ? 0 : Math.abs(semente.hashCode() % 1_000_000);
-        lat += ((h % 100) - 50) / 10000.0;
-        lng += (((h / 100) % 100) - 50) / 10000.0;
-        return new double[] { lat, lng };
-    }
+    // Os pontos das quatro lojas, no endereço comercial de cada uma. Todos em
+    // Curitiba: é onde a massa inteira acontece, e de onde o README manda
+    // simular o GPS na demonstração.
+    static final double[] PONTO_AGUA_VERDE    = {-25.4560, -49.2820};
+    static final double[] PONTO_BATEL         = {-25.4420, -49.2900};
+    static final double[] PONTO_CENTRO_CIVICO = {-25.4160, -49.2690};
+    static final double[] PONTO_REBOUCAS      = {-25.4445, -49.2610};
 }

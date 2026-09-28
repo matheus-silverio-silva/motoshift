@@ -305,6 +305,14 @@ List<InfoTileData> _infoDoTurno(Turno turno) {
       label: 'Horário',
       valor: turno.horarioFormatado,
     ),
+    // Só quando a lista veio da busca com posição: é a distância que o
+    // backend mediu, a mesma do card e do pino.
+    if (turno.distanciaRotulo != null)
+      InfoTileData(
+        icon: Icons.near_me_outlined,
+        label: 'Distância de você',
+        valor: turno.distanciaRotulo!,
+      ),
     InfoTileData(
       icon: Icons.radar_rounded,
       label: 'Raio de entrega',

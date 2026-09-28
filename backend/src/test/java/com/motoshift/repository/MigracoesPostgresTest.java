@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * deploy — inclusive as que dependem do estado que ja existe no banco, que e
  * onde migracao costuma quebrar.
  */
-class MigracoesPostgresTest {
+public class MigracoesPostgresTest {
 
     @Test
     @DisplayName("todas as migracoes aplicam num banco vazio, na ordem")
@@ -326,8 +326,13 @@ class MigracoesPostgresTest {
         return cfg.load();
     }
 
-    static String ultimaVersao() {
-        return "14";
+    /**
+     * A última migração do projeto. Os três testes que conferem o
+     * {@code flyway_schema_history} leem daqui, para uma migração nova mudar
+     * um número só.
+     */
+    public static String ultimaVersao() {
+        return "15";
     }
 
     static Connection conectar(String url) throws SQLException {

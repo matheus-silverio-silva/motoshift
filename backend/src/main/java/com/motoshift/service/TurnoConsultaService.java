@@ -133,10 +133,8 @@ public class TurnoConsultaService {
 
         // Refino exato do raio: a bounding box é um quadrado, o raio é um círculo.
         if (geo) {
-            stream = stream.filter(t -> {
-                Double d = GeoUtils.distanciaKm(lat, lng, t.getLatitude(), t.getLongitude());
-                return d != null && d <= raioKm;
-            });
+            stream = stream.filter(t -> GeoUtils.dentroDoRaio(
+                    GeoUtils.distanciaKm(lat, lng, t.getLatitude(), t.getLongitude()), raioKm));
         }
 
         Comparator<Turno> comparator = switch (ordenarPor != null ? ordenarPor : "") {

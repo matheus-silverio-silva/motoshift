@@ -279,3 +279,29 @@ agendados (hoje a saída é ligar os jobs em uma instância só).
 - **Avaliação:** média das notas recebidas, dos dois lados.
 - **DTO:** objeto que trafega entre app e API (não expõe a entidade do banco).
 - **Provider:** mecanismo de gerência de estado do Flutter usado no app.
+
+---
+
+## 11. Recursos desta revisão — a regra e onde ela está
+
+Uma seção curta por recurso: o que a regra diz e o arquivo em que ela mora.
+
+### Localização: o pino é a loja
+
+- **Regra.** O turno parte do ponto da loja, marcado uma vez em *Dados
+  pessoais* (`usuarios.latitude/longitude`, V15). Sem ele, do GPS; sem GPS, do
+  centro da cidade — e aí **publicar pede confirmação**: nenhum turno nasce num
+  ponto que ninguém olhou. O toque no mapa sempre vence, inclusive o GPS que
+  responde atrasado.
+- **Distância.** Quem mede é o backend (`GeoUtils`, Haversine); o app mostra
+  a `distanciaKm` que veio, a mesma no card, no pino e no detalhe. A caixa do
+  banco (`findAbertosNaArea`) e o círculo usam a mesma Terra: antes a caixa era
+  0,1% menor e um turno na borda do raio sumia (`FiltroPorDistanciaTest`).
+- **Onde.** `AgendarTurnoScreen._definirPontoInicial` e `_confirmarPonto`;
+  `LocalizacaoService` (tempo limite de 15 s, página fora de HTTPS, última
+  posição conhecida no celular); `GeoUtils`; `AuthService.definirPontoDaLoja`.
+
+**P: E se o GPS do navegador nunca responder?**
+R: Todo pedido de posição tem 15 s de limite — inclusive o aviso de permissão
+que ninguém clicou, que era onde a tela ficava "buscando" para sempre. Passou
+disso, a tela diz que o aparelho não respondeu e oferece tentar de novo.

@@ -46,6 +46,7 @@ import 'package:moto_shift/services/api/turno_api.dart';
 import 'package:moto_shift/services/api/usuario_api.dart';
 import 'package:moto_shift/services/api_service.dart';
 import 'package:moto_shift/services/auth_service.dart';
+import 'package:moto_shift/services/localizacao_service.dart';
 import 'package:moto_shift/theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1345,6 +1346,7 @@ Future<void> pumpGolden(
   int? turnoSelecionado,
   ApiService? apiFake,
   Usuario? usuario,
+  LocalizacaoService? localizacao,
 }) async {
   // A ordem importa: `physicalSize` precisa ser calculado com o DPR final.
   // Fazendo o inverso (multiplicar pelo DPR padrão da view, 3.0, e só depois
@@ -1382,6 +1384,10 @@ Future<void> pumpGolden(
       ChangeNotifierProvider<PendenciasProvider>(
         create: (_) => PendenciasProvider(api),
       ),
+      // O GPS dos testes. Sem ele as telas usam o do aparelho, que num teste
+      // não existe e cai no "erro" — o que também é um caminho válido.
+      if (localizacao != null)
+        Provider<LocalizacaoService>.value(value: localizacao),
     ],
     child: MaterialApp(
       debugShowCheckedModeBanner: false,

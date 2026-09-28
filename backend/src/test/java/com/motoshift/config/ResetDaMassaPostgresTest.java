@@ -130,7 +130,8 @@ class ResetDaMassaPostgresTest {
 
         // O que o boot precisa para não reaplicar migração continua igual.
         assertThat(flyway()).isEqualTo(flywayAntes);
-        assertThat(flywayAntes.versao()).isEqualTo("14");
+        assertThat(flywayAntes.versao()).isEqualTo(
+                com.motoshift.repository.MigracoesPostgresTest.ultimaVersao());
         assertThat(jdbc.queryForObject(
                 "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated",
                 Integer.class)).isZero();

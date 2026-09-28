@@ -1,6 +1,6 @@
 # DER — Diagrama Entidade-Relacionamento
 
-Mapa das tabelas que compõem o banco de dados do **MotoShift**. O modelo reflete o schema real em produção (PostgreSQL no Railway), versionado por **Flyway** (migrações V1 a V13) e validado contra as entidades JPA do backend Spring Boot (`spring.jpa.hibernate.ddl-auto=validate`).
+Mapa das tabelas que compõem o banco de dados do **MotoShift**. O modelo reflete o schema real em produção (PostgreSQL no Railway), versionado por **Flyway** (migrações V1 a V15) e validado contra as entidades JPA do backend Spring Boot (`spring.jpa.hibernate.ddl-auto=validate`).
 
 > **Escopo:** 9 tabelas — `usuarios`, `turnos`, `turno_inscricoes`, `avaliacoes`, `carteiras`, `transacoes`, `cobrancas`, `notificacoes`, `notas_fiscais`.
 > Fonte da verdade: `backend/src/main/resources/db/migration` + `backend/src/main/java/com/motoshift/entity`.
@@ -80,6 +80,7 @@ erDiagram
 | `score` | FLOAT(53) | não | Default 5.0 |
 | `media_avaliacao` | FLOAT(53) | sim | Calculada a partir de `avaliacoes` |
 | `nome_fantasia`, `endereco_comercial` | VARCHAR(255) | sim | Preenchidos quando `tipo = lojista` |
+| `latitude`, `longitude` | FLOAT(53) | sim | Ponto da loja no mapa (V15), marcado pelo lojista em "Dados pessoais". É de onde a publicação de turno parte — o pino do turno e o endereço comercial passam a ser o mesmo lugar. Nulos no entregador e em quem não marcou |
 | `cnh_numero`, `cnh_categoria`, `cnh_validade` | VARCHAR / DATE | sim | Preenchidos quando `tipo = motoboy` (categoria A ou AB) |
 | `veiculo_modelo`, `veiculo_placa`, `veiculo_ano`, `veiculo_cor` | VARCHAR / INTEGER | sim | Dados da moto do entregador |
 | `tentativas_login` | INTEGER | não | Default 0 — bloqueio do RF01, no banco desde a V8 |
@@ -255,3 +256,4 @@ deixaria de valer.
 | `V12__ledger_financeiro` | `natureza`, `operacao_id` e os dois snapshots de saldo em `transacoes`; tabela `cobrancas` com FK real. É a migração que dá ao dinheiro origem e destino — antes a liquidação creditava sem debitar ninguém |
 | `V13__remove_dupla_confirmacao` | CONTRACT: derruba `lojista_confirmou_em` e `motoboy_confirmou_em` de `turno_inscricoes`. Com a liquidação automática não há o que confirmar |
 | `V14__fiscal_por_lancamento` | Aditiva: `transacao_id`, `operacao_id`, `competencia` e `tributos_retidos` em `notas_fiscais`, com backfill ligando cada nota ao `pagamento_recebido` do turno; `uk_nota_transacao` e `ix_nota_competencia`; o CHECK de `transacoes.tipo` ganha `retencao_iss` e `retencao_irrf`. A nota passa a documentar o lançamento do extrato, não só o turno — ver [`docs/financeiro/FISCAL.md`](../financeiro/FISCAL.md) |
+| `V15__coordenada_da_loja` | Aditiva: `latitude` e `longitude` em `usuarios` — o ponto da loja. A publicação parte dele (depois do GPS e da cidade), em vez do GPS de onde o lojista estiver publicando |

@@ -141,6 +141,56 @@ flutter run
 flutter run -d chrome --dart-define=API_URL=http://localhost:8080
 ```
 
+### 📍 Testar a localização à mão (Chrome)
+
+O navegador só libera a localização em **HTTPS ou `localhost`**: rode o app
+com `flutter run -d chrome` (que abre em `localhost`). Para simular onde a
+pessoa está, abra o DevTools (F12) → menu ⋮ → *More tools* → **Sensors** →
+*Location* → *Other…* e digite a latitude e a longitude. Os pontos da massa:
+
+| Ponto | Latitude | Longitude | Distância do Água Verde |
+|---|---|---|---|
+| Hamburgueria da Cláudia — Água Verde | -25.4560 | -49.2820 | — |
+| Pizzaria do Fernando — Batel | -25.4420 | -49.2900 | 1,8 km |
+| Mercado Andrade — Rebouças | -25.4445 | -49.2610 | 2,5 km |
+| Farmácia Ana — Centro Cívico | -25.4160 | -49.2690 | 4,6 km |
+| Marco zero (Praça Tiradentes) | -25.4284 | -49.2733 | 3,2 km |
+
+**Entregador** (`ricardo@teste.com`), com a posição no Água Verde:
+
+1. *Turnos* → ligue **Filtrar por distância**. O mapa aparece com um pino por
+   turno, e cada pino traz o valor e a distância ("R$ 120 · 1,8 km").
+2. Arraste o raio até **2 km**: ficam os turnos do Água Verde e do Batel. Em
+   **3 km** entra o Rebouças; em **5 km**, todos. A distância do card ("a 1,8
+   km"), a do pino e a do detalhe ("Distância de você") são o mesmo número — o
+   que o backend mediu.
+3. Sem "perto de mim", o card diz **"entrega até 8 km"**: é a área que o turno
+   cobre, não a distância até você. A folha de filtros chama esse número de
+   *Área de entrega do turno*.
+4. Em *Sensors*, escolha **Location unavailable** e ligue o filtro de novo: a
+   faixa amarela diz que não foi possível obter a localização e oferece
+   "Tentar novamente". Bloqueie a permissão do site (cadeado na barra de
+   endereço → *Localização* → *Bloquear*): a faixa diz que a permissão está
+   bloqueada.
+5. Com o filtro ligado, pare o backend e mova o raio: aparece **"Não foi
+   possível buscar os turnos perto de você."** com "Tentar de novo" — e a lista
+   some, em vez de mostrar os turnos sem filtro.
+6. Abra o app pelo IP da rede (`http://192.168.x.x:porta`) e ligue o filtro: a
+   mensagem diz que a localização só funciona em HTTPS ou `localhost`.
+
+**Lojista** (`claudia@teste.com`):
+
+1. *Publicar turno*: o mapa já abre na loja, com "Ponto da sua loja, marcado em
+   Dados pessoais" — o GPS nem é consultado. Toque o mapa: vira "Ponto escolhido
+   por você no mapa", e o GPS não o move mais.
+2. *Perfil → Dados pessoais → Ponto da loja no mapa*: toque o mapa ou use
+   **"Estou na loja: usar minha localização"** (pega o ponto do *Sensors*).
+   **Desmarcar** e salvar deixa a loja sem ponto.
+3. Sem ponto de loja, *Publicar turno* parte do GPS ("Posição atual do
+   aparelho"). Com a localização bloqueada, parte do centro da cidade — e
+   **Publicar** pede **"Confirme o ponto de partida"** antes de gastar o saldo:
+   "Marcar no mapa" volta ao formulário, "Usar este ponto" aceita.
+
 ---
 
 ## 🚀 Deploy (Railway)
@@ -197,10 +247,16 @@ calculada a partir do momento em que roda.
 | `claudia@teste.com` | Cláudia Oliveira | Hamburgueria da Cláudia | Curitiba/PR |
 | `fernando@teste.com` | Fernando Costa | Pizzaria do Fernando | Curitiba/PR |
 | `ana@teste.com` | Ana Souza | Farmácia Ana | Curitiba/PR |
-| `lojista@teste.com` | Maria Andrade | Mercado Andrade | São Paulo/SP |
+| `lojista@teste.com` | Maria Andrade | Mercado Andrade | Curitiba/PR |
 
 Lojista não tem score (a reputação é do entregador); a média de avaliação de
 cada loja é a das notas que os entregadores deram a ela.
+
+As quatro lojas e os quatro entregadores são de **Curitiba** — inclusive
+`lojista@teste.com` e `motoboy@teste.com`, que eram de São Paulo enquanto a
+massa inteira acontecia em Curitiba (o "perto de mim" delas partia a 340 km de
+tudo). Cada loja tem o ponto marcado no mapa, no próprio endereço, e todo
+turno dela parte desse ponto — ver [Testar a localização à mão](#-testar-a-localização-à-mão-chrome).
 
 ### 🏍️ Motoboys
 

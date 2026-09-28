@@ -35,7 +35,17 @@ class Usuario {
   final String? nomeFantasia;
   final String? enderecoComercial;
 
+  /// Ponto da loja no mapa (V15), marcado em "Dados pessoais". É de onde a
+  /// publicação de turno parte: sem ele, o pino do turno vinha do GPS de onde
+  /// o lojista estivesse publicando — a casa dele —, enquanto o endereço
+  /// escrito era o da loja. Nulo para o entregador e para quem não marcou.
+  final double? latitude;
+  final double? longitude;
+
   final DateTime? criadoEm;
+
+  /// A loja já marcou o ponto no mapa?
+  bool get temPontoDaLoja => latitude != null && longitude != null;
 
   const Usuario({
     this.id,
@@ -59,6 +69,8 @@ class Usuario {
     this.veiculoCor,
     this.nomeFantasia,
     this.enderecoComercial,
+    this.latitude,
+    this.longitude,
     this.criadoEm,
   });
 
@@ -95,6 +107,8 @@ class Usuario {
       veiculoCor: json['veiculoCor'] as String?,
       nomeFantasia: json['nomeFantasia'] as String?,
       enderecoComercial: json['enderecoComercial'] as String?,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
       criadoEm: parseDate('criadoEm'),
     );
   }
@@ -133,6 +147,8 @@ class Usuario {
     String? veiculoCor,
     String? nomeFantasia,
     String? enderecoComercial,
+    double? latitude,
+    double? longitude,
     DateTime? criadoEm,
   }) {
     return Usuario(
@@ -157,6 +173,8 @@ class Usuario {
       veiculoCor: veiculoCor ?? this.veiculoCor,
       nomeFantasia: nomeFantasia ?? this.nomeFantasia,
       enderecoComercial: enderecoComercial ?? this.enderecoComercial,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
       criadoEm: criadoEm ?? this.criadoEm,
     );
   }

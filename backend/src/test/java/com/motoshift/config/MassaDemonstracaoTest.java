@@ -432,6 +432,46 @@ class MassaDemonstracaoTest {
         }
     }
 
+    /**
+     * As oito contas na mesma cidade da massa inteira. {@code lojista@teste.com}
+     * e {@code motoboy@teste.com} eram de São Paulo, com todos os turnos em
+     * Curitiba: na demonstração, o "perto de mim" e o ponto inicial do mapa
+     * delas ficavam a 340 km de tudo.
+     */
+    @Test
+    @DisplayName("todas as contas em Curitiba; toda loja com ponto no mapa; o turno parte da loja")
+    void tudoEmCuritibaEAPartirDaLoja() {
+        massa.resetar();
+
+        for (Usuario u : contasDaMassa()) {
+            assertThat(u.getCidade()).as("cidade de %s", u.getEmail()).isEqualTo("Curitiba");
+            assertThat(u.getEstado()).as("UF de %s", u.getEmail()).isEqualTo("PR");
+            if ("lojista".equals(u.getTipo())) {
+                assertThat(com.motoshift.util.GeoUtils.distanciaKm(
+                                -25.4284, -49.2733, u.getLatitude(), u.getLongitude()))
+                        .as("ponto da loja de %s, a partir do centro de Curitiba", u.getEmail())
+                        .isNotNull()
+                        .isLessThan(10.0);
+            } else {
+                assertThat(u.getLatitude()).as("entregador não tem loja").isNull();
+            }
+        }
+
+        Map<Long, Usuario> lojas = contasDaMassa().stream()
+                .filter(u -> "lojista".equals(u.getTipo()))
+                .collect(Collectors.toMap(Usuario::getId, u -> u));
+        for (Turno t : turnosDaMassa()) {
+            Usuario loja = lojas.get(t.getLojistId());
+            assertThat(t.getLatitude()).as("pino de %s", t.getTitulo()).isEqualTo(loja.getLatitude());
+            assertThat(t.getLongitude()).as("pino de %s", t.getTitulo()).isEqualTo(loja.getLongitude());
+            assertThat(t.getRegiao()).as("região de %s", t.getTitulo()).endsWith("Curitiba");
+        }
+
+        // Mesmo e-mail e mesma senha de antes.
+        assertThat(usuarioRepo.findByEmail("lojista@teste.com")).isPresent();
+        assertThat(usuarioRepo.findByEmail("motoboy@teste.com")).isPresent();
+    }
+
     private List<Long> idsDaMassa() {
         return contasDaMassa().stream().map(Usuario::getId).collect(Collectors.toList());
     }

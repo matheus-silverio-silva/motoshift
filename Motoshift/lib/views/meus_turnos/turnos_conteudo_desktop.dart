@@ -23,6 +23,7 @@ class TurnosConteudoDesktop extends StatelessWidget {
     required this.raioKm,
     required this.hasFilters,
     required this.onAceito,
+    this.erroDaBusca,
     super.key,
   });
 
@@ -39,6 +40,10 @@ class TurnosConteudoDesktop extends StatelessWidget {
 
   /// Chamado depois de aceitar um turno pelo painel da direita.
   final VoidCallback onAceito;
+
+  /// A busca com filtro falhou: vai no lugar dos disponíveis, que não podem
+  /// aparecer sem o filtro que a pessoa pediu.
+  final Widget? erroDaBusca;
 
   /// Turnos que o motoboy já aceitou e ainda vão acontecer (ou estão
   /// acontecendo) — a mesma seleção que o celular mostra em "Meus turnos".
@@ -133,7 +138,7 @@ class TurnosConteudoDesktop extends StatelessWidget {
             strokeWidth: 2, color: AppColors.teal),
       );
     }
-    if (disponiveis.isEmpty && aceitos.isEmpty) {
+    if (disponiveis.isEmpty && aceitos.isEmpty && erroDaBusca == null) {
       return Padding(
         padding: const EdgeInsets.all(24),
         child: Center(
@@ -160,7 +165,9 @@ class TurnosConteudoDesktop extends StatelessWidget {
           const SizedBox(height: 8),
           _tituloSecao('Disponíveis'),
         ],
-        if (disponiveis.isEmpty)
+        if (erroDaBusca != null)
+          erroDaBusca!
+        else if (disponiveis.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 20),
             child: Center(
@@ -212,7 +219,7 @@ class TurnosConteudoDesktop extends StatelessWidget {
       horario: t.horarioFormatado,
       valor: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
       meta: '${t.titulo} · ${t.regiao} · '
-          '${t.distanciaKm != null ? 'a ${t.distanciaKm!.toStringAsFixed(1).replaceAll('.', ',')} km' : '${t.raioEntregaKm.toStringAsFixed(0)} km'}',
+          '${t.distanciaRotulo ?? t.areaDeEntregaRotulo}',
       icon: Icons.two_wheeler_outlined,
       selected: t.id != null && t.id == selecao.id,
       pillLabel: t.multiVaga

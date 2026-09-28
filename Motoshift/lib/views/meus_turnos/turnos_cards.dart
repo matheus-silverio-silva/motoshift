@@ -28,13 +28,12 @@ class TurnoDisponivelCard extends StatelessWidget {
       horario: turno.horarioFormatado,
       name: turno.titulo,
       meta: [
+        // Logo depois do título: a linha é uma só e corta com reticências, e
+        // no fim dela a distância sumia no celular. distanciaKm só vem quando
+        // a busca foi por raio; fora disso vai o raio de entrega do turno —
+        // dizendo que é ele, e não a distância.
+        turno.distanciaRotulo ?? turno.areaDeEntregaRotulo,
         turno.regiao,
-        // distanciaKm só vem quando a busca foi por raio; fora disso mostra o
-        // raio de entrega do turno, como sempre mostrou.
-        if (turno.distanciaKm != null)
-          'a ${turno.distanciaKm!.toStringAsFixed(1).replaceAll('.', ',')} km'
-        else
-          '${turno.raioEntregaKm.toStringAsFixed(0)} km',
         if (turno.multiVaga) '${turno.vagasRestantes} de ${turno.vagas} vagas',
       ],
       value: 'R\$ ${turno.valorEstimado.toStringAsFixed(0)}',

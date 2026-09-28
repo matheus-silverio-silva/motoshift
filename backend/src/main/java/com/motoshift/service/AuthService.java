@@ -202,7 +202,39 @@ public class AuthService {
         if (body.get("nomeFantasia") instanceof String s) u.setNomeFantasia(s);
         if (body.get("enderecoComercial") instanceof String s) u.setEnderecoComercial(s);
 
+        if (body.containsKey("latitude") || body.containsKey("longitude")) {
+            definirPontoDaLoja(u, body.get("latitude"), body.get("longitude"));
+        }
+
         return resposta(repo.save(u));
+    }
+
+    /**
+     * O ponto da loja no mapa (V15): os dois números juntos, ou os dois nulos
+     * para desmarcar.
+     *
+     * <p>Só a conta de loja tem ponto: é de onde o turno parte. Um entregador
+     * mandando coordenada é erro do cliente, e dizer isso é melhor do que
+     * gravar um dado que nenhuma tela lê.
+     */
+    private static void definirPontoDaLoja(Usuario u, Object lat, Object lng) {
+        if (!"lojista".equals(u.getTipo())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Só a conta de loja tem ponto no mapa.");
+        }
+        if (lat == null && lng == null) {
+            u.setLatitude(null);
+            u.setLongitude(null);
+            return;
+        }
+        Double la = lat instanceof Number n ? n.doubleValue() : null;
+        Double lo = lng instanceof Number n ? n.doubleValue() : null;
+        if (!com.motoshift.util.GeoUtils.coordenadaValida(la, lo)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Ponto da loja inválido: envie latitude e longitude juntas.");
+        }
+        u.setLatitude(la);
+        u.setLongitude(lo);
     }
 
     private String tokenPara(Usuario u) {
