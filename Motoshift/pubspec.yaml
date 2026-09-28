@@ -51,6 +51,7 @@ dependencies:
   # arquivo. Ver docs/financeiro/FISCAL.md.
   pdf: ^3.12.0
   printing: ^5.14.3
+  share_plus: ^13.0.0
 
 dev_dependencies:
   flutter_test:

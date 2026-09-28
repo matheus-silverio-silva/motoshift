@@ -377,7 +377,7 @@ para "valor errado não faz nada".
 | GET | /api/dashboard/lojista/{id} | Métricas do Lojista |
 | GET | /api/carteira/{id} | Saldo, ganhos e a primeira página do extrato |
 | GET | /api/carteira/extrato | Extrato filtrado e paginado (período, tipo, natureza, turno, contraparte, valor, busca) |
-| GET | /api/carteira/extrato/exportar | O mesmo extrato sem paginação: `formato=csv` (planilha, padrão) ou `formato=json` (a base do PDF que o app gera) |
+| GET | /api/carteira/extrato/exportar | O mesmo extrato sem paginação: `formato=csv` (planilha, padrão) ou `formato=json` (a base do PDF que o app gera). O app entrega a planilha como **arquivo** `.csv` em UTF-8 com BOM (download no navegador, folha de compartilhar no celular) — o BOM é o que faz o Excel em português acertar os acentos |
 | GET | /api/carteira/resumo | O resumo do período para o papel de quem pergunta — entregador: recebido, retido, sacado, disponível e a receber; lojista: recarregado, pago, devolvido, disponível e comprometido. Os campos do outro papel não vêm |
 | GET | /api/carteira/fluxo | Série de fluxo de caixa por dia, semana ou mês (sem reserva e liberação, que são o dinheiro trocando de bolso) |
 | POST | /api/carteira/recargas | Abre uma cobrança Pix simulada (não credita) |

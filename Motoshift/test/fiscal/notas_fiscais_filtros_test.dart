@@ -197,7 +197,7 @@ void main() {
         (tester) async {
       final api = _api(notas: const [], total: 0);
 
-      fingirAreaDeTransferencia(tester);
+      final baixados = fingirDownload();
       await _abrir(tester, api);
       await tester.tap(find.text('Informe anual'));
       await tester.pumpAndSettle();
@@ -210,8 +210,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(api.notasApi.exportacoesDoResumo, 1);
-      // O aviso diz o que fazer com o conteúdo — ver entregarCsv.
-      expect(find.textContaining('Cole numa planilha'), findsOneWidget);
+      // Um arquivo de verdade — ver entregarCsv.
+      expect(baixados.single.nome, startsWith('informe-'));
+      expect(baixados.single.nome, endsWith('.csv'));
     });
 
     testWidgets('exportar em PDF monta o informe no app e o entrega',

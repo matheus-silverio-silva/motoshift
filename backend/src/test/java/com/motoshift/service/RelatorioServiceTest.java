@@ -151,6 +151,7 @@ class RelatorioServiceTest {
 
     @Test
     @DisplayName("a chave 'relatorio' continua trazendo o texto, para o app atual")
+    @SuppressWarnings("deprecation") // é exatamente o alias depreciado que se testa
     void relatorio_ehAliasDeAnalise() {
         RelatorioFinanceiroResponse r = relatorios.doMotoboy(entregador.getId(), null, null);
 

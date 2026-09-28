@@ -48,6 +48,7 @@ import 'package:moto_shift/services/api_service.dart';
 import 'package:moto_shift/services/auth_service.dart';
 import 'package:moto_shift/services/localizacao_service.dart';
 import 'package:moto_shift/theme/app_theme.dart';
+import 'package:moto_shift/utils/baixar_arquivo.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Setup global
@@ -1826,12 +1827,6 @@ const List<int> _pngTransparente1x1 = <int>[
   0xAE, 0x42, 0x60, 0x82,
 ];
 
-/// Faz o canal `flutter/platform` responder dentro do relógio falso do teste.
-///
-/// Sem isto, `Clipboard.setData` só é respondido fora do `pump`, e a tela que
-/// espera a cópia terminar fica girando o spinner para sempre — `pumpAndSettle`
-/// estoura em vez de falhar a asserção. Quem exercita "Exportar CSV" chama
-/// isto antes do toque.
 /// Finge o plugin `printing` e guarda o que ele recebeu: o PDF e o nome do
 /// arquivo. Sem isto, "Baixar PDF" num teste cai num canal de plataforma que
 /// não existe.
@@ -1857,9 +1852,12 @@ PdfEntregue fingirImpressora(WidgetTester tester) {
   return entregue;
 }
 
-void fingirAreaDeTransferencia(WidgetTester tester) {
-  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-    SystemChannels.platform,
-    (call) async => null,
-  );
+/// Finge o download e guarda os arquivos que a tela entregou — o CSV da
+/// planilha e o .ics do calendário. Sem isto, `baixarArquivo` cai na folha de
+/// compartilhar do sistema, que num teste não existe.
+List<ArquivoBaixado> fingirDownload() {
+  final baixados = <ArquivoBaixado>[];
+  final anterior = trocarEntregaDeArquivo((a) async => baixados.add(a));
+  addTearDown(() => trocarEntregaDeArquivo(anterior));
+  return baixados;
 }

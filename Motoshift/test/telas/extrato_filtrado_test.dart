@@ -160,7 +160,7 @@ void main() {
 
   testWidgets('exportar usa os mesmos filtros da tela e entrega o conteúdo',
       (tester) async {
-    fingirAreaDeTransferencia(tester);
+    final baixados = fingirDownload();
     await abrirExtrato(tester);
 
     await tester.tap(find.byKey(const Key('extrato-abrir-filtros')));
@@ -175,9 +175,13 @@ void main() {
     await tester.tap(find.byKey(const Key('exportar-planilha')));
     await tester.pumpAndSettle();
 
-    // O botão baixava o CSV e dizia "N exportados" sem entregar nada: o
-    // conteúdo morria na memória do app. Agora o aviso diz onde ele está.
-    expect(find.textContaining('Cole numa planilha'), findsOneWidget);
+    // O botão baixava o CSV e dizia "N exportados" sem entregar nada; depois
+    // passou a copiar para a área de transferência. Agora é um arquivo.
+    expect(baixados, hasLength(1));
+    expect(baixados.single.nome, 'extrato.csv');
+    expect(baixados.single.mime, startsWith('text/csv'));
+    // UTF-8 com BOM: é o que faz o Excel em português acertar os acentos.
+    expect(baixados.single.bytes.take(3), [0xEF, 0xBB, 0xBF]);
     expect(find.textContaining('extrato.csv'), findsOneWidget);
   });
 }
