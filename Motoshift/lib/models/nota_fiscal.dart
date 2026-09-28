@@ -1,3 +1,5 @@
+import 'danfse.dart';
+
 /// Nota fiscal de serviço de um turno (NFS-e).
 ///
 /// Espelha `NotaFiscalResponse` do backend. O prestador é sempre o entregador
@@ -37,6 +39,8 @@ class NotaFiscal {
     this.tributosRetidos = false,
     this.transacaoId,
     this.operacaoId,
+    this.chaveAcesso,
+    this.danfse,
   });
 
   final int id;
@@ -92,6 +96,12 @@ class NotaFiscal {
   /// quem pediu a nota ao backend.
   final String papel;
 
+  /// Os 50 dígitos da chave de acesso do padrão nacional.
+  final String? chaveAcesso;
+
+  /// A nota no leiaute oficial do DANFSe — o que a tela e o PDF desenham.
+  final Danfse? danfse;
+
   bool get souPrestador => papel == 'prestador';
 
   /// Número formatado como aparece no documento: "000123 / A1".
@@ -138,6 +148,10 @@ class NotaFiscal {
       tributosRetidos: json['tributosRetidos'] == true,
       transacaoId: (json['transacaoId'] as num?)?.toInt(),
       operacaoId: json['operacaoId'] as String?,
+      chaveAcesso: json['chaveAcesso'] as String?,
+      danfse: json['danfse'] is Map
+          ? Danfse.fromJson((json['danfse'] as Map).cast<String, dynamic>())
+          : null,
     );
   }
 }

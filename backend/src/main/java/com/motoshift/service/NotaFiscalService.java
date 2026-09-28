@@ -47,11 +47,13 @@ import java.util.stream.Collectors;
  * Emissão da nota fiscal de serviço de um pagamento de turno.
  *
  * <p><b>O que é e o que não é.</b> A nota emitida aqui é um documento
- * SIMULADO, com a estrutura de uma NFS-e: prestador, tomador, discriminação do
- * serviço, base de cálculo, tributos e valor líquido. Não há transmissão à
- * prefeitura, RPS nem certificado digital. Quem numera e autentica é o
+ * SIMULADO, com a estrutura de uma NFS-e do padrão nacional: prestador,
+ * tomador, discriminação do serviço, base de cálculo, tributos, valor líquido
+ * e chave de acesso — e é mostrada no leiaute oficial do DANFSe
+ * ({@code LeiauteDanfse}). Não há transmissão ao Sistema Nacional NFS-e, DPS
+ * assinada nem certificado digital. Quem numera e autentica é o
  * {@link EmissorDeNotas}; trocar a simulação por um provedor real é trocar a
- * implementação dele, sem mexer neste serviço nem no modelo — ver
+ * implementação dele, sem mexer neste serviço — ver
  * {@code docs/financeiro/FISCAL.md}.
  *
  * <p><b>A nota documenta um pagamento.</b> Até a V14 ela nascia do turno, com
@@ -196,7 +198,8 @@ public class NotaFiscalService {
 
         Turno turno = pagamento.getTurnoId() == null ? null
                 : turnoRepo.findById(pagamento.getTurnoId()).orElse(null);
-        NotaFiscal salva = notaRepo.save(montarNota(pagamento, turno, solicitanteId));
+        Usuario prestadorDaNota = usuarioRepo.findById(prestador).orElse(null);
+        NotaFiscal salva = notaRepo.save(montarNota(pagamento, turno, prestadorDaNota, solicitanteId));
 
         avisarOEntregador(salva, turno);
         return new Emissao(montar(salva, solicitanteId), true);
@@ -208,7 +211,8 @@ public class NotaFiscalService {
                 turnoId, prestadorId, TipoTransacao.PAGAMENTO_RECEBIDO, StatusTransacao.CONCLUIDO);
     }
 
-    private NotaFiscal montarNota(Transacao pagamento, Turno turno, Long solicitanteId) {
+    private NotaFiscal montarNota(Transacao pagamento, Turno turno, Usuario prestador,
+                                  Long solicitanteId) {
         BigDecimal base = emReais(pagamento.getValor());
 
         NotaFiscal n = new NotaFiscal();
@@ -224,10 +228,11 @@ public class NotaFiscalService {
         aplicarTributos(n, pagamento, base);
         n.setEmitidaEm(LocalDateTime.now());
 
-        EmissorDeNotas.Autorizacao a = emissor.autorizar(n);
+        EmissorDeNotas.Autorizacao a = emissor.autorizar(n, prestador);
         n.setNumero(a.numero());
         n.setSerie(a.serie());
         n.setCodigoVerificacao(a.codigoVerificacao());
+        n.setChaveAcesso(a.chaveAcesso());
         return n;
     }
 

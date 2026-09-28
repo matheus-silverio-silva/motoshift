@@ -8,6 +8,7 @@ import com.motoshift.entity.Turno;
 import com.motoshift.entity.Usuario;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
+import com.motoshift.util.Reais;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -16,9 +17,11 @@ import javax.crypto.spec.SecretKeySpec;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Recibos e comprovantes dos lançamentos que não são serviço prestado.
@@ -43,6 +46,13 @@ import java.util.List;
  */
 @Service
 public class ComprovanteService {
+
+    private static final DateTimeFormatter DATA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter HORA = DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter HORA_SEGUNDOS = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final DateTimeFormatter E2E_DATA_HORA = DateTimeFormatter.ofPattern("yyyyMMddHHmm");
+    private static final DateTimeFormatter DATA_POR_EXTENSO =
+            DateTimeFormatter.ofPattern("d 'de' MMMM 'de' yyyy", Locale.forLanguageTag("pt-BR"));
 
     private final byte[] chave;
     private final UsuarioRepository usuarioRepo;
@@ -70,6 +80,7 @@ public class ComprovanteService {
         Usuario titular = usuarioRepo.findById(t.getUsuarioId()).orElse(null);
         DocumentoDaParte doc = DocumentoDaParte.de(titular);
         Turno turno = t.getTurnoId() == null ? null : turnoRepo.findById(t.getTurnoId()).orElse(null);
+        boolean recibo = tipo == TipoDocumento.RECIBO_RECARGA;
 
         return new ComprovanteResponse(
                 tipo,
@@ -89,7 +100,41 @@ public class ComprovanteService {
                 cidade(titular),
                 emReais(t.getSaldoDisponivelApos()),
                 emReais(t.getSaldoBloqueadoApos()),
-                detalhes(t, tipo, turno));
+                detalhes(t, tipo, turno, titular, doc),
+                recibo ? Reais.porExtenso(t.getValor()) : null,
+                fundamento(tipo),
+                recibo ? declaracaoDeQuitacao(t, titular, doc) : null);
+    }
+
+    /** De onde vem o modelo do documento; nulo quando não há modelo legal. */
+    static String fundamento(TipoDocumento tipo) {
+        return switch (tipo) {
+            case RECIBO_RECARGA -> "Modelo de quitação do Código Civil, art. 320";
+            case COMPROVANTE_PIX -> "Requisitos mínimos do comprovante — Regulamento Pix "
+                    + "(Resolução BCB nº 1/2020)";
+            case COMPROVANTE_MOVIMENTACAO, NFSE -> null;
+        };
+    }
+
+    /**
+     * O texto do recibo, com o que o art. 320 do Código Civil exige da
+     * quitação: o valor e a espécie da dívida quitada, o nome de quem pagou, o
+     * tempo e o lugar do pagamento. A assinatura do credor, que um recibo em
+     * papel teria, aqui é o código de autenticação — e o documento diz isso.
+     */
+    static String declaracaoDeQuitacao(Transacao t, Usuario titular, DocumentoDaParte doc) {
+        String quem = titular == null ? "o titular da carteira" : titular.getNome();
+        String documento = doc.numero() == null ? "" : ", " + doc.tipo() + " " + doc.numero();
+        String lugar = cidade(titular);
+        return "Recebemos de " + quem + documento + " a importância de "
+                + Reais.formatar(t.getValor()) + " (" + Reais.porExtenso(t.getValor()) + "), "
+                + "referente à recarga de saldo na carteira MotoShift, paga via Pix em "
+                + DATA.format(t.getCriadoEm()) + " às " + HORA.format(t.getCriadoEm())
+                + ", dando por este recibo plena quitação do valor. "
+                + (lugar == null ? "" : lugar.replace("/", " - ") + ", ")
+                + DATA_POR_EXTENSO.format(t.getCriadoEm()) + ". "
+                + "Emitente (credor): MotoShift, em ambiente de simulação — o código de "
+                + "autenticação abaixo faz as vezes da assinatura.";
     }
 
     static String titulo(TipoDocumento tipo) {
@@ -138,7 +183,8 @@ public class ComprovanteService {
         }
     }
 
-    private static List<Linha> detalhes(Transacao t, TipoDocumento tipo, Turno turno) {
+    private List<Linha> detalhes(Transacao t, TipoDocumento tipo, Turno turno,
+                                 Usuario titular, DocumentoDaParte doc) {
         List<Linha> l = new ArrayList<>();
         String doTurno = turno == null ? null : turno.getTitulo();
         switch (t.getTipo()) {
@@ -148,10 +194,29 @@ public class ComprovanteService {
                 l.add(new Linha("Crédito em", "Saldo disponível"));
             }
             case SAQUE -> {
-                l.add(new Linha("Chave Pix de destino", mascararChavePix(chaveDoSaque(t))));
-                l.add(new Linha("Situação", tipo == TipoDocumento.COMPROVANTE_PIX
-                        ? "Transferência concluída"
-                        : "Transferência recusada pelo banco — o valor foi estornado"));
+                if (tipo == TipoDocumento.COMPROVANTE_PIX) {
+                    // Os campos que o Regulamento Pix pede no comprovante:
+                    // pagador, recebedor, instituições, valor, data e hora e
+                    // o identificador da transação.
+                    String nome = titular == null ? "—" : titular.getNome();
+                    l.add(new Linha("Tipo de transação", "Pix — transferência para chave própria"));
+                    l.add(new Linha("Pagador", nome));
+                    l.add(new Linha("Instituição do pagador", "MotoShift (carteira — simulação)"));
+                    l.add(new Linha("Recebedor", nome));
+                    l.add(new Linha("CPF/CNPJ do recebedor", doc.numero() == null
+                            ? doc.tipo() + " não informado no cadastro"
+                            : doc.tipo() + " " + doc.numero()));
+                    l.add(new Linha("Chave Pix do recebedor", mascararChavePix(chaveDoSaque(t))));
+                    l.add(new Linha("Instituição do recebedor", "Não informada pelo gateway simulado"));
+                    l.add(new Linha("Data e hora", DATA.format(t.getCriadoEm()) + " "
+                            + HORA_SEGUNDOS.format(t.getCriadoEm())));
+                    l.add(new Linha("ID da transação", endToEndId(t)));
+                    l.add(new Linha("Situação", "Transferência concluída"));
+                } else {
+                    l.add(new Linha("Chave Pix de destino", mascararChavePix(chaveDoSaque(t))));
+                    l.add(new Linha("Situação",
+                            "Transferência recusada pelo banco — o valor foi estornado"));
+                }
             }
             case RESERVA -> {
                 if (doTurno != null) l.add(new Linha("Turno", doTurno));
@@ -185,6 +250,18 @@ public class ComprovanteService {
             }
         }
         return l;
+    }
+
+    /**
+     * O identificador fim a fim do Pix no formato do Banco Central — 32
+     * posições: "E", o ISPB do participante (8), data e hora em AAAAMMDDHHMM
+     * (12) e 11 alfanuméricos. SIMULADO: no lugar do ISPB, que identificaria
+     * uma instituição de verdade, vai a palavra SIMULADO, que também tem 8
+     * letras; o final sai do código de autenticação do lançamento.
+     */
+    String endToEndId(Transacao t) {
+        return "E" + "SIMULADO" + E2E_DATA_HORA.format(t.getCriadoEm())
+                + codigoDeAutenticacao(t).replace("-", "").substring(0, 11);
     }
 
     /** A chave vem na descrição do saque ("Transferência Pix — chave"). */

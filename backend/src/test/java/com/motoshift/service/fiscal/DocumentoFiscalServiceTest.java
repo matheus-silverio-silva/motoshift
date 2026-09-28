@@ -138,6 +138,25 @@ class DocumentoFiscalServiceTest {
     }
 
     @Test
+    @DisplayName("o recibo segue o art. 320 do Código Civil: valor por extenso, quem pagou, quando e onde")
+    void recibo_modeloDoCodigoCivil() {
+        cenario.recarregar(lojista, "300.00");
+        Transacao recarga = doTipo(lojista, TipoTransacao.RECARGA);
+
+        var recibo = gerar(recarga, lojista).comprovante();
+
+        assertThat(recibo.fundamento()).contains("Código Civil, art. 320");
+        assertThat(recibo.valorPorExtenso()).isEqualTo("trezentos reais");
+        assertThat(recibo.declaracao())
+                .startsWith("Recebemos de ")
+                .contains("CNPJ **.222.333/0001-**")
+                .contains("R$ 300,00 (trezentos reais)")
+                .contains("recarga de saldo")
+                .contains("Curitiba - PR, ")
+                .contains("plena quitação");
+    }
+
+    @Test
     @DisplayName("reserva e liberação geram comprovante de movimentação — nunca nota fiscal")
     void reservaELiberacao_nuncaNfse() {
         cenario.recarregar(lojista, "300.00");
@@ -170,6 +189,31 @@ class DocumentoFiscalServiceTest {
         assertThat(doc.comprovante().detalhes())
                 .anySatisfy(l -> assertThat(l.valor()).isEqualTo("e***@pix.com"))
                 .anySatisfy(l -> assertThat(l.valor()).isEqualTo("Transferência concluída"));
+    }
+
+    @Test
+    @DisplayName("o comprovante Pix traz o que o Regulamento Pix pede: pagador, recebedor, instituições e ID")
+    void saque_pix_requisitosDoRegulamento() {
+        cenario.recarregar(entregador, "100.00");
+        chavePix(entregador, "entregador@pix.com");
+        cobrancas.sacar(entregador, new BigDecimal("40.00"), null);
+        Transacao saque = doTipo(entregador, TipoTransacao.SAQUE);
+
+        var pix = gerar(saque, entregador).comprovante();
+
+        assertThat(pix.fundamento()).contains("Regulamento Pix");
+        assertThat(pix.declaracao()).isNull();
+        assertThat(pix.valorPorExtenso()).isNull();
+        assertThat(pix.detalhes()).extracting(l -> l.rotulo()).contains(
+                "Pagador", "Instituição do pagador", "Recebedor", "CPF/CNPJ do recebedor",
+                "Chave Pix do recebedor", "Instituição do recebedor", "Data e hora", "ID da transação");
+        // O identificador fim a fim tem as 32 posições do formato do Banco
+        // Central — com SIMULADO no lugar do ISPB de uma instituição real.
+        String e2e = pix.detalhes().stream().filter(l -> l.rotulo().equals("ID da transação"))
+                .findFirst().orElseThrow().valor();
+        assertThat(e2e).hasSize(32).startsWith("ESIMULADO").matches("[A-Z0-9]{32}");
+        assertThat(gerar(saque, entregador).comprovante().detalhes())
+                .anySatisfy(l -> assertThat(l.valor()).isEqualTo(e2e));
     }
 
     @Test

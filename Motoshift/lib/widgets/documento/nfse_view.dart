@@ -1,19 +1,26 @@
 import 'package:flutter/material.dart';
 
+import '../../models/danfse.dart';
 import '../../models/nota_fiscal.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/formato_fiscal.dart';
 import 'marca_simulacao.dart';
+import 'qr_code.dart';
 
-/// Uma NFS-e na tela, na ordem do documento: cabeçalho, prestador, tomador,
-/// discriminação, valores, tributos e autenticação.
+/// Uma NFS-e na tela, no leiaute do DANFSe v2.0 — o Documento Auxiliar da
+/// NFS-e do padrão nacional (Nota Técnica SE/CGNFS-e nº 008/2026).
 ///
-/// Saiu do bottom sheet da tela de notas quando o extrato também passou a
-/// abrir notas: um layout só, para a nota não ter duas caras. O PDF
-/// (`DocumentoPdf`) segue a mesma ordem e os mesmos textos.
+/// A ordem é a do documento oficial: identificação da nota (chave de acesso,
+/// número, competência, emissão, DPS e QR Code), depois os quadros —
+/// prestador, tomador, destinatário, intermediário, serviço, tributação
+/// municipal, federal, IBS/CBS, valor total e informações complementares.
+/// Os quadros vêm prontos do backend ([Danfse]); aqui só se desenha. O PDF
+/// (`DocumentoPdf`) desenha os mesmos quadros.
 ///
-/// A marca de simulação vem sempre — no topo e em diagonal —, e não é
-/// parâmetro: não existe jeito de mostrar esta nota sem ela.
+/// O visual segue o do DANFSe: fundo branco, cabeçalho e valor final
+/// sombreados em cinza, rótulo pequeno em cima do valor. A marca de simulação
+/// vem sempre — no topo e em diagonal —, e não é parâmetro: não existe jeito
+/// de mostrar esta nota sem ela.
 class NfseView extends StatelessWidget {
   const NfseView({required this.nota, this.rodape, super.key});
 
@@ -24,6 +31,7 @@ class NfseView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final danfse = nota.danfse;
     return MarcaDagua(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -31,21 +39,21 @@ class NfseView extends StatelessWidget {
         children: [
           const MarcaSimulacao(),
           const SizedBox(height: 12),
-          _cabecalho(),
-          const SizedBox(height: 12),
-          _parte('Prestador do serviço', nota.prestadorNome,
-              nota.prestadorDocumentoTipo, nota.prestadorDocumento,
-              nota.prestadorCidade, Icons.two_wheeler_outlined, nota.souPrestador),
-          const SizedBox(height: 10),
-          _parte('Tomador do serviço', nota.tomadorNome,
-              nota.tomadorDocumentoTipo, nota.tomadorDocumento,
-              nota.tomadorCidade, Icons.storefront_outlined, !nota.souPrestador),
-          const SizedBox(height: 12),
-          _discriminacao(),
-          const SizedBox(height: 12),
-          _valores(),
-          const SizedBox(height: 12),
-          _autenticacao(),
+          if (danfse == null)
+            _semLeiaute()
+          else ...[
+            _cabecalho(danfse),
+            const SizedBox(height: 10),
+            _identificacao(danfse),
+            for (final q in danfse.quadros) ...[
+              const SizedBox(height: 10),
+              _QuadroView(
+                quadro: q,
+                souEu: (q.id == 'prestador' && nota.souPrestador) ||
+                    (q.id == 'tomador' && !nota.souPrestador),
+              ),
+            ],
+          ],
           if (nota.cancelada) ...[
             const SizedBox(height: 12),
             _cancelada(),
@@ -59,68 +67,44 @@ class NfseView extends StatelessWidget {
     );
   }
 
-  Widget _cabecalho() {
+  /// O cabeçalho do DANFSe: o que é o documento e de onde é. Sem brasão nem
+  /// nome de prefeitura — o documento é simulado e não fala em nome de órgão
+  /// nenhum; o município aparece como dado.
+  Widget _cabecalho(Danfse d) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      key: const Key('danfse-cabecalho'),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.surface3,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.line, width: 1.5),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('NOTA FISCAL DE SERVIÇO ELETRÔNICA',
-              style: tsJakarta(9, FontWeight.w700, color: Colors.white70)
-                  .copyWith(letterSpacing: 0.9)),
-          const SizedBox(height: 6),
-          Text('Nº ${nota.numeroFormatado}',
-              style: tsBricolage(24, FontWeight.w800, color: Colors.white)),
-          const SizedBox(height: 6),
-          Text('Emitida em ${FormatoFiscal.dataHora(nota.emitidaEm)}',
-              style: tsJakarta(11, FontWeight.w400, color: Colors.white70)),
-          if (nota.competencia != null) ...[
-            const SizedBox(height: 2),
-            Text('Competência: ${FormatoFiscal.data(nota.competencia!)}',
-                style: tsJakarta(11, FontWeight.w400, color: Colors.white70)),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _parte(String rotulo, String nome, String docTipo, String? doc,
-      String? cidade, IconData icone, bool souEu) {
-    return _Cartao(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 36,
-            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             decoration: BoxDecoration(
-              color: souEu ? AppColors.tealSoft : AppColors.surface2,
-              borderRadius: BorderRadius.circular(10),
+              color: AppColors.ink,
+              borderRadius: BorderRadius.circular(6),
             ),
-            child: Icon(icone,
-                size: 17, color: souEu ? AppColors.tealDeep : AppColors.muted),
+            child: Text('NFS-e',
+                style: tsBricolage(14, FontWeight.w800, color: Colors.white)),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(souEu ? '$rotulo · você' : rotulo,
-                    style: tsJakarta(10, FontWeight.w600,
-                        color: souEu ? AppColors.teal : AppColors.muted)),
-                const SizedBox(height: 2),
-                Text(nome,
-                    style: tsJakarta(12.5, FontWeight.w700, color: AppColors.ink)),
-                const SizedBox(height: 2),
-                Text(FormatoFiscal.documento(docTipo, doc),
+                Text(d.versao,
+                    style: tsJakarta(13, FontWeight.w800, color: AppColors.ink)),
+                Text('Documento Auxiliar da NFS-e',
+                    style: tsJakarta(11, FontWeight.w600, color: AppColors.text)),
+                const SizedBox(height: 4),
+                Text('Município emissor: ${d.municipioEmissor}',
                     style: tsJakarta(10.5, FontWeight.w400, color: AppColors.muted)),
-                if (cidade != null)
-                  Text(cidade,
-                      style: tsJakarta(10.5, FontWeight.w400, color: AppColors.muted)),
+                Text('Leiaute: ${d.norma}',
+                    style: tsJakarta(10, FontWeight.w400, color: AppColors.muted)),
               ],
             ),
           ),
@@ -129,75 +113,79 @@ class NfseView extends StatelessWidget {
     );
   }
 
-  Widget _discriminacao() {
-    return _Cartao(
-      titulo: 'Discriminação do serviço',
-      child: Text(nota.descricaoServico,
-          style: tsJakarta(12, FontWeight.w400, color: AppColors.text, height: 1.5)),
-    );
-  }
-
-  /// As duas políticas de tributo, cada uma dita pelo nome.
-  ///
-  /// Retidos: ISS e IRRF saíram do pagamento e o líquido é o que sobrou. Não
-  /// retidos: são o valor aproximado dos tributos, informação no espírito da
-  /// Lei 12.741/2012, e o líquido é o valor do serviço — o mesmo que o extrato
-  /// creditou.
-  Widget _valores() {
-    final retidos = nota.tributosRetidos;
-    final sinal = retidos ? '− ' : '';
-    return _Cartao(
-      titulo: retidos ? 'Valores e tributos retidos' : 'Valores e tributos',
+  /// Chave de acesso, número, competência, emissão, DPS e o QR Code.
+  Widget _identificacao(Danfse d) {
+    final campos = [
+      CampoDanfse('Número da NFS-e', nota.numero.toString()),
+      CampoDanfse('Competência da NFS-e',
+          nota.competencia == null ? '-' : FormatoFiscal.data(nota.competencia!)),
+      CampoDanfse('Data e Hora da emissão da NFS-e',
+          FormatoFiscal.dataHoraDocumento(nota.emitidaEm)),
+      CampoDanfse('Número da DPS', d.numeroDps?.toString() ?? '-'),
+      CampoDanfse('Série da DPS', d.serieDps ?? '-'),
+      CampoDanfse('Data e Hora da emissão da DPS',
+          FormatoFiscal.dataHoraDocumento(nota.emitidaEm)),
+    ];
+    return _Moldura(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _Linha('Valor do serviço (base de cálculo)',
-              FormatoFiscal.moeda(nota.valorServico), forte: true),
-          const SizedBox(height: 8),
-          if (!retidos) ...[
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('Valor aproximado dos tributos (Lei 12.741/2012)',
-                  style: tsJakarta(10.5, FontWeight.w700, color: AppColors.muted)),
-            ),
-            const SizedBox(height: 6),
-          ],
-          _Linha('ISS (${FormatoFiscal.percentual(nota.issAliquota)})',
-              '$sinal${FormatoFiscal.moeda(nota.issValor)}'),
-          const SizedBox(height: 6),
-          _Linha('IRRF (${FormatoFiscal.percentual(nota.irrfAliquota)})',
-              '$sinal${FormatoFiscal.moeda(nota.irrfValor)}'),
-          const SizedBox(height: 10),
-          const Divider(height: 1, color: AppColors.line),
-          const SizedBox(height: 10),
-          _Linha(retidos ? 'Total de tributos retidos' : 'Total aproximado de tributos',
-              FormatoFiscal.moeda(nota.totalTributos)),
-          const SizedBox(height: 8),
-          _Linha('Valor líquido', FormatoFiscal.moeda(nota.valorLiquido),
-              forte: true, destaque: true),
-          const SizedBox(height: 10),
-          Text(
-            retidos
-                ? 'Os tributos foram retidos na fonte e aparecem no extrato, '
-                    'na mesma operação do pagamento.'
-                : 'Nada foi retido: o valor líquido é o valor do serviço, o '
-                    'mesmo creditado no extrato. Alíquotas de exemplo.',
-            style: tsJakarta(10, FontWeight.w400, color: AppColors.muted, height: 1.4),
+          Text('CHAVE DE ACESSO DA NFS-e', style: _rotulo),
+          const SizedBox(height: 4),
+          SelectableText(
+            d.chaveFormatada,
+            key: const Key('danfse-chave'),
+            style: tsJakarta(12.5, FontWeight.w800, color: AppColors.ink)
+                .copyWith(letterSpacing: 0.6, fontFeatures: const [FontFeature.tabularFigures()]),
           ),
+          const SizedBox(height: 10),
+          _Grade(campos: campos),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              QrCode(key: const Key('danfse-qrcode'), conteudo: d.conteudoQrCode),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(d.avisoQrCode,
+                    style: tsJakarta(10.5, FontWeight.w400,
+                        color: AppColors.muted, height: 1.45)),
+              ),
+            ],
+          ),
+          if (nota.cancelada) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.error, width: 2),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text('NFS-e CANCELADA',
+                  textAlign: TextAlign.center,
+                  style: tsJakarta(13, FontWeight.w800, color: AppColors.error)
+                      .copyWith(letterSpacing: 1.2)),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _autenticacao() {
-    return _Cartao(
-      titulo: 'Autenticação',
+  /// Nota vinda de um backend anterior ao leiaute: diz o essencial e o porquê.
+  Widget _semLeiaute() {
+    return _Moldura(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Linha('Código de verificação', nota.codigoVerificacao, forte: true),
-          if (nota.operacaoId != null) ...[
-            const SizedBox(height: 6),
-            _Linha('Operação no extrato', nota.operacaoId!),
-          ],
+          Text('NFS-e Nº ${nota.numeroFormatado}',
+              style: tsJakarta(13, FontWeight.w800, color: AppColors.ink)),
+          const SizedBox(height: 6),
+          Text('Valor líquido: ${FormatoFiscal.moeda(nota.valorLiquido)}',
+              style: tsJakarta(12, FontWeight.w600, color: AppColors.text)),
+          const SizedBox(height: 6),
+          Text('O servidor não enviou o leiaute do DANFSe desta nota.',
+              style: tsJakarta(10.5, FontWeight.w400, color: AppColors.muted)),
         ],
       ),
     );
@@ -242,65 +230,143 @@ class NfseView extends StatelessWidget {
   }
 }
 
-class _Cartao extends StatelessWidget {
-  const _Cartao({required this.child, this.titulo});
+final TextStyle _rotulo = tsJakarta(8.5, FontWeight.w700, color: AppColors.muted)
+    .copyWith(letterSpacing: 0.6);
 
-  final String? titulo;
-  final Widget child;
+/// Um quadro do DANFSe: título em caixa alta, a grade de campos e a
+/// observação, se houver.
+class _QuadroView extends StatelessWidget {
+  const _QuadroView({required this.quadro, required this.souEu});
+
+  final QuadroDanfse quadro;
+
+  /// O quadro é do lado de quem está olhando — prestador ou tomador.
+  final bool souEu;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.line, width: 1.5),
-      ),
+    return _Moldura(
+      key: Key('danfse-quadro-${quadro.id}'),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (titulo != null) ...[
-            Text(titulo!.toUpperCase(),
-                style: tsJakarta(9, FontWeight.w700, color: AppColors.muted)
-                    .copyWith(letterSpacing: 0.9)),
-            const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                // "INTERMEDIÁRIO DO SERVIÇO NÃO IDENTIFICADO NA NFS-e" já é o
+                // título e o conteúdo: vai uma vez só.
+                child: Text(
+                    quadro.observacaoRepeteTitulo ? quadro.observacao! : quadro.titulo,
+                    style: tsJakarta(9.5, FontWeight.w800, color: AppColors.ink)
+                        .copyWith(letterSpacing: 0.7)),
+              ),
+              if (souEu)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.tealSoft,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text('você',
+                      style: tsJakarta(9.5, FontWeight.w700, color: AppColors.tealDeep)),
+                ),
+            ],
+          ),
+          if (quadro.campos.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _Grade(campos: quadro.campos),
           ],
-          child,
+          if (quadro.observacao != null && !quadro.observacaoRepeteTitulo) ...[
+            SizedBox(height: quadro.campos.isEmpty ? 6 : 8),
+            Text(quadro.observacao!,
+                style: tsJakarta(10.5, FontWeight.w400,
+                    color: quadro.campos.isEmpty ? AppColors.text : AppColors.muted,
+                    height: 1.45)),
+          ],
         ],
       ),
     );
   }
 }
 
-class _Linha extends StatelessWidget {
-  const _Linha(this.rotulo, this.valor, {this.forte = false, this.destaque = false});
+/// A grade de campos: duas colunas no celular, três em telas largas; campo
+/// largo ocupa a linha inteira.
+class _Grade extends StatelessWidget {
+  const _Grade({required this.campos});
 
-  final String rotulo;
-  final String valor;
-  final bool forte;
-  final bool destaque;
+  final List<CampoDanfse> campos;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Text(rotulo,
-              style: tsJakarta(11.5, forte ? FontWeight.w700 : FontWeight.w400,
-                  color: forte ? AppColors.text : AppColors.muted)),
-        ),
-        const SizedBox(width: 10),
-        Flexible(
-          child: Text(valor,
-              textAlign: TextAlign.right,
-              style: tsJakarta(destaque ? 14 : 12,
-                  forte ? FontWeight.w800 : FontWeight.w600,
-                  color: destaque ? AppColors.tealDeep : AppColors.text)),
-        ),
-      ],
+    return LayoutBuilder(builder: (context, c) {
+      const espaco = 8.0;
+      final colunas = c.maxWidth >= 520 ? 3 : 2;
+      final larguraCelula = (c.maxWidth - espaco * (colunas - 1)) / colunas;
+      return Wrap(
+        spacing: espaco,
+        runSpacing: espaco,
+        children: [
+          for (final campo in campos)
+            SizedBox(
+              width: campo.largo ? c.maxWidth : larguraCelula,
+              child: _CampoView(campo: campo),
+            ),
+        ],
+      );
+    });
+  }
+}
+
+class _CampoView extends StatelessWidget {
+  const _CampoView({required this.campo});
+
+  final CampoDanfse campo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: campo.destaque
+          ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
+          : EdgeInsets.zero,
+      decoration: campo.destaque
+          ? BoxDecoration(
+              color: AppColors.surface3,
+              borderRadius: BorderRadius.circular(6),
+            )
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(campo.rotulo, style: _rotulo),
+          const SizedBox(height: 2),
+          Text(campo.valor,
+              style: tsJakarta(campo.destaque ? 13 : 11.5,
+                  campo.destaque ? FontWeight.w800 : FontWeight.w600,
+                  color: campo.destaque ? AppColors.tealDeep : AppColors.text,
+                  height: 1.35)),
+        ],
+      ),
+    );
+  }
+}
+
+/// A borda fina dos blocos do DANFSe.
+class _Moldura extends StatelessWidget {
+  const _Moldura({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.line, width: 1.5),
+      ),
+      child: child,
     );
   }
 }

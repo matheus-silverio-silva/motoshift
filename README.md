@@ -506,6 +506,18 @@ Só as partes do lançamento veem o documento (terceiro leva 403), CPF e CNPJ
 saem mascarados, e **cancelar a nota não estorna dinheiro** — o serviço foi
 prestado e o pagamento está no extrato.
 
+**Os documentos seguem modelos oficiais da legislação brasileira** — sempre
+simulados, com a marca **DOCUMENTO SIMULADO — SEM VALOR FISCAL**:
+
+| Documento | Modelo seguido |
+|---|---|
+| NFS-e | **DANFSe v2.0**, o documento auxiliar da NFS-e do padrão nacional (Nota Técnica SE/CGNFS-e nº 008/2026): chave de acesso de 50 dígitos, DPS, QR Code e os quadros oficiais — prestador, tomador, serviço (LC 116/2003 item 26.01, NBS 1.0702.00.00), ISSQN, tributação federal, IBS/CBS do ano de teste de 2026 (LC 214/2025) e totais. Cabe numa página A4 |
+| Recibo de recarga | Quitação do **Código Civil, art. 320**: valor e espécie da dívida, quem pagou, tempo e lugar, com o valor por extenso |
+| Comprovante de Pix | Campos mínimos do **Regulamento Pix** (Resolução BCB nº 1/2020): pagador, recebedor, instituições, data e hora e identificador fim a fim |
+
+O detalhe de cada modelo, e o que é simulado em cada um, está em
+[`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md), seção 7.
+
 ### Exportação: planilha ou PDF
 
 Extrato, relatórios e informe anual têm um botão **Exportar** com duas opções:

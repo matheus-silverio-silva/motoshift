@@ -9,13 +9,14 @@ import java.util.UUID;
  * Nota fiscal de serviço (NFS-e) de um turno concluído.
  *
  * <p><b>Escopo.</b> Este é um documento interno da plataforma, não uma NFS-e
- * transmitida à prefeitura. Não há integração com o padrão ABRASF, certificado
- * digital nem RPS — o objetivo é registrar quem prestou, quem tomou, quanto
- * custou o serviço e quanto disso é imposto, com a numeração e o código de
- * verificação que um documento desses tem. Trocar isto por uma emissão real é
- * implementar {@link com.motoshift.service.fiscal.EmissorDeNotas} com um
- * cliente do provedor municipal; o modelo de dados abaixo já é o que ele
- * precisaria.
+ * transmitida ao Sistema Nacional NFS-e nem à prefeitura. Não há certificado
+ * digital nem DPS assinada — o objetivo é registrar quem prestou, quem tomou,
+ * quanto custou o serviço e quanto disso é imposto, com a numeração e a chave
+ * de acesso que um documento desses tem, e mostrá-la no leiaute oficial do
+ * DANFSe ({@link com.motoshift.service.fiscal.LeiauteDanfse}). Trocar isto
+ * por uma emissão real é implementar
+ * {@link com.motoshift.service.fiscal.EmissorDeNotas} com um cliente do
+ * Sistema Nacional NFS-e; o modelo de dados abaixo já é o que ele precisaria.
  *
  * <p><b>Documenta um pagamento, não um turno.</b> Desde a V14 a nota aponta
  * para o {@code pagamento_recebido} do extrato ({@link #transacaoId}): a base
@@ -83,6 +84,15 @@ public class NotaFiscal {
      */
     @Column(nullable = false, length = 16)
     private String codigoVerificacao;
+
+    /**
+     * Chave de acesso de 50 dígitos, no formato do padrão nacional da NFS-e
+     * (V20) — a que o DANFSe mostra no topo. Dada pelo emissor na autorização,
+     * como na nota real; nula nas notas anteriores à V20, que ganham na
+     * leitura uma chave derivada pela mesma regra (ver {@code LeiauteDanfse}).
+     */
+    @Column(unique = true, length = 50)
+    private String chaveAcesso;
 
     @Column(nullable = false, length = 300)
     private String descricaoServico;
@@ -180,6 +190,9 @@ public class NotaFiscal {
 
     public String getCodigoVerificacao() { return codigoVerificacao; }
     public void setCodigoVerificacao(String c) { this.codigoVerificacao = c; }
+
+    public String getChaveAcesso() { return chaveAcesso; }
+    public void setChaveAcesso(String chaveAcesso) { this.chaveAcesso = chaveAcesso; }
 
     public String getDescricaoServico() { return descricaoServico; }
     public void setDescricaoServico(String d) { this.descricaoServico = d; }

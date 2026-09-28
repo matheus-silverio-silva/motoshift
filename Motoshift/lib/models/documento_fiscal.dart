@@ -77,6 +77,9 @@ class Comprovante {
     this.titularCidade,
     this.saldoDisponivelApos,
     this.saldoBloqueadoApos,
+    this.valorPorExtenso,
+    this.fundamento,
+    this.declaracao,
   });
 
   final TipoDocumento tipo;
@@ -98,6 +101,16 @@ class Comprovante {
   final double? saldoDisponivelApos;
   final double? saldoBloqueadoApos;
   final List<LinhaComprovante> detalhes;
+
+  /// "quinhentos reais" — o que todo recibo repete ao lado do número.
+  final String? valorPorExtenso;
+
+  /// De onde vem o modelo do documento: "Código Civil, art. 320" no recibo,
+  /// o Regulamento Pix no comprovante de Pix. Nulo quando não há modelo legal.
+  final String? fundamento;
+
+  /// O texto de quitação do recibo ("Recebemos de…"). Nulo nos outros.
+  final String? declaracao;
 
   factory Comprovante.fromJson(Map<String, dynamic> json) {
     final natureza = (json['natureza'] as String?)?.toLowerCase();
@@ -123,6 +136,9 @@ class Comprovante {
         for (final l in (json['detalhes'] as List<dynamic>? ?? const []))
           LinhaComprovante.fromJson((l as Map).cast<String, dynamic>()),
       ],
+      valorPorExtenso: json['valorPorExtenso'] as String?,
+      fundamento: json['fundamento'] as String?,
+      declaracao: json['declaracao'] as String?,
     );
   }
 }

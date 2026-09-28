@@ -8,6 +8,10 @@ import 'nfse_view.dart';
 
 /// Recibo ou comprovante na tela: título, número, titular, valor, detalhes e
 /// código de autenticação.
+///
+/// Quando o documento tem modelo legal, ele aparece: o recibo traz o texto de
+/// quitação do art. 320 do Código Civil e o valor por extenso; o comprovante
+/// de Pix, os campos que o Regulamento Pix pede (vêm nos detalhes).
 class ComprovanteView extends StatelessWidget {
   const ComprovanteView({required this.comprovante, this.rodape, super.key});
 
@@ -43,10 +47,40 @@ class ComprovanteView extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text('Nº ${c.numero} · ${FormatoFiscal.dataHora(c.dataHora)}',
                     style: tsJakarta(11, FontWeight.w400, color: Colors.white70)),
+                if (c.fundamento != null) ...[
+                  const SizedBox(height: 4),
+                  Text(c.fundamento!,
+                      key: const Key('comprovante-fundamento'),
+                      style: tsJakarta(10, FontWeight.w600, color: Colors.white70)),
+                ],
               ],
             ),
           ),
           const SizedBox(height: 12),
+          if (c.declaracao != null) ...[
+            Container(
+              key: const Key('comprovante-declaracao'),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.line, width: 1.5),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('RECIBO',
+                      style: tsJakarta(9, FontWeight.w700, color: AppColors.muted)
+                          .copyWith(letterSpacing: 0.9)),
+                  const SizedBox(height: 8),
+                  Text(c.declaracao!,
+                      style: tsJakarta(12, FontWeight.w400,
+                          color: AppColors.text, height: 1.55)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           _cartao('Titular', [
             _linha('Nome', c.titularNome, forte: true),
             _linha('Documento', FormatoFiscal.documento(c.titularDocumentoTipo, c.titularDocumento)),
@@ -55,6 +89,8 @@ class ComprovanteView extends StatelessWidget {
           const SizedBox(height: 12),
           _cartao('Movimento', [
             if (c.descricao.isNotEmpty) _linha('Descrição', c.descricao),
+            if (c.valorPorExtenso != null && c.declaracao != null)
+              _linha('Valor por extenso', c.valorPorExtenso!),
             for (final l in c.detalhes) _linha(l.rotulo, l.valor),
             if (c.saldoDisponivelApos != null)
               _linha('Saldo disponível depois', FormatoFiscal.moeda(c.saldoDisponivelApos!)),

@@ -389,6 +389,25 @@ public class MigracoesPostgresTest {
         }
     }
 
+    @Test
+    @DisplayName("V20: a chave de acesso da NFS-e tem 50 posicoes e e unica quando preenchida")
+    void v20_chaveDeAcesso() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v20");
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            assertThat(contar(s, "SELECT count(*) FROM information_schema.columns "
+                    + "WHERE table_name = 'notas_fiscais' AND column_name = 'chave_acesso' "
+                    + "AND character_maximum_length = 50 AND is_nullable = 'YES'"))
+                    .isEqualTo(1);
+            // Parcial: as notas anteriores a V20 ficam nulas, e nulo nao colide.
+            assertThat(contar(s, "SELECT count(*) FROM pg_indexes "
+                    + "WHERE indexname = 'uk_nota_chave_acesso' "
+                    + "AND indexdef LIKE 'CREATE UNIQUE INDEX%' AND indexdef LIKE '%WHERE%'"))
+                    .isEqualTo(1);
+        }
+    }
+
     // ── Apoio ──────────────────────────────────────────────────────────────
 
     /** INSERT valido ATE a V11 — antes de a coluna natureza existir. */
@@ -452,7 +471,7 @@ public class MigracoesPostgresTest {
      * um número só.
      */
     public static String ultimaVersao() {
-        return "19";
+        return "20";
     }
 
     static Connection conectar(String url) throws SQLException {
