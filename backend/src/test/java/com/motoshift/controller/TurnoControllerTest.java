@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.motoshift.config.ApiExceptionHandler;
 import com.motoshift.dto.TurnoRequest;
 import com.motoshift.dto.TurnoResponse;
+import com.motoshift.repository.UsuarioRepository;
 import com.motoshift.security.JwtAuthFilter;
 import com.motoshift.security.JwtService;
 import com.motoshift.security.RespostaDeErro;
@@ -13,6 +14,7 @@ import com.motoshift.service.FavoritoService;
 import com.motoshift.service.TurnoConsultaService;
 import com.motoshift.service.TurnoService;
 import com.motoshift.service.ledger.RetentativaOtimista;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -30,6 +32,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -57,6 +60,8 @@ class TurnoControllerTest {
     @Autowired private ObjectMapper json;
     @Autowired private JwtService jwt;
 
+    // O filtro JWT confere que a conta do token existe; aqui toda conta existe.
+    @MockBean private UsuarioRepository usuariosDoFiltro;
     @MockBean private TurnoService service;
     @MockBean private TurnoConsultaService consultas;
     @MockBean private CheckinService checkins;
@@ -65,6 +70,11 @@ class TurnoControllerTest {
     // mocka-lo faria o teste passar mesmo se o controller parasse de chamar o
     // service.
     @Autowired private RetentativaOtimista retentativa;
+
+    @BeforeEach
+    void contasDoTokenExistem() {
+        when(usuariosDoFiltro.existsById(anyLong())).thenReturn(true);
+    }
 
     @Test
     @DisplayName("publicar turno usa o id do token e ignora o lojistId do corpo")

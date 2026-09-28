@@ -43,8 +43,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p><b>Por que PostgreSQL, e não o H2 dos outros testes.</b> Os dois 500 que
  * este teste prende só existem nele: o H2 ignora transação somente leitura (o
  * /resumo gravava uma carteira dentro de uma) e o schema do Hibernate não tem
- * as chaves estrangeiras da V11 (a carteira de uma conta que não existe mais
- * passava). No H2 os dois respondiam 200.
+ * as chaves estrangeiras da V11 (a carteira de uma conta que não existe mais —
+ * sessão aberta antes de um reset da massa — passava). No H2 os dois
+ * respondiam 200.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -146,6 +147,34 @@ class CarteiraDaMassaPostgresTest {
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(resumo.get("disponivel").decimalValue()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("depois do reset da massa, a sessão antiga leva 401 em toda rota da carteira — e não 500")
+    void sessaoDeContaQueNaoExisteMais() throws Exception {
+        Sessao antiga = entrar("ricardo@teste.com");
+
+        // O reset recria as contas da massa com ids novos. O token de antes
+        // continua assinado e dentro da validade, mas aponta para um id que
+        // não existe mais.
+        massa.resetar();
+        assertThat(usuarioRepo.findById(antiga.id())).isEmpty();
+
+        for (MockHttpServletRequestBuilder req : new MockHttpServletRequestBuilder[]{
+                get("/api/carteira/" + antiga.id()),
+                get("/api/carteira/resumo"),
+                get("/api/carteira/extrato").param("pagina", "0").param("tamanho", "20"),
+                get("/api/carteira/fluxo"),
+                get("/api/notas-fiscais/resumo").param("ano", String.valueOf(Year.now().getValue())),
+                post("/api/carteira/saques").contentType(MediaType.APPLICATION_JSON).content("{\"valor\": 20.00}"),
+                post("/api/carteira/recargas").contentType(MediaType.APPLICATION_JSON).content("{\"valor\": 50.00}")}) {
+            mvc.perform(com(antiga, req)).andExpect(status().isUnauthorized());
+        }
+
+        // Entrar de novo resolve: o login devolve o id atual.
+        Sessao nova = entrar("ricardo@teste.com");
+        assertThat(nova.id()).isNotEqualTo(antiga.id());
+        mvc.perform(com(nova, get("/api/carteira/" + nova.id()))).andExpect(status().isOk());
     }
 
     // ── Apoio ───────────────────────────────────────────────────────────────
