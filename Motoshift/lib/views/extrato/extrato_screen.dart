@@ -251,6 +251,9 @@ class _ExtratoScreenState extends State<ExtratoScreen> {
         child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal),
       );
     }
+    // Sem lançamentos porque a carga falhou não é "nenhum lançamento": a
+    // caixa de erro, acima, já diz o que houve.
+    if (_lancamentos.isEmpty && _erro != null) return const SizedBox.shrink();
     if (_lancamentos.isEmpty) {
       return Center(
         child: Padding(
@@ -332,6 +335,8 @@ class _ExtratoScreenState extends State<ExtratoScreen> {
     );
   }
 
+  /// O erro com a saída: "Tentar novamente" recarrega do começo — o puxar
+  /// para atualizar faz o mesmo, mas no navegador ninguém o descobre.
   Widget _caixaDeErro(String mensagem) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -347,6 +352,11 @@ class _ExtratoScreenState extends State<ExtratoScreen> {
           Expanded(
             child: Text(mensagem,
                 style: tsJakarta(12, FontWeight.w500, color: AppColors.error)),
+          ),
+          TextButton(
+            key: const Key('extrato-tentar-novamente'),
+            onPressed: _carregando ? null : _recarregar,
+            child: const Text('Tentar novamente'),
           ),
         ],
       ),
