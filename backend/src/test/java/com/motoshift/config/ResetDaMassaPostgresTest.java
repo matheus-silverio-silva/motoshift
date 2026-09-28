@@ -148,7 +148,8 @@ class ResetDaMassaPostgresTest {
         Map<String, long[]> resumo = massa.apagarTudoERecriar();
 
         assertThat(resumo.keySet()).containsExactly("notas_fiscais", "avaliacoes", "transacoes",
-                "cobrancas", "turno_inscricoes", "notificacoes", "turnos", "carteiras", "usuarios");
+                "cobrancas", "turno_inscricoes", "notificacoes", "turnos", "carteiras", "favoritos",
+                "usuarios");
         resumo.forEach((tabela, linha) -> {
             assertThat(linha[0]).as("antes de %s", tabela).isEqualTo(antes.get(tabela));
             assertThat(linha[1]).as("apagados de %s", tabela).isEqualTo(antes.get(tabela));

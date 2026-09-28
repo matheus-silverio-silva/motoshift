@@ -9,6 +9,7 @@ import '../../services/auth_service.dart';
 import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
 import '../perfil_publico/perfil_publico_screen.dart';
+import '../../widgets/botao_favorito.dart';
 import '../../widgets/acoes_do_turno.dart';
 import '../../widgets/desktop/info_tile_grid.dart';
 import '../../widgets/mapa_turno.dart';
@@ -192,6 +193,7 @@ class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
           statusLabel: _rotuloDaInscricao(
               inscrito.status, turno.status, inscrito.presenca),
           onAvaliar: _podeAvaliar ? () => _avaliar(turno) : null,
+          favoritavel: turno.status == StatusTurno.finalizado,
         ),
       ],
     ];
@@ -485,9 +487,14 @@ class _MotoboyCard extends StatelessWidget {
     this.nome,
     this.nota,
     this.onAvaliar,
+    this.favoritavel = false,
   });
 
   final int motoboyId;
+
+  /// Coração no card (V18) — só no turno finalizado, quando o lojista já sabe
+  /// como o entregador trabalhou.
+  final bool favoritavel;
   final String? nome;
   final double? nota;
 
@@ -563,6 +570,7 @@ class _MotoboyCard extends StatelessWidget {
           // telefone do entregador — mas o PerfilPublicoResponse não devolve
           // telefone nem e-mail, e não por esquecimento: foram cortados por
           // LGPD. Expor o número só para este botão desfaria essa decisão.
+          if (favoritavel) BotaoFavorito(motoboyId: motoboyId, nome: nome),
           if (onAvaliar != null) ...[
             _BotaoDoCard(rotulo: 'Avaliar', destaque: true, onTap: onAvaliar!),
             const SizedBox(width: 6),

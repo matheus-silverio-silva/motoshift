@@ -37,20 +37,22 @@ class TurnoResponseJsonTest {
     private ObjectMapper json;
 
     @Test
-    @DisplayName("o JSON de TurnoResponse é o de antes dos enums, menos as confirmações")
+    @DisplayName("o JSON de TurnoResponse é o de antes dos enums, menos as confirmações e mais o selo da V18")
     void serializacao_naoMudou() throws Exception {
         String saida = json.writeValueAsString(TurnoResponse.from(turnoCompleto()));
 
         // lojistaConfirmouEm e motoboyConfirmouEm saíram com a V13. Eram duas
         // chaves sempre nulas, mantidas só para não mudar o contrato enquanto a
         // dupla confirmação ainda existia em algum lugar. Ela não existe mais.
+        // lojaQueJaTeChamou entrou com a V18 (favoritos): chave nova, aditiva —
+        // o app antigo a ignora, e o novo lê false quando ela não vem.
         assertThat(saida).isEqualTo(
                 "{\"id\":42,\"lojistId\":7,\"motoboyId\":9,\"titulo\":\"Turno Tarde\","
                 + "\"descricao\":\"Entregas na regiao\",\"regiao\":\"Agua Verde\","
                 + "\"dataInicio\":\"2026-07-01T18:00:00\",\"dataFim\":\"2026-07-01T22:00:00\","
                 + "\"valorEstimado\":120.00,\"raioEntregaKm\":8.0,\"latitude\":-25.4284,"
                 + "\"longitude\":-49.2733,\"endereco\":\"Rua Teste, 100\",\"distanciaKm\":null,"
-                + "\"expiradoEm\":null,\"vagas\":2,\"vagasPreenchidas\":0,"
+                + "\"lojaQueJaTeChamou\":false,\"expiradoEm\":null,\"vagas\":2,\"vagasPreenchidas\":0,"
                 + "\"status\":\"aceito\",\"pagamentoStatus\":\"pendente\","
                 + "\"criadoEm\":null,\"atualizadoEm\":null}");
     }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../models/turno.dart';
 import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/selo_loja_que_te_chamou.dart';
 import '../../widgets/shift_card.dart';
 import '../../widgets/status_pill.dart';
 
@@ -45,6 +46,7 @@ class TurnoDisponivelCard extends StatelessWidget {
           ? '${turno.vagasRestantes} ${turno.vagasRestantes == 1 ? 'vaga' : 'vagas'}'
           : null,
       pillVariant: PillVariant.teal,
+      selo: turno.lojaQueJaTeChamou ? const SeloLojaQueTeChamou() : null,
       onTap: () => Navigator.pushNamed(
         context,
         AppRoutes.detalheTurno,

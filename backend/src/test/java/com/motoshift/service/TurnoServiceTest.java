@@ -46,6 +46,7 @@ class TurnoServiceTest {
     // dinheiro de verdade, contra um banco, e o ReservaELiquidacaoTest.
     @Mock private PagamentoTurnoService pagamentos;
     @Mock private CarteiraService carteiras;
+    @Mock private FavoritoService favoritos;
 
     private TurnoService turnoService;
 
@@ -56,7 +57,8 @@ class TurnoServiceTest {
         // null.
         turnoService = new TurnoService(
                 turnoRepo, usuarioRepo, inscricaoRepo, notificacoes, pagamentos, carteiras,
-                new TurnoMapper(inscricaoRepo), new TurnoAcesso(turnoRepo, inscricaoRepo));
+                new TurnoMapper(inscricaoRepo), new TurnoAcesso(turnoRepo, inscricaoRepo),
+                favoritos);
     }
 
     // --------------------------------------------------------

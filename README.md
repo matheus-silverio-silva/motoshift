@@ -371,7 +371,7 @@ para "valor errado não faz nada".
 |--------|----------|-----------|
 | POST | /api/auth/registro | Cadastro de usuário |
 | POST | /api/auth/login | Autenticação |
-| GET | /api/turnos/disponiveis | Listar turnos disponíveis |
+| GET | /api/turnos/disponiveis | Listar turnos disponíveis (para o entregador, `lojaQueJaTeChamou` marca os turnos das lojas que o favoritaram) |
 | POST | /api/turnos | Criar novo turno (Lojista) |
 | PUT | /api/turnos/{id}/aceitar | Aceitar turno (Motoboy) |
 | PUT | /api/turnos/{id}/finalizar | Finalizar turno |
@@ -380,6 +380,9 @@ para "valor errado não faz nada".
 | PUT | /api/turnos/{id}/checkout | "Encerrar turno" — a saída, só depois do check-in. Não finaliza nem paga |
 | POST | /api/turnos/{id}/gorjetas | Gorjeta do lojista a um entregador do turno finalizado (até R$ 50, com saldo disponível, uma por entregador — repetir a mesma não cobra de novo) |
 | GET | /api/turnos/{id}/gorjetas | Gorjetas do turno: o lojista vê todas, o entregador só a dele |
+| GET | /api/favoritos | Meus entregadores favoritos (só lojista) |
+| PUT | /api/favoritos/{motoboyId} | Favoritar entregador (só lojista, só entregador; favoritar de novo devolve o que existe) |
+| DELETE | /api/favoritos/{motoboyId} | Desfavoritar (sem favorito, não faz nada) |
 | GET | /api/dashboard/motoboy/{id} | Métricas do Motoboy |
 | GET | /api/dashboard/lojista/{id} | Métricas do Lojista |
 | GET | /api/carteira/{id} | Saldo, ganhos e a primeira página do extrato |
@@ -436,6 +439,7 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | RF10 | Turno publicado guarda o ponto de partida (lat/lng), que alimenta o filtro por distância e o mapa das duas pontas |
 | Check-in | O entregador registra chegada e saída (V16). A pontualidade — % de chegadas até 10 min após o início, nos últimos 90 dias — aparece no perfil e no perfil público; sem check-in, "Sem histórico" |
 | Publicar de novo | Turno finalizado, cancelado ou expirado do lojista abre o formulário de publicar já preenchido (mesmo lugar, raio, valor, vagas e duração), com a data no mesmo dia da semana da semana seguinte. Só no app: publica pelo mesmo `POST /api/turnos`, com a mesma confirmação de custo, antecedência e saldo |
+| Favoritos | O lojista marca entregadores com o coração (perfil público, avaliação, turno finalizado) e os vê no próprio perfil. Ao publicar, os favoritos recebem "A Hamburgueria da Cláudia publicou um turno para amanhã, 18h"; na lista de disponíveis do entregador, os turnos dessas lojas levam o selo "Loja que já te chamou". O entregador não vê quem o favoritou (V18) |
 | Gorjeta | Na avaliação do entregador, o lojista pode dar R$ 5, 10, 20 ou outro valor (até R$ 50) do saldo disponível. Transferência no ledger (`bonus_enviado` → `bonus`), com comprovante, não NFS-e |
 | RF11 | Turno finalizado gera NFS-e — entregador é o prestador, lojista é o tomador, e **só o lojista emite e cancela**; o entregador vê, baixa e imprime. Todo lançamento do extrato gera o documento correspondente (nota, recibo ou comprovante), sempre simulado — ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |
 

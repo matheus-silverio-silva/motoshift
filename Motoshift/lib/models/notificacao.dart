@@ -91,6 +91,12 @@ class Notificacao {
             fundo: AppColors.goodSoft,
             frente: Color(0xFF0F6E4E),
           ),
+        // Turno novo de uma loja que favoritou o entregador (V18).
+        'turno_de_favorito' => const NotificacaoEstilo(
+            icone: Icons.favorite_rounded,
+            fundo: AppColors.amberSoft,
+            frente: AppColors.onTertiaryContainer,
+          ),
         'turno_expirado' => const NotificacaoEstilo(
             icone: Icons.timer_off_outlined,
             fundo: AppColors.surface3,

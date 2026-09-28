@@ -25,6 +25,10 @@ public class TurnoResponse {
     // Distância do usuário até o turno, em km. Só vem preenchida quando a
     // requisição informou lat/lng; null caso contrário.
     private Double distanciaKm;
+    // A loja deste turno tem o entregador que pediu a lista entre os
+    // favoritos (V18) — o selo "Loja que já te chamou". Só na lista de
+    // disponíveis; nas outras respostas fica false.
+    private boolean lojaQueJaTeChamou;
     private LocalDateTime expiradoEm;
     private Integer vagas;
     private Integer vagasPreenchidas;
@@ -83,6 +87,8 @@ public class TurnoResponse {
     public String getEndereco() { return endereco; }
     public Double getDistanciaKm() { return distanciaKm; }
     public void setDistanciaKm(Double d) { this.distanciaKm = d; }
+    public boolean isLojaQueJaTeChamou() { return lojaQueJaTeChamou; }
+    public void setLojaQueJaTeChamou(boolean v) { this.lojaQueJaTeChamou = v; }
     public LocalDateTime getExpiradoEm() { return expiradoEm; }
     public Integer getVagas() { return vagas; }
     public Integer getVagasPreenchidas() { return vagasPreenchidas; }

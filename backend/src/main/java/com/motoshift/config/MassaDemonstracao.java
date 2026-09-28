@@ -281,6 +281,7 @@ public class MassaDemonstracao {
         m.put("notificacoes",     "Notificacao");
         m.put("turnos",           "Turno");
         m.put("carteiras",        "Carteira");
+        m.put("favoritos",        "Favorito");
         m.put("usuarios",         "Usuario");
         return m;
     }

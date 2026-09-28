@@ -348,6 +348,30 @@ só — a do primeiro —, e a pontualidade dos outros dois não existiria.
 R: Porque repetir sem olhar é publicar sem confirmar o custo. O app só
 preenche; quem publica é o lojista, pelo caminho de sempre.
 
+### Favoritos: a loja guarda quem trabalhou bem
+
+- **Regra.** Só o lojista favorita, e só entregador é favorito. Um favorito
+  por par (loja, entregador): a chave primária da tabela `favoritos` (V18) é
+  o próprio par, então nem dois cliques simultâneos duplicam — o segundo bate
+  na chave e o controller refaz a chamada, que encontra o que existe.
+  Desfavoritar o que não é favorito não é erro.
+- **O efeito.** Publicar um turno avisa os favoritos da loja ("A
+  Hamburgueria da Cláudia publicou um turno para amanhã, 18h"), na mesma
+  transação da publicação — turno recusado por saldo não avisa ninguém. Na
+  lista de disponíveis do entregador, os turnos dessas lojas levam o selo
+  "Loja que já te chamou", calculado numa consulta só.
+- **Papéis.** A lista é da loja. O entregador não vê quem o favoritou; vê
+  só o selo nos turnos daquela loja.
+- **Onde.** `FavoritoService`, `FavoritoController`, `Favorito` (chave
+  composta), V18; `TurnoService.criar` chama `avisarFavoritos`;
+  `TurnoController.disponiveis` marca o selo. No app, `FavoritosProvider`,
+  `BotaoFavorito`, `FavoritosDoLojista` (perfil) e `SeloLojaQueTeChamou`.
+
+**P: "da Mercado"? Como o texto acerta o artigo?**
+R: `Artigo` olha a primeira palavra do nome da loja: "Hamburgueria" é
+feminina, "Mercado" é masculina — "O Mercado do Fernando publicou um turno".
+A mesma regra vale para a notificação da gorjeta.
+
 ### Gorjeta: dinheiro a mais, pelo mesmo livro
 
 - **Regra.** Só o lojista do turno, só com o turno finalizado e só a quem

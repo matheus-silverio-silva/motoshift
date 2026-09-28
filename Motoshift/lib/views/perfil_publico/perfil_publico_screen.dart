@@ -7,6 +7,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/iniciais.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
+import '../../widgets/botao_favorito.dart';
 import '../../widgets/empty_state.dart';
 
 /// O perfil de outra conta — o que a plataforma mostra de quem está do outro
@@ -183,6 +184,12 @@ class _PerfilPublicoScreenState extends State<PerfilPublicoScreen> {
         else
           Text('Ainda sem avaliações',
               style: tsJakarta(12, FontWeight.w400, color: AppColors.muted)),
+        // O coração da loja (V18). Só entregador é favorito, e o botão some
+        // sozinho para quem não é lojista.
+        if (!p.ehLojista) ...[
+          const SizedBox(height: 8),
+          BotaoFavorito(motoboyId: p.id, nome: p.nome, comRotulo: true),
+        ],
       ],
     );
   }

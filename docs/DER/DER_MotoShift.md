@@ -1,6 +1,6 @@
 # DER — Diagrama Entidade-Relacionamento
 
-Mapa das tabelas que compõem o banco de dados do **MotoShift**. O modelo reflete o schema real em produção (PostgreSQL no Railway), versionado por **Flyway** (migrações V1 a V17) e validado contra as entidades JPA do backend Spring Boot (`spring.jpa.hibernate.ddl-auto=validate`).
+Mapa das tabelas que compõem o banco de dados do **MotoShift**. O modelo reflete o schema real em produção (PostgreSQL no Railway), versionado por **Flyway** (migrações V1 a V18) e validado contra as entidades JPA do backend Spring Boot (`spring.jpa.hibernate.ddl-auto=validate`).
 
 > **Escopo:** 9 tabelas — `usuarios`, `turnos`, `turno_inscricoes`, `avaliacoes`, `carteiras`, `transacoes`, `cobrancas`, `notificacoes`, `notas_fiscais`.
 > Fonte da verdade: `backend/src/main/resources/db/migration` + `backend/src/main/java/com/motoshift/entity`.
@@ -29,6 +29,8 @@ erDiagram
     TURNOS   ||--o{ TRANSACOES : "origina"
     TURNOS   ||--o{ NOTAS_FISCAIS : "documenta"
     TRANSACOES ||--o| NOTAS_FISCAIS : "pagamento documentado por"
+    USUARIOS ||--o{ FAVORITOS : "favorita (lojista_id)"
+    USUARIOS ||--o{ FAVORITOS : "e favorito (motoboy_id)"
 ```
 
 ## Visão geral das entidades
@@ -44,6 +46,7 @@ erDiagram
 | `cobrancas` | Recargas e saques no gateway — a fronteira com o dinheiro de fora | `id` | `idempotency_key` |
 | `notificacoes` | Notificação in-app do usuário (SCRUM-20) | `id` | — |
 | `notas_fiscais` | NFS-e do serviço prestado num turno — uma por par (turno, entregador) e uma por pagamento | `id` | `uk_nota_turno_prestador (turno_id, prestador_id)`, `uk_nota_transacao (transacao_id)` |
+| `favoritos` | Entregador que a loja marcou com o coração (V18) | `(lojista_id, motoboy_id)` | a própria PK — um favorito por par |
 
 ## Relacionamentos e cardinalidades
 
@@ -57,10 +60,11 @@ erDiagram
 | `usuarios` | `avaliacoes.avaliador_id / avaliado_id` | 1 : N (duplo) | Auto-relacionamento: o mesmo usuário avalia e é avaliado |
 | `usuarios` | `carteiras` | 1 : 1 | Toda carteira tem um dono único — lojista ou entregador |
 | `usuarios` | `transacoes.usuario_id` | 1 : N | Dono do lançamento; `contraparte_id` é o outro lado quando existe |
-| `turnos` | `transacoes.turno_id` | 0..1 : N | Nulo em recarga, saque e bônus (operações de uma ponta só) |
+| `turnos` | `transacoes.turno_id` | 0..1 : N | Nulo em recarga e saque (operações de uma ponta só); a gorjeta (`bonus` / `bonus_enviado`, V17) aponta para o turno em que foi dada |
 | `usuarios` | `notificacoes` | 1 : N | `referencia_tipo` + `referencia_id` fazem o deep link e a deduplicação |
 | `turnos` | `notas_fiscais` | 1 : N | Uma nota por entregador do turno: três vagas, três notas |
 | `usuarios` | `notas_fiscais.prestador_id / tomador_id` | 1 : N (duplo) | O entregador presta e o lojista toma; `emitida_por_id` registra quem clicou |
+| `usuarios` | `favoritos.lojista_id / motoboy_id` | 1 : N (duplo) | A loja favorita vários entregadores e o entregador é favorito de várias lojas; o par é único. Quem é loja e quem é entregador é regra do `FavoritoService`; o banco só impede a conta de favoritar a si mesma |
 | `transacoes` | `notas_fiscais.transacao_id` | 1 : 0..1 | A nota documenta o `pagamento_recebido` do extrato (V14). É o que impede nota e extrato de discordarem: o valor do serviço é o do lançamento |
 
 ## Dicionário de dados
@@ -207,6 +211,14 @@ deixaria de valer.
 | `lida`, `lida_em` | BOOLEAN / TIMESTAMP | `lida` obrigatória | Default `false` |
 | `criado_em` | TIMESTAMP(6) | não | — |
 
+### favoritos
+
+| Coluna | Tipo | Nulo | Observação |
+|---|---|---|---|
+| `lojista_id` | BIGINT | não | PK (com `motoboy_id`), FK `fk_favorito_lojista` → `usuarios.id` |
+| `motoboy_id` | BIGINT | não | PK (com `lojista_id`), FK `fk_favorito_motoboy` → `usuarios.id`; índice `ix_favorito_motoboy` para o selo "Loja que já te chamou" |
+| `criado_em` | TIMESTAMP(6) | não | Default `now()`. CHECK `ck_favorito_nao_a_si_mesmo` (`lojista_id <> motoboy_id`) |
+
 ### notas_fiscais
 
 | Coluna | Tipo | Nulo | Observação |
@@ -263,3 +275,4 @@ deixaria de valer.
 | `V15__coordenada_da_loja` | Aditiva: `latitude` e `longitude` em `usuarios` — o ponto da loja. A publicação parte dele (depois do GPS e da cidade), em vez do GPS de onde o lojista estiver publicando |
 | `V16__checkin_do_entregador` | Aditiva: `checkin_em`, `checkin_latitude`, `checkin_longitude` e `checkout_em` em `turno_inscricoes` — a hora real de cada entregador, na inscrição porque num turno multi-vaga cada um chega na sua hora; CHECK de saída depois da chegada; índice `ix_inscricao_checkin` para a pontualidade |
 | `V17__gorjeta` | O CHECK de `transacoes.tipo` ganha `bonus_enviado`, o lado de quem dá a gorjeta; o `bonus`, que estava no domínio desde a V10 sem fluxo, vira o lado de quem recebe. Sem coluna nova: a gorjeta é o par de lançamentos, e "uma por entregador por turno" é a chave de idempotência |
+| `V18__favoritos` | Tabela nova `favoritos (lojista_id, motoboy_id, criado_em)`, o par como chave primária, FKs para `usuarios` e índice por entregador. Aditiva: nada existente muda |

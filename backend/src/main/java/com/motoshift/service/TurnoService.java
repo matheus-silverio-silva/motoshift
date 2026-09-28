@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -43,6 +44,7 @@ public class TurnoService {
     private final CarteiraService carteiras;
     private final TurnoMapper mapper;
     private final TurnoAcesso acesso;
+    private final FavoritoService favoritos;
 
     public TurnoService(TurnoRepository turnoRepo,
                         UsuarioRepository usuarioRepo,
@@ -51,7 +53,8 @@ public class TurnoService {
                         PagamentoTurnoService pagamentos,
                         CarteiraService carteiras,
                         TurnoMapper mapper,
-                        TurnoAcesso acesso) {
+                        TurnoAcesso acesso,
+                        FavoritoService favoritos) {
         this.turnoRepo = turnoRepo;
         this.usuarioRepo = usuarioRepo;
         this.inscricaoRepo = inscricaoRepo;
@@ -60,6 +63,7 @@ public class TurnoService {
         this.carteiras = carteiras;
         this.mapper = mapper;
         this.acesso = acesso;
+        this.favoritos = favoritos;
     }
 
     // RF04 — Criar turno: início deve ser >= agora + 2h
@@ -108,6 +112,11 @@ public class TurnoService {
         Turno salvo = turnoRepo.save(t);
         exigirSaldoParaPublicar(salvo, lojistaId);
         pagamentos.reservar(salvo);
+
+        // Os entregadores favoritos da loja ficam sabendo (V18). Na mesma
+        // transação: se a reserva falhar, ninguém é avisado de turno que não
+        // existe.
+        favoritos.avisarFavoritos(salvo, LocalDate.now());
 
         return mapper.toResponse(salvo);
     }

@@ -7,6 +7,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_header.dart';
+import '../../widgets/botao_favorito.dart';
 import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/desktop/panel_card.dart';
 import '../../widgets/empty_state.dart';
@@ -367,6 +368,8 @@ class _AvaliarEntregadoresScreenState
                   ],
                 ),
               ),
+              // Favoritar quem acabou de trabalhar bem (V18).
+              BotaoFavorito(motoboyId: p.usuarioId, nome: p.nome),
             ],
           ),
           if (!p.enviado) ...[

@@ -5,6 +5,7 @@ import '../../models/turno.dart';
 import '../../presentation/providers/turno_provider.dart';
 import '../../presentation/providers/turno_selecionado_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/selo_loja_que_te_chamou.dart';
 import '../../widgets/desktop/master_detail.dart';
 import '../../widgets/desktop/shift_row.dart';
 import '../../widgets/status_pill.dart';
@@ -226,6 +227,7 @@ class TurnosConteudoDesktop extends StatelessWidget {
           ? '${t.vagasRestantes} ${t.vagasRestantes == 1 ? 'vaga' : 'vagas'}'
           : t.status.label,
       pillVariant: t.multiVaga ? PillVariant.teal : PillVariant.ghost,
+      selo: t.lojaQueJaTeChamou ? const SeloLojaQueTeChamou() : null,
       // No desktop tocar num card só troca a seleção — o painel da
       // direita reage. A rota /detalhe-turno não é empilhada aqui.
       onTap: () => selecao.selecionar(t.id),

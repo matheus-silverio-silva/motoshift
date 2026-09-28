@@ -211,6 +211,14 @@ regras de `TurnoService` no backend.
   da semana seguinte, no mesmo horário (se já passou, a próxima que ainda
   respeita as 2 h de antecedência). Nada é publicado sem a confirmação do
   custo; ao publicar, a lista recarrega com o turno novo.
+- **Favoritos** (lojista): o coração aparece no perfil público do
+  entregador, na avaliação ("Avaliar o entregador" e cada card de "Avaliar
+  entregadores") e no card do entregador no turno finalizado. A lista
+  "Meus entregadores favoritos" fica no próprio Perfil, sem tela nova — cada
+  linha abre o perfil público. Publicar avisa os favoritos
+  (`turno_de_favorito`, que abre o turno — seção 6), e na lista de
+  disponíveis do entregador os turnos dessas lojas levam o selo "Loja que já
+  te chamou". A ordenação não muda.
 - **A gorjeta mora na avaliação do entregador** (Avaliar o entregador e
   Avaliar entregadores, um seletor por card): opcional, "Sem gorjeta" vem
   marcado, R$ 5 · 10 · 20 ou outro valor até R$ 50. Não é tela nem botão

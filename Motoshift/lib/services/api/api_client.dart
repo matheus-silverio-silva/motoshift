@@ -108,6 +108,10 @@ class ApiClient {
         http.put(_uri(path), headers: _headers, body: jsonEncode(body)));
   }
 
+  Future<dynamic> delete(String path) async {
+    return _enviar(() => http.delete(_uri(path), headers: _headers));
+  }
+
   Uri _uri(String path) => Uri.parse('$baseUrl$path');
 
   Future<dynamic> _enviar(Future<http.Response> Function() requisicao) async {

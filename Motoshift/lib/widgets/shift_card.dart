@@ -16,6 +16,7 @@ class ShiftCard extends StatelessWidget {
     this.pillVariant = PillVariant.ghost,
     this.trailing,
     this.acao,
+    this.selo,
     this.onTap,
     super.key,
   });
@@ -43,6 +44,10 @@ class ShiftCard extends StatelessWidget {
   /// de novo"), para não disputar a linha com a pill de status. Só na
   /// hierarquia nova (com [horario]).
   final Widget? acao;
+
+  /// Selo numa linha própria, abaixo do título (ex.: "Loja que já te
+  /// chamou"). Só na hierarquia nova.
+  final Widget? selo;
   final VoidCallback? onTap;
 
   @override
@@ -206,6 +211,10 @@ class ShiftCard extends StatelessWidget {
                       ],
                     ],
                   ),
+                  if (selo != null) ...[
+                    const SizedBox(height: 6),
+                    selo!,
+                  ],
                 ],
               ),
             ),

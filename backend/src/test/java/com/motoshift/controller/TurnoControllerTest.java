@@ -9,6 +9,7 @@ import com.motoshift.security.JwtService;
 import com.motoshift.security.RespostaDeErro;
 import com.motoshift.security.SecurityConfig;
 import com.motoshift.service.CheckinService;
+import com.motoshift.service.FavoritoService;
 import com.motoshift.service.TurnoConsultaService;
 import com.motoshift.service.TurnoService;
 import com.motoshift.service.ledger.RetentativaOtimista;
@@ -59,6 +60,7 @@ class TurnoControllerTest {
     @MockBean private TurnoService service;
     @MockBean private TurnoConsultaService consultas;
     @MockBean private CheckinService checkins;
+    @MockBean private FavoritoService favoritos;
     // Nao e mock: o retry e um laco de tres tentativas sem estado e sem I/O, e
     // mocka-lo faria o teste passar mesmo se o controller parasse de chamar o
     // service.

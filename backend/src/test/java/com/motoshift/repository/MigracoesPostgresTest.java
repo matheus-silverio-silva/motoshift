@@ -113,8 +113,9 @@ public class MigracoesPostgresTest {
         flyway(url, null).migrate();
 
         try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            // As 18 da V11 e as 2 de favoritos (V18).
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f'"))
-                    .isEqualTo(18);
+                    .isEqualTo(20);
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated"))
                     .isZero();
         }
@@ -336,6 +337,36 @@ public class MigracoesPostgresTest {
         }
     }
 
+    @Test
+    @DisplayName("V18 cria favoritos: um par por loja e entregador, com FKs, e ninguém favorita a si mesmo")
+    void v18_favoritos() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v18");
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("loja-v18@teste.com", "x"));
+            s.execute(inserirUsuario("moto-v18@teste.com", "x"));
+            long loja = contar(s, "SELECT id FROM usuarios WHERE email = 'loja-v18@teste.com'");
+            long moto = contar(s, "SELECT id FROM usuarios WHERE email = 'moto-v18@teste.com'");
+
+            s.execute("INSERT INTO favoritos (lojista_id, motoboy_id) VALUES (" + loja + ", " + moto + ")");
+            assertThat(contar(s, "SELECT count(*) FROM favoritos WHERE criado_em IS NOT NULL")).isEqualTo(1);
+
+            assertThatThrownBy(() -> s.execute(
+                    "INSERT INTO favoritos (lojista_id, motoboy_id) VALUES (" + loja + ", " + moto + ")"))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("pk_favoritos");
+            assertThatThrownBy(() -> s.execute(
+                    "INSERT INTO favoritos (lojista_id, motoboy_id) VALUES (" + loja + ", " + loja + ")"))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_favorito_nao_a_si_mesmo");
+            assertThatThrownBy(() -> s.execute(
+                    "INSERT INTO favoritos (lojista_id, motoboy_id) VALUES (" + loja + ", 999999)"))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("fk_favorito_motoboy");
+        }
+    }
+
     // ── Apoio ──────────────────────────────────────────────────────────────
 
     /** INSERT valido ATE a V11 — antes de a coluna natureza existir. */
@@ -399,7 +430,7 @@ public class MigracoesPostgresTest {
      * um número só.
      */
     public static String ultimaVersao() {
-        return "17";
+        return "18";
     }
 
     static Connection conectar(String url) throws SQLException {

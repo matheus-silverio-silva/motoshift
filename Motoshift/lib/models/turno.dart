@@ -54,6 +54,10 @@ class Turno {
   /// listagens é nula.
   final double? distanciaKm;
 
+  /// A loja deste turno tem o entregador logado entre os favoritos (V18) — o
+  /// selo "Loja que já te chamou". Só vem na lista de disponíveis.
+  final bool lojaQueJaTeChamou;
+
   final DateTime? criadoEm;
   final DateTime? atualizadoEm;
 
@@ -78,6 +82,7 @@ class Turno {
     this.distanciaPercorridaKm,
     this.totalEntregas,
     this.distanciaKm,
+    this.lojaQueJaTeChamou = false,
     this.criadoEm,
     this.atualizadoEm,
   });
@@ -106,6 +111,7 @@ class Turno {
           : null,
       totalEntregas: json['totalEntregas'] as int?,
       distanciaKm: (json['distanciaKm'] as num?)?.toDouble(),
+      lojaQueJaTeChamou: json['lojaQueJaTeChamou'] as bool? ?? false,
       criadoEm: json['criadoEm'] != null
           ? DateTime.parse(json['criadoEm'] as String)
           : null,

@@ -8,6 +8,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/breakpoints.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_header.dart';
+import '../../widgets/botao_favorito.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/rating_stars.dart';
 import '../../widgets/seletor_de_gorjeta.dart';
@@ -269,6 +270,15 @@ class _AvaliacaoScreenState extends State<AvaliacaoScreen> {
                   style: tsJakarta(12, FontWeight.w400,
                       color: AppColors.muted),
                 ),
+                // O lojista pode favoritar quem está avaliando (V18). Para o
+                // entregador, que avalia a loja, o botão não aparece.
+                if (args != null && _souLojista) ...[
+                  const SizedBox(height: 6),
+                  BotaoFavorito(
+                      motoboyId: args.avaliadoId,
+                      nome: args.nomeAvaliado,
+                      comRotulo: true),
+                ],
               ],
             ),
           ),

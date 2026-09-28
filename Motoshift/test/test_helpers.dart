@@ -34,6 +34,9 @@ import 'package:moto_shift/presentation/providers/turno_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_selecionado_provider.dart';
 import 'package:moto_shift/presentation/providers/notificacao_provider.dart';
 import 'package:moto_shift/presentation/providers/pendencias_provider.dart';
+import 'package:moto_shift/presentation/providers/favoritos_provider.dart';
+import 'package:moto_shift/models/entregador_favorito.dart';
+import 'package:moto_shift/services/api/favorito_api.dart';
 import 'package:moto_shift/services/api/agenda_api.dart';
 import 'package:moto_shift/services/api/api_client.dart';
 import 'package:moto_shift/services/api/auth_api.dart';
@@ -1041,6 +1044,40 @@ class FakeAvaliacaoApi extends AvaliacaoApi {
   }
 }
 
+/// Favoritos do lojista em memória (V18). Começa com o Ricardo — o
+/// entregador de [fakeMotoboy] —, para o perfil do lojista mostrar a lista.
+class FakeFavoritoApi extends FavoritoApi {
+  FakeFavoritoApi({List<EntregadorFavorito>? iniciais})
+      : lista = iniciais ??
+            [
+              const EntregadorFavorito(
+                  motoboyId: 1,
+                  nome: 'Ricardo Souza',
+                  mediaAvaliacao: 4.8,
+                  score: 4.7),
+            ],
+        super(ApiClient());
+
+  final List<EntregadorFavorito> lista;
+
+  @override
+  Future<List<EntregadorFavorito>> listar() async => List.of(lista);
+
+  @override
+  Future<EntregadorFavorito> favoritar(int motoboyId) async {
+    final existente = lista.where((f) => f.motoboyId == motoboyId).firstOrNull;
+    if (existente != null) return existente;
+    final novo = EntregadorFavorito(
+        motoboyId: motoboyId, nome: 'Entregador $motoboyId');
+    lista.insert(0, novo);
+    return novo;
+  }
+
+  @override
+  Future<void> desfavoritar(int motoboyId) async =>
+      lista.removeWhere((f) => f.motoboyId == motoboyId);
+}
+
 class FakeNotificacaoApi extends NotificacaoApi {
   FakeNotificacaoApi() : super(ApiClient());
 
@@ -1234,6 +1271,10 @@ class FakeApiService extends ApiService {
   @override
   NotificacaoApi get notificacoes => _notificacoes;
   final NotificacaoApi _notificacoes = FakeNotificacaoApi();
+
+  @override
+  FavoritoApi get favoritos => _favoritos;
+  final FavoritoApi _favoritos = FakeFavoritoApi();
 }
 
 /// Turnos encerrados com data ABSOLUTA, para as telas de histórico.
@@ -1387,6 +1428,9 @@ Future<void> pumpGolden(
       ),
       ChangeNotifierProvider<PendenciasProvider>(
         create: (_) => PendenciasProvider(api),
+      ),
+      ChangeNotifierProvider<FavoritosProvider>(
+        create: (_) => FavoritosProvider(api),
       ),
       // O GPS dos testes. Sem ele as telas usam o do aparelho, que num teste
       // não existe e cai no "erro" — o que também é um caminho válido.

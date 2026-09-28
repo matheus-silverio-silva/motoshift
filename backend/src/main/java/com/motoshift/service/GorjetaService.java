@@ -13,6 +13,7 @@ import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.UsuarioRepository;
 import com.motoshift.service.ledger.LedgerService;
 import com.motoshift.service.ledger.Movimento;
+import com.motoshift.util.Artigo;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -135,7 +136,8 @@ public class GorjetaService {
 
         notificacoes.criar(entregadorId, "gorjeta_recebida",
                 "Você recebeu uma gorjeta",
-                "Você recebeu uma gorjeta de " + reaisCurto(valor) + " da " + nomeDaLoja
+                "Você recebeu uma gorjeta de " + reaisCurto(valor) + " " + Artigo.de(nomeDaLoja)
+                        + " " + nomeDaLoja
                         + " pelo turno \"" + turno.getTitulo() + "\".",
                 "carteira", null);
 

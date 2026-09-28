@@ -5,6 +5,7 @@ import com.motoshift.dto.TurnoRequest;
 import com.motoshift.dto.TurnoResponse;
 import com.motoshift.security.UsuarioAutenticado;
 import com.motoshift.service.CheckinService;
+import com.motoshift.service.FavoritoService;
 import com.motoshift.service.TurnoConsultaService;
 import com.motoshift.service.TurnoService;
 import com.motoshift.service.ledger.RetentativaOtimista;
@@ -13,6 +14,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -44,14 +46,19 @@ public class TurnoController {
 
     private final CheckinService checkins;
 
+    /** O selo "Loja que já te chamou" na lista de disponíveis (V18). */
+    private final FavoritoService favoritos;
+
     public TurnoController(TurnoService service,
                            TurnoConsultaService consultas,
                            RetentativaOtimista retentativa,
-                           CheckinService checkins) {
+                           CheckinService checkins,
+                           FavoritoService favoritos) {
         this.service = service;
         this.consultas = consultas;
         this.retentativa = retentativa;
         this.checkins = checkins;
+        this.favoritos = favoritos;
     }
 
     @Operation(summary = "Publicar turno",
@@ -118,7 +125,8 @@ public class TurnoController {
             @RequestParam(required = false) Double lng,
             @RequestParam(required = false) Double raioKm,
             @RequestParam(required = false) Integer pagina,
-            @RequestParam(required = false) Integer tamanho) {
+            @RequestParam(required = false) Integer tamanho,
+            @AuthenticationPrincipal UsuarioAutenticado atual) {
 
         boolean hasFilter = horarioInicio != null || horarioFim != null || diaSemana != null
                 || raioMaxKm != null || dataInicio != null || dataFim != null
@@ -128,10 +136,21 @@ public class TurnoController {
         if (hasFilter) {
             // Parte dos filtros (horário, dia da semana, raio exato) roda em
             // memória, então a página é cortada depois deles.
-            return Paginacao.fatia(consultas.listarDisponiveisComFiltros(horarioInicio, horarioFim,
-                    diaSemana, raioMaxKm, dataInicio, dataFim, ordenarPor, lat, lng, raioKm), pedido);
+            List<TurnoResponse> filtrados = consultas.listarDisponiveisComFiltros(horarioInicio,
+                    horarioFim, diaSemana, raioMaxKm, dataInicio, dataFim, ordenarPor, lat, lng, raioKm);
+            marcarLojasQueTeChamaram(filtrados, atual);
+            return Paginacao.fatia(filtrados, pedido);
         }
-        return Paginacao.resposta(consultas.listarDisponiveis(pedido));
+        Page<TurnoResponse> abertos = consultas.listarDisponiveis(pedido);
+        marcarLojasQueTeChamaram(abertos.getContent(), atual);
+        return Paginacao.resposta(abertos);
+    }
+
+    /** Só o entregador tem loja que o chamou; para o lojista, nada muda. */
+    private void marcarLojasQueTeChamaram(List<TurnoResponse> turnos, UsuarioAutenticado atual) {
+        if (atual != null && "motoboy".equals(atual.tipo())) {
+            favoritos.marcarLojasQueTeChamaram(turnos, atual.id());
+        }
     }
 
     @Operation(summary = "Buscar turno por ID")

@@ -7,6 +7,7 @@ import '../../services/api_service.dart';
 import '../../presentation/providers/pendencias_provider.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import 'favoritos_do_lojista.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/menu_row.dart';
@@ -274,6 +275,11 @@ class _PerfilScreenState extends State<PerfilScreen> {
                   context, AppRoutes.historicoTurnos),
             ),
           ]),
+          // Os entregadores favoritos da loja (V18) — só o lojista tem.
+          if (isLojista) ...[
+            const SizedBox(height: 14),
+            const FavoritosDoLojista(),
+          ],
           const SizedBox(height: 14),
           // SAIR
           MenuGroup(children: [
