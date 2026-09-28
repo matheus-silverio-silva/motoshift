@@ -36,18 +36,22 @@ class _FiltrosTurnosSheetState extends State<FiltrosTurnosSheet> {
   int? _diaSemana;
   double _raioMax = 20.0;
   bool _raioAtivo = false;
-  String _ordenarPor = 'valorAsc';
+  String _ordenarPor = 'dataInicio';
 
   static const _dias = [
     (1, 'Seg'), (2, 'Ter'), (3, 'Qua'),
     (4, 'Qui'), (5, 'Sex'), (6, 'Sáb'), (7, 'Dom'),
   ];
 
+  /// O valor é o que o backend entende em `ordenarPor`. "Maior valor" pedia
+  /// `valorAsc` — do menor para o maior —, e "Menor valor" o contrário: os
+  /// dois rótulos estavam trocados. "Mais cedo" vem primeiro porque é a ordem
+  /// em que a lista chega sem filtro nenhum.
   static const _ordens = [
-    ('valorAsc', 'Maior valor'),
-    ('valorDesc', 'Menor valor'),
-    ('raioAsc', 'Menor raio'),
     ('dataInicio', 'Mais cedo'),
+    ('valorDesc', 'Maior valor'),
+    ('valorAsc', 'Menor valor'),
+    ('raioAsc', 'Menor área de entrega'),
   ];
 
   @override
@@ -179,7 +183,7 @@ class _FiltrosTurnosSheetState extends State<FiltrosTurnosSheet> {
                   Row(
                     children: [
                       Expanded(
-                          child: _label('Raio máximo de entrega')),
+                          child: _label('Área de entrega do turno')),
                       Switch(
                         value: _raioAtivo,
                         activeColor: AppColors.teal,
@@ -187,6 +191,14 @@ class _FiltrosTurnosSheetState extends State<FiltrosTurnosSheet> {
                             setState(() => _raioAtivo = v),
                       ),
                     ],
+                  ),
+                  // Os dois "raios" da tela são coisas diferentes, e aqui
+                  // se diz qual é este.
+                  Text(
+                    'Até quantos km o turno roda — não é a distância até você; '
+                    'essa é o "Perto de mim", na lista.',
+                    style: tsJakarta(11, FontWeight.w400,
+                        color: AppColors.muted, height: 1.35),
                   ),
                   if (_raioAtivo) ...[
                     Row(
@@ -210,7 +222,7 @@ class _FiltrosTurnosSheetState extends State<FiltrosTurnosSheet> {
                           ),
                         ),
                         Text(
-                          '${_raioMax.toStringAsFixed(0)} km',
+                          'até ${_raioMax.toStringAsFixed(0)} km',
                           style: tsJakarta(12, FontWeight.w700,
                               color: AppColors.teal),
                         ),

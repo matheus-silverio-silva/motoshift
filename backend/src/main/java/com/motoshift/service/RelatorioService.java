@@ -112,6 +112,10 @@ public class RelatorioService {
                 ? emReais(total.divide(BigDecimal.valueOf(horas), 2, RoundingMode.HALF_UP))
                 : BigDecimal.ZERO.setScale(2));
         numeros.put("saquesNoPeriodo", emReais(saques));
+        // Gorjetas (bonus): além dos ganhos dos turnos, que ficam como estão
+        // — o valor por hora é do turno, não da gorjeta.
+        numeros.put("gorjetasRecebidas", emReais(transacaoRepo.somarTipoNoPeriodo(
+                motoboyId, TipoTransacao.BONUS, p.inicio(), p.fim())));
         // Sem histórico o score não é reputação, é o ponto de partida da conta:
         // o relatório diz isso em vez de apresentar um 5,0 que nada produziu.
         Double score = reputacao.scoreVisivel(motoboy);
@@ -184,6 +188,8 @@ public class RelatorioService {
         numeros.put("turnosCancelados", cancelados);
         numeros.put("turnosExpirados", expirados);
         numeros.put("valorDevolvido", emReais(devolvido));
+        numeros.put("gorjetasDadas", emReais(transacaoRepo.somarTipoNoPeriodo(
+                lojistaId, TipoTransacao.BONUS_ENVIADO, p.inicio(), p.fim())));
         numeros.put("mediaAvaliacao", lojista.getMediaAvaliacao());
 
         Map<String, List<ItemDeQuebra>> series = new LinkedHashMap<>();

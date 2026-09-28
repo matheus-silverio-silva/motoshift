@@ -75,6 +75,34 @@ class Notificacao {
             fundo: AppColors.amberSoft,
             frente: AppColors.onTertiaryContainer,
           ),
+        // Check-in e check-out do entregador (V16), para o lojista.
+        'entregador_chegou' => const NotificacaoEstilo(
+            icone: Icons.where_to_vote_outlined,
+            fundo: AppColors.tealSoft,
+            frente: AppColors.tealDeep,
+          ),
+        'entregador_saiu' => const NotificacaoEstilo(
+            icone: Icons.logout_rounded,
+            fundo: AppColors.amberSoft,
+            frente: AppColors.onTertiaryContainer,
+          ),
+        'gorjeta_recebida' => const NotificacaoEstilo(
+            icone: Icons.volunteer_activism_outlined,
+            fundo: AppColors.goodSoft,
+            frente: Color(0xFF0F6E4E),
+          ),
+        // Turno aceito que começa em até 1 h — entregador e loja.
+        'turno_lembrete' => const NotificacaoEstilo(
+            icone: Icons.alarm_rounded,
+            fundo: AppColors.tealSoft,
+            frente: AppColors.tealDeep,
+          ),
+        // Turno novo de uma loja que favoritou o entregador (V18).
+        'turno_de_favorito' => const NotificacaoEstilo(
+            icone: Icons.favorite_rounded,
+            fundo: AppColors.amberSoft,
+            frente: AppColors.onTertiaryContainer,
+          ),
         'turno_expirado' => const NotificacaoEstilo(
             icone: Icons.timer_off_outlined,
             fundo: AppColors.surface3,

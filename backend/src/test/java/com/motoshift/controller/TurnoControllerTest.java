@@ -8,6 +8,8 @@ import com.motoshift.security.JwtAuthFilter;
 import com.motoshift.security.JwtService;
 import com.motoshift.security.RespostaDeErro;
 import com.motoshift.security.SecurityConfig;
+import com.motoshift.service.CheckinService;
+import com.motoshift.service.FavoritoService;
 import com.motoshift.service.TurnoConsultaService;
 import com.motoshift.service.TurnoService;
 import com.motoshift.service.ledger.RetentativaOtimista;
@@ -33,6 +35,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -56,6 +59,8 @@ class TurnoControllerTest {
 
     @MockBean private TurnoService service;
     @MockBean private TurnoConsultaService consultas;
+    @MockBean private CheckinService checkins;
+    @MockBean private FavoritoService favoritos;
     // Nao e mock: o retry e um laco de tres tentativas sem estado e sem I/O, e
     // mocka-lo faria o teste passar mesmo se o controller parasse de chamar o
     // service.
@@ -101,6 +106,35 @@ class TurnoControllerTest {
                 .andExpect(jsonPath("$.codigo").value("acesso_negado"));
 
         verify(service, never()).criar(any(), any());
+    }
+
+    @Test
+    @DisplayName("check-in: o lojista leva 403; o entregador manda a posição e o id sai do token")
+    void checkin_soEntregador() throws Exception {
+        mvc.perform(put("/api/turnos/5/checkin")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(2L, "lojista"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"latitude\": -25.456, \"longitude\": -49.282}"))
+                .andExpect(status().isForbidden());
+        verify(checkins, never()).checkin(any(), any(), any(), any());
+
+        when(checkins.checkin(eq(5L), eq(9L), eq(-25.456), eq(-49.282)))
+                .thenReturn(new TurnoResponse());
+        mvc.perform(put("/api/turnos/5/checkin")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(9L, "motoboy"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"latitude\": -25.456, \"longitude\": -49.282, \"motoboyId\": 1}"))
+                .andExpect(status().isOk());
+        verify(checkins).checkin(5L, 9L, -25.456, -49.282);
+    }
+
+    @Test
+    @DisplayName("check-out: só o entregador")
+    void checkout_soEntregador() throws Exception {
+        mvc.perform(put("/api/turnos/5/checkout")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(2L, "lojista")))
+                .andExpect(status().isForbidden());
+        verify(checkins, never()).checkout(any(), any());
     }
 
     @Test

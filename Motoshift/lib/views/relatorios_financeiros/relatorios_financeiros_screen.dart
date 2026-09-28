@@ -241,7 +241,7 @@ class _RelatoriosFinanceirosScreenState
   }
 
   static Color _corDo(String chave) => switch (chave) {
-        'recebido' || 'recarregado' => AppColors.good,
+        'recebido' || 'recarregado' || 'gorjetas' => AppColors.good,
         'retencoes' => AppColors.error,
         'disponivel' => AppColors.teal,
         'a-receber' || 'comprometido' => AppColors.muted,

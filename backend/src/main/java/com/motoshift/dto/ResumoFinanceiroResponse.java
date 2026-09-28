@@ -49,6 +49,10 @@ import java.util.List;
  * @param reservasAbertas   lojista: quanto cada turno ainda segura
  * @param porTipo           quebra do período por tipo de lançamento — só os
  *                          tipos que o usuário tem
+ * @param gorjetas          os dois papéis: as gorjetas do período (recebidas
+ *                          pelo entregador, dadas pelo lojista). Já estão
+ *                          dentro de {@code recebido} / {@code pagoAEntregadores};
+ *                          vêm à parte para a tela mostrar. Ausente sem gorjeta
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ResumoFinanceiroResponse(
@@ -66,7 +70,8 @@ public record ResumoFinanceiroResponse(
         BigDecimal bloqueado,
         BigDecimal comprometido,
         List<ReservaAbertaResponse> reservasAbertas,
-        List<TotalPorTipoResponse> porTipo) {
+        List<TotalPorTipoResponse> porTipo,
+        BigDecimal gorjetas) {
 
     public static final String PRESTADOR = "prestador";
     public static final String TOMADOR = "tomador";
@@ -78,7 +83,7 @@ public record ResumoFinanceiroResponse(
             List<TotalPorTipoResponse> porTipo) {
         return new ResumoFinanceiroResponse(PRESTADOR, de, ate, disponivel,
                 recebido, retencoes, sacado, aReceber,
-                null, null, null, null, null, null, porTipo);
+                null, null, null, null, null, null, porTipo, null);
     }
 
     /** O resumo do lojista: nada de pagamento recebido, saque ou a receber. */
@@ -89,6 +94,13 @@ public record ResumoFinanceiroResponse(
         return new ResumoFinanceiroResponse(TOMADOR, de, ate, disponivel,
                 null, null, null, null,
                 recarregado, pagoAEntregadores, devolvido, bloqueado, bloqueado,
-                reservasAbertas, porTipo);
+                reservasAbertas, porTipo, null);
+    }
+
+    /** O mesmo resumo com as gorjetas do período à parte (nulo = sem gorjeta). */
+    public ResumoFinanceiroResponse comGorjetas(BigDecimal valor) {
+        return new ResumoFinanceiroResponse(papel, dataInicio, dataFim, disponivel,
+                recebido, retencoes, sacado, aReceber, recarregado, pagoAEntregadores,
+                devolvido, bloqueado, comprometido, reservasAbertas, porTipo, valor);
     }
 }

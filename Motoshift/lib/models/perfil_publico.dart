@@ -1,3 +1,5 @@
+import 'selo.dart';
+
 /// O que uma conta pode ver do perfil de OUTRA conta.
 ///
 /// Espelha o `PerfilPublicoResponse` do backend, e o que ele **não** traz é
@@ -22,6 +24,9 @@ class PerfilPublico {
     this.veiculoModelo,
     this.veiculoCor,
     this.nomeFantasia,
+    this.pontualidade,
+    this.checkinsPontualidade = 0,
+    this.selos = const [],
   });
 
   final int id;
@@ -41,6 +46,14 @@ class PerfilPublico {
   /// Fachada da loja — público por natureza.
   final String? nomeFantasia;
 
+  /// % de chegadas até 10 min após o início, nos últimos 90 dias (V16). Só do
+  /// entregador; nula sem check-in — "Sem histórico", nunca 100%.
+  final int? pontualidade;
+  final int checkinsPontualidade;
+
+  /// Selos de reputação, com o critério de cada um (calculados no backend).
+  final List<Selo> selos;
+
   factory PerfilPublico.fromJson(Map<String, dynamic> json) => PerfilPublico(
         id: json['id'] as int,
         nome: json['nome'] as String? ?? 'Usuário',
@@ -53,6 +66,10 @@ class PerfilPublico {
         veiculoModelo: json['veiculoModelo'] as String?,
         veiculoCor: json['veiculoCor'] as String?,
         nomeFantasia: json['nomeFantasia'] as String?,
+        pontualidade: (json['pontualidade'] as num?)?.toInt(),
+        checkinsPontualidade:
+            (json['checkinsPontualidade'] as num?)?.toInt() ?? 0,
+        selos: Selo.listaDe(json['selos']),
       );
 
   /// O backend grava `tipo` em minúsculas; o `toLowerCase` é só para o JSON
@@ -66,6 +83,13 @@ class PerfilPublico {
   String? get localidade {
     if (cidade == null) return estado;
     return estado == null ? cidade : '$cidade/$estado';
+  }
+
+  /// "92% · 13 check-ins", ou "Sem histórico".
+  String get pontualidadeRotulo {
+    if (pontualidade == null) return 'Sem histórico';
+    final n = checkinsPontualidade;
+    return '$pontualidade% · $n ${n == 1 ? 'check-in' : 'check-ins'}';
   }
 
   String? get veiculo {

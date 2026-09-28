@@ -5,8 +5,10 @@ import '../../models/perfil_publico.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/iniciais.dart';
+import '../../widgets/selos_de_reputacao.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
+import '../../widgets/botao_favorito.dart';
 import '../../widgets/empty_state.dart';
 
 /// O perfil de outra conta — o que a plataforma mostra de quem está do outro
@@ -123,6 +125,11 @@ class _PerfilPublicoScreenState extends State<PerfilPublicoScreen> {
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 32),
       children: [
         _cabecalho(p),
+        // Selos de reputação — o critério aparece ao tocar.
+        if (p.selos.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          SelosDeReputacao(selos: p.selos, centralizar: true),
+        ],
         const SizedBox(height: 18),
         if (p.localidade != null)
           _linha(Icons.place_outlined, 'Cidade', p.localidade!),
@@ -137,6 +144,9 @@ class _PerfilPublicoScreenState extends State<PerfilPublicoScreen> {
               p.score == null
                   ? 'Novo na plataforma'
                   : '${p.score!.toStringAsFixed(1).replaceAll('.', ',')} / 5'),
+        // Chegadas até 10 min após o início, nos últimos 90 dias (V16).
+        if (!p.ehLojista)
+          _linha(Icons.timer_outlined, 'Pontualidade', p.pontualidadeRotulo),
         const SizedBox(height: 18),
         _avisoDePrivacidade(),
       ],
@@ -180,6 +190,12 @@ class _PerfilPublicoScreenState extends State<PerfilPublicoScreen> {
         else
           Text('Ainda sem avaliações',
               style: tsJakarta(12, FontWeight.w400, color: AppColors.muted)),
+        // O coração da loja (V18). Só entregador é favorito, e o botão some
+        // sozinho para quem não é lojista.
+        if (!p.ehLojista) ...[
+          const SizedBox(height: 8),
+          BotaoFavorito(motoboyId: p.id, nome: p.nome, comRotulo: true),
+        ],
       ],
     );
   }

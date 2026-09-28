@@ -1,10 +1,13 @@
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/geo_referencia.dart';
+import '../../services/localizacao_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/validators.dart';
 import '../../widgets/adaptive_scaffold.dart';
@@ -12,6 +15,7 @@ import '../../widgets/app_buttons.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/desktop/panel_card.dart';
+import '../../widgets/mapa_raio.dart';
 
 class DadosPessoaisScreen extends StatefulWidget {
   const DadosPessoaisScreen({super.key});
@@ -30,6 +34,13 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
   DateTime? _dataNascimento;
   bool _salvando = false;
 
+  /// Ponto da loja no mapa (V15) — só do lojista. É de onde a publicação de
+  /// turno parte, para o pino do turno e o endereço da loja serem o mesmo
+  /// lugar.
+  LatLng? _pontoDaLoja;
+  bool _buscandoPonto = false;
+  String? _avisoDoPonto;
+
   @override
   void initState() {
     super.initState();
@@ -41,6 +52,9 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
     _nomeFantasiaCtrl =
         TextEditingController(text: u?.nomeFantasia ?? '');
     _dataNascimento = u?.dataNascimento;
+    if (u != null && u.temPontoDaLoja) {
+      _pontoDaLoja = LatLng(u.latitude!, u.longitude!);
+    }
   }
 
   @override
@@ -81,8 +95,12 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
         if (_dataNascimento != null)
           'dataNascimento':
               _dataNascimento!.toIso8601String().substring(0, 10),
-        if (auth.usuario?.tipo == TipoUsuario.lojista)
+        if (auth.usuario?.tipo == TipoUsuario.lojista) ...{
           'nomeFantasia': _nomeFantasiaCtrl.text.trim(),
+          // Os dois juntos, ou os dois nulos (desmarcado).
+          'latitude': _pontoDaLoja?.latitude,
+          'longitude': _pontoDaLoja?.longitude,
+        },
       });
       auth.atualizarUsuarioLocal(novo);
       if (!mounted) return;
@@ -91,7 +109,7 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
             content: Text('Dados atualizados com sucesso!'),
             backgroundColor: AppColors.good),
       );
-      Navigator.pop(context);
+      if (Navigator.of(context).canPop()) Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -137,6 +155,10 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
                 _section('Estabelecimento'),
                 const SizedBox(height: 10),
                 _campoEstabelecimento(),
+                const SizedBox(height: 18),
+                _section('Ponto da loja no mapa'),
+                const SizedBox(height: 10),
+                _campoPontoDaLoja(),
               ],
               const SizedBox(height: 24),
               _botaoSalvar(),
@@ -172,6 +194,110 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
 
   Widget _campoEstabelecimento() =>
       _field('Nome fantasia', _nomeFantasiaCtrl);
+
+  /// Onde fica a loja: marcado uma vez, vale para todo turno publicado.
+  ///
+  /// O endereço comercial é texto, e o app não tem geocodificação — por isso
+  /// o ponto é marcado no mapa (ou pelo GPS, com o lojista na loja). Sem ele,
+  /// a publicação partia do GPS de onde o lojista estivesse.
+  Widget _campoPontoDaLoja() {
+    final ponto = _pontoDaLoja;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Toque no mapa onde fica a loja. É de onde parte todo turno que você '
+          'publicar — o entregador vai até este ponto.',
+          style: tsJakarta(11.5, FontWeight.w400,
+              color: AppColors.muted, height: 1.4),
+        ),
+        const SizedBox(height: 10),
+        MapaRaio(
+          key: const Key('mapa-ponto-da-loja'),
+          centro: ponto ?? GeoReferencia.daCidade(_cidadeCtrl.text),
+          height: 180,
+          onTapMapa: (p) => setState(() {
+            _pontoDaLoja = p;
+            _avisoDoPonto = null;
+          }),
+          rodape: ponto == null ? 'Ponto ainda não marcado' : 'Ponto da loja',
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(
+                ponto == null
+                    ? Icons.info_outline_rounded
+                    : Icons.check_circle_outline_rounded,
+                size: 14,
+                color: ponto == null ? AppColors.muted : AppColors.good),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                ponto == null
+                    ? 'Sem ponto marcado: a publicação usa o GPS do aparelho ou '
+                        'o centro da cidade.'
+                    : 'Ponto marcado. Salve para valer nos próximos turnos.',
+                key: const Key('ponto-da-loja-situacao'),
+                style: tsJakarta(11, FontWeight.w500,
+                    color: ponto == null ? AppColors.muted : AppColors.text),
+              ),
+            ),
+          ],
+        ),
+        if (_avisoDoPonto != null) ...[
+          const SizedBox(height: 6),
+          Text(_avisoDoPonto!,
+              style: tsJakarta(11, FontWeight.w500, color: AppColors.error)),
+        ],
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 8,
+          children: [
+            TextButton.icon(
+              onPressed: _buscandoPonto ? null : _usarLocalizacaoAtual,
+              icon: _buscandoPonto
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: AppColors.teal))
+                  : const Icon(Icons.my_location_rounded, size: 16),
+              label: const Text('Estou na loja: usar minha localização'),
+              style: TextButton.styleFrom(
+                  foregroundColor: AppColors.tealDeep,
+                  minimumSize: const Size(0, 44)),
+            ),
+            if (ponto != null)
+              TextButton(
+                onPressed: () => setState(() => _pontoDaLoja = null),
+                style: TextButton.styleFrom(
+                    foregroundColor: AppColors.muted,
+                    minimumSize: const Size(0, 44)),
+                child: const Text('Desmarcar'),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _usarLocalizacaoAtual() async {
+    setState(() {
+      _buscandoPonto = true;
+      _avisoDoPonto = null;
+    });
+    final r = await LocalizacaoService.of(context).posicaoAtual();
+    if (!mounted) return;
+    setState(() {
+      _buscandoPonto = false;
+      if (r.temPosicao) {
+        _pontoDaLoja = LatLng(r.latitude!, r.longitude!);
+      } else {
+        _avisoDoPonto = (r.falha ?? FalhaLocalizacao.erro).mensagem;
+      }
+    });
+  }
 
   Widget _botaoSalvar() => PrimaryButton(
         label: 'Salvar alterações',
@@ -213,6 +339,11 @@ class _DadosPessoaisScreenState extends State<DadosPessoaisScreen> {
                   PanelCard(
                     title: 'Estabelecimento',
                     child: _campoEstabelecimento(),
+                  ),
+                  const SizedBox(height: 16),
+                  PanelCard(
+                    title: 'Ponto da loja no mapa',
+                    child: _campoPontoDaLoja(),
                   ),
                 ],
                 const SizedBox(height: 16),

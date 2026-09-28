@@ -163,6 +163,22 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <!-- Avisos do compilador ligados em todo build: sem isto o javac
+                 so resume "algumas entradas usam API depreciada" e o aviso
+                 real some no log. -processing fica de fora porque avisa de
+                 anotacoes que nenhum processador consome (as do JPA, do
+                 Spring), o que nao e defeito de ninguem. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <showWarnings>true</showWarnings>
+                    <showDeprecation>true</showDeprecation>
+                    <compilerArgs>
+                        <arg>-Xlint:all,-processing</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>

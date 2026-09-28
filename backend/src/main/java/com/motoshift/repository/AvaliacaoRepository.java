@@ -16,6 +16,9 @@ public interface AvaliacaoRepository extends JpaRepository<Avaliacao, Long> {
     @Deprecated
     boolean existsByTurnoIdAndAvaliadorId(Long turnoId, Long avaliadorId);
 
+    /** Quantas avaliações a conta recebeu — o selo de nota exige 10. */
+    long countByAvaliadoId(Long avaliadoId);
+
     // Duplicata real: mesmo avaliador, mesmo turno, MESMO avaliado.
     boolean existsByTurnoIdAndAvaliadorIdAndAvaliadoId(
             Long turnoId, Long avaliadorId, Long avaliadoId);

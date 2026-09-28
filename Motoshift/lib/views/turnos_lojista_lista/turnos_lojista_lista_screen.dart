@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/repeticao_de_turno.dart';
 import '../../models/turno.dart';
 import '../../presentation/providers/turno_provider.dart';
 import '../../presentation/providers/turno_selecionado_provider.dart';
@@ -125,7 +126,7 @@ class _TurnosLojistaListaScreenState
         titulo: 'Nenhum turno publicado ainda',
         subtitulo: 'Publique o primeiro e ele aparece aqui.',
         acaoLabel: 'Publicar turno',
-        onAcao: () => Navigator.pushNamed(context, AppRoutes.publicarTurno),
+        onAcao: () => _abrirEVoltar(AppRoutes.publicarTurno),
       );
     }
     final aba =
@@ -175,7 +176,7 @@ class _TurnosLojistaListaScreenState
       desktopPrimaryAction: TopbarPrimaryButton(
         label: 'Publicar turno',
         icon: Icons.add,
-        onTap: () => Navigator.pushNamed(context, AppRoutes.publicarTurno),
+        onTap: () => _abrirEVoltar(AppRoutes.publicarTurno),
       ),
       desktopBody: _buildDesktop(),
       body: Consumer<TurnoProvider>(
@@ -213,11 +214,17 @@ class _TurnosLojistaListaScreenState
                             iconData: Icons.store_outlined,
                             pillLabel: t.status.label,
                             pillVariant: _pillFor(t.status),
-                            onTap: () => Navigator.pushNamed(
-                              context,
-                              AppRoutes.turnoLojista,
-                              arguments: t,
-                            ),
+                            acao: RepeticaoDeTurno.podeRepetir(t)
+                                ? _BotaoPublicarDeNovo(
+                                    key: Key('repetir-${t.id}'),
+                                    onTap: () => _abrirEVoltar(
+                                        AppRoutes.publicarTurno,
+                                        argumentos: t),
+                                  )
+                                : null,
+                            onTap: () => _abrirEVoltar(
+                                AppRoutes.turnoLojista,
+                                argumentos: t),
                           )),
                   ],
                 ),
@@ -305,6 +312,15 @@ class _TurnosLojistaListaScreenState
         );
       },
     );
+  }
+
+  /// Abre uma tela e, se ela voltar dizendo que algo mudou (turno publicado,
+  /// finalizado, cancelado), recarrega a lista. Antes a lista só carregava
+  /// quando estava vazia, e o turno recém-publicado não aparecia na volta.
+  Future<void> _abrirEVoltar(String rota, {Object? argumentos}) async {
+    final mudou =
+        await Navigator.pushNamed(context, rota, arguments: argumentos);
+    if (mudou == true && mounted) _recarregar();
   }
 
   Future<void> _recarregar() async {
@@ -445,8 +461,38 @@ class _TurnosLojistaListaScreenState
         label: 'Publicar turno',
         icon: const Icon(Icons.add_rounded,
             color: AppColors.onTertiary, size: 18),
-        onPressed: () =>
-            Navigator.pushNamed(context, AppRoutes.publicarTurno),
+        onPressed: () => _abrirEVoltar(AppRoutes.publicarTurno),
+      ),
+    );
+  }
+}
+
+/// "Publicar de novo" no card do turno que acabou — abre o formulário
+/// preenchido; nada é publicado sem a confirmação de lá.
+class _BotaoPublicarDeNovo extends StatelessWidget {
+  const _BotaoPublicarDeNovo({required this.onTap, super.key});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 44),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.replay_rounded,
+                size: 16, color: AppColors.tealDeep),
+            const SizedBox(width: 6),
+            Text('Publicar de novo',
+                style: tsJakarta(12, FontWeight.w700,
+                    color: AppColors.tealDeep)),
+          ],
+        ),
       ),
     );
   }

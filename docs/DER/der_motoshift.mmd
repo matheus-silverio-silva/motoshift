@@ -15,6 +15,9 @@ erDiagram
     TURNOS   ||--o{ TRANSACOES : "origina"
     TURNOS   ||--o{ NOTAS_FISCAIS : "documenta"
     TRANSACOES ||--o| NOTAS_FISCAIS : "pagamento documentado por"
+    USUARIOS ||--o{ FAVORITOS : "favorita (lojista_id)"
+    USUARIOS ||--o{ TURNOS : "cancela (cancelado_por_id)"
+    USUARIOS ||--o{ FAVORITOS : "e favorito (motoboy_id)"
 
     USUARIOS {
         BIGINT id PK "IDENTITY"
@@ -32,6 +35,9 @@ erDiagram
         FLOAT media_avaliacao ""
         VARCHAR nome_fantasia "lojista"
         VARCHAR endereco_comercial "lojista"
+        FLOAT latitude "lojista - ponto da loja (V15)"
+        FLOAT longitude "lojista - ponto da loja (V15)"
+        NUMERIC meta_mensal "motoboy - meta de ganhos do mes (V19) - CHECK maior que zero"
         VARCHAR cnh_numero "motoboy"
         VARCHAR cnh_categoria "motoboy - A|AB"
         DATE cnh_validade "motoboy"
@@ -62,6 +68,8 @@ erDiagram
         VARCHAR status "NOT NULL - aberto|aceito|em_andamento|finalizado|cancelado|expirado"
         VARCHAR pagamento_status "null|pendente|pago"
         TIMESTAMP expirado_em "SCRUM-19"
+        BIGINT cancelado_por_id FK "usuarios.id - quem cancelou (V19)"
+        TIMESTAMP cancelado_em "V19"
         TIMESTAMP criado_em "NOT NULL"
         TIMESTAMP atualizado_em ""
     }
@@ -72,6 +80,10 @@ erDiagram
         BIGINT motoboy_id FK "NOT NULL - usuarios.id"
         VARCHAR status "NOT NULL - aceito|finalizado|cancelado"
         VARCHAR pagamento_status "null|pendente|pago - pago na finalizacao"
+        TIMESTAMP checkin_em "Cheguei (V16)"
+        FLOAT checkin_latitude "de onde (V16)"
+        FLOAT checkin_longitude "de onde (V16)"
+        TIMESTAMP checkout_em "Encerrar turno - so depois do checkin (V16)"
         TIMESTAMP criado_em "NOT NULL"
         UNIQUE uk_turno_motoboy UK "(turno_id, motoboy_id)"
     }
@@ -105,7 +117,7 @@ erDiagram
         BIGINT contraparte_id FK "usuarios.id - outro lado"
         BIGINT motoboy_id "legado - nullable"
         BIGINT turno_id FK "turnos.id"
-        VARCHAR tipo "NOT NULL - CHECK: recarga|reserva|liberacao_reserva|pagamento_enviado|pagamento_recebido|saque|bonus|estorno|retencao_iss|retencao_irrf"
+        VARCHAR tipo "NOT NULL - CHECK: recarga|reserva|liberacao_reserva|pagamento_enviado|pagamento_recebido|saque|bonus|bonus_enviado|estorno|retencao_iss|retencao_irrf - bonus_enviado V17"
         NUMERIC valor "NOT NULL - 12,2"
         VARCHAR descricao ""
         VARCHAR natureza "NOT NULL V12 - CHECK: credito|debito - sinal da tela"
@@ -140,6 +152,12 @@ erDiagram
         BOOLEAN lida "NOT NULL - default false"
         TIMESTAMP lida_em ""
         TIMESTAMP criado_em "NOT NULL"
+    }
+
+    FAVORITOS {
+        BIGINT lojista_id PK,FK "NOT NULL - usuarios.id - V18"
+        BIGINT motoboy_id PK,FK "NOT NULL - usuarios.id"
+        TIMESTAMP criado_em "NOT NULL - default now()"
     }
 
     NOTAS_FISCAIS {

@@ -71,6 +71,19 @@ public class Usuario {
     private String nomeFantasia;
     private String enderecoComercial;
 
+    // Ponto da loja no mapa (V15), marcado pelo lojista em "Dados pessoais".
+    // É de onde a publicação de turno parte: o pino do turno e o endereço
+    // comercial passam a apontar para o mesmo lugar. Nulo em quem não marcou
+    // e em todo entregador.
+    private Double latitude;
+    private Double longitude;
+
+    // ── Entregador: meta do mês (V19) ──────────────────────────
+    // Quanto quer ganhar no mês — pagamentos recebidos + gorjetas. Nula = sem
+    // meta; o painel convida a definir em vez de desenhar uma barra zerada.
+    @Column(precision = 12, scale = 2)
+    private java.math.BigDecimal metaMensal;
+
     // ── RF01: bloqueio por tentativas de login ─────────────────
     // No banco, e não num mapa em memória: o bloqueio precisa sobreviver a um
     // redeploy, valer igual em todas as instâncias e só existir para contas que
@@ -157,6 +170,15 @@ public class Usuario {
 
     public String getEnderecoComercial() { return enderecoComercial; }
     public void setEnderecoComercial(String enderecoComercial) { this.enderecoComercial = enderecoComercial; }
+
+    public java.math.BigDecimal getMetaMensal() { return metaMensal; }
+    public void setMetaMensal(java.math.BigDecimal metaMensal) { this.metaMensal = metaMensal; }
+
+    public Double getLatitude() { return latitude; }
+    public void setLatitude(Double latitude) { this.latitude = latitude; }
+
+    public Double getLongitude() { return longitude; }
+    public void setLongitude(Double longitude) { this.longitude = longitude; }
 
     public int getTentativasLogin() { return tentativasLogin == null ? 0 : tentativasLogin; }
     public void setTentativasLogin(Integer tentativasLogin) { this.tentativasLogin = tentativasLogin; }

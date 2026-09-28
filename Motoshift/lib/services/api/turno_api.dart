@@ -101,7 +101,35 @@ class TurnoApi {
   // decide nada so adiava o pagamento de quem trabalhou. As rotas
   // correspondentes tambem sairam do backend.
 
-  /// Entregadores inscritos num turno multi-vaga, com status de pagamento.
+  /// "Cheguei" — o check-in do entregador (V16). O backend confere a janela
+  /// (30 min antes do início até o fim) e a distância até o ponto do turno;
+  /// sem posição, só passa com a trava de proximidade desligada.
+  Future<Turno> checkin(int turnoId, {double? latitude, double? longitude}) async {
+    final data = await _client.put('/turnos/$turnoId/checkin', {
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+    });
+    return Turno.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// "Encerrar turno" — o check-out. Não finaliza: finalizar é o que paga.
+  Future<Turno> checkout(int turnoId) async {
+    final data = await _client.put('/turnos/$turnoId/checkout', {});
+    return Turno.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Gorjeta do lojista a um entregador do turno finalizado (V17). O backend
+  /// confere quem dá, a quem, o teto e o saldo; repetir a mesma gorjeta não
+  /// cobra de novo.
+  Future<void> darGorjeta(int turnoId, int entregadorId, double valor) async {
+    await _client.post('/turnos/$turnoId/gorjetas', {
+      'entregadorId': entregadorId,
+      'valor': valor,
+    });
+  }
+
+  /// Entregadores inscritos num turno multi-vaga, com status de pagamento e,
+  /// para o lojista e para o próprio entregador, a chegada e a saída.
   Future<List<Map<String, dynamic>>> listarInscritos(int turnoId) async {
     final list = await _client.get('/turnos/$turnoId/inscritos') as List<dynamic>;
     return list.map((e) => (e as Map).cast<String, dynamic>()).toList();

@@ -94,6 +94,35 @@ class ResetDaMassaPostgresTest {
     }
 
     @Test
+    @DisplayName("confirmo: favorito e cancelamento cruzados com a massa não travam o reset nas FKs (V18, V19)")
+    void confirmoComReferenciasCruzadas() {
+        massa.resetar();
+        Usuario loja = contaReal("Loja que favorita", "favorita@lojareal.com.br", "lojista");
+        Usuario entregador = contaReal("Entregador favorito", "favorito@real.com.br", "motoboy");
+        Long ricardo = usuarioRepo.findByEmail("ricardo@teste.com").orElseThrow().getId();
+        Long claudia = usuarioRepo.findByEmail("claudia@teste.com").orElseThrow().getId();
+        // A loja real favoritou o Ricardo; a Cláudia, o entregador real.
+        jdbc.update("INSERT INTO favoritos (lojista_id, motoboy_id) VALUES (?, ?)", loja.getId(), ricardo);
+        jdbc.update("INSERT INTO favoritos (lojista_id, motoboy_id) VALUES (?, ?)", claudia, entregador.getId());
+        // Um turno da loja real, cancelado pelo Ricardo.
+        Turno proprio = turnoReal(loja);
+        jdbc.update("UPDATE turnos SET status = 'cancelado', cancelado_por_id = ?, cancelado_em = now() "
+                + "WHERE id = ?", ricardo, proprio.getId());
+
+        new ResetDaMassaNoBoot(massa, "confirmo").run(null);
+
+        assertThat(usuarioRepo.findById(loja.getId())).isPresent();
+        assertThat(usuarioRepo.findById(entregador.getId())).isPresent();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM favoritos WHERE lojista_id = ? OR motoboy_id = ?",
+                Integer.class, loja.getId(), entregador.getId())).isZero();
+        // O turno real fica; quem o cancelou era da massa e virou desconhecido.
+        assertThat(jdbc.queryForObject("SELECT cancelado_por_id FROM turnos WHERE id = ?",
+                Long.class, proprio.getId())).isNull();
+        assertThat(contasDaMassa()).isEqualTo(8);
+        consistencia.verificarConsistencia(idsDaMassa()).exigirConsistente();
+    }
+
+    @Test
     @DisplayName("confirmo-apagar-tudo: só sobra a massa nova; schema e flyway_schema_history intactos")
     void confirmoApagarTudo() {
         Usuario loja = contaReal("Loja real", "outra@lojareal.com.br", "lojista");
@@ -130,7 +159,8 @@ class ResetDaMassaPostgresTest {
 
         // O que o boot precisa para não reaplicar migração continua igual.
         assertThat(flyway()).isEqualTo(flywayAntes);
-        assertThat(flywayAntes.versao()).isEqualTo("14");
+        assertThat(flywayAntes.versao()).isEqualTo(
+                com.motoshift.repository.MigracoesPostgresTest.ultimaVersao());
         assertThat(jdbc.queryForObject(
                 "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated",
                 Integer.class)).isZero();
@@ -147,7 +177,8 @@ class ResetDaMassaPostgresTest {
         Map<String, long[]> resumo = massa.apagarTudoERecriar();
 
         assertThat(resumo.keySet()).containsExactly("notas_fiscais", "avaliacoes", "transacoes",
-                "cobrancas", "turno_inscricoes", "notificacoes", "turnos", "carteiras", "usuarios");
+                "cobrancas", "turno_inscricoes", "notificacoes", "turnos", "carteiras", "favoritos",
+                "usuarios");
         resumo.forEach((tabela, linha) -> {
             assertThat(linha[0]).as("antes de %s", tabela).isEqualTo(antes.get(tabela));
             assertThat(linha[1]).as("apagados de %s", tabela).isEqualTo(antes.get(tabela));

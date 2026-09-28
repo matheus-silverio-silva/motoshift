@@ -131,7 +131,13 @@ public class CarteiraService {
         LocalDateTime inicioMes = LocalDate.now().withDayOfMonth(1).atStartOfDay();
         BigDecimal total = transacaoRepo.somarPorTipoDesde(
                 usuarioId, TIPO_GANHO, STATUS_LIQUIDADO, inicioMes);
-        return (total == null ? BigDecimal.ZERO : total).setScale(2, RoundingMode.HALF_UP);
+        // A gorjeta também é ganho do mês (V17) — é dinheiro do trabalho, que
+        // entrou no disponível como o pagamento do turno.
+        BigDecimal gorjetas = transacaoRepo.somarPorTipoDesde(
+                usuarioId, TipoTransacao.BONUS, STATUS_LIQUIDADO, inicioMes);
+        return (total == null ? BigDecimal.ZERO : total)
+                .add(gorjetas == null ? BigDecimal.ZERO : gorjetas)
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
     /**

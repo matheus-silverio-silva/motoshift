@@ -186,13 +186,17 @@ public class ExtratoService {
             List<ReservaAbertaResponse> reservas = transacaoRepo.reservasAbertas(usuarioId).stream()
                     .map(r -> new ReservaAbertaResponse(r.turnoId(), r.titulo(), emReais(r.valor())))
                     .toList();
+            // Pago aos entregadores = turnos + gorjetas; as gorjetas vêm também
+            // à parte, e só quando houve alguma no período.
+            BigDecimal gorjetas = somaDe(soma, TipoTransacao.BONUS_ENVIADO);
             return ResumoFinanceiroResponse.doLojista(de, ate,
                     emReais(carteira.getSaldoDisponivel()),
                     emReais(somaDe(soma, TipoTransacao.RECARGA)),
-                    emReais(somaDe(soma, TipoTransacao.PAGAMENTO_ENVIADO)),
+                    emReais(somaDe(soma, TipoTransacao.PAGAMENTO_ENVIADO, TipoTransacao.BONUS_ENVIADO)),
                     emReais(somaDe(soma, TipoTransacao.LIBERACAO_RESERVA, TipoTransacao.ESTORNO)),
                     emReais(carteira.getSaldoBloqueado()),
-                    reservas, porTipo);
+                    reservas, porTipo)
+                    .comGorjetas(gorjetas.signum() > 0 ? emReais(gorjetas) : null);
         }
 
         BigDecimal retencoes = somaDe(soma, TipoTransacao.RETENCAO_ISS, TipoTransacao.RETENCAO_IRRF);
@@ -200,6 +204,9 @@ public class ExtratoService {
         // (Movimento.estornoDeSaque): o que foi sacado de verdade é a diferença.
         BigDecimal sacado = somaDe(soma, TipoTransacao.SAQUE)
                 .subtract(somaDe(soma, TipoTransacao.ESTORNO)).max(BigDecimal.ZERO);
+        // Recebido = turnos + gorjetas; as gorjetas vêm também à parte, só
+        // quando houve alguma no período.
+        BigDecimal gorjetas = somaDe(soma, TipoTransacao.BONUS);
         return ResumoFinanceiroResponse.doEntregador(de, ate,
                 emReais(carteira.getSaldoDisponivel()),
                 emReais(somaDe(soma, TipoTransacao.PAGAMENTO_RECEBIDO, TipoTransacao.BONUS)),
@@ -208,7 +215,8 @@ public class ExtratoService {
                 tributos.reterNaFonte() || retencoes.signum() > 0 ? emReais(retencoes) : null,
                 emReais(sacado),
                 emReais(aReceber(usuarioId)),
-                porTipo);
+                porTipo)
+                .comGorjetas(gorjetas.signum() > 0 ? emReais(gorjetas) : null);
     }
 
     private static BigDecimal somaDe(Map<TipoTransacao, BigDecimal> soma, TipoTransacao... tipos) {
@@ -366,7 +374,7 @@ public class ExtratoService {
      */
     private static NaturezaTransacao naturezaDe(TipoTransacao tipo) {
         return switch (tipo) {
-            case SAQUE, RESERVA, PAGAMENTO_ENVIADO, RETENCAO_ISS, RETENCAO_IRRF ->
+            case SAQUE, RESERVA, PAGAMENTO_ENVIADO, RETENCAO_ISS, RETENCAO_IRRF, BONUS_ENVIADO ->
                     NaturezaTransacao.DEBITO;
             case RECARGA, LIBERACAO_RESERVA, PAGAMENTO_RECEBIDO, ESTORNO, BONUS ->
                     NaturezaTransacao.CREDITO;

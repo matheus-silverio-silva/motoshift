@@ -1,12 +1,15 @@
 package com.motoshift.service;
 
 import com.motoshift.entity.StatusInscricao;
+import com.motoshift.repository.Chegada;
 import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Usuario;
 import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -61,6 +64,47 @@ public class Reputacao {
         return turnoRepo.existsByMotoboyIdAndStatusIn(motoboyId,
                         List.of(StatusTurno.FINALIZADO, StatusTurno.CANCELADO))
                 || inscricaoRepo.existsByMotoboyIdAndStatus(motoboyId, StatusInscricao.FINALIZADO);
+    }
+
+    // ── Pontualidade ────────────────────────────────────────────────────────
+
+    /** Até quanto depois do início a chegada ainda conta como pontual. */
+    public static final Duration TOLERANCIA_PONTUAL = Duration.ofMinutes(10);
+
+    /** A janela da pontualidade: turnos que começaram nos últimos 90 dias. */
+    public static final int JANELA_PONTUALIDADE_DIAS = 90;
+
+    /**
+     * Percentual de check-ins até {@link #TOLERANCIA_PONTUAL} depois do
+     * início, nos turnos dos últimos {@link #JANELA_PONTUALIDADE_DIAS} dias.
+     *
+     * <p>Sem check-in na janela, o percentual é {@code null} — "Sem histórico"
+     * na tela. Nunca 100%: 100% de nada é o mesmo número inventado que o score
+     * 5,0 do entregador novo era, e que saiu do app pelo mesmo motivo.
+     *
+     * <p>Mede só quem fez check-in. Turno sem check-in (anterior à V16, ou em
+     * que o entregador esqueceu de tocar "Cheguei") não entra na conta nem
+     * como atraso: não há hora real a comparar.
+     */
+    public Pontualidade pontualidade(Long motoboyId) {
+        if (motoboyId == null) return Pontualidade.SEM_HISTORICO;
+        List<Chegada> chegadas = inscricaoRepo.chegadasDesde(motoboyId,
+                LocalDateTime.now().minusDays(JANELA_PONTUALIDADE_DIAS));
+        if (chegadas.isEmpty()) return Pontualidade.SEM_HISTORICO;
+
+        long pontuais = chegadas.stream()
+                .filter(c -> !c.checkinEm().isAfter(c.inicioDoTurno().plus(TOLERANCIA_PONTUAL)))
+                .count();
+        int percentual = (int) Math.round(100.0 * pontuais / chegadas.size());
+        return new Pontualidade(percentual, chegadas.size());
+    }
+
+    /**
+     * @param percentual 0 a 100, ou {@code null} sem check-in na janela
+     * @param checkins   quantos check-ins entraram na conta
+     */
+    public record Pontualidade(Integer percentual, int checkins) {
+        public static final Pontualidade SEM_HISTORICO = new Pontualidade(null, 0);
     }
 
     /** O score depois de um cancelamento tardio. */

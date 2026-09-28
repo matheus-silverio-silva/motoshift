@@ -5,6 +5,7 @@ import 'presentation/providers/turno_provider.dart';
 import 'presentation/providers/turno_selecionado_provider.dart';
 import 'presentation/providers/notificacao_provider.dart';
 import 'presentation/providers/pendencias_provider.dart';
+import 'presentation/providers/favoritos_provider.dart';
 import 'routes/app_routes.dart';
 import 'services/api_service.dart';
 import 'services/auth_service.dart';
@@ -82,6 +83,12 @@ class MotoShiftApp extends StatelessWidget {
         ChangeNotifierProxyProvider<ApiService, PendenciasProvider>(
           create: (ctx) => PendenciasProvider(ctx.read<ApiService>()),
           update: (_, api, prev) => prev ?? PendenciasProvider(api),
+        ),
+
+        // Entregadores favoritos do lojista (V18): o coração em quatro telas.
+        ChangeNotifierProxyProvider<ApiService, FavoritosProvider>(
+          create: (ctx) => FavoritosProvider(ctx.read<ApiService>()),
+          update: (_, api, prev) => prev ?? FavoritosProvider(api),
         ),
       ],
       child: MaterialApp(

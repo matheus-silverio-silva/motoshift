@@ -3,7 +3,8 @@ import 'usuario.dart';
 
 /// Tipos que o backend emite, em `Transacao.tipo`:
 ///   recarga | reserva | liberacao_reserva | pagamento_enviado
-///   | pagamento_recebido | saque | bonus | estorno
+///   | pagamento_recebido | saque | bonus | bonus_enviado | estorno
+///   (bonus e bonus_enviado são os dois lados da gorjeta, V17)
 ///   | retencao_iss | retencao_irrf (só com a retenção na fonte ligada)
 /// ("turno" é o legado dos créditos anteriores à liquidação automática.)
 TipoTransacao _parseTipo(String raw) {
@@ -11,6 +12,7 @@ TipoTransacao _parseTipo(String raw) {
     'turno' => TipoTransacao.turno,
     'entrega' => TipoTransacao.entrega,
     'bonus' => TipoTransacao.bonus,
+    'bonus_enviado' => TipoTransacao.bonusEnviado,
     'saque' => TipoTransacao.saque,
     'recarga' => TipoTransacao.recarga,
     'reserva' => TipoTransacao.reserva,
@@ -173,7 +175,12 @@ class Transacao {
 enum TipoTransacao {
   turno,
   entrega,
+
+  /// Gorjeta recebida — o lado do entregador (V17).
   bonus,
+
+  /// Gorjeta dada — o lado do lojista (V17).
+  bonusEnviado,
   saque,
   recarga,
   reserva,
@@ -195,7 +202,8 @@ enum TipoTransacao {
     return switch (this) {
       TipoTransacao.turno => 'Turno Concluído',
       TipoTransacao.entrega => 'Entrega Concluída',
-      TipoTransacao.bonus => 'Bônus',
+      TipoTransacao.bonus => 'Gorjeta recebida',
+      TipoTransacao.bonusEnviado => 'Gorjeta enviada',
       TipoTransacao.saque => 'Transferência',
       TipoTransacao.recarga => 'Recarga',
       TipoTransacao.reserva => 'Reserva de turno',
@@ -217,6 +225,7 @@ enum TipoTransacao {
       TipoTransacao.pagamentoRecebido => 'pagamento_recebido',
       TipoTransacao.retencaoIss => 'retencao_iss',
       TipoTransacao.retencaoIrrf => 'retencao_irrf',
+      TipoTransacao.bonusEnviado => 'bonus_enviado',
       _ => name,
     };
   }
@@ -230,14 +239,15 @@ enum TipoTransacao {
   /// A ordem é a de leitura: primeiro o dinheiro que entra e sai de verdade,
   /// depois os movimentos internos e as correções.
   ///
-  /// - Entregador (prestador): pagamento recebido, saque, estorno (de saque
-  ///   recusado) e as retenções na fonte.
+  /// - Entregador (prestador): pagamento recebido, gorjeta recebida, saque,
+  ///   estorno (de saque recusado) e as retenções na fonte.
   /// - Lojista (tomador): recarga, reserva, liberação de reserva, pagamento
-  ///   enviado e estorno.
+  ///   enviado, gorjeta enviada e estorno.
   static List<TipoTransacao> filtraveisPara(TipoUsuario papel) =>
       switch (papel) {
         TipoUsuario.motoboy => const [
             TipoTransacao.pagamentoRecebido,
+            TipoTransacao.bonus,
             TipoTransacao.saque,
             TipoTransacao.estorno,
             TipoTransacao.retencaoIss,
@@ -248,6 +258,7 @@ enum TipoTransacao {
             TipoTransacao.reserva,
             TipoTransacao.liberacaoReserva,
             TipoTransacao.pagamentoEnviado,
+            TipoTransacao.bonusEnviado,
             TipoTransacao.estorno,
           ],
       };
@@ -257,6 +268,7 @@ enum TipoTransacao {
         TipoTransacao.saque ||
         TipoTransacao.reserva ||
         TipoTransacao.pagamentoEnviado ||
+        TipoTransacao.bonusEnviado ||
         TipoTransacao.retencaoIss ||
         TipoTransacao.retencaoIrrf =>
           false,

@@ -28,6 +28,11 @@ public class UsuarioResponse {
     private String veiculoCor;
     private String nomeFantasia;
     private String enderecoComercial;
+    /** Ponto da loja (V15). Só no perfil do próprio dono — o público não traz. */
+    private Double latitude;
+    private Double longitude;
+    /** Meta de ganhos do mês do entregador (V19). Só no perfil do dono. */
+    private java.math.BigDecimal metaMensal;
     private LocalDateTime criadoEm;
 
     /**
@@ -58,6 +63,9 @@ public class UsuarioResponse {
         r.veiculoCor = u.getVeiculoCor();
         r.nomeFantasia = u.getNomeFantasia();
         r.enderecoComercial = u.getEnderecoComercial();
+        r.latitude = u.getLatitude();
+        r.longitude = u.getLongitude();
+        r.metaMensal = u.getMetaMensal();
         r.criadoEm = u.getCriadoEm();
         return r;
     }
@@ -83,5 +91,8 @@ public class UsuarioResponse {
     public String getVeiculoCor() { return veiculoCor; }
     public String getNomeFantasia() { return nomeFantasia; }
     public String getEnderecoComercial() { return enderecoComercial; }
+    public java.math.BigDecimal getMetaMensal() { return metaMensal; }
+    public Double getLatitude() { return latitude; }
+    public Double getLongitude() { return longitude; }
     public LocalDateTime getCriadoEm() { return criadoEm; }
 }

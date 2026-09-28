@@ -13,6 +13,7 @@ import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/serie_diaria.dart';
+import '../../widgets/meta_do_mes.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/desktop/app_topbar.dart';
@@ -112,6 +113,8 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
           _buildScoreRow(auth),
           const SizedBox(height: 12),
           _buildStats(),
+          const SizedBox(height: 12),
+          _metaDoMes(auth),
           const SizedBox(height: 16),
           // Só ocupa espaço quando há algo a resolver; sem pendência, some.
           const PainelPendencias(),
@@ -190,6 +193,21 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
 
   int get _turnosMes =>
       (_dashData?['turnosFinalizadosMes'] as num?)?.toInt() ?? 0;
+
+  /// A meta do mês (V19): a do painel quando ele já respondeu, senão a do
+  /// perfil carregado no login.
+  double? _meta(AuthService auth) => _dashData != null
+      ? (_dashData!['metaMensal'] as num?)?.toDouble()
+      : auth.usuario?.metaMensal;
+
+  Widget _metaDoMes(AuthService auth) => MetaDoMes(
+        ganhos: _ganhosMensais,
+        meta: _meta(auth),
+        onEditar: () async {
+          final mudou = await editarMetaDoMes(context);
+          if (mudou != false && mounted) _carregar();
+        },
+      );
 
   // ── Desktop ───────────────────────────────────────────────────────────────
 
@@ -276,6 +294,8 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  _metaDoMes(auth),
+                  const SizedBox(height: 16),
                   const PainelPendencias(),
                   PanelCard(
                     title: 'Turnos aceitos',

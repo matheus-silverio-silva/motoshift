@@ -76,6 +76,20 @@ public interface TurnoRepository extends JpaRepository<Turno, Long> {
     /** Se o entregador já tem turno encerrado — a base de "tem histórico". */
     boolean existsByMotoboyIdAndStatusIn(Long motoboyId, List<StatusTurno> statuses);
 
+    /** Cancelou algum turno depois de {@code desde}? (V19) — o selo "30 dias sem cancelar". */
+    boolean existsByCanceladoPorIdAndCanceladoEmAfter(Long canceladoPorId, LocalDateTime desde);
+
+    /** Inícios dos turnos da loja num status, desde uma data — o selo "Contrata toda semana". */
+    @Query("select t.dataInicio from Turno t where t.lojistId = :lojistaId "
+            + "and t.status = :status and t.dataInicio >= :desde")
+    List<LocalDateTime> iniciosDosTurnosDaLojaDesde(@Param("lojistaId") Long lojistaId,
+                                                   @Param("status") StatusTurno status,
+                                                   @Param("desde") LocalDateTime desde);
+
+    /** Turnos que começam numa janela, em qualquer dos status — o lembrete de 1 h. */
+    List<Turno> findByStatusInAndDataInicioBetween(List<StatusTurno> statuses,
+                                                   LocalDateTime de, LocalDateTime ate);
+
     // Histórico de turnos finalizados pelo motoboy a partir de uma data
     List<Turno> findByMotoboyIdAndStatusAndDataInicioAfter(
             Long motoboyId, StatusTurno status, LocalDateTime inicio);

@@ -96,8 +96,12 @@ class _MapaRaioState extends State<MapaRaio> {
 
   static const int _limiteDeErros = 4;
 
-  /// Quantos km cabem em um grau de latitude — constante em qualquer latitude.
-  /// É o mesmo número que o `GeoUtils` do backend usa na bounding box.
+  /// Quantos km cabem em um grau de latitude, para ENQUADRAR o círculo.
+  ///
+  /// Só enquadramento: a moldura tem 24 px de folga, e 0,1% a mais ou a menos
+  /// não aparece. Quem decide o que está dentro do raio é o backend
+  /// (`GeoUtils`, que usa o raio médio da Terra na caixa e no Haversine) — o
+  /// app não mede distância, mostra a `distanciaKm` que veio.
   static const double _kmPorGrauLat = 111.32;
 
   bool get _semTiles => _tilesComErro >= _limiteDeErros;

@@ -69,6 +69,10 @@ class MassaDemonstracaoTest {
     @Autowired private NotaFiscalRepository notaRepo;
     @Autowired private NotaFiscalService notasFiscais;
     @Autowired private Reputacao reputacao;
+    @Autowired private com.motoshift.repository.FavoritoRepository favoritoRepo;
+    @Autowired private com.motoshift.service.Selos selos;
+    @Autowired private com.motoshift.service.FavoritoService favoritos;
+    @Autowired private com.motoshift.service.TurnoConsultaService consultas;
 
     @Test
     @DisplayName("sem MOTOSHIFT_SEED_RESET o boot nao apaga nem cria nada")
@@ -196,15 +200,24 @@ class MassaDemonstracaoTest {
                 .hasSize(6)
                 .allSatisfy(t -> assertThat(t.getDataInicio()).isAfter(agora));
 
-        // Dois confirmados para amanhã e um em andamento.
+        // Três aceitos por começar: dois para amanhã e um em menos de 1 hora
+        // (o do lembrete).
         assertThat(turnos).filteredOn(t -> t.getStatus() == StatusTurno.ACEITO)
                 .hasSize(3)
-                .anySatisfy(t -> {
+                .allSatisfy(t -> assertThat(t.getDataInicio()).isAfter(agora))
+                .filteredOn(t -> t.getDataInicio().isBefore(agora.plusHours(1)))
+                .hasSize(1);
+
+        // Um em andamento: começou há pouco, e o Ricardo fez check-in (V16).
+        assertThat(turnos).filteredOn(t -> t.getStatus() == StatusTurno.EM_ANDAMENTO)
+                .singleElement()
+                .satisfies(t -> {
                     assertThat(t.getDataInicio()).isBefore(agora);
                     assertThat(t.getDataFim()).isAfter(agora);
-                })
-                .filteredOn(t -> t.getDataInicio().isAfter(agora))
-                .hasSize(2);
+                    assertThat(inscricaoRepo.findByTurnoId(t.getId()))
+                            .singleElement()
+                            .satisfies(i -> assertThat(i.getCheckinEm()).isBefore(agora));
+                });
 
         assertThat(turnos).filteredOn(t -> t.getStatus() == StatusTurno.FINALIZADO)
                 .hasSizeGreaterThan(60)
@@ -385,7 +398,107 @@ class MassaDemonstracaoTest {
                 });
         assertThat(todas).extracting(Notificacao::getTipo)
                 .contains("turno_aceito", "avaliacao_pendente", "turno_cancelado", "turno_expirado",
-                          "nota_fiscal_emitida", "nota_fiscal_cancelada");
+                          "nota_fiscal_emitida", "nota_fiscal_cancelada",
+                          "entregador_chegou", "entregador_saiu", "gorjeta_recebida",
+                          "turno_de_favorito", "turno_lembrete");
+    }
+
+    /**
+     * A massa passa por tudo o que esta revisão acrescentou — pelos serviços
+     * de verdade, com a data de cada passo: check-in (V16), gorjeta (V17),
+     * favoritos (V18), meta do mês e selos (V19), lembrete de 1 hora.
+     */
+    @Test
+    @DisplayName("a massa exercita as novidades: presença, gorjeta, favoritos, meta, selos e lembrete")
+    void novidadesNaMassa() {
+        massa.resetar();
+        LocalDateTime agora = LocalDateTime.now();
+        Long ricardo = id("ricardo@teste.com"), lucas = id("lucas@teste.com"),
+             thiago = id("thiago@teste.com"), carlos = id("motoboy@teste.com");
+        Long claudia = id("claudia@teste.com"), fernando = id("fernando@teste.com"),
+             ana = id("ana@teste.com"), maria = id("lojista@teste.com");
+
+        // Pontualidades diferentes: Ricardo sempre antes, Carlos quase sempre,
+        // Lucas às vezes, Thiago metade das vezes (ou menos).
+        Integer pRicardo = reputacao.pontualidade(ricardo).percentual();
+        Integer pCarlos = reputacao.pontualidade(carlos).percentual();
+        Integer pLucas = reputacao.pontualidade(lucas).percentual();
+        Integer pThiago = reputacao.pontualidade(thiago).percentual();
+        assertThat(pRicardo).isEqualTo(100);
+        assertThat(pCarlos).isBetween(90, 99);
+        assertThat(pLucas).isBetween(60, 89);
+        assertThat(pThiago).isLessThan(50);
+
+        // Gorjetas: a Cláudia dá; o Fernando deu duas; Maria e Ana, nenhuma.
+        Map<Long, Long> gorjetasDadas = transacaoRepo.findAll().stream()
+                .filter(t -> t.getTipo() == TipoTransacao.BONUS_ENVIADO)
+                .collect(Collectors.groupingBy(Transacao::getUsuarioId, Collectors.counting()));
+        assertThat(gorjetasDadas.get(claudia)).isGreaterThanOrEqualTo(3);
+        assertThat(gorjetasDadas.get(fernando)).isEqualTo(2);
+        assertThat(gorjetasDadas).doesNotContainKeys(maria, ana);
+        assertThat(transacaoRepo.findAll()).anyMatch(t -> t.getTipo() == TipoTransacao.BONUS
+                && t.getUsuarioId().equals(lucas) || t.getTipo() == TipoTransacao.BONUS
+                && t.getUsuarioId().equals(ricardo));
+
+        // Favoritos: Cláudia → Ricardo e Lucas; Maria → Carlos; Fernando → Lucas.
+        assertThat(favoritoRepo.findAll())
+                .extracting(f -> f.getLojistaId() + ">" + f.getMotoboyId())
+                .containsExactlyInAnyOrder(claudia + ">" + ricardo, claudia + ">" + lucas,
+                        maria + ">" + carlos, fernando + ">" + lucas);
+        // ...e o selo aparece para quem foi chamado.
+        List<com.motoshift.dto.TurnoResponse> disponiveis =
+                consultas.listarDisponiveis(null).getContent();
+        favoritos.marcarLojasQueTeChamaram(disponiveis, lucas);
+        assertThat(disponiveis).filteredOn(com.motoshift.dto.TurnoResponse::isLojaQueJaTeChamou)
+                .isNotEmpty()
+                .allSatisfy(t -> assertThat(t.getLojistId()).isIn(claudia, fernando));
+
+        // Meta: Ricardo e Carlos definiram; Lucas e Thiago não.
+        assertThat(usuarioRepo.findById(ricardo).orElseThrow().getMetaMensal()).isEqualByComparingTo("2000");
+        assertThat(usuarioRepo.findById(carlos).orElseThrow().getMetaMensal()).isEqualByComparingTo("1500");
+        assertThat(usuarioRepo.findById(lucas).orElseThrow().getMetaMensal()).isNull();
+        assertThat(usuarioRepo.findById(thiago).orElseThrow().getMetaMensal()).isNull();
+
+        // Selos em uns perfis e não em outros.
+        assertThat(codigosDosSelos(carlos)).containsExactly(
+                "turnos_concluidos", "sem_cancelar", "nota_alta", "pontual");
+        assertThat(codigosDosSelos(lucas)).containsExactly("turnos_concluidos", "sem_cancelar");
+        assertThat(codigosDosSelos(ricardo)).as("cancelou o turno de folga").containsExactly("pontual");
+        assertThat(codigosDosSelos(thiago)).isEmpty();
+        assertThat(codigosDosSelos(claudia)).containsExactly("paga_gorjeta", "toda_semana");
+        assertThat(codigosDosSelos(maria)).containsExactly("nota_alta", "toda_semana");
+        assertThat(codigosDosSelos(fernando)).isEmpty();
+        assertThat(codigosDosSelos(ana)).isEmpty();
+
+        // Notificações recentes, ainda no sino: a chegada do Ricardo (para a
+        // Cláudia), o lembrete de 1 hora (Lucas e Fernando) e os turnos novos
+        // das lojas favoritas.
+        assertThat(naoLidas(claudia, "entregador_chegou")).isNotEmpty();
+        assertThat(naoLidas(lucas, "turno_lembrete")).singleElement()
+                .satisfies(n -> assertThat(n.getMensagem()).contains("na Pizzaria do Fernando"));
+        assertThat(naoLidas(fernando, "turno_lembrete")).singleElement()
+                .satisfies(n -> assertThat(n.getMensagem()).contains("com Lucas"));
+        assertThat(naoLidas(ricardo, "turno_de_favorito"))
+                .allSatisfy(n -> assertThat(n.getMensagem()).startsWith("A Hamburgueria da Cláudia publicou"))
+                .isNotEmpty();
+        assertThat(naoLidas(carlos, "turno_de_favorito"))
+                .allSatisfy(n -> assertThat(n.getMensagem()).startsWith("O Mercado Andrade publicou"))
+                .isNotEmpty();
+        assertThat(naoLidas(thiago, "turno_de_favorito")).isEmpty();
+        // As antigas já foram lidas; nenhuma é do futuro.
+        assertThat(notificacaoRepo.findAll()).allSatisfy(n ->
+                assertThat(n.getCriadoEm()).isBeforeOrEqualTo(agora.plusMinutes(1)));
+    }
+
+    private List<String> codigosDosSelos(Long usuarioId) {
+        return selos.de(usuarioRepo.findById(usuarioId).orElseThrow()).stream()
+                .map(com.motoshift.service.Selos.Selo::codigo).toList();
+    }
+
+    private List<Notificacao> naoLidas(Long usuarioId, String tipo) {
+        return notificacaoRepo.findTop50ByUsuarioIdOrderByCriadoEmDesc(usuarioId).stream()
+                .filter(n -> tipo.equals(n.getTipo()) && !Boolean.TRUE.equals(n.getLida()))
+                .toList();
     }
 
     /**
@@ -430,6 +543,46 @@ class MassaDemonstracaoTest {
             assertThat(c.getSaldoBloqueado().signum())
                     .as("bloqueado de %s", u.getEmail()).isNotNegative();
         }
+    }
+
+    /**
+     * As oito contas na mesma cidade da massa inteira. {@code lojista@teste.com}
+     * e {@code motoboy@teste.com} eram de São Paulo, com todos os turnos em
+     * Curitiba: na demonstração, o "perto de mim" e o ponto inicial do mapa
+     * delas ficavam a 340 km de tudo.
+     */
+    @Test
+    @DisplayName("todas as contas em Curitiba; toda loja com ponto no mapa; o turno parte da loja")
+    void tudoEmCuritibaEAPartirDaLoja() {
+        massa.resetar();
+
+        for (Usuario u : contasDaMassa()) {
+            assertThat(u.getCidade()).as("cidade de %s", u.getEmail()).isEqualTo("Curitiba");
+            assertThat(u.getEstado()).as("UF de %s", u.getEmail()).isEqualTo("PR");
+            if ("lojista".equals(u.getTipo())) {
+                assertThat(com.motoshift.util.GeoUtils.distanciaKm(
+                                -25.4284, -49.2733, u.getLatitude(), u.getLongitude()))
+                        .as("ponto da loja de %s, a partir do centro de Curitiba", u.getEmail())
+                        .isNotNull()
+                        .isLessThan(10.0);
+            } else {
+                assertThat(u.getLatitude()).as("entregador não tem loja").isNull();
+            }
+        }
+
+        Map<Long, Usuario> lojas = contasDaMassa().stream()
+                .filter(u -> "lojista".equals(u.getTipo()))
+                .collect(Collectors.toMap(Usuario::getId, u -> u));
+        for (Turno t : turnosDaMassa()) {
+            Usuario loja = lojas.get(t.getLojistId());
+            assertThat(t.getLatitude()).as("pino de %s", t.getTitulo()).isEqualTo(loja.getLatitude());
+            assertThat(t.getLongitude()).as("pino de %s", t.getTitulo()).isEqualTo(loja.getLongitude());
+            assertThat(t.getRegiao()).as("região de %s", t.getTitulo()).endsWith("Curitiba");
+        }
+
+        // Mesmo e-mail e mesma senha de antes.
+        assertThat(usuarioRepo.findByEmail("lojista@teste.com")).isPresent();
+        assertThat(usuarioRepo.findByEmail("motoboy@teste.com")).isPresent();
     }
 
     private List<Long> idsDaMassa() {
@@ -494,7 +647,9 @@ class MassaDemonstracaoTest {
     private static final Set<String> TIPOS_DE_NOTIFICACAO = Set.of(
             "turno_aceito", "turno_lotado", "turno_vencendo", "turno_expirado", "turno_cancelado",
             "turno_pendente_finalizacao", "avaliacao_pendente", "pagamento_confirmado",
-            "nota_fiscal_emitida", "nota_fiscal_cancelada");
+            "nota_fiscal_emitida", "nota_fiscal_cancelada",
+            "entregador_chegou", "entregador_saiu", "gorjeta_recebida", "turno_de_favorito",
+            "turno_lembrete");
 
     /** As tags do app (lib/models/tags_de_avaliacao.dart), por papel de quem é avaliado. */
     private static final Set<String> TAGS_DO_ENTREGADOR = Set.of(

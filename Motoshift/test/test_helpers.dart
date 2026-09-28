@@ -34,6 +34,9 @@ import 'package:moto_shift/presentation/providers/turno_provider.dart';
 import 'package:moto_shift/presentation/providers/turno_selecionado_provider.dart';
 import 'package:moto_shift/presentation/providers/notificacao_provider.dart';
 import 'package:moto_shift/presentation/providers/pendencias_provider.dart';
+import 'package:moto_shift/presentation/providers/favoritos_provider.dart';
+import 'package:moto_shift/models/entregador_favorito.dart';
+import 'package:moto_shift/services/api/favorito_api.dart';
 import 'package:moto_shift/services/api/agenda_api.dart';
 import 'package:moto_shift/services/api/api_client.dart';
 import 'package:moto_shift/services/api/auth_api.dart';
@@ -46,7 +49,9 @@ import 'package:moto_shift/services/api/turno_api.dart';
 import 'package:moto_shift/services/api/usuario_api.dart';
 import 'package:moto_shift/services/api_service.dart';
 import 'package:moto_shift/services/auth_service.dart';
+import 'package:moto_shift/services/localizacao_service.dart';
 import 'package:moto_shift/theme/app_theme.dart';
+import 'package:moto_shift/utils/baixar_arquivo.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Setup global
@@ -328,6 +333,9 @@ Map<String, dynamic> fakeDashboardMotoboy() => {
       'turnosFinalizados': 42,
       'mediaAvaliacao': 4.8,
       'ganhosDiarios': [120.0, 95.0, 0.0, 145.0, 110.0, 130.0, 90.0],
+      // Chegadas até 10 min após o início, 90 dias (V16).
+      'pontualidade': 92,
+      'checkinsPontualidade': 13,
     };
 
 Map<String, dynamic> fakeDashboardLojista() => {
@@ -1036,6 +1044,40 @@ class FakeAvaliacaoApi extends AvaliacaoApi {
   }
 }
 
+/// Favoritos do lojista em memória (V18). Começa com o Ricardo — o
+/// entregador de [fakeMotoboy] —, para o perfil do lojista mostrar a lista.
+class FakeFavoritoApi extends FavoritoApi {
+  FakeFavoritoApi({List<EntregadorFavorito>? iniciais})
+      : lista = iniciais ??
+            [
+              const EntregadorFavorito(
+                  motoboyId: 1,
+                  nome: 'Ricardo Souza',
+                  mediaAvaliacao: 4.8,
+                  score: 4.7),
+            ],
+        super(ApiClient());
+
+  final List<EntregadorFavorito> lista;
+
+  @override
+  Future<List<EntregadorFavorito>> listar() async => List.of(lista);
+
+  @override
+  Future<EntregadorFavorito> favoritar(int motoboyId) async {
+    final existente = lista.where((f) => f.motoboyId == motoboyId).firstOrNull;
+    if (existente != null) return existente;
+    final novo = EntregadorFavorito(
+        motoboyId: motoboyId, nome: 'Entregador $motoboyId');
+    lista.insert(0, novo);
+    return novo;
+  }
+
+  @override
+  Future<void> desfavoritar(int motoboyId) async =>
+      lista.removeWhere((f) => f.motoboyId == motoboyId);
+}
+
 class FakeNotificacaoApi extends NotificacaoApi {
   FakeNotificacaoApi() : super(ApiClient());
 
@@ -1229,6 +1271,10 @@ class FakeApiService extends ApiService {
   @override
   NotificacaoApi get notificacoes => _notificacoes;
   final NotificacaoApi _notificacoes = FakeNotificacaoApi();
+
+  @override
+  FavoritoApi get favoritos => _favoritos;
+  final FavoritoApi _favoritos = FakeFavoritoApi();
 }
 
 /// Turnos encerrados com data ABSOLUTA, para as telas de histórico.
@@ -1345,6 +1391,7 @@ Future<void> pumpGolden(
   int? turnoSelecionado,
   ApiService? apiFake,
   Usuario? usuario,
+  LocalizacaoService? localizacao,
 }) async {
   // A ordem importa: `physicalSize` precisa ser calculado com o DPR final.
   // Fazendo o inverso (multiplicar pelo DPR padrão da view, 3.0, e só depois
@@ -1382,6 +1429,13 @@ Future<void> pumpGolden(
       ChangeNotifierProvider<PendenciasProvider>(
         create: (_) => PendenciasProvider(api),
       ),
+      ChangeNotifierProvider<FavoritosProvider>(
+        create: (_) => FavoritosProvider(api),
+      ),
+      // O GPS dos testes. Sem ele as telas usam o do aparelho, que num teste
+      // não existe e cai no "erro" — o que também é um caminho válido.
+      if (localizacao != null)
+        Provider<LocalizacaoService>.value(value: localizacao),
     ],
     child: MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -1820,12 +1874,6 @@ const List<int> _pngTransparente1x1 = <int>[
   0xAE, 0x42, 0x60, 0x82,
 ];
 
-/// Faz o canal `flutter/platform` responder dentro do relógio falso do teste.
-///
-/// Sem isto, `Clipboard.setData` só é respondido fora do `pump`, e a tela que
-/// espera a cópia terminar fica girando o spinner para sempre — `pumpAndSettle`
-/// estoura em vez de falhar a asserção. Quem exercita "Exportar CSV" chama
-/// isto antes do toque.
 /// Finge o plugin `printing` e guarda o que ele recebeu: o PDF e o nome do
 /// arquivo. Sem isto, "Baixar PDF" num teste cai num canal de plataforma que
 /// não existe.
@@ -1851,9 +1899,12 @@ PdfEntregue fingirImpressora(WidgetTester tester) {
   return entregue;
 }
 
-void fingirAreaDeTransferencia(WidgetTester tester) {
-  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-    SystemChannels.platform,
-    (call) async => null,
-  );
+/// Finge o download e guarda os arquivos que a tela entregou — o CSV da
+/// planilha e o .ics do calendário. Sem isto, `baixarArquivo` cai na folha de
+/// compartilhar do sistema, que num teste não existe.
+List<ArquivoBaixado> fingirDownload() {
+  final baixados = <ArquivoBaixado>[];
+  final anterior = trocarEntregaDeArquivo((a) async => baixados.add(a));
+  addTearDown(() => trocarEntregaDeArquivo(anterior));
+  return baixados;
 }

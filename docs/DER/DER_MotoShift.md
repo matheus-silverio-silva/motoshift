@@ -1,6 +1,6 @@
 # DER — Diagrama Entidade-Relacionamento
 
-Mapa das tabelas que compõem o banco de dados do **MotoShift**. O modelo reflete o schema real em produção (PostgreSQL no Railway), versionado por **Flyway** (migrações V1 a V13) e validado contra as entidades JPA do backend Spring Boot (`spring.jpa.hibernate.ddl-auto=validate`).
+Mapa das tabelas que compõem o banco de dados do **MotoShift**. O modelo reflete o schema real em produção (PostgreSQL no Railway), versionado por **Flyway** (migrações V1 a V19) e validado contra as entidades JPA do backend Spring Boot (`spring.jpa.hibernate.ddl-auto=validate`).
 
 > **Escopo:** 9 tabelas — `usuarios`, `turnos`, `turno_inscricoes`, `avaliacoes`, `carteiras`, `transacoes`, `cobrancas`, `notificacoes`, `notas_fiscais`.
 > Fonte da verdade: `backend/src/main/resources/db/migration` + `backend/src/main/java/com/motoshift/entity`.
@@ -29,6 +29,9 @@ erDiagram
     TURNOS   ||--o{ TRANSACOES : "origina"
     TURNOS   ||--o{ NOTAS_FISCAIS : "documenta"
     TRANSACOES ||--o| NOTAS_FISCAIS : "pagamento documentado por"
+    USUARIOS ||--o{ FAVORITOS : "favorita (lojista_id)"
+    USUARIOS ||--o{ TURNOS : "cancela (cancelado_por_id)"
+    USUARIOS ||--o{ FAVORITOS : "e favorito (motoboy_id)"
 ```
 
 ## Visão geral das entidades
@@ -44,6 +47,7 @@ erDiagram
 | `cobrancas` | Recargas e saques no gateway — a fronteira com o dinheiro de fora | `id` | `idempotency_key` |
 | `notificacoes` | Notificação in-app do usuário (SCRUM-20) | `id` | — |
 | `notas_fiscais` | NFS-e do serviço prestado num turno — uma por par (turno, entregador) e uma por pagamento | `id` | `uk_nota_turno_prestador (turno_id, prestador_id)`, `uk_nota_transacao (transacao_id)` |
+| `favoritos` | Entregador que a loja marcou com o coração (V18) | `(lojista_id, motoboy_id)` | a própria PK — um favorito por par |
 
 ## Relacionamentos e cardinalidades
 
@@ -57,10 +61,12 @@ erDiagram
 | `usuarios` | `avaliacoes.avaliador_id / avaliado_id` | 1 : N (duplo) | Auto-relacionamento: o mesmo usuário avalia e é avaliado |
 | `usuarios` | `carteiras` | 1 : 1 | Toda carteira tem um dono único — lojista ou entregador |
 | `usuarios` | `transacoes.usuario_id` | 1 : N | Dono do lançamento; `contraparte_id` é o outro lado quando existe |
-| `turnos` | `transacoes.turno_id` | 0..1 : N | Nulo em recarga, saque e bônus (operações de uma ponta só) |
+| `turnos` | `transacoes.turno_id` | 0..1 : N | Nulo em recarga e saque (operações de uma ponta só); a gorjeta (`bonus` / `bonus_enviado`, V17) aponta para o turno em que foi dada |
 | `usuarios` | `notificacoes` | 1 : N | `referencia_tipo` + `referencia_id` fazem o deep link e a deduplicação |
 | `turnos` | `notas_fiscais` | 1 : N | Uma nota por entregador do turno: três vagas, três notas |
 | `usuarios` | `notas_fiscais.prestador_id / tomador_id` | 1 : N (duplo) | O entregador presta e o lojista toma; `emitida_por_id` registra quem clicou |
+| `usuarios` | `turnos.cancelado_por_id` | 0..1 : N | Quem cancelou o turno (V19) — lojista ou entregador |
+| `usuarios` | `favoritos.lojista_id / motoboy_id` | 1 : N (duplo) | A loja favorita vários entregadores e o entregador é favorito de várias lojas; o par é único. Quem é loja e quem é entregador é regra do `FavoritoService`; o banco só impede a conta de favoritar a si mesma |
 | `transacoes` | `notas_fiscais.transacao_id` | 1 : 0..1 | A nota documenta o `pagamento_recebido` do extrato (V14). É o que impede nota e extrato de discordarem: o valor do serviço é o do lançamento |
 
 ## Dicionário de dados
@@ -80,6 +86,8 @@ erDiagram
 | `score` | FLOAT(53) | não | Default 5.0 |
 | `media_avaliacao` | FLOAT(53) | sim | Calculada a partir de `avaliacoes` |
 | `nome_fantasia`, `endereco_comercial` | VARCHAR(255) | sim | Preenchidos quando `tipo = lojista` |
+| `meta_mensal` | NUMERIC(12,2) | sim | Meta de ganhos do mês do entregador (V19): pagamentos recebidos + gorjetas. CHECK `ck_usuario_meta_positiva`. Nula = sem meta (o painel convida a definir) |
+| `latitude`, `longitude` | FLOAT(53) | sim | Ponto da loja no mapa (V15), marcado pelo lojista em "Dados pessoais". É de onde a publicação de turno parte — o pino do turno e o endereço comercial passam a ser o mesmo lugar. Nulos no entregador e em quem não marcou |
 | `cnh_numero`, `cnh_categoria`, `cnh_validade` | VARCHAR / DATE | sim | Preenchidos quando `tipo = motoboy` (categoria A ou AB) |
 | `veiculo_modelo`, `veiculo_placa`, `veiculo_ano`, `veiculo_cor` | VARCHAR / INTEGER | sim | Dados da moto do entregador |
 | `tentativas_login` | INTEGER | não | Default 0 — bloqueio do RF01, no banco desde a V8 |
@@ -103,6 +111,8 @@ erDiagram
 | `status` | VARCHAR(255) | não | `aberto` \| `aceito` \| `em_andamento` \| `finalizado` \| `cancelado` \| `expirado` |
 | `pagamento_status` | VARCHAR(255) | sim | `null` (não finalizado) \| `pendente` \| `pago` |
 | `expirado_em` | TIMESTAMP(6) | sim | Preenchido pelo job de vencimento (SCRUM-19) |
+| `cancelado_por_id` | BIGINT | sim | FK `fk_turno_cancelado_por` → `usuarios.id` (V19): quem cancelou — os dois lados podem, e o selo "30 dias sem cancelar" conta só o que o entregador cancelou. Nulo no turno não cancelado e no cancelado antes da V19 |
+| `cancelado_em` | TIMESTAMP(6) | sim | Quando foi cancelado (V19); índice `ix_turno_cancelado_por (cancelado_por_id, cancelado_em)` |
 | `criado_em`, `atualizado_em` | TIMESTAMP(6) | criação obrigatória | Auditoria |
 
 ### turno_inscricoes
@@ -115,6 +125,10 @@ erDiagram
 | `status` | VARCHAR(255) | não | `aceito` \| `finalizado` \| `cancelado` |
 | `pagamento_status` | VARCHAR(255) | sim | Pagamento por entregador. Na prática `pendente` é um instante: a finalização marca pendente, liquida e marca `pago` na mesma transação |
 | `criado_em` | TIMESTAMP(6) | não | — |
+
+| `checkin_em` | TIMESTAMP(6) | sim | Quando o entregador tocou "Cheguei" (V16). Nulo = não chegou, ou inscrição anterior à V16 |
+| `checkin_latitude`, `checkin_longitude` | FLOAT(53) | sim | De onde fez o check-in — a distância até o ponto do turno é conferida na hora |
+| `checkout_em` | TIMESTAMP(6) | sim | Quando tocou "Encerrar turno". CHECK `ck_inscricao_saida_apos_chegada`: só com check-in, e nunca antes dele |
 
 > `lojista_confirmou_em` e `motoboy_confirmou_em` **foram removidas pela V13**.
 > Guardavam a dupla confirmação — cada parte declarando que o dinheiro tinha
@@ -156,7 +170,7 @@ erDiagram
 | `usuario_id` | BIGINT | não | Dono do lançamento — FK → `usuarios.id` |
 | `contraparte_id` | BIGINT | sim | O outro lado da operação — FK → `usuarios.id` |
 | `turno_id` | BIGINT | sim | FK → `turnos.id` |
-| `tipo` | VARCHAR(255) | não | CHECK `ck_transacao_tipo`: `recarga` \| `reserva` \| `liberacao_reserva` \| `pagamento_enviado` \| `pagamento_recebido` \| `saque` \| `bonus` \| `estorno` \| `retencao_iss` \| `retencao_irrf` (V14) |
+| `tipo` | VARCHAR(255) | não | CHECK `ck_transacao_tipo`: `recarga` \| `reserva` \| `liberacao_reserva` \| `pagamento_enviado` \| `pagamento_recebido` \| `saque` \| `bonus` (gorjeta recebida) \| `bonus_enviado` (gorjeta dada, V17) \| `estorno` \| `retencao_iss` \| `retencao_irrf` (V14) |
 | `natureza` | VARCHAR(8) | não | CHECK `ck_transacao_natureza`: `credito` \| `debito`. O **sinal que a tela desenha** (V12) — não a aritmética do saldo: `reserva` é débito e não muda o patrimônio. Ver `docs/financeiro/FLUXO-FINANCEIRO.md` |
 | `valor` | NUMERIC(12,2) | não | Migrado na V3 |
 | `descricao` | VARCHAR(255) | sim | — |
@@ -202,6 +216,14 @@ deixaria de valer.
 | `lida`, `lida_em` | BOOLEAN / TIMESTAMP | `lida` obrigatória | Default `false` |
 | `criado_em` | TIMESTAMP(6) | não | — |
 
+### favoritos
+
+| Coluna | Tipo | Nulo | Observação |
+|---|---|---|---|
+| `lojista_id` | BIGINT | não | PK (com `motoboy_id`), FK `fk_favorito_lojista` → `usuarios.id` |
+| `motoboy_id` | BIGINT | não | PK (com `lojista_id`), FK `fk_favorito_motoboy` → `usuarios.id`; índice `ix_favorito_motoboy` para o selo "Loja que já te chamou" |
+| `criado_em` | TIMESTAMP(6) | não | Default `now()`. CHECK `ck_favorito_nao_a_si_mesmo` (`lojista_id <> motoboy_id`) |
+
 ### notas_fiscais
 
 | Coluna | Tipo | Nulo | Observação |
@@ -235,6 +257,8 @@ deixaria de valer.
 - **`pagamento_status` nulo tem significado.** Nulo = turno ainda não finalizado; `pendente` = finalizado e devendo; `pago` = ambas as partes confirmaram.
 - **Idempotência obrigatória no extrato.** Todo lançamento tem chave: `pagamento_turno:{turno}:{motoboy}` para pagamento de turno, `saque:{usuario}:{chave do cliente}` quando o cliente manda `Idempotency-Key`, `legado:{id}` para as linhas anteriores à V10.
 - **Colunas legadas preservadas.** `carteiras.motoboy_id`, `carteiras.ganhos_mensais` e `transacoes.motoboy_id` permanecem no banco com o histórico intacto, apenas sem `NOT NULL`.
+- **FKs das V18 e V19, com a mesma regra.** `favoritos.lojista_id`, `favoritos.motoboy_id` e `turnos.cancelado_por_id` são `ON DELETE RESTRICT` como as da V11. O reset "só da massa" apaga os favoritos que tocam uma conta da massa e esvazia `cancelado_por_id` de turno real cancelado por ela — sem isso, a FK travaria o reset (`ResetDaMassaPostgresTest`).
+- **O que não virou tabela.** Pontualidade (V16) e selos de reputação (Fase 7) são calculados na hora a partir de `turno_inscricoes`, `avaliacoes`, `transacoes` e `turnos`: um valor guardado envelheceria. O lembrete de 1 hora também não tem coluna de controle — a notificação que já existe (`ix_notificacao_dedup`) é o controle.
 - **Índices de desempenho.** `ix_turno_status_inicio`, `ix_turno_status_fim` e `ix_turno_geo` sustentam a listagem de turnos disponíveis, o job de expiração e o pré-filtro por bounding box do filtro de raio; `ix_notificacao_dedup` evita notificação repetida a cada execução do job; `ix_inscricao_motoboy` e `ix_avaliacao_avaliador` (V11) cobrem as consultas por pessoa e a verificação das FKs.
 
 ## Rastreabilidade
@@ -255,3 +279,8 @@ deixaria de valer.
 | `V12__ledger_financeiro` | `natureza`, `operacao_id` e os dois snapshots de saldo em `transacoes`; tabela `cobrancas` com FK real. É a migração que dá ao dinheiro origem e destino — antes a liquidação creditava sem debitar ninguém |
 | `V13__remove_dupla_confirmacao` | CONTRACT: derruba `lojista_confirmou_em` e `motoboy_confirmou_em` de `turno_inscricoes`. Com a liquidação automática não há o que confirmar |
 | `V14__fiscal_por_lancamento` | Aditiva: `transacao_id`, `operacao_id`, `competencia` e `tributos_retidos` em `notas_fiscais`, com backfill ligando cada nota ao `pagamento_recebido` do turno; `uk_nota_transacao` e `ix_nota_competencia`; o CHECK de `transacoes.tipo` ganha `retencao_iss` e `retencao_irrf`. A nota passa a documentar o lançamento do extrato, não só o turno — ver [`docs/financeiro/FISCAL.md`](../financeiro/FISCAL.md) |
+| `V15__coordenada_da_loja` | Aditiva: `latitude` e `longitude` em `usuarios` — o ponto da loja. A publicação parte dele (depois do GPS e da cidade), em vez do GPS de onde o lojista estiver publicando |
+| `V16__checkin_do_entregador` | Aditiva: `checkin_em`, `checkin_latitude`, `checkin_longitude` e `checkout_em` em `turno_inscricoes` — a hora real de cada entregador, na inscrição porque num turno multi-vaga cada um chega na sua hora; CHECK de saída depois da chegada; índice `ix_inscricao_checkin` para a pontualidade |
+| `V17__gorjeta` | O CHECK de `transacoes.tipo` ganha `bonus_enviado`, o lado de quem dá a gorjeta; o `bonus`, que estava no domínio desde a V10 sem fluxo, vira o lado de quem recebe. Sem coluna nova: a gorjeta é o par de lançamentos, e "uma por entregador por turno" é a chave de idempotência |
+| `V18__favoritos` | Tabela nova `favoritos (lojista_id, motoboy_id, criado_em)`, o par como chave primária, FKs para `usuarios` e índice por entregador. Aditiva: nada existente muda |
+| `V19__meta_do_mes_e_quem_cancelou` | Aditiva: `meta_mensal` em `usuarios` (CHECK positiva) e `cancelado_por_id` (FK) e `cancelado_em` em `turnos`, com índice. Os selos de reputação não têm tabela: são calculados do histórico |

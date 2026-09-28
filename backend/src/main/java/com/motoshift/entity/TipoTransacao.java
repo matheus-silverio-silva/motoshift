@@ -15,10 +15,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * O domínio é o documentado desde a V4 e que o app já sabe desenhar
  * (Motoshift/lib/models/transacao.dart). Quem emite cada um, e o que ele faz
  * com o saldo, está na tabela de {@code service.ledger.Movimento} — a única
- * fonte dessa resposta. {@link #BONUS} é o único que nenhum fluxo emite hoje;
- * existe para que uma linha antiga com esse valor seja lida sem estourar. A
- * lista bate com o CHECK do banco (V10, ampliado na V14) — valor fora dela é
- * erro alto, lá e aqui.
+ * fonte dessa resposta. A lista bate com o CHECK do banco (V10, ampliado na
+ * V14 e na V17) — valor fora dela é erro alto, lá e aqui.
  *
  * Mesmo padrão dos outros enums: o valor gravado é minúsculo e explícito, nunca
  * {@code name()} (ver {@link StatusTurno}).
@@ -31,7 +29,20 @@ public enum TipoTransacao {
     PAGAMENTO_ENVIADO("pagamento_enviado"),
     PAGAMENTO_RECEBIDO("pagamento_recebido"),
     SAQUE("saque"),
+
+    /**
+     * Gorjeta recebida pelo entregador (V17) — o lado de quem recebe. Estava
+     * no CHECK desde a V10 sem fluxo que o emitisse.
+     */
     BONUS("bonus"),
+
+    /**
+     * Gorjeta dada pelo lojista (V17) — o lado de quem paga. Tipo próprio, e
+     * não {@link #BONUS} com natureza débito: aqui o tipo decide a aritmética
+     * e a natureza é só o sinal da tela. É o par de
+     * {@link #PAGAMENTO_ENVIADO} / {@link #PAGAMENTO_RECEBIDO}.
+     */
+    BONUS_ENVIADO("bonus_enviado"),
     ESTORNO("estorno"),
 
     /**

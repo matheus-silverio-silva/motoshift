@@ -48,7 +48,7 @@ class AuthServiceTest {
     @BeforeEach
     void setUp() {
         authService = new AuthService(repo, carteiras, encoder, new JwtService("", 168),
-                mock(Reputacao.class));
+                mock(Reputacao.class), mock(Selos.class));
 
         usuarioValido = new Usuario();
         // id é gerado pelo JPA (sem setter); simula um usuário já persistido
@@ -282,7 +282,7 @@ class AuthServiceTest {
         // "Restart": um AuthService novo, sem nenhum estado em memoria. Com o
         // mapa antigo este login passaria; o bloqueio estava so no objeto velho.
         AuthService depoisDoDeploy = new AuthService(repo, carteiras, encoder,
-                new JwtService("", 168), mock(Reputacao.class));
+                new JwtService("", 168), mock(Reputacao.class), mock(Selos.class));
         LoginRequest certo = buildLoginRequest("motoboy@teste.com", "senha123");
 
         assertThatExceptionOfType(ResponseStatusException.class)
@@ -302,6 +302,111 @@ class AuthServiceTest {
         assertThat(lido.id()).isEqualTo(1L);
         assertThat(lido.email()).isEqualTo("motoboy@teste.com");
         assertThat(lido.tipo()).isEqualTo("motoboy");
+    }
+
+    // --------------------------------------------------------
+    // V15 — ponto da loja no mapa
+    // --------------------------------------------------------
+
+    @Test
+    @DisplayName("a loja marca o ponto no mapa e ele volta no próprio perfil")
+    void pontoDaLoja_gravado() {
+        Usuario loja = lojista();
+        when(repo.findById(7L)).thenReturn(Optional.of(loja));
+        when(repo.save(any(Usuario.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var r = authService.atualizar(7L, java.util.Map.of("latitude", -25.456, "longitude", -49.282));
+
+        assertThat(r.getLatitude()).isEqualTo(-25.456);
+        assertThat(r.getLongitude()).isEqualTo(-49.282);
+    }
+
+    @Test
+    @DisplayName("latitude sem longitude, ou fora do planeta, é 400 e não grava nada")
+    void pontoDaLoja_invalido() {
+        Usuario loja = lojista();
+        when(repo.findById(7L)).thenReturn(Optional.of(loja));
+
+        assertThatThrownBy(() -> authService.atualizar(7L, java.util.Map.of("latitude", -25.456)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("latitude e longitude juntas");
+        assertThatThrownBy(() -> authService.atualizar(7L,
+                java.util.Map.of("latitude", -125.0, "longitude", -49.2)))
+                .isInstanceOf(ResponseStatusException.class);
+        assertThat(loja.getLatitude()).isNull();
+        verify(repo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("os dois nulos desmarcam o ponto")
+    void pontoDaLoja_desmarcado() {
+        Usuario loja = lojista();
+        loja.setLatitude(-25.4);
+        loja.setLongitude(-49.2);
+        when(repo.findById(7L)).thenReturn(Optional.of(loja));
+        when(repo.save(any(Usuario.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        java.util.Map<String, Object> corpo = new java.util.HashMap<>();
+        corpo.put("latitude", null);
+        corpo.put("longitude", null);
+        var r = authService.atualizar(7L, corpo);
+
+        assertThat(r.getLatitude()).isNull();
+        assertThat(r.getLongitude()).isNull();
+    }
+
+    @Test
+    @DisplayName("entregador não tem loja: mandar ponto é 400")
+    void pontoDaLoja_entregadorRecusado() {
+        when(repo.findById(1L)).thenReturn(Optional.of(usuarioValido));
+
+        assertThatThrownBy(() -> authService.atualizar(1L,
+                java.util.Map.of("latitude", -25.4, "longitude", -49.2)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Só a conta de loja");
+    }
+
+    // --------------------------------------------------------
+    // V19 — meta do mês do entregador
+    // --------------------------------------------------------
+
+    @Test
+    @DisplayName("o entregador define a meta do mês, e nula tira")
+    void meta_definidaETirada() {
+        when(repo.findById(1L)).thenReturn(Optional.of(usuarioValido));
+        when(repo.save(any(Usuario.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var r = authService.atualizar(1L, java.util.Map.of("metaMensal", 2000));
+        assertThat(r.getMetaMensal()).isEqualByComparingTo("2000.00");
+
+        java.util.Map<String, Object> tirar = new java.util.HashMap<>();
+        tirar.put("metaMensal", null);
+        assertThat(authService.atualizar(1L, tirar).getMetaMensal()).isNull();
+    }
+
+    @Test
+    @DisplayName("meta zero, negativa, absurda ou de loja é 400")
+    void meta_invalida() {
+        when(repo.findById(1L)).thenReturn(Optional.of(usuarioValido));
+        when(repo.findById(7L)).thenReturn(Optional.of(lojista()));
+
+        for (Object v : java.util.List.of(0, -10, 100001, "abc")) {
+            assertThatThrownBy(() -> authService.atualizar(1L, java.util.Map.of("metaMensal", v)))
+                    .isInstanceOf(ResponseStatusException.class);
+        }
+        assertThatThrownBy(() -> authService.atualizar(7L, java.util.Map.of("metaMensal", 2000)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Só o entregador");
+        verify(repo, never()).save(any());
+    }
+
+    private Usuario lojista() {
+        Usuario u = new Usuario();
+        ReflectionTestUtils.setField(u, "id", 7L);
+        u.setNome("Cláudia Oliveira");
+        u.setTipo("lojista");
+        u.setEmail("claudia@teste.com");
+        return u;
     }
 
     // --------------------------------------------------------

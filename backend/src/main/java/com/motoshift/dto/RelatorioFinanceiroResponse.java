@@ -35,7 +35,20 @@ public record RelatorioFinanceiroResponse(
         Map<String, Object> numeros,
         Map<String, List<ItemDeQuebra>> series,
         String analise,
-        @Deprecated String relatorio) {
+        String relatorio) {
+
+    /**
+     * O mesmo texto de {@link #analise()}, na chave que o app antigo lê.
+     *
+     * <p>O {@code @Deprecated} mora aqui, no acessor, e não no componente: no
+     * componente o javac avisava que a anotação não tinha efeito sobre o
+     * parâmetro do construtor — e era verdade.
+     */
+    @Deprecated
+    @Override
+    public String relatorio() {
+        return relatorio;
+    }
 
     public static RelatorioFinanceiroResponse de(String perfil, String periodo,
                                                  LocalDate inicio, LocalDate fim,

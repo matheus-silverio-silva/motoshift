@@ -1,8 +1,11 @@
 package com.motoshift.controller;
 
+import com.motoshift.dto.CheckinRequest;
 import com.motoshift.dto.TurnoRequest;
 import com.motoshift.dto.TurnoResponse;
 import com.motoshift.security.UsuarioAutenticado;
+import com.motoshift.service.CheckinService;
+import com.motoshift.service.FavoritoService;
 import com.motoshift.service.TurnoConsultaService;
 import com.motoshift.service.TurnoService;
 import com.motoshift.service.ledger.RetentativaOtimista;
@@ -11,6 +14,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -40,12 +44,21 @@ public class TurnoController {
      */
     private final RetentativaOtimista retentativa;
 
+    private final CheckinService checkins;
+
+    /** O selo "Loja que já te chamou" na lista de disponíveis (V18). */
+    private final FavoritoService favoritos;
+
     public TurnoController(TurnoService service,
                            TurnoConsultaService consultas,
-                           RetentativaOtimista retentativa) {
+                           RetentativaOtimista retentativa,
+                           CheckinService checkins,
+                           FavoritoService favoritos) {
         this.service = service;
         this.consultas = consultas;
         this.retentativa = retentativa;
+        this.checkins = checkins;
+        this.favoritos = favoritos;
     }
 
     @Operation(summary = "Publicar turno",
@@ -112,7 +125,8 @@ public class TurnoController {
             @RequestParam(required = false) Double lng,
             @RequestParam(required = false) Double raioKm,
             @RequestParam(required = false) Integer pagina,
-            @RequestParam(required = false) Integer tamanho) {
+            @RequestParam(required = false) Integer tamanho,
+            @AuthenticationPrincipal UsuarioAutenticado atual) {
 
         boolean hasFilter = horarioInicio != null || horarioFim != null || diaSemana != null
                 || raioMaxKm != null || dataInicio != null || dataFim != null
@@ -122,10 +136,21 @@ public class TurnoController {
         if (hasFilter) {
             // Parte dos filtros (horário, dia da semana, raio exato) roda em
             // memória, então a página é cortada depois deles.
-            return Paginacao.fatia(consultas.listarDisponiveisComFiltros(horarioInicio, horarioFim,
-                    diaSemana, raioMaxKm, dataInicio, dataFim, ordenarPor, lat, lng, raioKm), pedido);
+            List<TurnoResponse> filtrados = consultas.listarDisponiveisComFiltros(horarioInicio,
+                    horarioFim, diaSemana, raioMaxKm, dataInicio, dataFim, ordenarPor, lat, lng, raioKm);
+            marcarLojasQueTeChamaram(filtrados, atual);
+            return Paginacao.fatia(filtrados, pedido);
         }
-        return Paginacao.resposta(consultas.listarDisponiveis(pedido));
+        Page<TurnoResponse> abertos = consultas.listarDisponiveis(pedido);
+        marcarLojasQueTeChamaram(abertos.getContent(), atual);
+        return Paginacao.resposta(abertos);
+    }
+
+    /** Só o entregador tem loja que o chamou; para o lojista, nada muda. */
+    private void marcarLojasQueTeChamaram(List<TurnoResponse> turnos, UsuarioAutenticado atual) {
+        if (atual != null && "motoboy".equals(atual.tipo())) {
+            favoritos.marcarLojasQueTeChamaram(turnos, atual.id());
+        }
     }
 
     @Operation(summary = "Buscar turno por ID")
@@ -186,6 +211,43 @@ public class TurnoController {
     public TurnoResponse cancelar(@PathVariable Long id,
                                   @AuthenticationPrincipal UsuarioAutenticado atual) {
         return retentativa.executar("cancelar turno", () -> service.cancelar(id, atual.id()));
+    }
+
+    @Operation(summary = "Check-in do entregador (\"Cheguei\")",
+            description = "Grava a hora real de chegada. Só o entregador inscrito e aceito; de 30 "
+                    + "minutos antes do início até o fim do turno; a até "
+                    + "motoshift.checkin.raio-metros (padrão 500 m) do ponto do turno, a menos "
+                    + "que motoshift.checkin.exigir-proximidade=false. O primeiro check-in leva o "
+                    + "turno a EM_ANDAMENTO e avisa o lojista. Repetir não muda nada.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Chegada registrada (ou já estava)"),
+        @ApiResponse(responseCode = "400", description = "Sem localização, com a trava ligada"),
+        @ApiResponse(responseCode = "403", description = "Não é entregador aceito neste turno"),
+        @ApiResponse(responseCode = "409", description = "Fora da janela, ou turno encerrado"),
+        @ApiResponse(responseCode = "422", description = "Longe demais — a mensagem diz a distância")
+    })
+    @PutMapping("/{id}/checkin")
+    public TurnoResponse checkin(@PathVariable Long id,
+                                 @RequestBody(required = false) CheckinRequest req,
+                                 @AuthenticationPrincipal UsuarioAutenticado atual) {
+        atual.exigirTipo("motoboy");
+        return checkins.checkin(id, atual.id(),
+                req == null ? null : req.latitude(), req == null ? null : req.longitude());
+    }
+
+    @Operation(summary = "Check-out do entregador (\"Encerrar turno\")",
+            description = "Grava a hora real de saída, só depois do check-in, e avisa o lojista. "
+                    + "Não finaliza o turno: finalizar é o que paga.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Saída registrada (ou já estava)"),
+        @ApiResponse(responseCode = "403", description = "Não é entregador aceito neste turno"),
+        @ApiResponse(responseCode = "409", description = "Ainda não fez check-in")
+    })
+    @PutMapping("/{id}/checkout")
+    public TurnoResponse checkout(@PathVariable Long id,
+                                  @AuthenticationPrincipal UsuarioAutenticado atual) {
+        atual.exigirTipo("motoboy");
+        return checkins.checkout(id, atual.id());
     }
 
     @Operation(summary = "Listar inscritos do turno",

@@ -4,7 +4,9 @@ import '../../models/turno.dart';
 import '../../presentation/providers/turno_provider.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/atalhos_do_turno.dart';
 import '../../widgets/acoes_do_turno.dart';
+import '../../widgets/checkin_do_turno.dart';
 import '../../widgets/desktop/info_tile_grid.dart';
 import '../../widgets/mapa_turno.dart';
 import '../../widgets/o_que_falta.dart';
@@ -95,8 +97,12 @@ class _DetalheTurnoConteudoState extends State<DetalheTurnoConteudo> {
               _InfoCard(turno: turno),
               const SizedBox(height: 12),
               _GridInfo(turno: turno),
+              // Abrir rota / calendário — somem quando não cabem.
+              AtalhosDoTurno(turno: turno, margem: const EdgeInsets.only(top: 12)),
               // Some sozinho quando não há pendência — ver OQueFalta.
               OQueFalta(turno: turno, margem: const EdgeInsets.only(top: 12)),
+              // "Cheguei" / "Encerrar turno": só para quem está no turno.
+              CheckinDoTurno(turno: turno, margem: const EdgeInsets.only(top: 12)),
               if (turno.descricao != null && turno.descricao!.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 RequisitosCard(descricao: turno.descricao!),
@@ -128,6 +134,7 @@ class _DetalheTurnoConteudoState extends State<DetalheTurnoConteudo> {
           _CabecalhoDesktop(turno: turno),
           const SizedBox(height: 16),
           InfoTileGrid(itens: _infoDoTurno(turno)),
+          AtalhosDoTurno(turno: turno, margem: const EdgeInsets.only(top: 16)),
           const SizedBox(height: 16),
           Expanded(
             // O mapa ocupa a altura que sobrar do painel; o LayoutBuilder
@@ -143,6 +150,7 @@ class _DetalheTurnoConteudoState extends State<DetalheTurnoConteudo> {
           ],
           const SizedBox(height: 16),
           OQueFalta(turno: turno, margem: const EdgeInsets.only(bottom: 16)),
+          CheckinDoTurno(turno: turno, margem: const EdgeInsets.only(bottom: 16)),
           AcoesDoTurno(
             turno: turno,
             aceitando: _aceitando,
@@ -305,6 +313,14 @@ List<InfoTileData> _infoDoTurno(Turno turno) {
       label: 'Horário',
       valor: turno.horarioFormatado,
     ),
+    // Só quando a lista veio da busca com posição: é a distância que o
+    // backend mediu, a mesma do card e do pino.
+    if (turno.distanciaRotulo != null)
+      InfoTileData(
+        icon: Icons.near_me_outlined,
+        label: 'Distância de você',
+        valor: turno.distanciaRotulo!,
+      ),
     InfoTileData(
       icon: Icons.radar_rounded,
       label: 'Raio de entrega',

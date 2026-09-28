@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -43,6 +44,7 @@ public class TurnoService {
     private final CarteiraService carteiras;
     private final TurnoMapper mapper;
     private final TurnoAcesso acesso;
+    private final FavoritoService favoritos;
 
     public TurnoService(TurnoRepository turnoRepo,
                         UsuarioRepository usuarioRepo,
@@ -51,7 +53,8 @@ public class TurnoService {
                         PagamentoTurnoService pagamentos,
                         CarteiraService carteiras,
                         TurnoMapper mapper,
-                        TurnoAcesso acesso) {
+                        TurnoAcesso acesso,
+                        FavoritoService favoritos) {
         this.turnoRepo = turnoRepo;
         this.usuarioRepo = usuarioRepo;
         this.inscricaoRepo = inscricaoRepo;
@@ -60,6 +63,7 @@ public class TurnoService {
         this.carteiras = carteiras;
         this.mapper = mapper;
         this.acesso = acesso;
+        this.favoritos = favoritos;
     }
 
     // RF04 — Criar turno: início deve ser >= agora + 2h
@@ -108,6 +112,11 @@ public class TurnoService {
         Turno salvo = turnoRepo.save(t);
         exigirSaldoParaPublicar(salvo, lojistaId);
         pagamentos.reservar(salvo);
+
+        // Os entregadores favoritos da loja ficam sabendo (V18). Na mesma
+        // transação: se a reserva falhar, ninguém é avisado de turno que não
+        // existe.
+        favoritos.avisarFavoritos(salvo, LocalDate.now());
 
         return mapper.toResponse(salvo);
     }
@@ -269,6 +278,16 @@ public class TurnoService {
         if (turno.getStatus() == StatusTurno.FINALIZADO || turno.getStatus() == StatusTurno.CANCELADO) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Turno já encerrado.");
         }
+        // Turno que começou não é cancelado como se não tivesse começado:
+        // cancelar devolve a reserva INTEIRA ao lojista, e alguém já está
+        // trabalhando. O check-in é o que diz que começou — inclusive o feito
+        // antes do início, com o turno ainda ABERTO para as vagas que sobram.
+        if (turno.getStatus() == StatusTurno.EM_ANDAMENTO
+                || inscricaoRepo.existsByTurnoIdAndCheckinEmIsNotNull(turnoId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "O turno já começou — o entregador fez check-in. Finalize o turno para "
+                            + "pagar quem trabalhou.");
+        }
 
         boolean cancelamentoTardio = LocalDateTime.now().isAfter(
                 turno.getDataInicio().minusHours(1));
@@ -294,6 +313,10 @@ public class TurnoService {
         pagamentos.liberarReserva(turno, MotivoLiberacao.CANCELAMENTO);
 
         turno.setStatus(StatusTurno.CANCELADO);
+        // Quem cancelou (V19): o selo "30 dias sem cancelar" conta só o que o
+        // entregador cancelou, não o que a loja cancelou com ele no turno.
+        turno.setCanceladoPorId(usuarioId);
+        turno.setCanceladoEm(LocalDateTime.now());
         turnoRepo.save(turno);
 
         // SCRUM-20: todo mundo que estava no turno precisa saber.

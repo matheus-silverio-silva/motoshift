@@ -172,7 +172,14 @@ public class ComprovanteService {
                 if (doTurno != null) l.add(new Linha("Turno", doTurno));
                 l.add(new Linha("Movimento", "Retido na fonte sobre o pagamento do turno"));
             }
-            case BONUS -> l.add(new Linha("Movimento", "Crédito de bônus"));
+            case BONUS, BONUS_ENVIADO -> {
+                boolean recebida = t.getTipo() == TipoTransacao.BONUS;
+                l.add(new Linha("Movimento", recebida ? "Gorjeta recebida" : "Gorjeta enviada"));
+                if (doTurno != null) l.add(new Linha("Turno", doTurno));
+                l.add(new Linha(recebida ? "Crédito em" : "Débito de", "Saldo disponível"));
+                l.add(new Linha("Natureza",
+                        "Gorjeta — valor além do turno; não é serviço e não gera NFS-e"));
+            }
             case PAGAMENTO_RECEBIDO, PAGAMENTO_ENVIADO -> {
                 // Pagamento de turno tem NFS-e, não comprovante.
             }

@@ -182,19 +182,62 @@ regras de `TurnoService` no backend.
 | Status | Entregador | Lojista |
 |---|---|---|
 | Aberto, com vaga | **Aceitar turno** | **Cancelar turno** (e **Finalizar turno**, se já há entregador) |
-| Aberto (já aceito por mim, multi-vaga), aceito, em andamento | **Finalizar turno** · **Cancelar turno** | **Finalizar turno** · **Cancelar turno** |
-| Finalizado, com avaliação pendente | **Avaliar a loja** | **Avaliar o entregador** / **Avaliar entregadores** |
-| Finalizado sem pendência, cancelado, expirado | Só o status por extenso — "Turno finalizado", "Turno cancelado" | idem |
+| Aberto (já aceito por mim, multi-vaga), aceito | **Cheguei** (presença) · **Finalizar turno** · **Cancelar turno** | **Finalizar turno** · **Cancelar turno** |
+| Em andamento (alguém fez check-in) | **Encerrar turno** (presença) · **Finalizar turno** | **Finalizar turno** |
+| Finalizado, com avaliação pendente | **Avaliar a loja** | **Avaliar o entregador** / **Avaliar entregadores** · **Publicar de novo** |
+| Finalizado sem pendência, cancelado, expirado | Só o status por extenso — "Turno finalizado", "Turno cancelado" | O status por extenso · **Publicar de novo** |
 
 - **Os dois participantes finalizam.** O backend aceita desde que o dinheiro
   passou a ser reservado na publicação: finalizar não cria compromisso, só
   transfere o que já estava reservado.
+- **Presença.** No detalhe do turno do entregador, o bloco **PRESENÇA** tem
+  "Cheguei" (check-in, de 30 min antes do início até o fim, a até 500 m do
+  ponto) e depois "Encerrar turno" (check-out). A posição vem do
+  `LocalizacaoService`; a recusa do backend aparece como veio ("Você está a 1,2
+  km do local"). O lojista vê "Chegou às 14:03 (3 min antes) · saiu às 18:02"
+  no card de cada entregador, e recebe a notificação de chegada e de saída.
+- **Turno em andamento não se cancela.** Depois do check-in alguém está
+  trabalhando: cancelar devolveria a reserva inteira. A saída é finalizar.
 - **Finalizar leva direto à avaliação**, para os dois papéis — o backend
   notifica os dois na mesma transação.
 - **Cancelar avisa a consequência** antes de confirmar: menos de 1 h do início
   desconta 0,5 do score do entregador; o valor reservado volta inteiro.
 - O lojista vê **todos os inscritos** do turno, cada um com "Ver perfil" e,
   quando a nota dele falta, "Avaliar".
+- **Publicar de novo** (lojista, turno finalizado, cancelado ou expirado —
+  no detalhe e no card da lista, no celular; no desktop, no painel ao lado da
+  lista) abre *Publicar turno* preenchido com título, descrição, região,
+  ponto, raio, valor, vagas e duração. A data vai para o mesmo dia da semana
+  da semana seguinte, no mesmo horário (se já passou, a próxima que ainda
+  respeita as 2 h de antecedência). Nada é publicado sem a confirmação do
+  custo; ao publicar, a lista recarrega com o turno novo.
+- **Abrir rota / Calendário.** No detalhe do turno, abaixo das informações:
+  o entregador tem "Abrir rota" (Google Maps; no celular, também Waze, se
+  estiver instalado) em turno que ainda vale e tem ponto no mapa, e
+  "Calendário" nos turnos em que está; a loja tem "Adicionar ao calendário"
+  nos turnos que publicou e ainda não acabaram. O calendário baixa um `.ics`
+  pelo mesmo caminho da planilha.
+- **Lembrete.** 1 h antes do turno aceito, entregador e loja recebem
+  `turno_lembrete`, que abre o turno (seção 6).
+- **Meta do mês** (entregador): no Início, abaixo dos números do mês — a
+  barra "R$ 1.340 de R$ 2.000 (67%)" ou, sem meta, o convite "Definir meta";
+  no Perfil, a linha "Meta do mês". Os dois abrem o mesmo diálogo.
+- **Selos de reputação**: chips no perfil público (abaixo do nome) e no
+  próprio Perfil (abaixo dos números); tocar mostra o critério. Sem selo, nada
+  aparece.
+- **Favoritos** (lojista): o coração aparece no perfil público do
+  entregador, na avaliação ("Avaliar o entregador" e cada card de "Avaliar
+  entregadores") e no card do entregador no turno finalizado. A lista
+  "Meus entregadores favoritos" fica no próprio Perfil, sem tela nova — cada
+  linha abre o perfil público. Publicar avisa os favoritos
+  (`turno_de_favorito`, que abre o turno — seção 6), e na lista de
+  disponíveis do entregador os turnos dessas lojas levam o selo "Loja que já
+  te chamou". A ordenação não muda.
+- **A gorjeta mora na avaliação do entregador** (Avaliar o entregador e
+  Avaliar entregadores, um seletor por card): opcional, "Sem gorjeta" vem
+  marcado, R$ 5 · 10 · 20 ou outro valor até R$ 50. Não é tela nem botão
+  próprio — é um gesto de quem acabou de dar a nota. O entregador recebe a
+  notificação `gorjeta_recebida`, que abre a Carteira (seção 6).
 
 ### "O que falta"
 

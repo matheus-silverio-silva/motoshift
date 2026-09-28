@@ -265,9 +265,9 @@ depende disso.
 
 **P: O que está fora do escopo (trabalhos futuros)?**
 R: Rastreamento em tempo real, redefinição de senha por e-mail, rascunho de
-turno, check-in do entregador (o estado EM_ANDAMENTO existe e é lido, mas
-ninguém o escreve), tabela de eventos de score e lock distribuído para os jobs
-agendados (hoje a saída é ligar os jobs em uma instância só).
+turno, tabela de eventos de score e lock distribuído para os jobs agendados
+(hoje a saída é ligar os jobs em uma instância só). O check-in, que estava
+aqui, entrou nesta revisão (seção 11).
 
 ---
 
@@ -279,3 +279,199 @@ agendados (hoje a saída é ligar os jobs em uma instância só).
 - **Avaliação:** média das notas recebidas, dos dois lados.
 - **DTO:** objeto que trafega entre app e API (não expõe a entidade do banco).
 - **Provider:** mecanismo de gerência de estado do Flutter usado no app.
+
+---
+
+## 11. Recursos desta revisão — a regra e onde ela está
+
+Uma seção curta por recurso: o que a regra diz e o arquivo em que ela mora.
+
+### Localização: o pino é a loja
+
+- **Regra.** O turno parte do ponto da loja, marcado uma vez em *Dados
+  pessoais* (`usuarios.latitude/longitude`, V15). Sem ele, do GPS; sem GPS, do
+  centro da cidade — e aí **publicar pede confirmação**: nenhum turno nasce num
+  ponto que ninguém olhou. O toque no mapa sempre vence, inclusive o GPS que
+  responde atrasado.
+- **Distância.** Quem mede é o backend (`GeoUtils`, Haversine); o app mostra
+  a `distanciaKm` que veio, a mesma no card, no pino e no detalhe. A caixa do
+  banco (`findAbertosNaArea`) e o círculo usam a mesma Terra: antes a caixa era
+  0,1% menor e um turno na borda do raio sumia (`FiltroPorDistanciaTest`).
+- **Onde.** `AgendarTurnoScreen._definirPontoInicial` e `_confirmarPonto`;
+  `LocalizacaoService` (tempo limite de 15 s, página fora de HTTPS, última
+  posição conhecida no celular); `GeoUtils`; `AuthService.definirPontoDaLoja`.
+
+**P: E se o GPS do navegador nunca responder?**
+R: Todo pedido de posição tem 15 s de limite — inclusive o aviso de permissão
+que ninguém clicou, que era onde a tela ficava "buscando" para sempre. Passou
+disso, a tela diz que o aparelho não respondeu e oferece tentar de novo.
+
+### Check-in e check-out: a hora real
+
+- **Regra.** Só o entregador inscrito e aceito; de 30 min antes do início até
+  o fim do turno; a até 500 m do ponto (`motoshift.checkin.raio-metros`). A
+  trava de distância desliga com `MOTOSHIFT_CHECKIN_EXIGIR_PROXIMIDADE=false`,
+  para a apresentação feita de casa. Check-out só depois do check-in. Repetir
+  qualquer um não muda nada nem avisa de novo.
+- **Status.** O primeiro check-in leva o turno de ACEITO a EM_ANDAMENTO — o
+  estado que o enum esperava. Em andamento, o turno **não vence** (o job só
+  olha turno aberto) e **não se cancela**: cancelar devolveria a reserva
+  inteira com alguém trabalhando; a saída é finalizar. O job de vencimento,
+  ao fechar um turno multi-vaga no início, o leva direto a EM_ANDAMENTO se
+  alguém já chegou.
+- **Pontualidade.** % de check-ins até 10 min após o início, nos últimos 90
+  dias. Sem check-in, "Sem histórico" — nunca 100%.
+- **Onde.** `CheckinService`; colunas em `turno_inscricoes` (V16) porque cada
+  entregador de um turno multi-vaga chega na sua hora; `Reputacao.pontualidade`;
+  no app, `CheckinDoTurno` (detalhe do entregador) e `Presenca`.
+
+**P: Por que a presença mora na inscrição e não no turno?**
+R: Porque num turno de três vagas são três chegadas. No turno ficaria uma hora
+só — a do primeiro —, e a pontualidade dos outros dois não existiria.
+
+### Publicar de novo: o turno que acabou vira rascunho
+
+- **Regra.** Turno finalizado, cancelado ou expirado do lojista tem
+  "Publicar de novo" (lista e detalhe). O formulário abre com título,
+  descrição, região, ponto, raio, valor, vagas e duração do turno de origem;
+  a data vai para o mesmo dia da semana da semana seguinte, mesmo horário —
+  e, se essa data já passou ou fura as 2 h de antecedência, para a próxima
+  semana que dá.
+- **Nada muda nas regras.** É o mesmo formulário e o mesmo
+  `POST /api/turnos`: confirmação do custo, antecedência e saldo valem igual,
+  e o backend confere de novo. Por isso não há endpoint novo.
+- **Onde.** `RepeticaoDeTurno` (a data e o que se copia),
+  `AgendarTurnoScreen(origem:)`, botão em `AcoesDoTurno` e no card de
+  `TurnosLojistaListaScreen`.
+
+**P: Por que não um endpoint "repetir turno"?**
+R: Porque repetir sem olhar é publicar sem confirmar o custo. O app só
+preenche; quem publica é o lojista, pelo caminho de sempre.
+
+### Abrir rota e calendário: o turno fora do app
+
+- **Rota.** Google Maps pela URL universal (`maps/dir/?api=1&destination=`),
+  que funciona no navegador e no celular; o Waze só aparece quando o
+  `waze://` responde — AndroidManifest e Info.plist declaram a consulta. No
+  navegador não dá para saber que apps a pessoa tem, então é o Google Maps.
+- **Calendário.** `.ics` pela RFC 5545: `DTSTART;TZID=America/Sao_Paulo`,
+  com o VTIMEZONE junto (o backend devolve horário de parede, sem fuso — sem
+  o TZID, "18:00" viraria 18:00 de quem abre o arquivo), VALARM de 1 h, texto
+  escapado e linhas dobradas em 75 octetos sem partir "ç". Baixa pelo
+  `baixarArquivo`, o mesmo da planilha.
+- **Onde.** `AbrirRota`, `CalendarioIcs`, `AtalhosDoTurno`.
+
+### Lembrete de 1 hora
+
+- **Regra.** Job de 5 em 5 min (padrão do vencimento): turno aberto, aceito
+  ou em andamento que começa em até 1 h; lembra cada entregador com inscrição
+  aceita que ainda não chegou, e a loja uma vez ("com Ricardo e mais 1").
+- **Sem duplicar.** `criarUnica` — a notificação que já existe para aquela
+  pessoa, tipo e turno é o controle; não precisou de coluna.
+- **Onde.** `TurnoLembreteService`; no app, o estilo de `turno_lembrete`.
+
+### Meta do mês
+
+- **Regra.** `usuarios.meta_mensal` (V19), só do entregador, de R$ 1 a
+  R$ 100.000, editável no perfil e no painel. A barra compara com
+  `ganhosMensais` — pagamentos recebidos + gorjetas do mês, a mesma soma do
+  "Ganhos mês". Sem meta, o painel convida a definir: uma barra zerada diria
+  "você não ganhou nada", quando o que falta é a meta.
+- **Onde.** `AuthService.definirMeta`, `DashboardService.doMotoboy`; no app,
+  `MetaDoMes` e `editarMetaDoMes`.
+
+### Selos de reputação
+
+- **Regra.** Calculados na hora a partir do histórico — sem tabela, porque um
+  selo guardado envelhece. Entregador: 20 turnos concluídos (o pedido era 25;
+  ajustado à massa, em que o entregador mais antigo tem 23); 30 dias sem
+  cancelar (histórico mais velho que 30 dias e nenhum cancelamento DELE no
+  período); nota acima de 4,8 com 10 avaliações ou mais; pontual (90% ou mais
+  com 10 check-ins ou mais). Loja: paga gorjeta (3 ou mais em turnos dos
+  últimos 90 dias); nota acima de 4,8; contrata toda semana (turno concluído
+  em cada uma das últimas 4 semanas).
+- **Quem cancelou.** Cancelar é dos dois lados, e sem saber quem cancelou um
+  cancelamento da loja tiraria o selo do entregador. Por isso a V19 grava
+  `cancelado_por_id` e `cancelado_em` no turno.
+- **Onde.** `Selos` (os limites são constantes no topo), no perfil público
+  (`AuthService.buscarPerfilPublico`) e nos painéis; no app,
+  `SelosDeReputacao`, com o critério num diálogo ao tocar.
+
+**P: Por que o selo não é guardado?**
+R: Porque ele é uma pergunta sobre o histórico ("cancelou nos últimos 30
+dias?"). Guardado, ficaria verdadeiro depois de deixar de ser.
+
+### Favoritos: a loja guarda quem trabalhou bem
+
+- **Regra.** Só o lojista favorita, e só entregador é favorito. Um favorito
+  por par (loja, entregador): a chave primária da tabela `favoritos` (V18) é
+  o próprio par, então nem dois cliques simultâneos duplicam — o segundo bate
+  na chave e o controller refaz a chamada, que encontra o que existe.
+  Desfavoritar o que não é favorito não é erro.
+- **O efeito.** Publicar um turno avisa os favoritos da loja ("A
+  Hamburgueria da Cláudia publicou um turno para amanhã, 18h"), na mesma
+  transação da publicação — turno recusado por saldo não avisa ninguém. Na
+  lista de disponíveis do entregador, os turnos dessas lojas levam o selo
+  "Loja que já te chamou", calculado numa consulta só.
+- **Papéis.** A lista é da loja. O entregador não vê quem o favoritou; vê
+  só o selo nos turnos daquela loja.
+- **Onde.** `FavoritoService`, `FavoritoController`, `Favorito` (chave
+  composta), V18; `TurnoService.criar` chama `avisarFavoritos`;
+  `TurnoController.disponiveis` marca o selo. No app, `FavoritosProvider`,
+  `BotaoFavorito`, `FavoritosDoLojista` (perfil) e `SeloLojaQueTeChamou`.
+
+**P: "da Mercado"? Como o texto acerta o artigo?**
+R: `Artigo` olha a primeira palavra do nome da loja: "Hamburgueria" é
+feminina, "Mercado" é masculina — "O Mercado do Fernando publicou um turno".
+A mesma regra vale para a notificação da gorjeta.
+
+### Gorjeta: dinheiro a mais, pelo mesmo livro
+
+- **Regra.** Só o lojista do turno, só com o turno finalizado e só a quem
+  trabalhou nele (inscrição finalizada); uma por entregador por turno; de
+  R$ 1 a `motoshift.gorjeta.maximo` (R$ 50); só do saldo **disponível** — o
+  bloqueado é das reservas. Sem saldo, 422 com quanto há.
+- **Idempotente.** Chave `gorjeta:turno:{t}:entregador:{e}:debito|credito`.
+  A mesma gorjeta pedida de novo devolve a que existe; outro valor para o
+  mesmo entregador no mesmo turno é recusado (409).
+- **Dois tipos, um de cada lado.** Débito do lojista `bonus_enviado`,
+  crédito do entregador `bonus`, mesma `operacao_id`, os dois com o
+  `turno_id`. O tipo decide a aritmética do saldo (a invariante (c) do
+  `ConsistenciaService`); um tipo só com o sinal na `natureza` quebraria essa
+  regra. Por isso a V17 só alarga o CHECK.
+- **Fiscal.** Gorjeta não é serviço: gera comprovante, não NFS-e
+  (FISCAL.md).
+- **Onde.** `GorjetaService`, `Movimento.gorjeta`, V17; no app,
+  `SeletorDeGorjeta` dentro de `AvaliacaoScreen` e
+  `AvaliarEntregadoresScreen`. Aparece no extrato ("Gorjeta recebida" /
+  "Gorjeta enviada"), no resumo, nos relatórios e no CSV.
+
+**P: E se a avaliação for enviada e a gorjeta falhar?**
+R: São duas chamadas: a nota fica, e a tela diz "Avaliação enviada, mas a
+gorjeta não" com o motivo do backend. Nada de dinheiro se move pela metade —
+a gorjeta é uma transação só no `LedgerService`.
+
+### A massa conta tudo isso
+
+- **Pelos serviços de verdade.** Chegada e saída pelo `CheckinService`
+  (numa sobrecarga que recebe a hora: a regra é a mesma, conferida contra a
+  hora do turno do passado), gorjeta pelo `GorjetaService`, favoritos pelo
+  `FavoritoService`, meta pelo `AuthService.atualizar`, o aviso aos favoritos
+  pelo `avisarFavoritos` e o lembrete pelo próprio job. A massa só reescreve a
+  data do que cada passo gravou.
+- **O que mostra.** Pontualidades diferentes (Ricardo 100%, Carlos ~92%,
+  Lucas ~73%, Thiago ~30%); um turno em andamento com check-in; gorjetas da
+  Cláudia e duas do Fernando; favoritos de três lojas; meta do Ricardo e do
+  Carlos (Lucas e Thiago veem o convite); selos em uns perfis e em outros não;
+  lembrete de 1 hora e avisos de chegada e de favorito ainda não lidos.
+- **Continua fechando.** `MassaDemonstracaoTest.massaFechaNasInvariantes`
+  passa a massa pela `verificarConsistencia()`, agora com gorjetas no meio;
+  `novidadesNaMassa` confere cada item acima; `ResetDaMassaPostgresTest`
+  confere, no Postgres, que um favorito ou um cancelamento de conta real
+  cruzado com a massa não trava o reset nas FKs.
+
+**P: A massa grava direto no banco?**
+R: Só o que a regra do presente não deixaria fazer no passado (publicar um
+turno de três meses atrás, que a RF04 barraria) e as datas. Dinheiro, presença,
+gorjeta e favoritos passam pelos serviços — por isso a massa também testa as
+regras.

@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * deploy — inclusive as que dependem do estado que ja existe no banco, que e
  * onde migracao costuma quebrar.
  */
-class MigracoesPostgresTest {
+public class MigracoesPostgresTest {
 
     @Test
     @DisplayName("todas as migracoes aplicam num banco vazio, na ordem")
@@ -113,8 +113,9 @@ class MigracoesPostgresTest {
         flyway(url, null).migrate();
 
         try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            // As 18 da V11, as 2 de favoritos (V18) e a de quem cancelou (V19).
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f'"))
-                    .isEqualTo(18);
+                    .isEqualTo(21);
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated"))
                     .isZero();
         }
@@ -269,6 +270,125 @@ class MigracoesPostgresTest {
         }
     }
 
+    @Test
+    @DisplayName("V16 guarda chegada e saída na inscrição, e o banco recusa saída antes da chegada")
+    void v16_checkin() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v16");
+        flyway(url, "15").migrate();
+
+        long inscricao;
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("loja-v16@teste.com", "x"));
+            s.execute(inserirUsuario("entregador-v16@teste.com", "x"));
+            long lojista = contar(s, "SELECT id FROM usuarios WHERE email = 'loja-v16@teste.com'");
+            long entregador = contar(s, "SELECT id FROM usuarios WHERE email = 'entregador-v16@teste.com'");
+            s.execute("INSERT INTO turnos (lojist_id, titulo, data_inicio, data_fim, valor_estimado, "
+                    + "status, criado_em) VALUES (" + lojista + ", 'Turno V16', "
+                    + "'2026-03-10 18:00', '2026-03-10 22:00', 120, 'aceito', now())");
+            long turno = contar(s, "SELECT id FROM turnos WHERE titulo = 'Turno V16'");
+            s.execute("INSERT INTO turno_inscricoes (turno_id, motoboy_id, status, criado_em) "
+                    + "VALUES (" + turno + ", " + entregador + ", 'aceito', now())");
+            inscricao = contar(s, "SELECT id FROM turno_inscricoes WHERE turno_id = " + turno);
+        }
+
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            // A inscrição de antes da V16 fica sem presença — nula, não inventada.
+            assertThat(contar(s, "SELECT count(*) FROM turno_inscricoes WHERE checkin_em IS NULL "
+                    + "AND checkout_em IS NULL AND id = " + inscricao)).isEqualTo(1);
+            assertThat(validada(s, "ck_inscricao_saida_apos_chegada")).isTrue();
+
+            // Saída sem chegada, e saída antes da chegada: o banco recusa.
+            assertThatThrownBy(() -> s.execute("UPDATE turno_inscricoes SET checkout_em = now() "
+                    + "WHERE id = " + inscricao))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_inscricao_saida_apos_chegada");
+            assertThatThrownBy(() -> s.execute("UPDATE turno_inscricoes SET "
+                    + "checkin_em = '2026-03-10 18:00', checkout_em = '2026-03-10 17:00' "
+                    + "WHERE id = " + inscricao))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_inscricao_saida_apos_chegada");
+
+            s.execute("UPDATE turno_inscricoes SET checkin_em = '2026-03-10 17:58', "
+                    + "checkin_latitude = -25.456, checkin_longitude = -49.282, "
+                    + "checkout_em = '2026-03-10 22:03' WHERE id = " + inscricao);
+            assertThat(contar(s, "SELECT count(*) FROM turno_inscricoes WHERE checkout_em IS NOT NULL"))
+                    .isEqualTo(1);
+        }
+    }
+
+    @Test
+    @DisplayName("V17 abre o domínio de tipos para o lado de quem dá a gorjeta, e só para ele")
+    void v17_gorjeta() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v17");
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("loja-v17@teste.com", "x"));
+            long loja = contar(s, "SELECT id FROM usuarios WHERE email = 'loja-v17@teste.com'");
+            s.execute(inserirTransacaoV12(loja, null, "bonus_enviado", "concluido",
+                    "gorjeta:turno:1:entregador:2:debito", "debito"));
+            assertThat(validada(s, "ck_transacao_tipo")).isTrue();
+            assertThatThrownBy(() -> s.execute(inserirTransacaoV12(loja, null,
+                    "gorjeta", "concluido", "v17:ruim", "debito")))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_transacao_tipo");
+        }
+    }
+
+    @Test
+    @DisplayName("V18 cria favoritos: um par por loja e entregador, com FKs, e ninguém favorita a si mesmo")
+    void v18_favoritos() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v18");
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("loja-v18@teste.com", "x"));
+            s.execute(inserirUsuario("moto-v18@teste.com", "x"));
+            long loja = contar(s, "SELECT id FROM usuarios WHERE email = 'loja-v18@teste.com'");
+            long moto = contar(s, "SELECT id FROM usuarios WHERE email = 'moto-v18@teste.com'");
+
+            s.execute("INSERT INTO favoritos (lojista_id, motoboy_id) VALUES (" + loja + ", " + moto + ")");
+            assertThat(contar(s, "SELECT count(*) FROM favoritos WHERE criado_em IS NOT NULL")).isEqualTo(1);
+
+            assertThatThrownBy(() -> s.execute(
+                    "INSERT INTO favoritos (lojista_id, motoboy_id) VALUES (" + loja + ", " + moto + ")"))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("pk_favoritos");
+            assertThatThrownBy(() -> s.execute(
+                    "INSERT INTO favoritos (lojista_id, motoboy_id) VALUES (" + loja + ", " + loja + ")"))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_favorito_nao_a_si_mesmo");
+            assertThatThrownBy(() -> s.execute(
+                    "INSERT INTO favoritos (lojista_id, motoboy_id) VALUES (" + loja + ", 999999)"))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("fk_favorito_motoboy");
+        }
+    }
+
+    @Test
+    @DisplayName("V19: meta positiva ou nula; quem cancelou aponta para usuarios")
+    void v19_metaEQuemCancelou() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v19");
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("moto-v19@teste.com", "x"));
+            long moto = contar(s, "SELECT id FROM usuarios WHERE email = 'moto-v19@teste.com'");
+
+            s.execute("UPDATE usuarios SET meta_mensal = 2000.00 WHERE id = " + moto);
+            s.execute("UPDATE usuarios SET meta_mensal = NULL WHERE id = " + moto);
+            assertThatThrownBy(() -> s.execute("UPDATE usuarios SET meta_mensal = 0 WHERE id = " + moto))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_usuario_meta_positiva");
+
+            assertThat(validada(s, "fk_turno_cancelado_por")).isTrue();
+            assertThat(contar(s, "SELECT count(*) FROM pg_indexes WHERE indexname = 'ix_turno_cancelado_por'"))
+                    .isEqualTo(1);
+        }
+    }
+
     // ── Apoio ──────────────────────────────────────────────────────────────
 
     /** INSERT valido ATE a V11 — antes de a coluna natureza existir. */
@@ -326,8 +446,13 @@ class MigracoesPostgresTest {
         return cfg.load();
     }
 
-    static String ultimaVersao() {
-        return "14";
+    /**
+     * A última migração do projeto. Os três testes que conferem o
+     * {@code flyway_schema_history} leem daqui, para uma migração nova mudar
+     * um número só.
+     */
+    public static String ultimaVersao() {
+        return "19";
     }
 
     static Connection conectar(String url) throws SQLException {

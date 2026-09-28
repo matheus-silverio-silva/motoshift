@@ -54,6 +54,10 @@ class Turno {
   /// listagens é nula.
   final double? distanciaKm;
 
+  /// A loja deste turno tem o entregador logado entre os favoritos (V18) — o
+  /// selo "Loja que já te chamou". Só vem na lista de disponíveis.
+  final bool lojaQueJaTeChamou;
+
   final DateTime? criadoEm;
   final DateTime? atualizadoEm;
 
@@ -78,6 +82,7 @@ class Turno {
     this.distanciaPercorridaKm,
     this.totalEntregas,
     this.distanciaKm,
+    this.lojaQueJaTeChamou = false,
     this.criadoEm,
     this.atualizadoEm,
   });
@@ -106,6 +111,7 @@ class Turno {
           : null,
       totalEntregas: json['totalEntregas'] as int?,
       distanciaKm: (json['distanciaKm'] as num?)?.toDouble(),
+      lojaQueJaTeChamou: json['lojaQueJaTeChamou'] as bool? ?? false,
       criadoEm: json['criadoEm'] != null
           ? DateTime.parse(json['criadoEm'] as String)
           : null,
@@ -152,6 +158,23 @@ class Turno {
 
   /// Turno que comporta mais de um entregador.
   bool get multiVaga => vagas > 1;
+
+  /// "a 2,3 km" — a distância que o BACKEND mediu entre o entregador e o
+  /// turno. Só existe na busca com posição; o app nunca a recalcula, para o
+  /// card, o detalhe e o pino do mapa mostrarem o mesmo número.
+  String? get distanciaRotulo =>
+      distanciaCurta == null ? null : 'a $distanciaCurta';
+
+  /// "2,3 km", para onde o "a" não cabe (o rótulo do pino).
+  String? get distanciaCurta => distanciaKm == null
+      ? null
+      : '${distanciaKm!.toStringAsFixed(1).replaceAll('.', ',')} km';
+
+  /// "entrega até 8 km" — o raio de ENTREGA do turno, que não é a distância
+  /// até o entregador. Os dois apareciam como "8 km" e "a 2,3 km", e só o
+  /// "a" separava um do outro.
+  String get areaDeEntregaRotulo =>
+      'entrega até ${raioEntregaKm.toStringAsFixed(0)} km';
 
   /// Dá para plotar este turno no mapa? A tela precisa saber disso para
   /// mostrar o aviso certo em vez de um mapa centrado em (0, 0) — que fica no

@@ -1,12 +1,16 @@
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/selo.dart';
 import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../presentation/providers/pendencias_provider.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import 'favoritos_do_lojista.dart';
+import '../../widgets/meta_do_mes.dart';
+import '../../widgets/selos_de_reputacao.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/menu_row.dart';
@@ -27,6 +31,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
   /// Métricas do dashboard. O perfil não tem endpoint próprio, e
   /// `turnosFinalizados` já é calculado lá — reaproveita em vez de recontar.
   Map<String, dynamic>? _dash;
+
+  List<Selo> get _selos => Selo.listaDe(_dash?['selos']);
+
+  double? get _meta => context.read<AuthService>().usuario?.metaMensal;
 
   @override
   void initState() {
@@ -53,6 +61,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
   Widget _buildStatsCard(Usuario? usuario) {
     final turnos = (_dash?['turnosFinalizados'] as num?)?.toInt();
     final avaliacao = usuario?.mediaAvaliacao;
+    final ehLojista = usuario?.tipo == TipoUsuario.lojista;
+    final pontualidade = (_dash?['pontualidade'] as num?)?.toInt();
 
     return Container(
       decoration: BoxDecoration(
@@ -71,12 +81,22 @@ class _PerfilScreenState extends State<PerfilScreen> {
           const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
       child: Row(
         children: [
-          // "137" e "96%" eram literais com um TODO de integração. Turnos
-          // agora vem do backend; pontualidade foi substituída pela avaliação
-          // recebida, porque não existe registro de pontualidade no modelo —
-          // calculá-la exigiria o horário real de início do turno, que a
-          // plataforma ainda não guarda.
+          // "137" e "96%" eram literais com um TODO de integração. Turnos vem
+          // do backend; a pontualidade saiu por falta de dado — a plataforma
+          // não guardava a hora real de chegada — e volta com o check-in
+          // (V16): % de chegadas até 10 min após o início, nos últimos 90
+          // dias. Sem check-in, "Sem histórico", nunca 100%.
           _StatCell(value: turnos?.toString() ?? '—', label: 'TURNOS'),
+          if (!ehLojista) ...[
+            const _StatDivider(),
+            _StatCell(
+              key: const Key('perfil-pontualidade'),
+              value: pontualidade == null
+                  ? (_dash == null ? '—' : 'Sem histórico')
+                  : '$pontualidade%',
+              label: 'PONTUALIDADE',
+            ),
+          ],
           const _StatDivider(),
           _StatCell(
             value: avaliacao != null ? avaliacao.toStringAsFixed(1) : 'N/D',
@@ -132,6 +152,12 @@ class _PerfilScreenState extends State<PerfilScreen> {
             offset: const Offset(0, -28),
             child: _buildStatsCard(usuario),
           ),
+          // Os selos da própria conta — os mesmos que os outros veem.
+          if (_selos.isNotEmpty)
+            Transform.translate(
+              offset: const Offset(0, -16),
+              child: SelosDeReputacao(selos: _selos),
+            ),
           const SizedBox(height: 4),
           ..._buildMenus(context, isLojista, nome),
         ],
@@ -199,6 +225,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
               ),
               const SizedBox(height: 16),
               _buildStatsCard(usuario),
+              if (_selos.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                SelosDeReputacao(selos: _selos),
+              ],
             ],
           ),
         ),
@@ -226,6 +256,20 @@ class _PerfilScreenState extends State<PerfilScreen> {
               onTap: () => Navigator.pushNamed(
                   context, AppRoutes.dadosPessoais),
             ),
+            // Meta do mês (V19) — só o entregador recebe pagamento.
+            if (!isLojista)
+              MenuRow(
+                key: const Key('perfil-meta'),
+                icon: Icons.flag_outlined,
+                label: 'Meta do mês',
+                subtitle: _meta == null
+                    ? 'Não definida'
+                    : reaisSemCentavos(_meta!),
+                onTap: () async {
+                  final mudou = await editarMetaDoMes(context);
+                  if (mudou != false && mounted) setState(() {});
+                },
+              ),
             MenuRow(
               icon: isLojista
                   ? Icons.location_on_outlined
@@ -262,6 +306,11 @@ class _PerfilScreenState extends State<PerfilScreen> {
                   context, AppRoutes.historicoTurnos),
             ),
           ]),
+          // Os entregadores favoritos da loja (V18) — só o lojista tem.
+          if (isLojista) ...[
+            const SizedBox(height: 14),
+            const FavoritosDoLojista(),
+          ],
           const SizedBox(height: 14),
           // SAIR
           MenuGroup(children: [
@@ -447,7 +496,7 @@ class _PerfilHeader extends StatelessWidget {
 
 // ── Stats card helpers ────────────────────────────────────────────────────────
 class _StatCell extends StatelessWidget {
-  const _StatCell({required this.value, required this.label});
+  const _StatCell({required this.value, required this.label, super.key});
   final String value;
   final String label;
 

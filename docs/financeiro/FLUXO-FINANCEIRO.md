@@ -243,7 +243,8 @@ a mesma que está codificada em `service/ledger/Movimento.java`, em um lugar só
 | `pagamento_recebido` | crédito | +v | 0 | **+v** | lojista | `liquidacao:inscricao:{id}:credito` |
 | `saque` | débito | −v | 0 | **−v** | — | `saque:{cobrancaId}` |
 | `estorno` | crédito | +v | 0 | **+v** | — | `estorno:saque:{cobrancaId}` |
-| `bonus` | crédito | +v | 0 | **+v** | — | (não emitido hoje) |
+| `bonus_enviado` (gorjeta) | débito | −v | 0 | **−v** | entregador | `gorjeta:turno:{t}:entregador:{e}:debito` |
+| `bonus` (gorjeta) | crédito | +v | 0 | **+v** | lojista | `gorjeta:turno:{t}:entregador:{e}:credito` |
 | `retencao_iss` | débito | −v | 0 | **−v** | — | `liquidacao:inscricao:{id}:retencao-iss` |
 | `retencao_irrf` | débito | −v | 0 | **−v** | — | `liquidacao:inscricao:{id}:retencao-irrf` |
 
@@ -271,6 +272,7 @@ Somando a coluna sobre **todas as carteiras**:
 - `reserva` e `liberacao_reserva` valem 0 — são internas à mesma carteira;
 - `pagamento_enviado` (−v no lojista) e `pagamento_recebido` (+v no entregador)
   se anulam, porque são as duas pernas do mesmo evento e têm o mesmo `valor`;
+- `bonus_enviado` e `bonus`, os dois lados da gorjeta, também;
 - sobram `recarga` (+), `saque` (−), `estorno` (+) e as retenções (−).
 
 As retenções só existem com `motoshift.fiscal.reter-na-fonte` ligado, e são
@@ -288,8 +290,8 @@ e **o número que não é do papel não aparece — nem zerado**:
 
 | | Entregador (prestador) | Lojista (tomador) |
 |---|---|---|
-| Tipos no filtro do extrato | `pagamento_recebido`, `saque`, `estorno`, `retencao_iss`, `retencao_irrf` | `recarga`, `reserva`, `liberacao_reserva`, `pagamento_enviado`, `estorno` |
-| `/api/carteira/resumo` | `recebido`, `retencoes` (só com retenção na fonte), `sacado` (saque menos o estorno do saque recusado), `disponivel`, `aReceber` | `recarregado`, `pagoAEntregadores`, `devolvido` (liberação + estorno), `disponivel`, `bloqueado`, `comprometido`, `reservasAbertas` |
+| Tipos no filtro do extrato | `pagamento_recebido`, `bonus` (gorjeta recebida), `saque`, `estorno`, `retencao_iss`, `retencao_irrf` | `recarga`, `reserva`, `liberacao_reserva`, `pagamento_enviado`, `bonus_enviado` (gorjeta dada), `estorno` |
+| `/api/carteira/resumo` | `recebido` (turnos + gorjetas), `gorjetas` (só com gorjeta no período), `retencoes` (só com retenção na fonte), `sacado` (saque menos o estorno do saque recusado), `disponivel`, `aReceber` | `recarregado`, `pagoAEntregadores` (turnos + gorjetas), `gorjetas` (só com gorjeta no período), `devolvido` (liberação + estorno), `disponivel`, `bloqueado`, `comprometido`, `reservasAbertas` |
 
 A lista de tipos por papel está num lugar só no app,
 `TipoTransacao.filtraveisPara(papel)`, e é a que o filtro, o relatório e a
@@ -303,6 +305,24 @@ O **fluxo de caixa** (`/api/carteira/fluxo`) deixa `reserva` e
 `liberacao_reserva` de fora, pela coluna "Δ total" acima: elas não mudam o que
 a carteira tem, só o bolso em que está. Contadas, um turno de R$ 120 aparecia
 no gráfico do lojista como R$ 240 de saída (a reserva e depois o pagamento).
+
+### Gorjeta
+
+Depois de avaliar o entregador, o lojista pode dar uma gorjeta: R$ 5, 10, 20 ou
+outro valor até `motoshift.gorjeta.maximo` (padrão R$ 50). É uma transferência
+como o pagamento do turno, com uma diferença que importa: **sai do disponível**,
+não do bloqueado — ninguém reservou gorjeta ao publicar. Por isso ela só passa
+com saldo disponível, e a mensagem diz quanto há.
+
+- Só o lojista do turno; só com o turno finalizado; só a quem trabalhou nele
+  (inscrição finalizada); uma por entregador por turno.
+- Os dois lados (`bonus_enviado` e `bonus`) vão ligados ao turno e à mesma
+  operação. Por que dois tipos e não `bonus` com a natureza separando os
+  lados: aqui **o tipo decide a aritmética** e a natureza é só o sinal da tela
+  (seção acima). Um `bonus` que ora soma, ora subtrai obrigaria a conferência a
+  ler a natureza para fazer conta.
+- Gera comprovante, não NFS-e — ver [`FISCAL.md`](FISCAL.md).
+- Entra nos ganhos do mês do entregador e no "recebido"/"pago" do resumo.
 
 ---
 
@@ -340,14 +360,17 @@ dos deltas dos lançamentos **concluídos** dele.
 ```
 Σ (disponível + bloqueado) de todas as carteiras
     = Σ recargas concluídas − Σ saques concluídos + Σ estornos
-      + Σ bônus − Σ retenções na fonte
+      + Σ bonus − Σ bonus_enviado − Σ retenções na fonte
 ```
 
 > **Como é garantida:** pela tabela da seção 5. Só `recarga`, `saque`,
-> `estorno`, `bonus` e as duas retenções têm Δ total diferente de zero. Os três
-> primeiros nascem em um arquivo só — `CobrancaService`, a única porta para
-> fora —, e as retenções em outro, `PagamentoTurnoService`, na mesma transação
-> do pagamento que as originou.
+> `estorno`, os dois lados da gorjeta e as duas retenções têm Δ total diferente
+> de zero. Os três primeiros nascem em um arquivo só — `CobrancaService`, a
+> única porta para fora —; as retenções em outro, `PagamentoTurnoService`, na
+> mesma transação do pagamento que as originou; e os dois lados da gorjeta
+> nascem juntos, numa transferência só (`GorjetaService`), então `bonus` e
+> `bonus_enviado` se anulam no conjunto. Um `bonus` sem par — bônus da
+> plataforma, que nenhum fluxo emite — continuaria contando como entrada.
 
 ---
 
@@ -396,6 +419,9 @@ inteira volta — saldo incluso.
 
 - confirmar a mesma recarga duas vezes creditar uma vez;
 - finalizar o mesmo turno duas vezes transferir uma vez;
+- a mesma gorjeta, pedida duas vezes, cobrar uma vez — a chave é
+  `gorjeta:turno:{t}:entregador:{e}`, então é também o que faz valer "uma
+  gorjeta por entregador por turno" (outro valor, no mesmo par, é recusado);
 - o retry acima ser seguro: na segunda tentativa, o que já commitou é
   reencontrado pela chave em vez de lançado de novo.
 

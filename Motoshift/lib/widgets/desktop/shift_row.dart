@@ -17,6 +17,7 @@ class ShiftRow extends StatefulWidget {
     this.pillLabel,
     this.pillVariant = PillVariant.ghost,
     this.selected = false,
+    this.selo,
     this.onTap,
     super.key,
   });
@@ -37,6 +38,9 @@ class ShiftRow extends StatefulWidget {
 
   /// Item ativo do master-detail: fundo teal claro e borda destacada.
   final bool selected;
+
+  /// Selo numa terceira linha (ex.: "Loja que já te chamou").
+  final Widget? selo;
   final VoidCallback? onTap;
 
   @override
@@ -143,6 +147,10 @@ class _ShiftRowState extends State<ShiftRow> {
                         ],
                       ],
                     ),
+                    if (widget.selo != null) ...[
+                      const SizedBox(height: 6),
+                      widget.selo!,
+                    ],
                   ],
                 ),
               ),

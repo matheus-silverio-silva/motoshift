@@ -141,6 +141,56 @@ flutter run
 flutter run -d chrome --dart-define=API_URL=http://localhost:8080
 ```
 
+### 📍 Testar a localização à mão (Chrome)
+
+O navegador só libera a localização em **HTTPS ou `localhost`**: rode o app
+com `flutter run -d chrome` (que abre em `localhost`). Para simular onde a
+pessoa está, abra o DevTools (F12) → menu ⋮ → *More tools* → **Sensors** →
+*Location* → *Other…* e digite a latitude e a longitude. Os pontos da massa:
+
+| Ponto | Latitude | Longitude | Distância do Água Verde |
+|---|---|---|---|
+| Hamburgueria da Cláudia — Água Verde | -25.4560 | -49.2820 | — |
+| Pizzaria do Fernando — Batel | -25.4420 | -49.2900 | 1,8 km |
+| Mercado Andrade — Rebouças | -25.4445 | -49.2610 | 2,5 km |
+| Farmácia Ana — Centro Cívico | -25.4160 | -49.2690 | 4,6 km |
+| Marco zero (Praça Tiradentes) | -25.4284 | -49.2733 | 3,2 km |
+
+**Entregador** (`ricardo@teste.com`), com a posição no Água Verde:
+
+1. *Turnos* → ligue **Filtrar por distância**. O mapa aparece com um pino por
+   turno, e cada pino traz o valor e a distância ("R$ 120 · 1,8 km").
+2. Arraste o raio até **2 km**: ficam os turnos do Água Verde e do Batel. Em
+   **3 km** entra o Rebouças; em **5 km**, todos. A distância do card ("a 1,8
+   km"), a do pino e a do detalhe ("Distância de você") são o mesmo número — o
+   que o backend mediu.
+3. Sem "perto de mim", o card diz **"entrega até 8 km"**: é a área que o turno
+   cobre, não a distância até você. A folha de filtros chama esse número de
+   *Área de entrega do turno*.
+4. Em *Sensors*, escolha **Location unavailable** e ligue o filtro de novo: a
+   faixa amarela diz que não foi possível obter a localização e oferece
+   "Tentar novamente". Bloqueie a permissão do site (cadeado na barra de
+   endereço → *Localização* → *Bloquear*): a faixa diz que a permissão está
+   bloqueada.
+5. Com o filtro ligado, pare o backend e mova o raio: aparece **"Não foi
+   possível buscar os turnos perto de você."** com "Tentar de novo" — e a lista
+   some, em vez de mostrar os turnos sem filtro.
+6. Abra o app pelo IP da rede (`http://192.168.x.x:porta`) e ligue o filtro: a
+   mensagem diz que a localização só funciona em HTTPS ou `localhost`.
+
+**Lojista** (`claudia@teste.com`):
+
+1. *Publicar turno*: o mapa já abre na loja, com "Ponto da sua loja, marcado em
+   Dados pessoais" — o GPS nem é consultado. Toque o mapa: vira "Ponto escolhido
+   por você no mapa", e o GPS não o move mais.
+2. *Perfil → Dados pessoais → Ponto da loja no mapa*: toque o mapa ou use
+   **"Estou na loja: usar minha localização"** (pega o ponto do *Sensors*).
+   **Desmarcar** e salvar deixa a loja sem ponto.
+3. Sem ponto de loja, *Publicar turno* parte do GPS ("Posição atual do
+   aparelho"). Com a localização bloqueada, parte do centro da cidade — e
+   **Publicar** pede **"Confirme o ponto de partida"** antes de gastar o saldo:
+   "Marcar no mapa" volta ao formulário, "Usar este ponto" aceita.
+
 ---
 
 ## 🚀 Deploy (Railway)
@@ -177,6 +227,9 @@ Roda com o perfil `prod` (PostgreSQL). Variáveis principais:
 | `MOTOSHIFT_FISCAL_CHAVE` | **sim** | Chave do HMAC que autentica os comprovantes (recarga, Pix, movimentação). Sem ela o boot falha: o código de autenticação viraria um hash que qualquer um refaz. Trocar a chave muda o código de todos os comprovantes já emitidos |
 | `MOTOSHIFT_FISCAL_RETER_NA_FONTE` | não | `true` faz a liquidação reter ISS e IRRF do entregador, como lançamentos próprios no extrato; padrão `false`, com os tributos apenas informativos na nota. Ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |
 | `JWT_EXPIRACAO_HORAS` | não | Validade do token; padrão 168 (7 dias) |
+| `MOTOSHIFT_CHECKIN_EXIGIR_PROXIMIDADE` | não | `false` desliga a trava de distância do check-in (o "Cheguei" passa a valer de qualquer lugar). É para a **apresentação feita de casa**, longe de qualquer loja da massa; a janela de horário e a regra de papel continuam valendo. Padrão `true` |
+| `MOTOSHIFT_CHECKIN_RAIO_METROS` | não | A que distância do ponto do turno o check-in ainda vale; padrão 500 |
+| `MOTOSHIFT_GORJETA_MAXIMO` | não | Teto de uma gorjeta, em reais; padrão 50 |
 | `PORT` | não | Porta do servidor (injetada automaticamente pelo Railway) |
 
 ---
@@ -192,24 +245,34 @@ calculada a partir do momento em que roda.
 
 ### 🏪 Lojistas
 
-| Email | Nome | Estabelecimento | Cidade |
-|-------|------|-----------------|--------|
-| `claudia@teste.com` | Cláudia Oliveira | Hamburgueria da Cláudia | Curitiba/PR |
-| `fernando@teste.com` | Fernando Costa | Pizzaria do Fernando | Curitiba/PR |
-| `ana@teste.com` | Ana Souza | Farmácia Ana | Curitiba/PR |
-| `lojista@teste.com` | Maria Andrade | Mercado Andrade | São Paulo/SP |
+| Email | Nome | Estabelecimento | Cidade | Selos | Favoritos | Gorjeta |
+|-------|------|-----------------|--------|-------|-----------|---------|
+| `claudia@teste.com` | Cláudia Oliveira | Hamburgueria da Cláudia | Curitiba/PR | Paga gorjeta · Contrata toda semana | Ricardo, Lucas | R$ 10 a cada três semanas |
+| `fernando@teste.com` | Fernando Costa | Pizzaria do Fernando | Curitiba/PR | — | Lucas | duas vezes, R$ 5 |
+| `ana@teste.com` | Ana Souza | Farmácia Ana | Curitiba/PR | — | — | nunca |
+| `lojista@teste.com` | Maria Andrade | Mercado Andrade | Curitiba/PR | Nota acima de 4,8 · Contrata toda semana | Carlos | nunca |
 
 Lojista não tem score (a reputação é do entregador); a média de avaliação de
 cada loja é a das notas que os entregadores deram a ela.
 
+As quatro lojas e os quatro entregadores são de **Curitiba** — inclusive
+`lojista@teste.com` e `motoboy@teste.com`, que eram de São Paulo enquanto a
+massa inteira acontecia em Curitiba (o "perto de mim" delas partia a 340 km de
+tudo). Cada loja tem o ponto marcado no mapa, no próprio endereço, e todo
+turno dela parte desse ponto — ver [Testar a localização à mão](#-testar-a-localização-à-mão-chrome).
+
 ### 🏍️ Motoboys
 
-| Email | Nome | Veículo | Score | Por quê |
-|-------|------|---------|-------|---------|
-| `ricardo@teste.com` | Ricardo Souza | Honda CG 160 Titan | 5.0 | cancelou um turno com folga — sem penalidade |
-| `lucas@teste.com` | Lucas Mendes | Yamaha Factor 150 | 5.0 | nenhum cancelamento |
-| `thiago@teste.com` | Thiago Alves | Honda Biz 125 | 4.5 | cancelou um turno a menos de 1h do início (−0,5) |
-| `motoboy@teste.com` | Carlos Mendes | Honda PCX 150 | 5.0 | nenhum cancelamento |
+| Email | Nome | Veículo | Score | Por quê | Pontualidade | Meta do mês | Selos |
+|-------|------|---------|-------|---------|--------------|-------------|-------|
+| `ricardo@teste.com` | Ricardo Souza | Honda CG 160 Titan | 5.0 | cancelou um turno com folga — sem penalidade | 100% (chega sempre antes) | R$ 2.000 | Pontual |
+| `lucas@teste.com` | Lucas Mendes | Yamaha Factor 150 | 5.0 | nenhum cancelamento | ~73% (atrasa às vezes) | — (o painel convida) | 20 turnos concluídos · 30 dias sem cancelar |
+| `thiago@teste.com` | Thiago Alves | Honda Biz 125 | 4.5 | cancelou um turno a menos de 1h do início (−0,5) | ~30% (atrasa com frequência) | — | nenhum |
+| `motoboy@teste.com` | Carlos Mendes | Honda PCX 150 | 5.0 | nenhum cancelamento | ~92% | R$ 1.500 | 20 turnos concluídos · 30 dias sem cancelar · Nota acima de 4,8 · Pontual |
+
+Pontualidade, selos e o "Loja que já te chamou" saem do histórico da massa,
+calculados como no app — os valores acima são os de uma massa recém-criada e
+se movem um pouco com a data (a janela é de 90 dias).
 
 Nenhum desses números é gravado à mão: o score é o que a regra da RF07 produz
 (5,0 inicial, −0,5 por cancelamento tardio) a partir do que aconteceu na massa,
@@ -235,15 +298,32 @@ Cerca de cinco meses de história, gravados pelos mesmos serviços que o app usa
   para Maria, Ana e Cláudia; "aguardando emissão" para Carlos, Ricardo e
   Lucas) e avaliações por fazer.
 - Um turno da Ana que **expirou** sem entregador (vencido pelo próprio job).
-- **O presente:** seis turnos abertos, um em andamento (Cláudia + Ricardo),
-  dois confirmados para amanhã e os dois cancelamentos que explicam os scores.
+- **Chegada e saída** em todo turno pago, pelo `CheckinService` com a hora do
+  turno: o Ricardo chega sempre antes, o Carlos quase sempre no horário, o
+  Lucas se atrasa de vez em quando e o Thiago com frequência — daí as
+  pontualidades diferentes.
+- **Gorjetas** da Cláudia (a cada três semanas) e duas do Fernando, pelo
+  `GorjetaService`; aparecem no extrato dos dois lados e nas notificações.
+- **Favoritos:** a Cláudia favoritou Ricardo e Lucas; a Maria, o Carlos; o
+  Fernando, o Lucas. Os turnos abertos dessas lojas aparecem com o selo
+  "Loja que já te chamou" para eles, e a publicação deles avisou os
+  favoritos ("A Hamburgueria da Cláudia publicou um turno para amanhã, 18h").
+- **Maria e Carlos**, a dupla de toda semana, dão nota 5 um ao outro — de onde
+  saem os dois selos "Nota acima de 4,8".
+- **O presente:** seis turnos abertos, um **em andamento com check-in** (o
+  Ricardo chegou 4 min antes; a Cláudia recebeu "Ricardo chegou às…"), três
+  aceitos por começar — dois amanhã e um da Pizzaria do Fernando com o Lucas
+  daqui a menos de 1 hora, que já gerou o **lembrete** para os dois — e os dois
+  cancelamentos que explicam os scores.
 - **Notificações** só dos tipos que o código gera hoje, com os textos de hoje;
   as de mais de três dias já aparecem como lidas.
 
 > 💡 Para explorar o fluxo completo, recomendamos **`claudia@teste.com`**
-> (lojista com o turno de três vagas, pendências e um turno em andamento) e
-> **`ricardo@teste.com`** (entregador com histórico, saques, notas e um turno
-> em andamento). Para o fluxo de nota fiscal dos dois lados, use
+> (lojista com o turno de três vagas, pendências, gorjetas, favoritos e um turno
+> em andamento com check-in) e **`ricardo@teste.com`** (entregador com
+> histórico, saques, notas, meta do mês e um turno em andamento). Para o
+> lembrete de 1 hora, **`lucas@teste.com`** ou **`fernando@teste.com`**. Para
+> o fluxo de nota fiscal dos dois lados, use
 > **`lojista@teste.com`** e **`motoboy@teste.com`**.
 
 ### 🔄 Resetar a massa de demonstração
@@ -312,16 +392,24 @@ para "valor errado não faz nada".
 |--------|----------|-----------|
 | POST | /api/auth/registro | Cadastro de usuário |
 | POST | /api/auth/login | Autenticação |
-| GET | /api/turnos/disponiveis | Listar turnos disponíveis |
+| GET | /api/turnos/disponiveis | Listar turnos disponíveis (para o entregador, `lojaQueJaTeChamou` marca os turnos das lojas que o favoritaram) |
 | POST | /api/turnos | Criar novo turno (Lojista) |
 | PUT | /api/turnos/{id}/aceitar | Aceitar turno (Motoboy) |
 | PUT | /api/turnos/{id}/finalizar | Finalizar turno |
-| PUT | /api/turnos/{id}/cancelar | Cancelar turno |
+| PUT | /api/turnos/{id}/cancelar | Cancelar turno (recusado depois do check-in: turno que começou se finaliza) |
+| PUT | /api/turnos/{id}/checkin | "Cheguei" — só o entregador aceito; de 30 min antes do início até o fim; a até 500 m do ponto (com a trava ligada). O primeiro leva o turno a `em_andamento` e avisa o lojista |
+| PUT | /api/turnos/{id}/checkout | "Encerrar turno" — a saída, só depois do check-in. Não finaliza nem paga |
+| POST | /api/turnos/{id}/gorjetas | Gorjeta do lojista a um entregador do turno finalizado (até R$ 50, com saldo disponível, uma por entregador — repetir a mesma não cobra de novo) |
+| GET | /api/turnos/{id}/gorjetas | Gorjetas do turno: o lojista vê todas, o entregador só a dele |
+| PUT | /api/usuarios/{id} | Atualiza o próprio perfil; `metaMensal` (só entregador, R$ 1 a R$ 100.000, `null` tira) |
+| GET | /api/favoritos | Meus entregadores favoritos (só lojista) |
+| PUT | /api/favoritos/{motoboyId} | Favoritar entregador (só lojista, só entregador; favoritar de novo devolve o que existe) |
+| DELETE | /api/favoritos/{motoboyId} | Desfavoritar (sem favorito, não faz nada) |
 | GET | /api/dashboard/motoboy/{id} | Métricas do Motoboy |
 | GET | /api/dashboard/lojista/{id} | Métricas do Lojista |
 | GET | /api/carteira/{id} | Saldo, ganhos e a primeira página do extrato |
 | GET | /api/carteira/extrato | Extrato filtrado e paginado (período, tipo, natureza, turno, contraparte, valor, busca) |
-| GET | /api/carteira/extrato/exportar | O mesmo extrato sem paginação: `formato=csv` (planilha, padrão) ou `formato=json` (a base do PDF que o app gera) |
+| GET | /api/carteira/extrato/exportar | O mesmo extrato sem paginação: `formato=csv` (planilha, padrão) ou `formato=json` (a base do PDF que o app gera). O app entrega a planilha como **arquivo** `.csv` em UTF-8 com BOM (download no navegador, folha de compartilhar no celular) — o BOM é o que faz o Excel em português acertar os acentos |
 | GET | /api/carteira/resumo | O resumo do período para o papel de quem pergunta — entregador: recebido, retido, sacado, disponível e a receber; lojista: recarregado, pago, devolvido, disponível e comprometido. Os campos do outro papel não vêm |
 | GET | /api/carteira/fluxo | Série de fluxo de caixa por dia, semana ou mês (sem reserva e liberação, que são o dinheiro trocando de bolso) |
 | POST | /api/carteira/recargas | Abre uma cobrança Pix simulada (não credita) |
@@ -371,6 +459,15 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | RF08 | Sugestão inteligente de turnos via IA |
 | RF09 | Relatório financeiro/operacional mensal via IA |
 | RF10 | Turno publicado guarda o ponto de partida (lat/lng), que alimenta o filtro por distância e o mapa das duas pontas |
+| Check-in | O entregador registra chegada e saída (V16). A pontualidade — % de chegadas até 10 min após o início, nos últimos 90 dias — aparece no perfil e no perfil público; sem check-in, "Sem histórico" |
+| Publicar de novo | Turno finalizado, cancelado ou expirado do lojista abre o formulário de publicar já preenchido (mesmo lugar, raio, valor, vagas e duração), com a data no mesmo dia da semana da semana seguinte. Só no app: publica pelo mesmo `POST /api/turnos`, com a mesma confirmação de custo, antecedência e saldo |
+| Abrir rota | No detalhe do turno, o entregador abre a rota até o ponto no Google Maps (no celular, também no Waze, se instalado) |
+| Adicionar ao calendário | Baixa um `.ics` (RFC 5545, fuso America/Sao_Paulo, alarme 1 h antes) — o entregador nos turnos em que está, a loja nos que publicou |
+| Lembrete | Um job de 5 em 5 min lembra entregador e loja do turno aceito que começa em até 1 h (`turno_lembrete`), uma vez só por pessoa e turno |
+| Meta do mês | O entregador define no perfil quanto quer ganhar no mês; o painel mostra "R$ 1.340 de R$ 2.000 (67%)", somando pagamentos recebidos e gorjetas. Sem meta, um convite — nunca uma barra zerada (V19) |
+| Selos de reputação | Calculados do histórico, sem tabela, no perfil público e no próprio, com o critério ao tocar. Entregador: 20 turnos concluídos (limite ajustado à massa), 30 dias sem cancelar, nota acima de 4,8 (10+ avaliações), pontual (90%+, 10+ check-ins). Loja: paga gorjeta (3+ em 90 dias), nota acima de 4,8, contrata toda semana (4 semanas seguidas) |
+| Favoritos | O lojista marca entregadores com o coração (perfil público, avaliação, turno finalizado) e os vê no próprio perfil. Ao publicar, os favoritos recebem "A Hamburgueria da Cláudia publicou um turno para amanhã, 18h"; na lista de disponíveis do entregador, os turnos dessas lojas levam o selo "Loja que já te chamou". O entregador não vê quem o favoritou (V18) |
+| Gorjeta | Na avaliação do entregador, o lojista pode dar R$ 5, 10, 20 ou outro valor (até R$ 50) do saldo disponível. Transferência no ledger (`bonus_enviado` → `bonus`), com comprovante, não NFS-e |
 | RF11 | Turno finalizado gera NFS-e — entregador é o prestador, lojista é o tomador, e **só o lojista emite e cancela**; o entregador vê, baixa e imprime. Todo lançamento do extrato gera o documento correspondente (nota, recibo ou comprovante), sempre simulado — ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |
 
 ---
