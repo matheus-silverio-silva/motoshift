@@ -4,7 +4,8 @@ name: Regravar goldens (temporario)
 # CI (windows-latest, Segoe UI, Flutter 3.41.5) e devolve as imagens a esta
 # branch. Existe porque a NFS-e passou a seguir o leiaute do DANFSe v2.0 e o
 # recibo ganhou o texto de quitação, e os goldens so podem ser gravados no
-# Windows. Sai da branch antes do merge.
+# Windows. Sai da branch antes do merge. (Segunda rodada: o golden da nota
+# com retenção passou a rolar até os tributos e totais.)
 on:
   push:
     branches: ['claude/dreamy-davinci-gu076z']
