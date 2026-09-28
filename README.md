@@ -184,8 +184,7 @@ Roda com o perfil `prod` (PostgreSQL). Variáveis principais:
 ## 🔑 Credenciais de Teste
 
 Todos os usuários abaixo usam a senha **`senha123`**. Em desenvolvimento são
-criados automaticamente na primeira inicialização (junto com turnos, carteiras,
-extrato, avaliações, notas fiscais e notificações), desde que o banco esteja
+criados automaticamente na primeira inicialização, desde que o banco esteja
 vazio. Em produção, a massa é recriada pelo reset descrito em
 [Resetar a massa de demonstração](#-resetar-a-massa-de-demonstração). A massa
 inteira mora em `backend/.../config/MassaDemonstracao.java`, e toda data dela é
@@ -200,44 +199,110 @@ calculada a partir do momento em que roda.
 | `ana@teste.com` | Ana Souza | Farmácia Ana | Curitiba/PR |
 | `lojista@teste.com` | Maria Andrade | Mercado Andrade | São Paulo/SP |
 
+Lojista não tem score (a reputação é do entregador); a média de avaliação de
+cada loja é a das notas que os entregadores deram a ela.
+
 ### 🏍️ Motoboys
 
-| Email | Nome | Veículo | Score |
-|-------|------|---------|-------|
-| `ricardo@teste.com` | Ricardo Souza | Honda CG 160 Titan | 4.7 |
-| `lucas@teste.com` | Lucas Mendes | Yamaha Factor 150 | 4.9 |
-| `thiago@teste.com` | Thiago Alves | Honda Biz 125 | 3.1 |
-| `motoboy@teste.com` | Carlos Mendes | Honda PCX 150 | 5.0 |
+| Email | Nome | Veículo | Score | Por quê |
+|-------|------|---------|-------|---------|
+| `ricardo@teste.com` | Ricardo Souza | Honda CG 160 Titan | 5.0 | cancelou um turno com folga — sem penalidade |
+| `lucas@teste.com` | Lucas Mendes | Yamaha Factor 150 | 5.0 | nenhum cancelamento |
+| `thiago@teste.com` | Thiago Alves | Honda Biz 125 | 4.5 | cancelou um turno a menos de 1h do início (−0,5) |
+| `motoboy@teste.com` | Carlos Mendes | Honda PCX 150 | 5.0 | nenhum cancelamento |
 
-> 💡 Para explorar o fluxo completo, recomendamos **`claudia@teste.com`** (lojista
-> com vários turnos) e **`ricardo@teste.com`** (motoboy com histórico, carteira e
-> avaliações). Os turnos de teste cobrem cenários abertos, em andamento,
-> concluídos, pendentes de pagamento e cancelados.
+Nenhum desses números é gravado à mão: o score é o que a regra da RF07 produz
+(5,0 inicial, −0,5 por cancelamento tardio) a partir do que aconteceu na massa,
+e a média de avaliação é recalculada pelo `AvaliacaoService` a cada avaliação.
+
+### 📖 O que a massa conta
+
+Cerca de cinco meses de história, gravados pelos mesmos serviços que o app usa
+(recarga e saque pelo `CobrancaService`, aceite/finalização/cancelamento pelo
+`TurnoService`, avaliação pelo `AvaliacaoService`, nota pelo
+`NotaFiscalService`):
+
+- **Todo mês** as lojas recarregam a carteira pelo Pix simulado e os
+  entregadores sacam parte do que receberam.
+- **Toda semana** há turnos pagos na finalização — cada um com as duas
+  avaliações (notas de 3 a 5, comentários com as tags do app) e a NFS-e
+  emitida pelo lojista no dia seguinte.
+- Um **turno de três vagas** da Cláudia com Ricardo, Lucas e Thiago: três
+  pagamentos, três notas. E turnos de duas vagas com um entregador só, em que a
+  sobra da reserva volta à loja.
+- Uma **nota cancelada** pelo Fernando (o pagamento continua no extrato).
+- **Pendências da última semana:** três pagamentos ainda sem nota ("a emitir"
+  para Maria, Ana e Cláudia; "aguardando emissão" para Carlos, Ricardo e
+  Lucas) e avaliações por fazer.
+- Um turno da Ana que **expirou** sem entregador (vencido pelo próprio job).
+- **O presente:** seis turnos abertos, um em andamento (Cláudia + Ricardo),
+  dois confirmados para amanhã e os dois cancelamentos que explicam os scores.
+- **Notificações** só dos tipos que o código gera hoje, com os textos de hoje;
+  as de mais de três dias já aparecem como lidas.
+
+> 💡 Para explorar o fluxo completo, recomendamos **`claudia@teste.com`**
+> (lojista com o turno de três vagas, pendências e um turno em andamento) e
+> **`ricardo@teste.com`** (entregador com histórico, saques, notas e um turno
+> em andamento). Para o fluxo de nota fiscal dos dois lados, use
+> **`lojista@teste.com`** e **`motoboy@teste.com`**.
 
 ### 🔄 Resetar a massa de demonstração
 
 Com o tempo a massa envelhece: turnos "abertos" com início no passado, extrato
-parado, notificações antigas. O reset apaga **só** a massa — as contas cujo
-e-mail termina em `@teste.com` e o que pertence a elas — e cria outra com datas
-de agora. Contas reais e os dados delas ficam intactos (o que uma conta real
-fez *dentro* da massa, como aceitar um turno da Cláudia, sai junto). Não mexe
-em schema, migrações nem no histórico do Flyway, e roda numa transação só: se
-algo falhar, nada é apagado.
+parado, notificações antigas. Há dois resets, os dois pela variável de
+ambiente `MOTOSHIFT_SEED_RESET` no boot, e os dois numa transação só — se algo
+falhar, nada é apagado e o app sobe normalmente. Nenhum mexe em schema,
+migrações ou no `flyway_schema_history`.
 
-Em produção (serviço **Back-End** no Railway):
+| Valor exato | O que apaga | Contas reais |
+|-------------|-------------|--------------|
+| `confirmo` | só a massa: contas `@teste.com` e o que pertence a elas (o que uma conta real fez *dentro* da massa, como aceitar um turno da Cláudia, sai junto) | ficam |
+| `confirmo-apagar-tudo` | **todos** os dados de negócio (notas, avaliações, extrato, cobranças, inscrições, notificações, turnos, carteiras e usuários), com `DELETE` na ordem das chaves estrangeiras — nunca `DROP`/`TRUNCATE` | **são apagadas** |
 
-1. Defina a variável `MOTOSHIFT_SEED_RESET` com o valor exato `confirmo`.
-   Qualquer outro valor — ou a variável ausente — não faz nada.
-2. Faça o redeploy (ou reinicie o serviço).
-3. Confira no log do deploy o resumo `[massa] reset concluido`, com quantas
-   linhas foram apagadas e criadas por tabela.
-4. **Remova a variável `MOTOSHIFT_SEED_RESET`.** Este passo não é opcional:
-   enquanto ela existir, **todo** deploy e **todo** restart apagam e recriam a
-   massa — inclusive o que foi feito com as contas de teste durante uma
-   apresentação.
+Qualquer outro valor — `CONFIRMO`, ` confirmo`, `confirmo-apagar`,
+`apagar-tudo`, a variável vazia ou ausente — não faz nada.
+
+#### Passo a passo no Railway (serviço **Back-End**) — `confirmo-apagar-tudo`
+
+Use quando o banco de produção tem dados velhos ou de teste que não são da
+massa e a demonstração precisa começar do zero.
+
+1. **Antes de tudo, um backup.** Este modo apaga contas reais. No serviço do
+   PostgreSQL, faça um backup (aba *Backups*) ou um `pg_dump` pela URL pública.
+2. **Faça o deploy da versão que tem este modo.** Em *Settings → Source*,
+   aponte o serviço para a branch com esta versão (ou para a `main`, depois do
+   merge) e espere o deploy terminar. Uma versão anterior não conhece o valor
+   `confirmo-apagar-tudo` e simplesmente o ignora.
+3. **Defina a variável.** Em *Variables*, crie `MOTOSHIFT_SEED_RESET` com o
+   valor exato `confirmo-apagar-tudo` e aplique (*Deploy* nas mudanças
+   pendentes). O Railway sobe um deploy novo com ela.
+4. **Espere o boot** — até o log mostrar `Started MotoshiftApplication`.
+5. **Confira o log do deploy.** Devem aparecer, nesta ordem:
+   - `[massa] MOTOSHIFT_SEED_RESET=confirmo-apagar-tudo — apagando TODOS os dados de negocio ...`
+   - `[massa] reset TOTAL concluido — todos os dados de negocio`, seguido de
+     uma tabela com as colunas `antes`, `apagados` e `depois` por tabela. Na
+     linha `usuarios`, `depois` tem de ser **8**.
+   - `[massa] REMOVA a variavel MOTOSHIFT_SEED_RESET do servico agora.`
+
+   Se aparecer `[massa] reset falhou e foi desfeito por inteiro; nada foi
+   apagado`, o banco está exatamente como antes; a causa vem logo abaixo, no
+   stack trace.
+6. **Remova a variável `MOTOSHIFT_SEED_RESET`** em *Variables*. Este passo não
+   é opcional: enquanto ela existir, **todo** deploy e **todo** restart apagam
+   tudo de novo — inclusive o que for feito durante uma apresentação.
+7. **Faça o redeploy** sem a variável e confirme que o log do boot não tem
+   nenhuma linha `[massa]`. Entre no app com `lojista@teste.com` /
+   `senha123` para conferir.
+
+Para o reset que preserva contas reais, o procedimento é o mesmo com o valor
+`confirmo` (sem o passo do backup, se preferir); o log mostra
+`[massa] reset concluido`, com as linhas apagadas e criadas por tabela.
 
 Em desenvolvimento não é preciso: o H2 é recriado a cada boot e a massa nasce
-nova. Para testar o reset localmente, suba com `MOTOSHIFT_SEED_RESET=confirmo`.
+nova. Para testar localmente, suba com `MOTOSHIFT_SEED_RESET=confirmo` ou
+`MOTOSHIFT_SEED_RESET=confirmo-apagar-tudo`. Os dois modos têm teste de
+integração sobre PostgreSQL com Flyway (`ResetDaMassaPostgresTest`), inclusive
+para "valor errado não faz nada".
 
 ---
 

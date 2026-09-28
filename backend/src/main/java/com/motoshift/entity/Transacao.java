@@ -138,9 +138,9 @@ public class Transacao {
 
     @PrePersist
     private void prePersist() {
-        // So a massa de demonstracao data um lancamento no passado (para o
-        // grafico mensal ter mais de uma barra). O fluxo normal deixa null e o
-        // carimbo e sempre "agora".
+        // So teste data um lancamento no passado. O fluxo normal deixa null e
+        // o carimbo e sempre "agora" — inclusive na massa de demonstracao, que
+        // passa pelo ledger e so depois reescreve a data (MassaDemonstracao).
         if (criadoEm == null) criadoEm = LocalDateTime.now();
         if (status == null) status = StatusTransacao.CONCLUIDO;
     }
@@ -193,6 +193,6 @@ public class Transacao {
 
     public LocalDateTime getCriadoEm() { return criadoEm; }
 
-    /** Ver o comentario do @PrePersist: uso restrito a massa de demonstracao. */
+    /** Ver o comentario do @PrePersist: uso restrito a testes. */
     public void setCriadoEm(LocalDateTime criadoEm) { this.criadoEm = criadoEm; }
 }

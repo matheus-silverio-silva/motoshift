@@ -50,7 +50,7 @@ Pacote raiz: `com.motoshift`. Arquitetura em camadas clássica:
 | **Repository** | `repository/` | Acesso a dados (Spring Data JPA) |
 | **Entity** | `entity/` | Tabelas do banco (`Usuario`, `Turno`, `Carteira`, `Transacao`, `Avaliacao`) |
 | **DTO** | `dto/` | Objetos de transferência (separa API do modelo interno) |
-| **Config** | `config/` | `MassaDemonstracao` (massa de teste: `popular()` e `resetar()`), `DataInitializer` (gatilho em dev) e `ResetDaMassaNoBoot` (reset com trava em qualquer ambiente) |
+| **Config** | `config/` | `MassaDemonstracao` (massa de teste: `popular()`, `resetar()` e `apagarTudoERecriar()`), `DataInitializer` (gatilho em dev) e `ResetDaMassaNoBoot` (os dois resets, com trava, em qualquer ambiente) |
 
 **Fluxo de uma requisição** (ex: aceitar turno):
 `PUT /api/turnos/{id}/aceitar` → `TurnoController` → `TurnoService.aceitar()`
@@ -134,10 +134,14 @@ Android) ou `localhost:8080`.
 - **Integridade no banco.** Desde a V11 são 16 `FOREIGN KEY` com
   `ON DELETE RESTRICT`. As entidades continuam referenciando por `Long`, sem
   `@ManyToOne` — decisões separadas, explicadas no DER.
-- **Massa de demonstração:** `MassaDemonstracao` (`popular()` / `resetar()`).
-  Em dev nasce com o banco vazio; em produção é recriada pelo reset com trava
-  (`MOTOSHIFT_SEED_RESET=confirmo`), com datas sempre calculadas a partir do
-  momento em que roda. O passo a passo está no README.
+- **Massa de demonstração:** `MassaDemonstracao` — cerca de cinco meses de
+  história (recargas, turnos pagos toda semana, saques, avaliações, notas
+  emitidas pelo lojista) gravados pelos mesmos serviços do app, e não por
+  INSERT. Em dev nasce com o banco vazio; em produção é recriada por um de dois
+  resets com trava: `MOTOSHIFT_SEED_RESET=confirmo` (só a massa) ou
+  `MOTOSHIFT_SEED_RESET=confirmo-apagar-tudo` (todos os dados de negócio, com
+  DELETE na ordem das FKs; o `flyway_schema_history` fica). Datas sempre
+  calculadas a partir do momento em que roda. O passo a passo está no README.
 
 ---
 
@@ -217,6 +221,19 @@ antes da primeira. No app, estrela é sempre avaliação, nunca score. O "score
 de 30 dias atrás" da tela de análise é **estimativa** (reverte as penalizações
 da janela) e vai rotulado como tal na resposta da API — medir de verdade
 exigiria uma tabela de eventos de score.
+
+**P: Os números da demonstração foram escritos à mão?**
+R: Não. A massa passa pelos serviços de verdade: a recarga pelo
+`CobrancaService`, o aceite, a finalização e o cancelamento pelo
+`TurnoService`, a avaliação pelo `AvaliacaoService` e a nota pelo
+`NotaFiscalService`, a pedido do lojista. Por isso o score do Thiago é 4,5 —
+ele cancelou um turno a menos de 1h do início, e a regra tirou 0,5 —, as
+médias são as das notas que cada um recebeu, as notificações são as que o
+código gera hoje, e a massa passa na mesma conferência de consistência do
+ledger que o banco de produção. A única coisa que vai direto ao repositório é
+o turno do passado: a RF04 não deixa publicar com menos de 2h de antecedência,
+e um turno de três meses atrás não tem como respeitá-la hoje — ele nasce pelo
+repositório e reserva o dinheiro pelo mesmo serviço da publicação.
 
 **P: Quem emite a nota fiscal? A NFS-e não é do prestador?**
 R: No mundo real, sim: a NFS-e sai do CNPJ de quem presta — aqui, o entregador
