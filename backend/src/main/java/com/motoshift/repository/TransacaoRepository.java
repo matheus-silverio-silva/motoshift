@@ -101,12 +101,16 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long>,
      * volume de lancamentos.
      *
      * <p>So lancamentos CONCLUIDOS: um grafico de fluxo de caixa que inclui
-     * dinheiro que nao se moveu nao e um grafico de fluxo de caixa.
+     * dinheiro que nao se moveu nao e um grafico de fluxo de caixa. Pelo mesmo
+     * motivo, sem reserva e liberacao: sao o dinheiro do lojista trocando de
+     * bolso dentro da propria carteira, nao entrando nem saindo dela.
      */
     @Query("SELECT new com.motoshift.repository.PontoDeFluxo("
          + "  year(t.criadoEm), month(t.criadoEm), day(t.criadoEm), t.natureza, SUM(t.valor)) "
          + "FROM Transacao t "
          + "WHERE t.usuarioId = :usuarioId AND t.status = com.motoshift.entity.StatusTransacao.CONCLUIDO "
+         + "AND t.tipo NOT IN (com.motoshift.entity.TipoTransacao.RESERVA, "
+         + "                   com.motoshift.entity.TipoTransacao.LIBERACAO_RESERVA) "
          + "AND t.criadoEm >= :inicio AND t.criadoEm < :fim "
          + "GROUP BY year(t.criadoEm), month(t.criadoEm), day(t.criadoEm), t.natureza "
          + "ORDER BY year(t.criadoEm), month(t.criadoEm), day(t.criadoEm)")

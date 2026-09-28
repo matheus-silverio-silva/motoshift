@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/extrato_filtro.dart';
 import '../../models/transacao.dart';
+import '../../models/usuario.dart';
 import '../../theme/app_theme.dart';
 
 /// A folha de filtros do extrato.
@@ -9,11 +10,21 @@ import '../../theme/app_theme.dart';
 /// Edita uma cópia e só devolve o filtro no "Aplicar": mexer no filtro ativo a
 /// cada toque dispararia uma consulta por clique, e o usuário que abriu para
 /// mudar três coisas veria a lista piscar três vezes.
+///
+/// Os tipos oferecidos são os do [papel] — ver [TipoTransacao.filtraveisPara]:
+/// o entregador não vê "Recarga" nem "Reserva", o lojista não vê "Pagamento
+/// recebido".
 class ExtratoFiltros extends StatefulWidget {
-  const ExtratoFiltros({required this.inicial, required this.hoje, super.key});
+  const ExtratoFiltros({
+    required this.inicial,
+    required this.hoje,
+    required this.papel,
+    super.key,
+  });
 
   final ExtratoFiltro inicial;
   final DateTime hoje;
+  final TipoUsuario papel;
 
   @override
   State<ExtratoFiltros> createState() => _ExtratoFiltrosState();
@@ -210,7 +221,7 @@ class _ExtratoFiltrosState extends State<ExtratoFiltros> {
       spacing: 8,
       runSpacing: 8,
       children: [
-        for (final t in TipoTransacao.filtraveis)
+        for (final t in TipoTransacao.filtraveisPara(widget.papel))
           FilterChip(
             key: Key('filtro-tipo-${t.name}'),
             label: Text(t.label),

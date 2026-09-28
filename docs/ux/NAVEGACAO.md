@@ -202,7 +202,9 @@ No turno finalizado, acima das ações, aparece o bloco **O QUE FALTA** — só
 quando há o que fazer:
 
 - **Avaliar** — com o nome de quem falta avaliar;
-- **Emitir a nota fiscal** — leva às Notas fiscais, onde está o botão Emitir.
+- **Emitir a nota fiscal** — só para o lojista, que é quem emite; leva às Notas
+  fiscais, onde está o botão Emitir. Para o entregador a nota que falta não é
+  tarefa dele: a tela de notas a mostra como "Aguardando emissão", sem botão.
 
 **Não há botão de pagamento.** O dinheiro foi reservado na publicação e
 transferido na finalização, na mesma transação. Um botão sugerindo o contrário

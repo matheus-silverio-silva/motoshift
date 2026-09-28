@@ -43,7 +43,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
   bool _carregando = false;
   String? _erro;
 
-  /// Filtro do extrato no desktop: todos | entradas | saques.
+  /// Filtro do extrato no desktop: todos | entradas | saidas.
   String _filtroExtrato = 'todos';
 
   @override
@@ -231,11 +231,11 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
 
   List<Transacao> get _extratoFiltrado {
     final todas = _carteira?.transacoes ?? const <Transacao>[];
+    // Pela natureza do lançamento, não por "é saque ou não": com retenção na
+    // fonte ligada, ISS e IRRF retidos são saída, e caíam em "Entradas".
     return switch (_filtroExtrato) {
-      'entradas' =>
-        todas.where((t) => t.tipo != TipoTransacao.saque).toList(),
-      'saques' =>
-        todas.where((t) => t.tipo == TipoTransacao.saque).toList(),
+      'entradas' => todas.where((t) => t.credito == true).toList(),
+      'saidas' => todas.where((t) => t.credito == false).toList(),
       _ => todas,
     };
   }
@@ -313,7 +313,7 @@ class _CarteiraScreenState extends State<CarteiraScreen> {
     const opcoes = [
       ('todos', 'Tudo'),
       ('entradas', 'Entradas'),
-      ('saques', 'Saques'),
+      ('saidas', 'Saídas'),
     ];
     return Container(
       padding: const EdgeInsets.all(4),

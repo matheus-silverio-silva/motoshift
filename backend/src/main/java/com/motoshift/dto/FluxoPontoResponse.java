@@ -9,8 +9,8 @@ import java.time.LocalDate;
  * @param inicio  primeiro dia do balde (o proprio dia, a segunda-feira da
  *                semana ou o dia 1 do mes)
  * @param rotulo  como a tela escreve o periodo: "05/09", "01-07/09", "09/2026"
- * @param entradas soma dos creditos do periodo
- * @param saidas   soma dos debitos do periodo, sempre positiva
+ * @param entradas soma dos creditos do periodo, sem liberacao de reserva
+ * @param saidas   soma dos debitos do periodo, sem reserva, sempre positiva
  * @param liquido  entradas menos saidas — pode ser negativo, e deve mesmo
  */
 public record FluxoPontoResponse(LocalDate inicio, String rotulo,

@@ -279,6 +279,31 @@ simulado e não tem carteira. Ver [`FISCAL.md`](FISCAL.md).
 
 Daí a invariante (c).
 
+### O que cada papel vê
+
+Os tipos da tabela não existem para todo mundo. O entregador nunca tem
+`recarga`, `reserva`, `liberacao_reserva` nem `pagamento_enviado`; o lojista
+nunca tem `pagamento_recebido` nem retenção. As telas e o resumo seguem isso,
+e **o número que não é do papel não aparece — nem zerado**:
+
+| | Entregador (prestador) | Lojista (tomador) |
+|---|---|---|
+| Tipos no filtro do extrato | `pagamento_recebido`, `saque`, `estorno`, `retencao_iss`, `retencao_irrf` | `recarga`, `reserva`, `liberacao_reserva`, `pagamento_enviado`, `estorno` |
+| `/api/carteira/resumo` | `recebido`, `retencoes` (só com retenção na fonte), `sacado` (saque menos o estorno do saque recusado), `disponivel`, `aReceber` | `recarregado`, `pagoAEntregadores`, `devolvido` (liberação + estorno), `disponivel`, `bloqueado`, `comprometido`, `reservasAbertas` |
+
+A lista de tipos por papel está num lugar só no app,
+`TipoTransacao.filtraveisPara(papel)`, e é a que o filtro, o relatório e a
+exportação usam. O resumo vem com `papel` e **sem** os campos do outro lado
+(`@JsonInclude(NON_NULL)`): um "Comprometido R$ 0,00" para o entregador ou um
+"A receber R$ 0,00" para o lojista não é informação, é ruído com o rótulo
+errado. "Entradas" e "saídas" saíram do resumo pelo mesmo motivo — a entrada
+do lojista é recarga, não receita, e a saída do entregador é saque, não custo.
+
+O **fluxo de caixa** (`/api/carteira/fluxo`) deixa `reserva` e
+`liberacao_reserva` de fora, pela coluna "Δ total" acima: elas não mudam o que
+a carteira tem, só o bolso em que está. Contadas, um turno de R$ 120 aparecia
+no gráfico do lojista como R$ 240 de saída (a reserva e depois o pagamento).
+
 ---
 
 ## 6. As três invariantes

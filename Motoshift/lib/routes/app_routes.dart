@@ -32,8 +32,9 @@ class AppRoutes {
       '/avaliar-entregadores';                                     // tela 19
 
   // ── Financeiro ───────────────────────────────────────────────────────────
-  // Servem aos dois perfis: a pergunta "quanto entrou, quanto saiu, o que está
-  // comprometido" é a mesma para lojista e entregador, só muda o sinal.
+  // Servem aos dois perfis com a mesma rota, mas cada tela mostra só o que é
+  // do papel de quem abriu: o entregador vê recebido, sacado e a receber; o
+  // lojista vê recarregado, pago, devolvido e comprometido.
   static const String extrato           = '/extrato';
   static const String lancamento        = '/extrato/lancamento';
   static const String recarga           = '/recarga';

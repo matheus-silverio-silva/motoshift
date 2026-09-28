@@ -343,8 +343,6 @@ class _NotasFiscaisScreenState extends State<NotasFiscaisScreen> {
       return _total == 1 ? '1 nota no total' : '$_total notas no total';
     }
     final partes = <String>[
-      if (_filtro.papel == 'prestador') 'como prestador',
-      if (_filtro.papel == 'tomador') 'como tomador',
       if (_filtro.status == 'emitida') 'só as válidas',
       if (_filtro.status == 'cancelada') 'só as canceladas',
       if (_filtro.competenciaDe != null || _filtro.competenciaAte != null)
@@ -402,21 +400,18 @@ class _NotasFiscaisScreenState extends State<NotasFiscaisScreen> {
     );
   }
 
-  /// Papel, situação, período de competência e contraparte. O filtro por
-  /// turno existe na API e não aqui: quem procura a nota de um turno chega a
-  /// ela pelo próprio turno.
+  /// Situação, período de competência e contraparte.
+  ///
+  /// Não há filtro de papel ("Prestei"/"Tomei"): cada conta tem um lado só —
+  /// o entregador sempre presta, o lojista sempre toma —, e a pílula do outro
+  /// lado devolvia sempre uma lista vazia. O filtro existe na API, para quem
+  /// integrar, e não aqui. O filtro por turno também: quem procura a nota de
+  /// um turno chega a ela pelo próprio turno.
   Widget _barraDeFiltros() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          _chip('Todas', _filtro.papel == null,
-              () => _aplicarFiltro(_filtro.copyWith(limparPapel: true))),
-          _chip('Prestei', _filtro.papel == 'prestador',
-              () => _aplicarFiltro(_filtro.copyWith(papel: 'prestador'))),
-          _chip('Tomei', _filtro.papel == 'tomador',
-              () => _aplicarFiltro(_filtro.copyWith(papel: 'tomador'))),
-          const SizedBox(width: 6),
           _chip('Válidas', _filtro.status == 'emitida',
               () => _aplicarFiltro(_filtro.status == 'emitida'
                   ? _filtro.copyWith(limparStatus: true)

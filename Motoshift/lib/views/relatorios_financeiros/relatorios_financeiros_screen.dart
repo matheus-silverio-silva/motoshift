@@ -4,8 +4,11 @@ import 'package:provider/provider.dart';
 
 import '../../models/extrato_filtro.dart';
 import '../../models/resumo_financeiro.dart';
+import '../../models/transacao.dart';
+import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/exportar_csv.dart';
 import '../../widgets/adaptive_scaffold.dart';
@@ -19,6 +22,13 @@ import '../../widgets/desktop/panel_card.dart';
 /// montar total nenhum. Isso não é detalhe de implementação: enquanto a conta
 /// era feita aqui, ela dependia de o cliente ter baixado o extrato inteiro, e
 /// só funcionava enquanto o extrato fosse pequeno.
+///
+/// Cada papel vê os seus números e só eles. O entregador presta serviço:
+/// recebido, retido na fonte, sacado, disponível e a receber. O lojista
+/// contrata: recarregado, pago a entregadores, devolvido, disponível e
+/// comprometido. "Entradas" e "Saídas" saíram dos cartões porque diziam coisas
+/// diferentes para cada um — a entrada do lojista é recarga, não receita, e a
+/// saída do entregador é saque, não custo.
 class RelatoriosFinanceirosScreen extends StatefulWidget {
   const RelatoriosFinanceirosScreen({super.key, this.agora});
 
@@ -42,6 +52,11 @@ class _RelatoriosFinanceirosScreenState
   String? _erro;
 
   DateTime get _hoje => widget.agora ?? clock.now();
+
+  TipoUsuario get _papel =>
+      context.read<AuthService>().usuario?.tipo ?? TipoUsuario.motoboy;
+
+  bool get _souLojista => _papel == TipoUsuario.lojista;
 
   @override
   void initState() {
@@ -171,50 +186,53 @@ class _RelatoriosFinanceirosScreenState
     );
   }
 
+  /// Os cartões do papel de quem abriu a tela, dois por linha. O que é do
+  /// outro papel não aparece — nem zerado.
   Widget _cartoesDeResumo() {
     final r = _resumo;
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-                child: _cartao('Entradas', r?.entradas, AppColors.good,
-                    const Key('relatorio-entradas'))),
+    final cartoes = _souLojista
+        ? [
+            _cartao('Recarregado', r?.recarregado, AppColors.good,
+                const Key('relatorio-recarregado')),
+            _cartao('Pago a entregadores', r?.pagoAEntregadores, AppColors.ink,
+                const Key('relatorio-pago')),
+            _cartao('Devolvido', r?.devolvido, AppColors.ink,
+                const Key('relatorio-devolvido')),
+            _cartao('Disponível', r?.disponivel, AppColors.teal,
+                const Key('relatorio-disponivel')),
+            _cartao('Comprometido em turnos', r?.comprometido, AppColors.muted,
+                const Key('relatorio-comprometido')),
+          ]
+        : [
+            _cartao('Recebido por serviços', r?.recebido, AppColors.good,
+                const Key('relatorio-recebido')),
+            _cartao('Sacado', r?.sacado, AppColors.ink,
+                const Key('relatorio-sacado')),
+            // Só existe com retenção na fonte: sem ela o backend não manda o
+            // campo, e a tela não inventa um "R$ 0,00 retido".
+            if (r?.retencoes != null)
+              _cartao('Retido na fonte', r?.retencoes, AppColors.error,
+                  const Key('relatorio-retencoes')),
+            _cartao('Disponível', r?.disponivel, AppColors.teal,
+                const Key('relatorio-disponivel')),
+            _cartao('A receber', r?.aReceber, AppColors.muted,
+                const Key('relatorio-a-receber')),
+          ];
+
+    final linhas = <Widget>[];
+    for (var i = 0; i < cartoes.length; i += 2) {
+      if (i > 0) linhas.add(const SizedBox(height: 10));
+      linhas.add(Row(
+        children: [
+          Expanded(child: cartoes[i]),
+          if (i + 1 < cartoes.length) ...[
             const SizedBox(width: 10),
-            Expanded(
-                child: _cartao('Saídas', r?.saidas, AppColors.error,
-                    const Key('relatorio-saidas'))),
+            Expanded(child: cartoes[i + 1]),
           ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-                child: _cartao('Líquido', r?.liquido, AppColors.ink,
-                    const Key('relatorio-liquido'))),
-            const SizedBox(width: 10),
-            Expanded(
-                child: _cartao('Disponível', r?.disponivel, AppColors.teal,
-                    const Key('relatorio-disponivel'))),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            // Os dois números que só fazem sentido para um dos perfis: vêm
-            // zerados para quem não tem aquele tipo de pendência, e o rótulo
-            // diz de quem é cada um.
-            Expanded(
-                child: _cartao('A receber', r?.aReceber, AppColors.muted,
-                    const Key('relatorio-a-receber'))),
-            const SizedBox(width: 10),
-            Expanded(
-                child: _cartao('Comprometido', r?.comprometido, AppColors.muted,
-                    const Key('relatorio-comprometido'))),
-          ],
-        ),
-      ],
-    );
+        ],
+      ));
+    }
+    return Column(children: linhas);
   }
 
   Widget _cartao(String rotulo, double? valor, Color cor, Key key) {
@@ -243,7 +261,11 @@ class _RelatoriosFinanceirosScreenState
   Widget _painelDeFluxo() {
     return PanelCard(
       title: 'Fluxo de caixa',
-      subtitle: 'Entradas e saídas do período',
+      // O que compõe cada barra, dito para quem lê: reserva e liberação ficam
+      // de fora (backend) porque são o dinheiro do lojista trocando de bolso.
+      subtitle: _souLojista
+          ? 'Recargas e estornos entrando; pagamentos a entregadores saindo'
+          : 'Pagamentos recebidos entrando; saques e retenções saindo',
       padding: const EdgeInsets.all(16),
       gap: 12,
       trailing: DropdownButton<String>(
@@ -291,6 +313,39 @@ class _RelatoriosFinanceirosScreenState
         .map((p) => p.entradas > p.saidas ? p.entradas : p.saidas)
         .fold<double>(0, (a, b) => a > b ? a : b);
 
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _legenda(AppColors.good, 'Entrou na carteira'),
+            const SizedBox(width: 14),
+            _legenda(AppColors.error, 'Saiu da carteira'),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _barras(maximo),
+      ],
+    );
+  }
+
+  Widget _legenda(Color cor, String texto) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: cor, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(texto,
+            style: tsJakarta(10.5, FontWeight.w500, color: AppColors.muted)),
+      ],
+    );
+  }
+
+  Widget _barras(double maximo) {
     return SizedBox(
       height: 190,
       child: ListView.separated(
@@ -346,8 +401,18 @@ class _RelatoriosFinanceirosScreenState
     );
   }
 
+  /// A quebra na ordem de leitura do papel — a mesma do filtro do extrato
+  /// ([TipoTransacao.filtraveisPara]). Um tipo fora da lista (um saque do
+  /// lojista, um bônus) continua aparecendo, no fim: é dinheiro dele.
   Widget _painelPorTipo() {
-    final itens = _resumo?.porTipo ?? const <TotalPorTipo>[];
+    final ordem = TipoTransacao.filtraveisPara(_papel);
+    int posicao(TotalPorTipo t) {
+      final i = ordem.indexOf(t.tipo);
+      return i < 0 ? ordem.length : i;
+    }
+
+    final itens = [...?_resumo?.porTipo]
+      ..sort((a, b) => posicao(a).compareTo(posicao(b)));
     return PanelCard(
       title: 'Por tipo de lançamento',
       subtitle: 'Onde o dinheiro se moveu no período',

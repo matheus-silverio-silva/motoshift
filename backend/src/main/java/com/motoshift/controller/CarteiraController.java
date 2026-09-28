@@ -224,10 +224,13 @@ public class CarteiraController {
     }
 
     @Operation(summary = "Resumo financeiro do período",
-            description = "Entradas, saídas e líquido do período, mais o retrato atual da "
-                    + "carteira: disponível, bloqueado, a receber (entregador: turnos aceitos "
-                    + "ainda não finalizados) e comprometido (lojista: reservas abertas, com "
-                    + "a lista por turno). Sem datas, usa os últimos 30 dias.")
+            description = "O retrato do período para o papel de quem pergunta, e só ele. "
+                    + "Entregador (papel=prestador): recebido, retencoes (com retenção na "
+                    + "fonte), sacado, disponível e aReceber (turnos aceitos ainda não "
+                    + "finalizados). Lojista (papel=tomador): recarregado, pagoAEntregadores, "
+                    + "devolvido (liberação de reserva e estorno), disponível, bloqueado e "
+                    + "comprometido, com a lista de reservas abertas. Os campos do outro "
+                    + "papel não vêm no JSON. Sem datas, usa os últimos 30 dias.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Resumo do período"),
         @ApiResponse(responseCode = "400", description = "Data final anterior à inicial")
@@ -237,13 +240,15 @@ public class CarteiraController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataInicio,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataFim,
             @AuthenticationPrincipal UsuarioAutenticado atual) {
-        return extrato.resumo(atual.id(), dataInicio, dataFim);
+        return extrato.resumo(atual.id(), atual.isLojista(), dataInicio, dataFim);
     }
 
     @Operation(summary = "Série de fluxo de caixa",
-            description = "Entradas e saídas agrupadas por dia, semana ou mês, somadas no "
-                    + "banco. Períodos sem lançamento vêm com zero, para o gráfico não "
-                    + "mentir sobre o intervalo. Sem datas, usa os últimos 30 dias.")
+            description = "Entradas e saídas da carteira agrupadas por dia, semana ou mês, "
+                    + "somadas no banco. Reserva e liberação ficam de fora: são dinheiro "
+                    + "trocando de bolso dentro da carteira, não entrando nem saindo. "
+                    + "Períodos sem lançamento vêm com zero, para o gráfico não mentir sobre "
+                    + "o intervalo. Sem datas, usa os últimos 30 dias.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Série do gráfico"),
         @ApiResponse(responseCode = "400", description = "Agrupamento ou período inválido")

@@ -20,18 +20,31 @@ void main() {
   setUpAll(setupGoldenTests);
 
   group('Filtros', () {
-    testWidgets('tocar em "Prestei" manda o papel para a API', (tester) async {
+    testWidgets('tocar em "Válidas" manda a situação para a API', (tester) async {
       final api = _api(notas: [fakeNotaFiscal()], total: 1);
 
       await _abrir(tester, api);
-      await tester.tap(find.text('Prestei'));
+      await tester.tap(find.text('Válidas'));
       await tester.pumpAndSettle();
 
-      expect(api.notasApi.ultimoFiltro?.papel, 'prestador');
+      expect(api.notasApi.ultimoFiltro?.status, 'emitida');
       // Volta para a primeira página: filtro novo, contagem nova.
       expect(api.notasApi.ultimoTamanho, 20);
       expect(api.notasApi.ultimaPagina, 0);
     });
+
+    for (final papel in TipoUsuario.values) {
+      testWidgets('${papel.name}: sem pílula de papel — cada conta tem um lado só',
+          (tester) async {
+        final api = _api(notas: [fakeNotaFiscal()], total: 1);
+
+        await _abrir(tester, api, tipoUsuario: papel);
+
+        expect(find.text('Prestei'), findsNothing);
+        expect(find.text('Tomei'), findsNothing);
+        expect(api.notasApi.ultimoFiltro?.papel, isNull);
+      });
+    }
 
     testWidgets('a pílula de situação liga e desliga no mesmo toque',
         (tester) async {
@@ -71,10 +84,9 @@ void main() {
       api.notasApi.notas = const [];
       api.notasApi.total = 0;
 
-      await tester.tap(find.text('Tomei'));
-      await tester.pumpAndSettle();
+      await _tocarNoChip(tester, 'Canceladas');
 
-      expect(find.textContaining('filtrando como tomador'), findsOneWidget);
+      expect(find.textContaining('filtrando só as canceladas'), findsOneWidget);
     });
   });
 
@@ -87,7 +99,7 @@ void main() {
       await _abrir(tester, api);
       expect(find.textContaining('5 restantes'), findsOneWidget);
 
-      await tester.tap(find.text('Prestei'));
+      await tester.tap(find.text('Válidas'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('notas-carregar-mais')));
       await tester.pumpAndSettle();
@@ -95,7 +107,7 @@ void main() {
       expect(api.notasApi.ultimoTamanho, 40);
       // O filtro sobrevive à paginação — senão "carregar mais" viraria
       // "carregar tudo de novo".
-      expect(api.notasApi.ultimoFiltro?.papel, 'prestador');
+      expect(api.notasApi.ultimoFiltro?.status, 'emitida');
     });
 
     testWidgets('sem mais nada para buscar, não mostra o botão', (tester) async {

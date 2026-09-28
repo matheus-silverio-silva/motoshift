@@ -1,57 +1,97 @@
 import 'transacao.dart';
 
-/// O retrato financeiro do período, como o backend o devolve em `/resumo`.
+/// O retrato financeiro do período, como o backend o devolve em `/resumo` —
+/// um para cada papel.
 ///
-/// Serve aos dois perfis: o que é específico de cada papel tem nome próprio —
-/// [aReceber] é do entregador, [comprometido] e [reservasAbertas] são do
-/// lojista — e vem zerado para quem não tem aquele tipo de pendência.
+/// Os dois perfis recebiam os mesmos campos, com o do outro papel zerado: o
+/// entregador via "Comprometido R$ 0,00" e o lojista "A receber R$ 0,00". Agora
+/// o backend manda só o que é de quem pergunta, e aqui o campo do outro papel
+/// é `null` — a tela não mostra, em vez de mostrar um zero com o rótulo
+/// errado.
+///
+/// - Entregador ([souPrestador]): [recebido], [retencoes] (só com retenção na
+///   fonte), [sacado], [disponivel] e [aReceber].
+/// - Lojista ([souTomador]): [recarregado], [pagoAEntregadores], [devolvido],
+///   [disponivel], [bloqueado], [comprometido] e [reservasAbertas].
 class ResumoFinanceiro {
+  /// `prestador` (entregador) ou `tomador` (lojista).
+  final String papel;
   final DateTime dataInicio;
   final DateTime dataFim;
-  final double entradas;
-  final double saidas;
-  final double liquido;
   final double disponivel;
-  final double bloqueado;
+
+  /// Entregador: pagamentos de turno recebidos no período.
+  final double? recebido;
+
+  /// Entregador: ISS e IRRF retidos na fonte. Nulo quando a retenção está
+  /// desligada e nada foi retido no período.
+  final double? retencoes;
+
+  /// Entregador: o que saiu por saque — descontado o saque que o banco
+  /// recusou e voltou por estorno.
+  final double? sacado;
 
   /// Entregador: turnos aceitos que ainda não foram finalizados.
   ///
   /// Não é saldo. O dinheiro está bloqueado na carteira do lojista, não na
   /// dele, e o turno ainda pode ser cancelado — por isso aparece separado.
-  final double aReceber;
+  final double? aReceber;
+
+  /// Lojista: recargas do período.
+  final double? recarregado;
+
+  /// Lojista: pagamentos de turno enviados aos entregadores no período.
+  final double? pagoAEntregadores;
+
+  /// Lojista: o que voltou ao disponível — liberação de reserva e estorno.
+  final double? devolvido;
+
+  /// Lojista: saldo preso em turnos publicados.
+  final double? bloqueado;
 
   /// Lojista: total das reservas abertas. É o mesmo número de [bloqueado],
   /// mostrado ao lado da lista que o explica.
-  final double comprometido;
+  final double? comprometido;
 
   final List<ReservaAberta> reservasAbertas;
   final List<TotalPorTipo> porTipo;
 
   const ResumoFinanceiro({
+    required this.papel,
     required this.dataInicio,
     required this.dataFim,
-    required this.entradas,
-    required this.saidas,
-    required this.liquido,
     required this.disponivel,
-    required this.bloqueado,
-    required this.aReceber,
-    required this.comprometido,
+    this.recebido,
+    this.retencoes,
+    this.sacado,
+    this.aReceber,
+    this.recarregado,
+    this.pagoAEntregadores,
+    this.devolvido,
+    this.bloqueado,
+    this.comprometido,
     this.reservasAbertas = const [],
     this.porTipo = const [],
   });
 
+  bool get souPrestador => papel == 'prestador';
+  bool get souTomador => papel == 'tomador';
+
   factory ResumoFinanceiro.fromJson(Map<String, dynamic> json) {
     return ResumoFinanceiro(
+      papel: json['papel'] as String? ?? 'prestador',
       dataInicio: DateTime.parse(json['dataInicio'] as String),
       dataFim: DateTime.parse(json['dataFim'] as String),
-      entradas: _num(json['entradas']),
-      saidas: _num(json['saidas']),
-      liquido: _num(json['liquido']),
       disponivel: _num(json['disponivel']),
-      bloqueado: _num(json['bloqueado']),
-      aReceber: _num(json['aReceber']),
-      comprometido: _num(json['comprometido']),
+      recebido: _talvez(json['recebido']),
+      retencoes: _talvez(json['retencoes']),
+      sacado: _talvez(json['sacado']),
+      aReceber: _talvez(json['aReceber']),
+      recarregado: _talvez(json['recarregado']),
+      pagoAEntregadores: _talvez(json['pagoAEntregadores']),
+      devolvido: _talvez(json['devolvido']),
+      bloqueado: _talvez(json['bloqueado']),
+      comprometido: _talvez(json['comprometido']),
       reservasAbertas: (json['reservasAbertas'] as List<dynamic>? ?? [])
           .map((e) => ReservaAberta.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -61,7 +101,8 @@ class ResumoFinanceiro {
     );
   }
 
-  double get saldoTotal => disponivel + bloqueado;
+  /// Disponível mais bloqueado — só existe para quem tem bloqueado (lojista).
+  double? get saldoTotal => bloqueado == null ? null : disponivel + bloqueado!;
 }
 
 /// Quanto um turno específico ainda segura na carteira do lojista.
@@ -117,6 +158,9 @@ class TotalPorTipo {
 }
 
 /// Um ponto da série de fluxo de caixa.
+///
+/// Entradas e saídas da carteira — reserva e liberação ficam de fora no
+/// backend, porque são o dinheiro do lojista trocando de bolso.
 class PontoDeFluxo {
   final DateTime inicio;
   final String rotulo;
@@ -142,3 +186,6 @@ class PontoDeFluxo {
 }
 
 double _num(dynamic v) => (v as num?)?.toDouble() ?? 0;
+
+/// Campo que pode não vir: é de outro papel, e ausente não é zero.
+double? _talvez(dynamic v) => (v as num?)?.toDouble();

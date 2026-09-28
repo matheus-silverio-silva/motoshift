@@ -245,27 +245,73 @@ class ExtratoServiceTest {
     // -- Resumo --------------------------------------------------------------
 
     @Test
-    @DisplayName("resumo soma entradas e saídas do período e mostra o saldo atual")
-    void resumo_somaOPeriodo() {
+    @DisplayName("resumo do lojista: recarregado, pago, devolvido e comprometido — nada do entregador")
+    void resumo_doLojista() {
         ResumoFinanceiroResponse r = extrato.resumo(
-                usuario, LocalDate.now().minusDays(30), LocalDate.now());
+                usuario, true, LocalDate.now().minusDays(30), LocalDate.now());
 
-        // 1000 + 240 + 95 de crédito; 360 + 120 + 200 de débito.
-        assertThat(r.entradas()).isEqualByComparingTo("1335.00");
-        assertThat(r.saidas()).isEqualByComparingTo("680.00");
-        assertThat(r.liquido()).isEqualByComparingTo("655.00");
+        assertThat(r.papel()).isEqualTo("tomador");
+        assertThat(r.recarregado()).isEqualByComparingTo("1000.00");
+        assertThat(r.pagoAEntregadores()).isEqualByComparingTo("120.00");
+        // Liberação de reserva e estorno: o que voltou ao disponível.
+        assertThat(r.devolvido()).isEqualByComparingTo("240.00");
+        assertThat(r.comprometido()).isNotNull();
+        assertThat(r.reservasAbertas()).isNotNull();
+        // Os números do entregador não vêm — nem como zero.
+        assertThat(r.recebido()).isNull();
+        assertThat(r.sacado()).isNull();
+        assertThat(r.aReceber()).isNull();
+        assertThat(r.retencoes()).isNull();
         assertThat(r.porTipo()).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("resumo do entregador: recebido, sacado e a receber — nada do lojista")
+    void resumo_doEntregador() {
+        ResumoFinanceiroResponse r = extrato.resumo(
+                usuario, false, LocalDate.now().minusDays(30), LocalDate.now());
+
+        assertThat(r.papel()).isEqualTo("prestador");
+        assertThat(r.recebido()).isEqualByComparingTo("95.00");
+        assertThat(r.sacado()).isEqualByComparingTo("200.00");
+        assertThat(r.aReceber()).isEqualByComparingTo("0.00");
+        // Retenção desligada e nenhuma retida: o número não existe para ele.
+        assertThat(r.retencoes()).isNull();
+        assertThat(r.recarregado()).isNull();
+        assertThat(r.pagoAEntregadores()).isNull();
+        assertThat(r.devolvido()).isNull();
+        assertThat(r.comprometido()).isNull();
+        assertThat(r.bloqueado()).isNull();
+        assertThat(r.reservasAbertas()).isNull();
+    }
+
+    @Test
+    @DisplayName("o sacado do entregador desconta o saque que o banco recusou; a retenção aparece quando houve")
+    void resumo_doEntregador_estornoERetencao() {
+        lancamento(TipoTransacao.SAQUE, "50.00", dia(1), null, null, "Transferência Pix — recusada");
+        lancamento(TipoTransacao.ESTORNO, "50.00", dia(1), null, null, "Estorno de saque recusado");
+        lancamento(TipoTransacao.RETENCAO_ISS, "4.75", dia(5), 501L, null, "ISS retido");
+
+        ResumoFinanceiroResponse r = extrato.resumo(
+                usuario, false, LocalDate.now().minusDays(30), LocalDate.now());
+
+        assertThat(r.sacado()).isEqualByComparingTo("200.00");
+        assertThat(r.retencoes()).isEqualByComparingTo("4.75");
     }
 
     @Test
     @DisplayName("resumo recorta pelo período pedido")
     void resumo_recortaPeriodo() {
         ResumoFinanceiroResponse r = extrato.resumo(
-                usuario, LocalDate.now().minusDays(6), LocalDate.now());
+                usuario, false, LocalDate.now().minusDays(6), LocalDate.now());
 
         // Só o pagamento recebido (dia 5) e o saque (dia 2).
-        assertThat(r.entradas()).isEqualByComparingTo("95.00");
-        assertThat(r.saidas()).isEqualByComparingTo("200.00");
+        assertThat(r.recebido()).isEqualByComparingTo("95.00");
+        assertThat(r.sacado()).isEqualByComparingTo("200.00");
+
+        ResumoFinanceiroResponse doLojista = extrato.resumo(
+                usuario, true, LocalDate.now().minusDays(6), LocalDate.now());
+        assertThat(doLojista.recarregado()).isEqualByComparingTo("0.00");
     }
 
     @Test
@@ -273,7 +319,7 @@ class ExtratoServiceTest {
     void resumo_periodoInvertido_erro() {
         assertThatExceptionOfType(ResponseStatusException.class)
                 .isThrownBy(() -> extrato.resumo(
-                        usuario, LocalDate.now(), LocalDate.now().minusDays(10)))
+                        usuario, false, LocalDate.now(), LocalDate.now().minusDays(10)))
                 .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(400));
     }
 
@@ -298,16 +344,22 @@ class ExtratoServiceTest {
     }
 
     @Test
-    @DisplayName("fluxo por mês dobra os dias e o líquido fecha com o resumo")
-    void fluxo_porMes_fechaComOResumo() {
+    @DisplayName("fluxo por mês dobra os dias, e reserva e liberação não são entrada nem saída")
+    void fluxo_porMes_semMovimentoEntreBolsos() {
         LocalDate de = LocalDate.now().minusDays(30);
         LocalDate ate = LocalDate.now();
 
-        BigDecimal liquidoDaSerie = extrato.fluxo(usuario, "mes", de, ate).stream()
-                .map(FluxoPontoResponse::liquido)
+        List<FluxoPontoResponse> serie = extrato.fluxo(usuario, "mes", de, ate);
+        BigDecimal entradas = serie.stream().map(FluxoPontoResponse::entradas)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal saidas = serie.stream().map(FluxoPontoResponse::saidas)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        assertThat(liquidoDaSerie).isEqualByComparingTo(extrato.resumo(usuario, de, ate).liquido());
+        // Recarga 1000 + pagamento recebido 95; pagamento enviado 120 + saque
+        // 200. A reserva de 360 e a liberação de 240 ficam de fora: contadas,
+        // o turno de 120 apareceria como 480 de saída.
+        assertThat(entradas).isEqualByComparingTo("1095.00");
+        assertThat(saidas).isEqualByComparingTo("320.00");
     }
 
     @Test

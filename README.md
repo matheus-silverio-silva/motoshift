@@ -257,8 +257,8 @@ nova. Para testar o reset localmente, suba com `MOTOSHIFT_SEED_RESET=confirmo`.
 | GET | /api/carteira/{id} | Saldo, ganhos e a primeira página do extrato |
 | GET | /api/carteira/extrato | Extrato filtrado e paginado (período, tipo, natureza, turno, contraparte, valor, busca) |
 | GET | /api/carteira/extrato/exportar | O mesmo extrato em CSV, sem paginação |
-| GET | /api/carteira/resumo | Entradas, saídas, líquido, disponível, bloqueado, a receber e comprometido |
-| GET | /api/carteira/fluxo | Série de fluxo de caixa por dia, semana ou mês |
+| GET | /api/carteira/resumo | O resumo do período para o papel de quem pergunta — entregador: recebido, retido, sacado, disponível e a receber; lojista: recarregado, pago, devolvido, disponível e comprometido. Os campos do outro papel não vêm |
+| GET | /api/carteira/fluxo | Série de fluxo de caixa por dia, semana ou mês (sem reserva e liberação, que são o dinheiro trocando de bolso) |
 | POST | /api/carteira/recargas | Abre uma cobrança Pix simulada (não credita) |
 | POST | /api/carteira/recargas/{id}/confirmar | Simula o webhook e credita o saldo (idempotente) |
 | POST | /api/carteira/saques | Saque via Pix — estorna sozinho se o gateway recusar |

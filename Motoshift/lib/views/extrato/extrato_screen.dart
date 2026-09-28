@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 
 import '../../models/extrato_filtro.dart';
 import '../../models/transacao.dart';
+import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../utils/exportar_csv.dart';
@@ -19,7 +21,8 @@ import 'lancamento_tile.dart';
 /// Serve lojista e entregador com a mesma tela porque a pergunta é a mesma — o
 /// que entrou, o que saiu, quando e com quem —, e o sinal de cada linha vem da
 /// `natureza` gravada no lançamento, não de um `switch` sobre o tipo que esta
-/// versão do app conhece.
+/// versão do app conhece. O que muda por papel são os tipos que o filtro
+/// oferece: cada um só vê os lançamentos que existem para ele.
 ///
 /// O filtro vai para a API. Antes a tela baixava o extrato inteiro e escondia
 /// linhas; com isso não dava para paginar, e a resposta crescia sem limite.
@@ -116,7 +119,11 @@ class _ExtratoScreenState extends State<ExtratoScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => ExtratoFiltros(inicial: _filtro, hoje: _hoje),
+      builder: (_) => ExtratoFiltros(
+        inicial: _filtro,
+        hoje: _hoje,
+        papel: context.read<AuthService>().usuario?.tipo ?? TipoUsuario.motoboy,
+      ),
     );
     if (novo != null) {
       setState(() => _filtro = novo);

@@ -493,18 +493,48 @@ List<Transacao> fakeExtrato() {
   ];
 }
 
-ResumoFinanceiro fakeResumoFinanceiro() {
+/// O resumo do entregador, como o backend o manda: sem nenhum campo de
+/// lojista.
+ResumoFinanceiro fakeResumoFinanceiro({double? retencoes}) {
   final dia = DateTime(
       dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
   return ResumoFinanceiro(
+    papel: 'prestador',
     dataInicio: dia.subtract(const Duration(days: 29)),
     dataFim: dia,
-    entradas: 620,
-    saidas: 200,
-    liquido: 420,
     disponivel: 820,
-    bloqueado: 360,
+    recebido: 620,
+    retencoes: retencoes,
+    sacado: 200,
     aReceber: 240,
+    porTipo: const [
+      TotalPorTipo(
+          tipo: TipoTransacao.pagamentoRecebido,
+          natureza: NaturezaTransacao.credito,
+          total: 620,
+          quantidade: 5),
+      TotalPorTipo(
+          tipo: TipoTransacao.saque,
+          natureza: NaturezaTransacao.debito,
+          total: 200,
+          quantidade: 1),
+    ],
+  );
+}
+
+/// O resumo do lojista: sem recebido, sacado nem a receber.
+ResumoFinanceiro fakeResumoLojista() {
+  final dia = DateTime(
+      dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
+  return ResumoFinanceiro(
+    papel: 'tomador',
+    dataInicio: dia.subtract(const Duration(days: 29)),
+    dataFim: dia,
+    disponivel: 820,
+    recarregado: 500,
+    pagoAEntregadores: 360,
+    devolvido: 120,
+    bloqueado: 360,
     comprometido: 360,
     reservasAbertas: const [
       ReservaAberta(turnoId: 301, titulo: 'Turno Noite — Hamburgueria', valor: 240),
@@ -517,10 +547,10 @@ ResumoFinanceiro fakeResumoFinanceiro() {
           total: 500,
           quantidade: 1),
       TotalPorTipo(
-          tipo: TipoTransacao.saque,
+          tipo: TipoTransacao.pagamentoEnviado,
           natureza: NaturezaTransacao.debito,
-          total: 200,
-          quantidade: 1),
+          total: 360,
+          quantidade: 3),
     ],
   );
 }
@@ -774,7 +804,10 @@ class FakeTurnoApi extends TurnoApi {
 /// que voltou. Um fake que devolvesse tudo faria o teste passar mesmo se a tela
 /// parasse de filtrar.
 class FakeCarteiraApi extends CarteiraApi {
-  FakeCarteiraApi() : super(ApiClient());
+  FakeCarteiraApi({this.papel = TipoUsuario.motoboy}) : super(ApiClient());
+
+  /// De quem é a carteira: o resumo do backend depende do papel.
+  final TipoUsuario papel;
 
   /// Registro do que a tela pediu — para o teste conferir o filtro enviado.
   final List<ExtratoFiltro> filtrosRecebidos = [];
@@ -853,7 +886,7 @@ class FakeCarteiraApi extends CarteiraApi {
     DateTime? dataInicio,
     DateTime? dataFim,
   }) async =>
-      fakeResumoFinanceiro();
+      papel == TipoUsuario.lojista ? fakeResumoLojista() : fakeResumoFinanceiro();
 
   @override
   Future<List<PontoDeFluxo>> buscarFluxo({
@@ -1141,7 +1174,10 @@ class FakeUsuarioApi extends UsuarioApi {
 /// O ApiService dos testes: mesma montagem do de produção, com cada domínio
 /// trocado pelo seu fake.
 class FakeApiService extends ApiService {
-  FakeApiService();
+  /// [tipoUsuario] é o papel da conta logada — o fake da carteira devolve o
+  /// resumo daquele papel, como o backend faz.
+  FakeApiService({TipoUsuario tipoUsuario = TipoUsuario.motoboy})
+      : _carteira = FakeCarteiraApi(papel: tipoUsuario);
 
   @override
   AuthApi get auth => _auth;
@@ -1161,7 +1197,7 @@ class FakeApiService extends ApiService {
 
   @override
   CarteiraApi get carteira => _carteira;
-  final CarteiraApi _carteira = FakeCarteiraApi();
+  final CarteiraApi _carteira;
 
   @override
   DashboardApi get dashboard => _dashboard;
@@ -1306,7 +1342,7 @@ Future<void> pumpGolden(
 
   // Telas que imprimem data absoluta precisam de um fake de data fixa, senão
   // o golden vira o dia junto com o calendário — ver [FakeApiHistorico].
-  final api = apiFake ?? FakeApiService();
+  final api = apiFake ?? FakeApiService(tipoUsuario: tipoUsuario);
   final usuario =
       tipoUsuario == TipoUsuario.motoboy ? fakeMotoboy() : fakeLojista();
   final auth = AuthService(api)..atualizarUsuarioLocal(usuario);
