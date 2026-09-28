@@ -10,6 +10,7 @@ import '../../widgets/app_buttons.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/rating_stars.dart';
+import '../../widgets/seletor_de_gorjeta.dart';
 
 /// Route arguments: AvaliacaoArgs
 class AvaliacaoArgs {
@@ -39,6 +40,12 @@ class _AvaliacaoScreenState extends State<AvaliacaoScreen> {
   bool _enviando = false;
 
   final Set<String> _tagsSelected = {};
+
+  /// Gorjeta opcional (V17) — só quando quem avalia é o lojista.
+  double? _gorjeta;
+
+  bool get _souLojista =>
+      context.read<AuthService>().usuario?.tipo == TipoUsuario.lojista;
 
   /// Quem avalia é a conta logada; quem é avaliado é o outro lado do turno.
   /// O lojista avalia entregador, o entregador avalia loja — e cada um marca
@@ -94,12 +101,18 @@ class _AvaliacaoScreenState extends State<AvaliacaoScreen> {
           'comentario': _montarComentario(),
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Avaliação enviada com sucesso!'),
-          backgroundColor: AppColors.good,
-        ),
-      );
+      final gorjetaFalhou = await _darGorjeta(args);
+      if (!mounted) return;
+      if (!gorjetaFalhou) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_gorjeta == null
+                ? 'Avaliação enviada com sucesso!'
+                : 'Avaliação e gorjeta de ${_moeda(_gorjeta!)} enviadas!'),
+            backgroundColor: AppColors.good,
+          ),
+        );
+      }
       Navigator.pop(context, true);
     } catch (_) {
       if (!mounted) return;
@@ -113,6 +126,38 @@ class _AvaliacaoScreenState extends State<AvaliacaoScreen> {
       if (mounted) setState(() => _enviando = false);
     }
   }
+
+  /// Dá a gorjeta depois da avaliação. A avaliação já foi: se a gorjeta
+  /// falhar (sem saldo, por exemplo), diz o porquê — com a mensagem do
+  /// backend — em vez de desfazer o que deu certo. Devolve se falhou.
+  Future<bool> _darGorjeta(AvaliacaoArgs args) async {
+    final valor = _gorjeta;
+    if (valor == null || !_souLojista) return false;
+    try {
+      await context
+          .read<ApiService>()
+          .turnos
+          .darGorjeta(args.turnoId, args.avaliadoId, valor);
+      return false;
+    } on ApiException catch (e) {
+      _avisarGorjeta(e.message);
+    } catch (_) {
+      _avisarGorjeta('Não foi possível enviar a gorjeta agora.');
+    }
+    return true;
+  }
+
+  void _avisarGorjeta(String motivo) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Avaliação enviada, mas a gorjeta não: $motivo'),
+      backgroundColor: AppColors.error,
+      duration: const Duration(seconds: 6),
+    ));
+  }
+
+  static String _moeda(double v) =>
+      'R\$ ${v.toStringAsFixed(v == v.roundToDouble() ? 0 : 2).replaceAll('.', ',')}';
 
   @override
   Widget build(BuildContext context) {
@@ -316,6 +361,11 @@ class _AvaliacaoScreenState extends State<AvaliacaoScreen> {
               ),
             ),
           ),
+          // Gorjeta: só o lojista, avaliando o entregador.
+          if (_souLojista) ...[
+            const SizedBox(height: 12),
+            SeletorDeGorjeta(onMudou: (v) => _gorjeta = v),
+          ],
           const SizedBox(height: 22),
           PrimaryButton(
             label: 'Enviar avaliação',

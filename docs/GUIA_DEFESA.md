@@ -328,3 +328,29 @@ disso, a tela diz que o aparelho não respondeu e oferece tentar de novo.
 **P: Por que a presença mora na inscrição e não no turno?**
 R: Porque num turno de três vagas são três chegadas. No turno ficaria uma hora
 só — a do primeiro —, e a pontualidade dos outros dois não existiria.
+
+### Gorjeta: dinheiro a mais, pelo mesmo livro
+
+- **Regra.** Só o lojista do turno, só com o turno finalizado e só a quem
+  trabalhou nele (inscrição finalizada); uma por entregador por turno; de
+  R$ 1 a `motoshift.gorjeta.maximo` (R$ 50); só do saldo **disponível** — o
+  bloqueado é das reservas. Sem saldo, 422 com quanto há.
+- **Idempotente.** Chave `gorjeta:turno:{t}:entregador:{e}:debito|credito`.
+  A mesma gorjeta pedida de novo devolve a que existe; outro valor para o
+  mesmo entregador no mesmo turno é recusado (409).
+- **Dois tipos, um de cada lado.** Débito do lojista `bonus_enviado`,
+  crédito do entregador `bonus`, mesma `operacao_id`, os dois com o
+  `turno_id`. O tipo decide a aritmética do saldo (a invariante (c) do
+  `ConsistenciaService`); um tipo só com o sinal na `natureza` quebraria essa
+  regra. Por isso a V17 só alarga o CHECK.
+- **Fiscal.** Gorjeta não é serviço: gera comprovante, não NFS-e
+  (FISCAL.md).
+- **Onde.** `GorjetaService`, `Movimento.gorjeta`, V17; no app,
+  `SeletorDeGorjeta` dentro de `AvaliacaoScreen` e
+  `AvaliarEntregadoresScreen`. Aparece no extrato ("Gorjeta recebida" /
+  "Gorjeta enviada"), no resumo, nos relatórios e no CSV.
+
+**P: E se a avaliação for enviada e a gorjeta falhar?**
+R: São duas chamadas: a nota fica, e a tela diz "Avaliação enviada, mas a
+gorjeta não" com o motivo do backend. Nada de dinheiro se move pela metade —
+a gorjeta é uma transação só no `LedgerService`.

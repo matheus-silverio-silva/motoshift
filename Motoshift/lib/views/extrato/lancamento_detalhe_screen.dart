@@ -141,6 +141,7 @@ class LancamentoDetalheScreen extends StatelessWidget {
         lancamento.valor,
       TipoTransacao.saque ||
       TipoTransacao.reserva ||
+      TipoTransacao.bonusEnviado ||
       TipoTransacao.retencaoIss ||
       TipoTransacao.retencaoIrrf =>
         -lancamento.valor,

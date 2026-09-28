@@ -118,6 +118,16 @@ class TurnoApi {
     return Turno.fromJson(data as Map<String, dynamic>);
   }
 
+  /// Gorjeta do lojista a um entregador do turno finalizado (V17). O backend
+  /// confere quem dá, a quem, o teto e o saldo; repetir a mesma gorjeta não
+  /// cobra de novo.
+  Future<void> darGorjeta(int turnoId, int entregadorId, double valor) async {
+    await _client.post('/turnos/$turnoId/gorjetas', {
+      'entregadorId': entregadorId,
+      'valor': valor,
+    });
+  }
+
   /// Entregadores inscritos num turno multi-vaga, com status de pagamento e,
   /// para o lojista e para o próprio entregador, a chegada e a saída.
   Future<List<Map<String, dynamic>>> listarInscritos(int turnoId) async {

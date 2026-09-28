@@ -317,6 +317,25 @@ public class MigracoesPostgresTest {
         }
     }
 
+    @Test
+    @DisplayName("V17 abre o domínio de tipos para o lado de quem dá a gorjeta, e só para ele")
+    void v17_gorjeta() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v17");
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("loja-v17@teste.com", "x"));
+            long loja = contar(s, "SELECT id FROM usuarios WHERE email = 'loja-v17@teste.com'");
+            s.execute(inserirTransacaoV12(loja, null, "bonus_enviado", "concluido",
+                    "gorjeta:turno:1:entregador:2:debito", "debito"));
+            assertThat(validada(s, "ck_transacao_tipo")).isTrue();
+            assertThatThrownBy(() -> s.execute(inserirTransacaoV12(loja, null,
+                    "gorjeta", "concluido", "v17:ruim", "debito")))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_transacao_tipo");
+        }
+    }
+
     // ── Apoio ──────────────────────────────────────────────────────────────
 
     /** INSERT valido ATE a V11 — antes de a coluna natureza existir. */
@@ -380,7 +399,7 @@ public class MigracoesPostgresTest {
      * um número só.
      */
     public static String ultimaVersao() {
-        return "16";
+        return "17";
     }
 
     static Connection conectar(String url) throws SQLException {

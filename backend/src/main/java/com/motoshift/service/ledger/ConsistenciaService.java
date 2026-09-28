@@ -164,13 +164,17 @@ public class ConsistenciaService {
         BigDecimal recargas = somaDoTipo(lancamentos, TipoTransacao.RECARGA);
         BigDecimal saques = somaDoTipo(lancamentos, TipoTransacao.SAQUE);
         BigDecimal estornos = somaDoTipo(lancamentos, TipoTransacao.ESTORNO);
+        // Gorjeta: bonus (+v no entregador) e bonus_enviado (-v no lojista)
+        // se anulam. Uma linha "bonus" sem par — bonus da plataforma, que
+        // nenhum fluxo emite — continua contando como dinheiro que entrou.
         BigDecimal bonus = somaDoTipo(lancamentos, TipoTransacao.BONUS);
+        BigDecimal bonusEnviado = somaDoTipo(lancamentos, TipoTransacao.BONUS_ENVIADO);
         // Retencao na fonte e dinheiro que sai para o fisco (simulado), como o
         // saque sai para a chave Pix: diminui o total, e so por esse caminho.
         BigDecimal retencoes = somaDoTipo(lancamentos, TipoTransacao.RETENCAO_ISS)
                 .add(somaDoTipo(lancamentos, TipoTransacao.RETENCAO_IRRF));
         BigDecimal esperadoTotal = recargas.subtract(saques).add(estornos).add(bonus)
-                .subtract(retencoes);
+                .subtract(bonusEnviado).subtract(retencoes);
 
         if (totalCarteiras.compareTo(esperadoTotal) != 0) {
             problemas.add("(c) carteiras somam " + totalCarteiras
@@ -186,6 +190,7 @@ public class ConsistenciaService {
         totais.put("saques", saques);
         totais.put("estornos", estornos);
         totais.put("retencoes", retencoes);
+        totais.put("gorjetas", bonusEnviado);
 
         return new Resultado(problemas.isEmpty(), problemas, totais);
     }
@@ -210,7 +215,7 @@ public class ConsistenciaService {
         BigDecimal v = t.getValor();
         return switch (t.getTipo()) {
             case RECARGA, PAGAMENTO_RECEBIDO, ESTORNO, BONUS, LIBERACAO_RESERVA -> v;
-            case SAQUE, RESERVA, RETENCAO_ISS, RETENCAO_IRRF -> v.negate();
+            case SAQUE, RESERVA, RETENCAO_ISS, RETENCAO_IRRF, BONUS_ENVIADO -> v.negate();
             case PAGAMENTO_ENVIADO -> BigDecimal.ZERO;
         };
     }
@@ -220,7 +225,7 @@ public class ConsistenciaService {
         return switch (t.getTipo()) {
             case RESERVA -> v;
             case LIBERACAO_RESERVA, PAGAMENTO_ENVIADO -> v.negate();
-            case RECARGA, PAGAMENTO_RECEBIDO, ESTORNO, BONUS, SAQUE,
+            case RECARGA, PAGAMENTO_RECEBIDO, ESTORNO, BONUS, BONUS_ENVIADO, SAQUE,
                  RETENCAO_ISS, RETENCAO_IRRF -> BigDecimal.ZERO;
         };
     }

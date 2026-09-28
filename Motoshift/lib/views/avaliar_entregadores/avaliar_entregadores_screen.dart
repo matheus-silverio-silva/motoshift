@@ -11,6 +11,7 @@ import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/desktop/panel_card.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/rating_stars.dart';
+import '../../widgets/seletor_de_gorjeta.dart';
 
 /// Argumentos da rota `/avaliar-entregadores`.
 class AvaliarEntregadoresArgs {
@@ -32,6 +33,9 @@ class _Pendente {
 
   int nota = 0;
   final comentario = TextEditingController();
+
+  /// Gorjeta opcional para este entregador (V17). Nula = sem gorjeta.
+  double? gorjeta;
   bool enviado = false;
   bool enviando = false;
 
@@ -147,14 +151,32 @@ class _AvaliarEntregadoresScreenState
           'comentario': p.comentario.text.trim(),
       });
       if (!mounted) return;
+      // A gorjeta vem depois da avaliação; se falhar, a avaliação fica, e o
+      // motivo — o do backend, como "saldo insuficiente" — é dito.
+      String? falhaDaGorjeta;
+      if (p.gorjeta != null) {
+        try {
+          await api.turnos.darGorjeta(args.turnoId, p.usuarioId, p.gorjeta!);
+        } on ApiException catch (e) {
+          falhaDaGorjeta = e.message;
+        } catch (_) {
+          falhaDaGorjeta = 'Não foi possível enviar a gorjeta agora.';
+        }
+      }
+      if (!mounted) return;
       setState(() {
         p.enviado = true;
         p.enviando = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${p.nome} avaliado.'),
-          backgroundColor: AppColors.good,
+          content: Text(falhaDaGorjeta != null
+              ? '${p.nome} avaliado, mas a gorjeta não: $falhaDaGorjeta'
+              : p.gorjeta != null
+                  ? '${p.nome} avaliado, com gorjeta.'
+                  : '${p.nome} avaliado.'),
+          backgroundColor:
+              falhaDaGorjeta != null ? AppColors.error : AppColors.good,
         ),
       );
     } catch (_) {
@@ -379,6 +401,12 @@ class _AvaliarEntregadoresScreenState
                       color: AppColors.muted),
                 ),
               ),
+            ),
+            const SizedBox(height: 12),
+            SeletorDeGorjeta(
+              key: Key('gorjeta-de-${p.usuarioId}'),
+              compacto: true,
+              onMudou: (v) => p.gorjeta = v,
             ),
             const SizedBox(height: 12),
             PrimaryButton(

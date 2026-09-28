@@ -33,6 +33,8 @@ import java.math.BigDecimal;
  *   pagamento_enviado         0         -v        -v     debito
  *   pagamento_recebido       +v          0        +v     credito
  *   saque                    -v          0        -v     debito
+ *   bonus_enviado (gorjeta)  -v          0        -v     debito
+ *   bonus (gorjeta)          +v          0        +v     credito
  *   estorno                  +v          0        +v     credito
  *   retencao_iss             -v          0        -v     debito
  *   retencao_irrf            -v          0        -v     debito
@@ -40,7 +42,8 @@ import java.math.BigDecimal;
  *
  * Repare que a coluna do total fecha: reserva e liberacao nao criam nem
  * destroem nada, e pagamento_enviado (-v no lojista) e pagamento_recebido (+v
- * no entregador) se anulam. E dai que sai a invariante (c) — a soma de todas as
+ * no entregador) se anulam — como bonus_enviado e bonus, os dois lados da
+ * gorjeta. E dai que sai a invariante (c) — a soma de todas as
  * carteiras so muda por recarga, saque, estorno e retencao. As retencoes sao
  * dinheiro saindo da plataforma, como o saque; o destino e o fisco, que aqui e
  * simulado e nao tem carteira.
@@ -174,6 +177,36 @@ public record Movimento(
                 valor, valor, ZERO,
                 "Turno finalizado: " + tituloTurno, chave);
     }
+
+    /**
+     * Gorjeta: do DISPONIVEL do lojista para o disponivel do entregador.
+     *
+     * <p>Diferente do pagamento do turno, nao sai do bloqueado: ninguem
+     * reservou gorjeta ao publicar. Por isso ela so passa com saldo
+     * disponivel — e o bloqueado, que e das reservas, nao encosta.
+     *
+     * <p>Os dois lados ligados ao turno; a chave e deterministica (uma
+     * gorjeta por entregador por turno), no padrao da liquidacao: repetir a
+     * mesma gorjeta devolve os lancamentos que ja existem.
+     *
+     * @param chave a base da chave de idempotencia — os lados ganham
+     *              {@code :debito} e {@code :credito}
+     */
+    public static Par gorjeta(Long lojistaId, Long entregadorId, BigDecimal valor, Long turnoId,
+                              String nomeDoEntregador, String nomeDaLoja, String chave) {
+        Movimento debito = new Movimento(lojistaId, entregadorId, turnoId,
+                TipoTransacao.BONUS_ENVIADO, NaturezaTransacao.DEBITO,
+                valor, valor.negate(), ZERO,
+                "Gorjeta para " + nomeDoEntregador, chave + ":debito");
+        Movimento credito = new Movimento(entregadorId, lojistaId, turnoId,
+                TipoTransacao.BONUS, NaturezaTransacao.CREDITO,
+                valor, valor, ZERO,
+                "Gorjeta de " + nomeDaLoja, chave + ":credito");
+        return new Par(debito, credito);
+    }
+
+    /** Os dois lados de uma transferencia, prontos para o {@code LedgerService.transferir}. */
+    public record Par(Movimento debito, Movimento credito) {}
 
     // -- Retencao na fonte ---------------------------------------------------
 

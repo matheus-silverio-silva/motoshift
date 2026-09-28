@@ -167,7 +167,9 @@ class LancamentoTile extends StatelessWidget {
       TipoTransacao.retencaoIss ||
       TipoTransacao.retencaoIrrf =>
         Icons.account_balance_outlined,
-      TipoTransacao.bonus => Icons.card_giftcard_rounded,
+      TipoTransacao.bonus ||
+      TipoTransacao.bonusEnviado =>
+        Icons.volunteer_activism_outlined,
       TipoTransacao.desconhecido => Icons.receipt_long_outlined,
     };
   }

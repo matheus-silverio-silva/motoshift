@@ -86,6 +86,11 @@ class Notificacao {
             fundo: AppColors.amberSoft,
             frente: AppColors.onTertiaryContainer,
           ),
+        'gorjeta_recebida' => const NotificacaoEstilo(
+            icone: Icons.volunteer_activism_outlined,
+            fundo: AppColors.goodSoft,
+            frente: Color(0xFF0F6E4E),
+          ),
         'turno_expirado' => const NotificacaoEstilo(
             icone: Icons.timer_off_outlined,
             fundo: AppColors.surface3,

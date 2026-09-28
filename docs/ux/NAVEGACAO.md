@@ -204,6 +204,11 @@ regras de `TurnoService` no backend.
   desconta 0,5 do score do entregador; o valor reservado volta inteiro.
 - O lojista vê **todos os inscritos** do turno, cada um com "Ver perfil" e,
   quando a nota dele falta, "Avaliar".
+- **A gorjeta mora na avaliação do entregador** (Avaliar o entregador e
+  Avaliar entregadores, um seletor por card): opcional, "Sem gorjeta" vem
+  marcado, R$ 5 · 10 · 20 ou outro valor até R$ 50. Não é tela nem botão
+  próprio — é um gesto de quem acabou de dar a nota. O entregador recebe a
+  notificação `gorjeta_recebida`, que abre a Carteira (seção 6).
 
 ### "O que falta"
 

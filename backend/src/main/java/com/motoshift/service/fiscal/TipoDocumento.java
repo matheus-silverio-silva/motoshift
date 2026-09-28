@@ -17,7 +17,8 @@ import java.util.Optional;
  *   saque, Pix concluído                COMPROVANTE_PIX            o dono
  *   saque, Pix recusado                 COMPROVANTE_MOVIMENTACAO   o dono
  *   reserva, liberacao_reserva,         COMPROVANTE_MOVIMENTACAO   o dono
- *   estorno, retencao_*, bonus
+ *   estorno, retencao_*,
+ *   bonus, bonus_enviado (gorjeta)
  * </pre>
  *
  * <p><b>Reserva e liberação NÃO são serviço prestado</b>, e por isso não geram
@@ -68,7 +69,9 @@ public enum TipoDocumento {
             }
             // Não são serviço prestado — ver o cabeçalho.
             case RESERVA, LIBERACAO_RESERVA -> Optional.of(COMPROVANTE_MOVIMENTACAO);
-            case ESTORNO, BONUS, RETENCAO_ISS, RETENCAO_IRRF ->
+            // Gorjeta não é serviço: não há prestação nova, é um valor além
+            // do turno que já tem a sua nota. Comprovante, nunca NFS-e.
+            case ESTORNO, BONUS, BONUS_ENVIADO, RETENCAO_ISS, RETENCAO_IRRF ->
                     Optional.of(COMPROVANTE_MOVIMENTACAO);
         };
     }

@@ -229,6 +229,7 @@ Roda com o perfil `prod` (PostgreSQL). Variáveis principais:
 | `JWT_EXPIRACAO_HORAS` | não | Validade do token; padrão 168 (7 dias) |
 | `MOTOSHIFT_CHECKIN_EXIGIR_PROXIMIDADE` | não | `false` desliga a trava de distância do check-in (o "Cheguei" passa a valer de qualquer lugar). É para a **apresentação feita de casa**, longe de qualquer loja da massa; a janela de horário e a regra de papel continuam valendo. Padrão `true` |
 | `MOTOSHIFT_CHECKIN_RAIO_METROS` | não | A que distância do ponto do turno o check-in ainda vale; padrão 500 |
+| `MOTOSHIFT_GORJETA_MAXIMO` | não | Teto de uma gorjeta, em reais; padrão 50 |
 | `PORT` | não | Porta do servidor (injetada automaticamente pelo Railway) |
 
 ---
@@ -377,6 +378,8 @@ para "valor errado não faz nada".
 | PUT | /api/turnos/{id}/cancelar | Cancelar turno (recusado depois do check-in: turno que começou se finaliza) |
 | PUT | /api/turnos/{id}/checkin | "Cheguei" — só o entregador aceito; de 30 min antes do início até o fim; a até 500 m do ponto (com a trava ligada). O primeiro leva o turno a `em_andamento` e avisa o lojista |
 | PUT | /api/turnos/{id}/checkout | "Encerrar turno" — a saída, só depois do check-in. Não finaliza nem paga |
+| POST | /api/turnos/{id}/gorjetas | Gorjeta do lojista a um entregador do turno finalizado (até R$ 50, com saldo disponível, uma por entregador — repetir a mesma não cobra de novo) |
+| GET | /api/turnos/{id}/gorjetas | Gorjetas do turno: o lojista vê todas, o entregador só a dele |
 | GET | /api/dashboard/motoboy/{id} | Métricas do Motoboy |
 | GET | /api/dashboard/lojista/{id} | Métricas do Lojista |
 | GET | /api/carteira/{id} | Saldo, ganhos e a primeira página do extrato |
@@ -432,6 +435,7 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | RF09 | Relatório financeiro/operacional mensal via IA |
 | RF10 | Turno publicado guarda o ponto de partida (lat/lng), que alimenta o filtro por distância e o mapa das duas pontas |
 | Check-in | O entregador registra chegada e saída (V16). A pontualidade — % de chegadas até 10 min após o início, nos últimos 90 dias — aparece no perfil e no perfil público; sem check-in, "Sem histórico" |
+| Gorjeta | Na avaliação do entregador, o lojista pode dar R$ 5, 10, 20 ou outro valor (até R$ 50) do saldo disponível. Transferência no ledger (`bonus_enviado` → `bonus`), com comprovante, não NFS-e |
 | RF11 | Turno finalizado gera NFS-e — entregador é o prestador, lojista é o tomador, e **só o lojista emite e cancela**; o entregador vê, baixa e imprime. Todo lançamento do extrato gera o documento correspondente (nota, recibo ou comprovante), sempre simulado — ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |
 
 ---

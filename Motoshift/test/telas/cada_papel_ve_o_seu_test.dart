@@ -27,8 +27,11 @@ void main() {
       final entregador = TipoTransacao.filtraveisPara(TipoUsuario.motoboy);
       final lojista = TipoTransacao.filtraveisPara(TipoUsuario.lojista);
 
+      // A gorjeta tem um tipo de cada lado (V17): quem recebe vê "bonus",
+      // quem paga vê "bonus_enviado" — e a separação continua valendo.
       expect(entregador, [
         TipoTransacao.pagamentoRecebido,
+        TipoTransacao.bonus,
         TipoTransacao.saque,
         TipoTransacao.estorno,
         TipoTransacao.retencaoIss,
@@ -39,6 +42,7 @@ void main() {
         TipoTransacao.reserva,
         TipoTransacao.liberacaoReserva,
         TipoTransacao.pagamentoEnviado,
+        TipoTransacao.bonusEnviado,
         TipoTransacao.estorno,
       ]);
       expect(entregador.toSet().intersection(lojista.toSet()),

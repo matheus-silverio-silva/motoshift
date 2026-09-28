@@ -57,6 +57,11 @@ class ResumoFinanceiro {
   final List<ReservaAberta> reservasAbertas;
   final List<TotalPorTipo> porTipo;
 
+  /// Os dois papéis: as gorjetas do período (V17) — recebidas pelo
+  /// entregador, dadas pelo lojista. Já estão dentro de [recebido] /
+  /// [pagoAEntregadores]; nulas quando não houve gorjeta.
+  final double? gorjetas;
+
   const ResumoFinanceiro({
     required this.papel,
     required this.dataInicio,
@@ -73,6 +78,7 @@ class ResumoFinanceiro {
     this.comprometido,
     this.reservasAbertas = const [],
     this.porTipo = const [],
+    this.gorjetas,
   });
 
   bool get souPrestador => papel == 'prestador';
@@ -93,6 +99,7 @@ class ResumoFinanceiro {
       devolvido: _talvez(json['devolvido']),
       bloqueado: _talvez(json['bloqueado']),
       comprometido: _talvez(json['comprometido']),
+      gorjetas: _talvez(json['gorjetas']),
       reservasAbertas: (json['reservasAbertas'] as List<dynamic>? ?? [])
           .map((e) => ReservaAberta.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -113,6 +120,9 @@ class ResumoFinanceiro {
       return [
         NumeroDoResumo('recarregado', 'Recarregado', r?.recarregado),
         NumeroDoResumo('pago', 'Pago a entregadores', r?.pagoAEntregadores),
+        // Dentro do "pago"; à parte só quando houve gorjeta no período.
+        if (r?.gorjetas != null)
+          NumeroDoResumo('gorjetas', 'Gorjetas dadas', r?.gorjetas),
         NumeroDoResumo('devolvido', 'Devolvido', r?.devolvido),
         NumeroDoResumo('disponivel', 'Disponível', r?.disponivel),
         NumeroDoResumo('comprometido', 'Comprometido em turnos', r?.comprometido),
@@ -120,6 +130,9 @@ class ResumoFinanceiro {
     }
     return [
       NumeroDoResumo('recebido', 'Recebido por serviços', r?.recebido),
+      // Dentro do "recebido"; à parte só quando houve gorjeta no período.
+      if (r?.gorjetas != null)
+        NumeroDoResumo('gorjetas', 'Gorjetas recebidas', r?.gorjetas),
       // Só existe com retenção na fonte: sem ela o backend não manda o campo,
       // e ninguém inventa um "R$ 0,00 retido".
       if (r?.retencoes != null)

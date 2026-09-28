@@ -41,7 +41,8 @@ A tabela está codificada em `service/fiscal/TipoDocumento.java`, num lugar só.
 | `saque`, Pix concluído | Comprovante de Pix | o dono |
 | `saque`, Pix recusado | Comprovante de movimentação | o dono |
 | `reserva`, `liberacao_reserva` | Comprovante de movimentação | o dono |
-| `estorno`, `retencao_iss`, `retencao_irrf`, `bonus` | Comprovante de movimentação | o dono |
+| `estorno`, `retencao_iss`, `retencao_irrf` | Comprovante de movimentação | o dono |
+| `bonus_enviado` / `bonus` — a **gorjeta** (V17) | Comprovante de movimentação ("Gorjeta enviada" / "Gorjeta recebida", com o turno) | o dono de cada lado |
 | qualquer lançamento **não concluído** | nenhum | — |
 | `saque` com Pix ainda **pendente** | nenhum ainda | — |
 
@@ -56,6 +57,15 @@ um serviço inexistente e tributaria movimento interno de caixa.
 Por isso reserva e liberação geram **comprovante**, nunca nota. NFS-e existe
 para uma coisa só neste sistema: o pagamento de um **turno concluído**, que é
 serviço de entrega prestado pelo entregador ao lojista.
+
+### A gorjeta não é serviço
+
+A gorjeta é um valor além do turno, dado depois de o serviço ter sido prestado
+e documentado — pela NFS-e do pagamento do turno. Não há prestação nova, não há
+base de cálculo, e uma nota para ela duplicaria o serviço. Por isso gera
+**comprovante**, dos dois lados, com o turno de referência e a natureza dita
+por extenso ("não é serviço e não gera NFS-e"). No mundo real, gorjeta a
+autônomo tem tratamento próprio de rendimento; aqui, como tudo, é simulado.
 
 ### O saque pendente não tem comprovante
 
