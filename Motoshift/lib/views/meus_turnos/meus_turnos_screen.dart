@@ -735,10 +735,13 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
       children: [
         if (ativo != null) ...[
           SectionTitle(title: 'Turno em andamento'),
-          TurnoAtivoCard(
-            turno: ativo,
-            onConfirmarConclusao: () => _finalizar(ativo, provider),
-            onCancelar: () => _cancelar(ativo, provider),
+          GestureDetector(
+            onTap: () => Navigator.pushNamed(context, AppRoutes.detalheTurno,
+                arguments: ativo),
+            child: TurnoAtivoCard(
+              turno: ativo,
+              onConfirmarConclusao: () => _finalizar(ativo, provider),
+            ),
           ),
         ],
         if (proximos.isNotEmpty) ...[
@@ -795,17 +798,6 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
       );
     }
   }
-
-  Future<void> _cancelar(Turno turno, TurnoProvider provider) async {
-    final ok = await provider.cancelarTurno(turno.id!);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(ok ? 'Turno cancelado.' : (provider.erro ?? 'Erro')),
-      backgroundColor: ok ? Colors.orange : Colors.red,
-    ));
-    if (ok) _carregar();
-  }
-
 
   void _abrirFiltros() {
     showModalBottomSheet(

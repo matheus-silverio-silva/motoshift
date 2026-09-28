@@ -33,6 +33,7 @@ public class Notificacao {
     // turno_aceito | turno_lotado | turno_vencendo | turno_expirado
     // | turno_cancelado | turno_pendente_finalizacao | avaliacao_pendente
     // | pagamento_confirmado | nota_fiscal_emitida | nota_fiscal_cancelada
+    // | entregador_chegou | entregador_saiu (check-in e check-out, V16)
     // (pagamento_pendente era da dupla confirmação, removida na V13.)
     @Column(nullable = false, length = 40)
     private String tipo;

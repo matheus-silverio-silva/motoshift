@@ -27,10 +27,12 @@ import java.util.Map;
  * Regras deliberadas:
  *  - Turno ABERTO que ninguém aceitou e cujo início já passou → EXPIRADO, e a
  *    reserva volta inteira ao disponível do lojista.
- *  - Turno ABERTO parcialmente preenchido cujo início já passou → ACEITO
- *    (fecha as vagas remanescentes; quem já entrou continua valendo). A reserva
+ *  - Turno ABERTO parcialmente preenchido cujo início já passou → ACEITO, ou
+ *    EM_ANDAMENTO se alguém já fez check-in (fecha as vagas remanescentes;
+ *    quem já entrou continua valendo). A reserva
  *    permanece bloqueada: o turno vai acontecer, e o que sobrar das vagas
  *    vazias é devolvido na finalização, quando se sabe quem trabalhou.
+ *  - Turno EM_ANDAMENTO nunca vence: o job só olha turno ABERTO.
  *  - Turno ACEITO/EM_ANDAMENTO cujo fim já passou → NÃO muda de status.
  *    Finalizar transfere dinheiro entre carteiras; isso é decisão humana, o job
  *    só cobra a finalização via notificação.
@@ -112,8 +114,12 @@ public class TurnoExpiracaoService {
                 // Parcialmente preenchido: fecha para novos aceites, mas o turno
                 // vale — e por isso a reserva CONTINUA bloqueada. O que sobrar
                 // das vagas vazias volta na finalizacao (liberacao_reserva com
-                // motivo "sobra"), que e quando se sabe quem trabalhou.
-                t.setStatus(StatusTurno.ACEITO);
+                // motivo "sobra"), que e quando se sabe quem trabalhou. Se
+                // alguem ja fez check-in (ele abre 30 min antes), o turno ja
+                // comecou de fato: vai direto a EM_ANDAMENTO.
+                t.setStatus(inscricaoRepo.existsByTurnoIdAndCheckinEmIsNotNull(t.getId())
+                        ? StatusTurno.EM_ANDAMENTO
+                        : StatusTurno.ACEITO);
                 turnoRepo.save(t);
                 fechados++;
                 notificacoes.criarUnica(t.getLojistId(), "turno_lotado",

@@ -269,6 +269,54 @@ public class MigracoesPostgresTest {
         }
     }
 
+    @Test
+    @DisplayName("V16 guarda chegada e saída na inscrição, e o banco recusa saída antes da chegada")
+    void v16_checkin() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v16");
+        flyway(url, "15").migrate();
+
+        long inscricao;
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("loja-v16@teste.com", "x"));
+            s.execute(inserirUsuario("entregador-v16@teste.com", "x"));
+            long lojista = contar(s, "SELECT id FROM usuarios WHERE email = 'loja-v16@teste.com'");
+            long entregador = contar(s, "SELECT id FROM usuarios WHERE email = 'entregador-v16@teste.com'");
+            s.execute("INSERT INTO turnos (lojist_id, titulo, data_inicio, data_fim, valor_estimado, "
+                    + "status, criado_em) VALUES (" + lojista + ", 'Turno V16', "
+                    + "'2026-03-10 18:00', '2026-03-10 22:00', 120, 'aceito', now())");
+            long turno = contar(s, "SELECT id FROM turnos WHERE titulo = 'Turno V16'");
+            s.execute("INSERT INTO turno_inscricoes (turno_id, motoboy_id, status, criado_em) "
+                    + "VALUES (" + turno + ", " + entregador + ", 'aceito', now())");
+            inscricao = contar(s, "SELECT id FROM turno_inscricoes WHERE turno_id = " + turno);
+        }
+
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            // A inscrição de antes da V16 fica sem presença — nula, não inventada.
+            assertThat(contar(s, "SELECT count(*) FROM turno_inscricoes WHERE checkin_em IS NULL "
+                    + "AND checkout_em IS NULL AND id = " + inscricao)).isEqualTo(1);
+            assertThat(validada(s, "ck_inscricao_saida_apos_chegada")).isTrue();
+
+            // Saída sem chegada, e saída antes da chegada: o banco recusa.
+            assertThatThrownBy(() -> s.execute("UPDATE turno_inscricoes SET checkout_em = now() "
+                    + "WHERE id = " + inscricao))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_inscricao_saida_apos_chegada");
+            assertThatThrownBy(() -> s.execute("UPDATE turno_inscricoes SET "
+                    + "checkin_em = '2026-03-10 18:00', checkout_em = '2026-03-10 17:00' "
+                    + "WHERE id = " + inscricao))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_inscricao_saida_apos_chegada");
+
+            s.execute("UPDATE turno_inscricoes SET checkin_em = '2026-03-10 17:58', "
+                    + "checkin_latitude = -25.456, checkin_longitude = -49.282, "
+                    + "checkout_em = '2026-03-10 22:03' WHERE id = " + inscricao);
+            assertThat(contar(s, "SELECT count(*) FROM turno_inscricoes WHERE checkout_em IS NOT NULL"))
+                    .isEqualTo(1);
+        }
+    }
+
     // ── Apoio ──────────────────────────────────────────────────────────────
 
     /** INSERT valido ATE a V11 — antes de a coluna natureza existir. */
@@ -332,7 +380,7 @@ public class MigracoesPostgresTest {
      * um número só.
      */
     public static String ultimaVersao() {
-        return "15";
+        return "16";
     }
 
     static Connection conectar(String url) throws SQLException {

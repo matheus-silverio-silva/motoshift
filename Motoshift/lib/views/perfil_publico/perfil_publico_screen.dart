@@ -137,6 +137,9 @@ class _PerfilPublicoScreenState extends State<PerfilPublicoScreen> {
               p.score == null
                   ? 'Novo na plataforma'
                   : '${p.score!.toStringAsFixed(1).replaceAll('.', ',')} / 5'),
+        // Chegadas até 10 min após o início, nos últimos 90 dias (V16).
+        if (!p.ehLojista)
+          _linha(Icons.timer_outlined, 'Pontualidade', p.pontualidadeRotulo),
         const SizedBox(height: 18),
         _avisoDePrivacidade(),
       ],

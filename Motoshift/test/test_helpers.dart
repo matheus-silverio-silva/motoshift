@@ -330,6 +330,9 @@ Map<String, dynamic> fakeDashboardMotoboy() => {
       'turnosFinalizados': 42,
       'mediaAvaliacao': 4.8,
       'ganhosDiarios': [120.0, 95.0, 0.0, 145.0, 110.0, 130.0, 90.0],
+      // Chegadas até 10 min após o início, 90 dias (V16).
+      'pontualidade': 92,
+      'checkinsPontualidade': 13,
     };
 
 Map<String, dynamic> fakeDashboardLojista() => {

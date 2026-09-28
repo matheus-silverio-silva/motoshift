@@ -186,6 +186,11 @@ public class DashboardService {
         resp.put("turnosAceitos", turnosAceitos);
         resp.put("turnosFinalizados", turnosFinalizados);
         resp.put("turnosFinalizadosMes", turnosFinalizadosMes);
+        // Pontualidade (V16): nula sem check-in nos últimos 90 dias — a tela
+        // diz "Sem histórico", nunca 100%.
+        Reputacao.Pontualidade pontualidade = reputacao.pontualidade(id);
+        resp.put("pontualidade", pontualidade.percentual());
+        resp.put("checkinsPontualidade", pontualidade.checkins());
         return resp;
     }
 }

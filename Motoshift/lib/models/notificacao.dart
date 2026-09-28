@@ -75,6 +75,17 @@ class Notificacao {
             fundo: AppColors.amberSoft,
             frente: AppColors.onTertiaryContainer,
           ),
+        // Check-in e check-out do entregador (V16), para o lojista.
+        'entregador_chegou' => const NotificacaoEstilo(
+            icone: Icons.where_to_vote_outlined,
+            fundo: AppColors.tealSoft,
+            frente: AppColors.tealDeep,
+          ),
+        'entregador_saiu' => const NotificacaoEstilo(
+            icone: Icons.logout_rounded,
+            fundo: AppColors.amberSoft,
+            frente: AppColors.onTertiaryContainer,
+          ),
         'turno_expirado' => const NotificacaoEstilo(
             icone: Icons.timer_off_outlined,
             fundo: AppColors.surface3,

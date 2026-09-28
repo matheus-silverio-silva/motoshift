@@ -165,7 +165,12 @@ public class AuthService {
     /** Perfil reduzido, o unico que uma conta ve de outra. */
     public PerfilPublicoResponse buscarPerfilPublico(Long id) {
         Usuario u = carregar(id);
-        return PerfilPublicoResponse.from(u, reputacao.scoreVisivel(u));
+        PerfilPublicoResponse r = PerfilPublicoResponse.from(u, reputacao.scoreVisivel(u));
+        if ("motoboy".equals(u.getTipo())) {
+            Reputacao.Pontualidade p = reputacao.pontualidade(u.getId());
+            r.comPontualidade(p.percentual(), p.checkins());
+        }
+        return r;
     }
 
     private Usuario carregar(Long id) {

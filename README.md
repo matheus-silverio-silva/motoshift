@@ -227,6 +227,8 @@ Roda com o perfil `prod` (PostgreSQL). Variáveis principais:
 | `MOTOSHIFT_FISCAL_CHAVE` | **sim** | Chave do HMAC que autentica os comprovantes (recarga, Pix, movimentação). Sem ela o boot falha: o código de autenticação viraria um hash que qualquer um refaz. Trocar a chave muda o código de todos os comprovantes já emitidos |
 | `MOTOSHIFT_FISCAL_RETER_NA_FONTE` | não | `true` faz a liquidação reter ISS e IRRF do entregador, como lançamentos próprios no extrato; padrão `false`, com os tributos apenas informativos na nota. Ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |
 | `JWT_EXPIRACAO_HORAS` | não | Validade do token; padrão 168 (7 dias) |
+| `MOTOSHIFT_CHECKIN_EXIGIR_PROXIMIDADE` | não | `false` desliga a trava de distância do check-in (o "Cheguei" passa a valer de qualquer lugar). É para a **apresentação feita de casa**, longe de qualquer loja da massa; a janela de horário e a regra de papel continuam valendo. Padrão `true` |
+| `MOTOSHIFT_CHECKIN_RAIO_METROS` | não | A que distância do ponto do turno o check-in ainda vale; padrão 500 |
 | `PORT` | não | Porta do servidor (injetada automaticamente pelo Railway) |
 
 ---
@@ -372,7 +374,9 @@ para "valor errado não faz nada".
 | POST | /api/turnos | Criar novo turno (Lojista) |
 | PUT | /api/turnos/{id}/aceitar | Aceitar turno (Motoboy) |
 | PUT | /api/turnos/{id}/finalizar | Finalizar turno |
-| PUT | /api/turnos/{id}/cancelar | Cancelar turno |
+| PUT | /api/turnos/{id}/cancelar | Cancelar turno (recusado depois do check-in: turno que começou se finaliza) |
+| PUT | /api/turnos/{id}/checkin | "Cheguei" — só o entregador aceito; de 30 min antes do início até o fim; a até 500 m do ponto (com a trava ligada). O primeiro leva o turno a `em_andamento` e avisa o lojista |
+| PUT | /api/turnos/{id}/checkout | "Encerrar turno" — a saída, só depois do check-in. Não finaliza nem paga |
 | GET | /api/dashboard/motoboy/{id} | Métricas do Motoboy |
 | GET | /api/dashboard/lojista/{id} | Métricas do Lojista |
 | GET | /api/carteira/{id} | Saldo, ganhos e a primeira página do extrato |
@@ -427,6 +431,7 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | RF08 | Sugestão inteligente de turnos via IA |
 | RF09 | Relatório financeiro/operacional mensal via IA |
 | RF10 | Turno publicado guarda o ponto de partida (lat/lng), que alimenta o filtro por distância e o mapa das duas pontas |
+| Check-in | O entregador registra chegada e saída (V16). A pontualidade — % de chegadas até 10 min após o início, nos últimos 90 dias — aparece no perfil e no perfil público; sem check-in, "Sem histórico" |
 | RF11 | Turno finalizado gera NFS-e — entregador é o prestador, lojista é o tomador, e **só o lojista emite e cancela**; o entregador vê, baixa e imprime. Todo lançamento do extrato gera o documento correspondente (nota, recibo ou comprovante), sempre simulado — ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |
 
 ---

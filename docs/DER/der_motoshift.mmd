@@ -74,6 +74,10 @@ erDiagram
         BIGINT motoboy_id FK "NOT NULL - usuarios.id"
         VARCHAR status "NOT NULL - aceito|finalizado|cancelado"
         VARCHAR pagamento_status "null|pendente|pago - pago na finalizacao"
+        TIMESTAMP checkin_em "Cheguei (V16)"
+        FLOAT checkin_latitude "de onde (V16)"
+        FLOAT checkin_longitude "de onde (V16)"
+        TIMESTAMP checkout_em "Encerrar turno - so depois do checkin (V16)"
         TIMESTAMP criado_em "NOT NULL"
         UNIQUE uk_turno_motoboy UK "(turno_id, motoboy_id)"
     }

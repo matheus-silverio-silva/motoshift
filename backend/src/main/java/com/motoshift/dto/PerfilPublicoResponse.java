@@ -30,6 +30,9 @@ public class PerfilPublicoResponse {
     private String veiculoModelo;
     private String veiculoCor;
     private String nomeFantasia;
+    /** % de check-ins até 10 min após o início, 90 dias — só entregador; nulo = sem histórico. */
+    private Integer pontualidade;
+    private Integer checkinsPontualidade;
 
     /**
      * @param score o score visível ({@code Reputacao.scoreVisivel}): só o
@@ -55,6 +58,13 @@ public class PerfilPublicoResponse {
         return r;
     }
 
+    /** A pontualidade do entregador (V16). O lojista não tem: fica nula. */
+    public PerfilPublicoResponse comPontualidade(Integer percentual, int checkins) {
+        this.pontualidade = percentual;
+        this.checkinsPontualidade = checkins;
+        return this;
+    }
+
     public Long getId() { return id; }
     public String getNome() { return nome; }
     public String getTipo() { return tipo; }
@@ -66,4 +76,6 @@ public class PerfilPublicoResponse {
     public String getVeiculoModelo() { return veiculoModelo; }
     public String getVeiculoCor() { return veiculoCor; }
     public String getNomeFantasia() { return nomeFantasia; }
+    public Integer getPontualidade() { return pontualidade; }
+    public Integer getCheckinsPontualidade() { return checkinsPontualidade; }
 }

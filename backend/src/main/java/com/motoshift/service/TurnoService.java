@@ -269,6 +269,16 @@ public class TurnoService {
         if (turno.getStatus() == StatusTurno.FINALIZADO || turno.getStatus() == StatusTurno.CANCELADO) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Turno já encerrado.");
         }
+        // Turno que começou não é cancelado como se não tivesse começado:
+        // cancelar devolve a reserva INTEIRA ao lojista, e alguém já está
+        // trabalhando. O check-in é o que diz que começou — inclusive o feito
+        // antes do início, com o turno ainda ABERTO para as vagas que sobram.
+        if (turno.getStatus() == StatusTurno.EM_ANDAMENTO
+                || inscricaoRepo.existsByTurnoIdAndCheckinEmIsNotNull(turnoId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "O turno já começou — o entregador fez check-in. Finalize o turno para "
+                            + "pagar quem trabalhou.");
+        }
 
         boolean cancelamentoTardio = LocalDateTime.now().isAfter(
                 turno.getDataInicio().minusHours(1));

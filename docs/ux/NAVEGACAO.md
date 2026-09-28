@@ -182,13 +182,22 @@ regras de `TurnoService` no backend.
 | Status | Entregador | Lojista |
 |---|---|---|
 | Aberto, com vaga | **Aceitar turno** | **Cancelar turno** (e **Finalizar turno**, se já há entregador) |
-| Aberto (já aceito por mim, multi-vaga), aceito, em andamento | **Finalizar turno** · **Cancelar turno** | **Finalizar turno** · **Cancelar turno** |
+| Aberto (já aceito por mim, multi-vaga), aceito | **Cheguei** (presença) · **Finalizar turno** · **Cancelar turno** | **Finalizar turno** · **Cancelar turno** |
+| Em andamento (alguém fez check-in) | **Encerrar turno** (presença) · **Finalizar turno** | **Finalizar turno** |
 | Finalizado, com avaliação pendente | **Avaliar a loja** | **Avaliar o entregador** / **Avaliar entregadores** |
 | Finalizado sem pendência, cancelado, expirado | Só o status por extenso — "Turno finalizado", "Turno cancelado" | idem |
 
 - **Os dois participantes finalizam.** O backend aceita desde que o dinheiro
   passou a ser reservado na publicação: finalizar não cria compromisso, só
   transfere o que já estava reservado.
+- **Presença.** No detalhe do turno do entregador, o bloco **PRESENÇA** tem
+  "Cheguei" (check-in, de 30 min antes do início até o fim, a até 500 m do
+  ponto) e depois "Encerrar turno" (check-out). A posição vem do
+  `LocalizacaoService`; a recusa do backend aparece como veio ("Você está a 1,2
+  km do local"). O lojista vê "Chegou às 14:03 (3 min antes) · saiu às 18:02"
+  no card de cada entregador, e recebe a notificação de chegada e de saída.
+- **Turno em andamento não se cancela.** Depois do check-in alguém está
+  trabalhando: cancelar devolveria a reserva inteira. A saída é finalizar.
 - **Finalizar leva direto à avaliação**, para os dois papéis — o backend
   notifica os dois na mesma transação.
 - **Cancelar avisa a consequência** antes de confirmar: menos de 1 h do início

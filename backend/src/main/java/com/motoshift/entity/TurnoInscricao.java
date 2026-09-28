@@ -27,7 +27,9 @@ import java.time.LocalDateTime;
     indexes = {
         // "Turnos deste entregador": a unicidade acima começa por turnoId e
         // não serve para buscar por motoboy (V11).
-        @Index(name = "ix_inscricao_motoboy", columnList = "motoboyId, status")
+        @Index(name = "ix_inscricao_motoboy", columnList = "motoboyId, status"),
+        // Pontualidade dos últimos 90 dias (V16).
+        @Index(name = "ix_inscricao_checkin", columnList = "motoboyId, checkinEm")
     }
 )
 public class TurnoInscricao {
@@ -62,6 +64,22 @@ public class TurnoInscricao {
     // quando a liquidação passou a ser automática: o lojista compromete o valor
     // ao publicar e a finalização transfere o que já estava reservado.
 
+    // ── Presença (V16) ────────────────────────────────────────────────────
+    // O horário REAL deste entregador neste turno. Mora na inscrição, e não
+    // no turno, porque num turno multi-vaga cada um chega na sua hora. Quem
+    // escreve é o CheckinService; o CHECK da V16 garante que a saída nunca
+    // vem antes da chegada.
+
+    /** Quando tocou "Cheguei". Nulo = ainda não chegou (ou turno anterior à V16). */
+    private LocalDateTime checkinEm;
+
+    /** De onde fez o check-in — a distância até o turno é conferida na hora. */
+    private Double checkinLatitude;
+    private Double checkinLongitude;
+
+    /** Quando tocou "Encerrar turno". Só existe depois do check-in. */
+    private LocalDateTime checkoutEm;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime criadoEm;
 
@@ -84,6 +102,18 @@ public class TurnoInscricao {
 
     public StatusPagamento getPagamentoStatus() { return pagamentoStatus; }
     public void setPagamentoStatus(StatusPagamento p) { this.pagamentoStatus = p; }
+
+    public LocalDateTime getCheckinEm() { return checkinEm; }
+    public void setCheckinEm(LocalDateTime checkinEm) { this.checkinEm = checkinEm; }
+
+    public Double getCheckinLatitude() { return checkinLatitude; }
+    public void setCheckinLatitude(Double v) { this.checkinLatitude = v; }
+
+    public Double getCheckinLongitude() { return checkinLongitude; }
+    public void setCheckinLongitude(Double v) { this.checkinLongitude = v; }
+
+    public LocalDateTime getCheckoutEm() { return checkoutEm; }
+    public void setCheckoutEm(LocalDateTime checkoutEm) { this.checkoutEm = checkoutEm; }
 
     public LocalDateTime getCriadoEm() { return criadoEm; }
 }

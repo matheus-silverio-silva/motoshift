@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' hide StepState;
 import 'package:provider/provider.dart';
+import '../../models/presenca.dart';
 import '../../models/turno.dart';
 import '../../presentation/providers/pendencias_provider.dart';
 import '../../routes/abrir_avaliacao.dart';
@@ -40,7 +41,13 @@ class TurnoLojistaConteudo extends StatefulWidget {
 }
 
 /// Um entregador do turno, do jeito que o card precisa dele.
-typedef _Inscrito = ({int id, String nome, double? nota, String status});
+typedef _Inscrito = ({
+  int id,
+  String nome,
+  double? nota,
+  String status,
+  Presenca presenca,
+});
 
 class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
   /// Todos os entregadores do turno, e não só `turno.motoboyId`.
@@ -91,6 +98,8 @@ class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
           nome: nome,
           nota: nota,
           status: m['status'] as String? ?? '',
+          // Chegada e saída (V16) — o lojista vê as de cada entregador.
+          presenca: Presenca.doInscrito(m),
         );
       }));
 
@@ -107,7 +116,13 @@ class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
       if (!mounted || motoboyId == null) return;
       setState(() {
         _inscritos = [
-          (id: motoboyId, nome: 'Motoboy #$motoboyId', nota: null, status: '')
+          (
+            id: motoboyId,
+            nome: 'Motoboy #$motoboyId',
+            nota: null,
+            status: '',
+            presenca: Presenca.vazia,
+          )
         ];
         _turnoCarregado = turnoId;
       });
@@ -132,7 +147,12 @@ class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
   ///
   /// O card dizia "Turno aceito" para todo mundo, inclusive depois de o turno
   /// ter sido finalizado ou de a inscrição daquela pessoa ter sido cancelada.
-  String _rotuloDaInscricao(String statusInscricao, StatusTurno statusTurno) {
+  String _rotuloDaInscricao(
+      String statusInscricao, StatusTurno statusTurno, Presenca presenca) {
+    // Com check-in, a hora real diz mais do que o status: "Chegou às 14:03
+    // (3 min antes) · saiu às 18:02".
+    final presente = presenca.resumo;
+    if (presente != null) return presente;
     if (statusInscricao.toUpperCase() == 'FINALIZADO' ||
         statusTurno == StatusTurno.finalizado) {
       return 'Turno concluído';
@@ -169,7 +189,8 @@ class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
           motoboyId: inscrito.id,
           nome: inscrito.nome,
           nota: inscrito.nota,
-          statusLabel: _rotuloDaInscricao(inscrito.status, turno.status),
+          statusLabel: _rotuloDaInscricao(
+              inscrito.status, turno.status, inscrito.presenca),
           onAvaliar: _podeAvaliar ? () => _avaliar(turno) : null,
         ),
       ],
@@ -523,10 +544,15 @@ class _MotoboyCard extends StatelessWidget {
                               color: AppColors.ink)),
                       const SizedBox(width: 6),
                     ],
-                    Text(
-                      statusLabel,
-                      style: tsJakarta(10, FontWeight.w400,
-                          color: AppColors.muted),
+                    Flexible(
+                      child: Text(
+                        statusLabel,
+                        key: const Key('inscrito-status'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: tsJakarta(10, FontWeight.w400,
+                            color: AppColors.muted),
+                      ),
                     ),
                   ],
                 ),

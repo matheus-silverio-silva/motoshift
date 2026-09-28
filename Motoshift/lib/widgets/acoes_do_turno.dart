@@ -24,7 +24,8 @@ import 'app_buttons.dart';
 /// As regras aqui são as de `TurnoService`, não uma aproximação:
 ///
 /// * finalizar e cancelar valem para qualquer status que não seja
-///   `FINALIZADO` nem `CANCELADO`, e exigem um entregador no turno;
+///   `FINALIZADO` nem `CANCELADO`, e exigem um entregador no turno — menos
+///   cancelar o turno em andamento: com check-in feito, ele já começou;
 /// * qualquer participante pode fazer as duas coisas;
 /// * o turno finalizado não tem mais nada a fazer além de avaliar — e é o
 ///   [OQueFalta] logo acima que lista a nota fiscal.
@@ -144,12 +145,15 @@ class _AcoesDoTurnoState extends State<AcoesDoTurno> {
               loading: _ocupado,
               onPressed: _ocupado ? null : _finalizar,
             ),
-          GhostButton(
-            key: const Key('acao-cancelar'),
-            label: 'Cancelar turno',
-            danger: true,
-            onPressed: _ocupado ? null : _cancelar,
-          ),
+          // Turno em andamento não se cancela: alguém fez check-in e está
+          // trabalhando — o backend recusa, e a saída é finalizar.
+          if (_turno.status != StatusTurno.emAndamento)
+            GhostButton(
+              key: const Key('acao-cancelar'),
+              label: 'Cancelar turno',
+              danger: true,
+              onPressed: _ocupado ? null : _cancelar,
+            ),
         ];
     }
   }

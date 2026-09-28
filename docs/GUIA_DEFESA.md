@@ -265,9 +265,9 @@ depende disso.
 
 **P: O que está fora do escopo (trabalhos futuros)?**
 R: Rastreamento em tempo real, redefinição de senha por e-mail, rascunho de
-turno, check-in do entregador (o estado EM_ANDAMENTO existe e é lido, mas
-ninguém o escreve), tabela de eventos de score e lock distribuído para os jobs
-agendados (hoje a saída é ligar os jobs em uma instância só).
+turno, tabela de eventos de score e lock distribuído para os jobs agendados
+(hoje a saída é ligar os jobs em uma instância só). O check-in, que estava
+aqui, entrou nesta revisão (seção 11).
 
 ---
 
@@ -305,3 +305,26 @@ Uma seção curta por recurso: o que a regra diz e o arquivo em que ela mora.
 R: Todo pedido de posição tem 15 s de limite — inclusive o aviso de permissão
 que ninguém clicou, que era onde a tela ficava "buscando" para sempre. Passou
 disso, a tela diz que o aparelho não respondeu e oferece tentar de novo.
+
+### Check-in e check-out: a hora real
+
+- **Regra.** Só o entregador inscrito e aceito; de 30 min antes do início até
+  o fim do turno; a até 500 m do ponto (`motoshift.checkin.raio-metros`). A
+  trava de distância desliga com `MOTOSHIFT_CHECKIN_EXIGIR_PROXIMIDADE=false`,
+  para a apresentação feita de casa. Check-out só depois do check-in. Repetir
+  qualquer um não muda nada nem avisa de novo.
+- **Status.** O primeiro check-in leva o turno de ACEITO a EM_ANDAMENTO — o
+  estado que o enum esperava. Em andamento, o turno **não vence** (o job só
+  olha turno aberto) e **não se cancela**: cancelar devolveria a reserva
+  inteira com alguém trabalhando; a saída é finalizar. O job de vencimento,
+  ao fechar um turno multi-vaga no início, o leva direto a EM_ANDAMENTO se
+  alguém já chegou.
+- **Pontualidade.** % de check-ins até 10 min após o início, nos últimos 90
+  dias. Sem check-in, "Sem histórico" — nunca 100%.
+- **Onde.** `CheckinService`; colunas em `turno_inscricoes` (V16) porque cada
+  entregador de um turno multi-vaga chega na sua hora; `Reputacao.pontualidade`;
+  no app, `CheckinDoTurno` (detalhe do entregador) e `Presenca`.
+
+**P: Por que a presença mora na inscrição e não no turno?**
+R: Porque num turno de três vagas são três chegadas. No turno ficaria uma hora
+só — a do primeiro —, e a pontualidade dos outros dois não existiria.

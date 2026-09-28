@@ -5,6 +5,7 @@ import '../../presentation/providers/turno_provider.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/acoes_do_turno.dart';
+import '../../widgets/checkin_do_turno.dart';
 import '../../widgets/desktop/info_tile_grid.dart';
 import '../../widgets/mapa_turno.dart';
 import '../../widgets/o_que_falta.dart';
@@ -97,6 +98,8 @@ class _DetalheTurnoConteudoState extends State<DetalheTurnoConteudo> {
               _GridInfo(turno: turno),
               // Some sozinho quando não há pendência — ver OQueFalta.
               OQueFalta(turno: turno, margem: const EdgeInsets.only(top: 12)),
+              // "Cheguei" / "Encerrar turno": só para quem está no turno.
+              CheckinDoTurno(turno: turno, margem: const EdgeInsets.only(top: 12)),
               if (turno.descricao != null && turno.descricao!.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 RequisitosCard(descricao: turno.descricao!),
@@ -143,6 +146,7 @@ class _DetalheTurnoConteudoState extends State<DetalheTurnoConteudo> {
           ],
           const SizedBox(height: 16),
           OQueFalta(turno: turno, margem: const EdgeInsets.only(bottom: 16)),
+          CheckinDoTurno(turno: turno, margem: const EdgeInsets.only(bottom: 16)),
           AcoesDoTurno(
             turno: turno,
             aceitando: _aceitando,

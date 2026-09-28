@@ -54,18 +54,20 @@ class TurnoDisponivelCard extends StatelessWidget {
   }
 }
 
-/// Turno em andamento, com as duas ações do entregador.
+/// Turno em andamento, com a ação do entregador.
+///
+/// "Cancelar" saiu daqui: em andamento quer dizer que alguém fez check-in, e
+/// o backend não cancela um turno que começou como se não tivesse começado.
+/// Chegada e saída ficam no detalhe, que o toque no card abre.
 class TurnoAtivoCard extends StatelessWidget {
   const TurnoAtivoCard({
     required this.turno,
     required this.onConfirmarConclusao,
-    required this.onCancelar,
     super.key,
   });
 
   final Turno turno;
   final VoidCallback onConfirmarConclusao;
-  final VoidCallback onCancelar;
 
   @override
   Widget build(BuildContext context) {
@@ -132,26 +134,6 @@ class TurnoAtivoCard extends StatelessWidget {
                             color: Colors.white),
                       ),
                     ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: onCancelar,
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 11),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface2,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.line, width: 1.5),
-                  ),
-                  child: Text(
-                    'Cancelar',
-                    style:
-                        tsJakarta(12, FontWeight.w700, color: AppColors.muted),
                   ),
                 ),
               ),

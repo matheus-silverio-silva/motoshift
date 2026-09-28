@@ -174,9 +174,18 @@ public class TurnoConsultaService {
         return mapper.toResponse(acesso.carregar(id));
     }
 
-    /** Entregadores inscritos no turno, com o status de pagamento de cada um. */
+    /**
+     * Entregadores inscritos no turno, com o status de pagamento de cada um e,
+     * desde a V16, a chegada e a saída.
+     *
+     * <p>A presença de cada entregador aparece para o lojista do turno e para
+     * o próprio entregador — nunca para o colega de outra vaga, que não tem
+     * por que saber a que horas o outro chegou.
+     */
     public List<Map<String, Object>> listarInscritos(Long turnoId, Long usuarioId) {
-        acesso.exigirParticipante(acesso.carregar(turnoId), usuarioId);
+        Turno turno = acesso.carregar(turnoId);
+        acesso.exigirParticipante(turno, usuarioId);
+        boolean ehLojista = usuarioId.equals(turno.getLojistId());
 
         List<TurnoInscricao> inscricoes = inscricaoRepo.findByTurnoId(turnoId).stream()
                 .filter(i -> i.getStatus() != StatusInscricao.CANCELADO)
@@ -195,6 +204,15 @@ public class TurnoConsultaService {
                     m.put("nome", nomes.getOrDefault(i.getMotoboyId(), "Entregador"));
                     m.put("status", i.getStatus());
                     m.put("pagamentoStatus", i.getPagamentoStatus());
+                    if (ehLojista || usuarioId.equals(i.getMotoboyId())) {
+                        m.put("checkinEm", i.getCheckinEm());
+                        m.put("checkoutEm", i.getCheckoutEm());
+                        // Em minutos, para o app não refazer a conta com o
+                        // relógio dele: negativo = chegou antes do início.
+                        m.put("minutosDoInicio", i.getCheckinEm() == null ? null
+                                : java.time.Duration.between(turno.getDataInicio(),
+                                        i.getCheckinEm()).toMinutes());
+                    }
                     // lojistaConfirmou/motoboyConfirmou sairam com a V13: a
                     // dupla confirmacao deixou de existir, e devolver dois
                     // booleanos sempre falsos so daria trabalho ao app para

@@ -53,6 +53,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
   Widget _buildStatsCard(Usuario? usuario) {
     final turnos = (_dash?['turnosFinalizados'] as num?)?.toInt();
     final avaliacao = usuario?.mediaAvaliacao;
+    final ehLojista = usuario?.tipo == TipoUsuario.lojista;
+    final pontualidade = (_dash?['pontualidade'] as num?)?.toInt();
 
     return Container(
       decoration: BoxDecoration(
@@ -71,12 +73,22 @@ class _PerfilScreenState extends State<PerfilScreen> {
           const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
       child: Row(
         children: [
-          // "137" e "96%" eram literais com um TODO de integração. Turnos
-          // agora vem do backend; pontualidade foi substituída pela avaliação
-          // recebida, porque não existe registro de pontualidade no modelo —
-          // calculá-la exigiria o horário real de início do turno, que a
-          // plataforma ainda não guarda.
+          // "137" e "96%" eram literais com um TODO de integração. Turnos vem
+          // do backend; a pontualidade saiu por falta de dado — a plataforma
+          // não guardava a hora real de chegada — e volta com o check-in
+          // (V16): % de chegadas até 10 min após o início, nos últimos 90
+          // dias. Sem check-in, "Sem histórico", nunca 100%.
           _StatCell(value: turnos?.toString() ?? '—', label: 'TURNOS'),
+          if (!ehLojista) ...[
+            const _StatDivider(),
+            _StatCell(
+              key: const Key('perfil-pontualidade'),
+              value: pontualidade == null
+                  ? (_dash == null ? '—' : 'Sem histórico')
+                  : '$pontualidade%',
+              label: 'PONTUALIDADE',
+            ),
+          ],
           const _StatDivider(),
           _StatCell(
             value: avaliacao != null ? avaliacao.toStringAsFixed(1) : 'N/D',
@@ -447,7 +459,7 @@ class _PerfilHeader extends StatelessWidget {
 
 // ── Stats card helpers ────────────────────────────────────────────────────────
 class _StatCell extends StatelessWidget {
-  const _StatCell({required this.value, required this.label});
+  const _StatCell({required this.value, required this.label, super.key});
   final String value;
   final String label;
 

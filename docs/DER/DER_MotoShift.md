@@ -1,6 +1,6 @@
 # DER — Diagrama Entidade-Relacionamento
 
-Mapa das tabelas que compõem o banco de dados do **MotoShift**. O modelo reflete o schema real em produção (PostgreSQL no Railway), versionado por **Flyway** (migrações V1 a V15) e validado contra as entidades JPA do backend Spring Boot (`spring.jpa.hibernate.ddl-auto=validate`).
+Mapa das tabelas que compõem o banco de dados do **MotoShift**. O modelo reflete o schema real em produção (PostgreSQL no Railway), versionado por **Flyway** (migrações V1 a V16) e validado contra as entidades JPA do backend Spring Boot (`spring.jpa.hibernate.ddl-auto=validate`).
 
 > **Escopo:** 9 tabelas — `usuarios`, `turnos`, `turno_inscricoes`, `avaliacoes`, `carteiras`, `transacoes`, `cobrancas`, `notificacoes`, `notas_fiscais`.
 > Fonte da verdade: `backend/src/main/resources/db/migration` + `backend/src/main/java/com/motoshift/entity`.
@@ -116,6 +116,10 @@ erDiagram
 | `status` | VARCHAR(255) | não | `aceito` \| `finalizado` \| `cancelado` |
 | `pagamento_status` | VARCHAR(255) | sim | Pagamento por entregador. Na prática `pendente` é um instante: a finalização marca pendente, liquida e marca `pago` na mesma transação |
 | `criado_em` | TIMESTAMP(6) | não | — |
+
+| `checkin_em` | TIMESTAMP(6) | sim | Quando o entregador tocou "Cheguei" (V16). Nulo = não chegou, ou inscrição anterior à V16 |
+| `checkin_latitude`, `checkin_longitude` | FLOAT(53) | sim | De onde fez o check-in — a distância até o ponto do turno é conferida na hora |
+| `checkout_em` | TIMESTAMP(6) | sim | Quando tocou "Encerrar turno". CHECK `ck_inscricao_saida_apos_chegada`: só com check-in, e nunca antes dele |
 
 > `lojista_confirmou_em` e `motoboy_confirmou_em` **foram removidas pela V13**.
 > Guardavam a dupla confirmação — cada parte declarando que o dinheiro tinha
@@ -257,3 +261,4 @@ deixaria de valer.
 | `V13__remove_dupla_confirmacao` | CONTRACT: derruba `lojista_confirmou_em` e `motoboy_confirmou_em` de `turno_inscricoes`. Com a liquidação automática não há o que confirmar |
 | `V14__fiscal_por_lancamento` | Aditiva: `transacao_id`, `operacao_id`, `competencia` e `tributos_retidos` em `notas_fiscais`, com backfill ligando cada nota ao `pagamento_recebido` do turno; `uk_nota_transacao` e `ix_nota_competencia`; o CHECK de `transacoes.tipo` ganha `retencao_iss` e `retencao_irrf`. A nota passa a documentar o lançamento do extrato, não só o turno — ver [`docs/financeiro/FISCAL.md`](../financeiro/FISCAL.md) |
 | `V15__coordenada_da_loja` | Aditiva: `latitude` e `longitude` em `usuarios` — o ponto da loja. A publicação parte dele (depois do GPS e da cidade), em vez do GPS de onde o lojista estiver publicando |
+| `V16__checkin_do_entregador` | Aditiva: `checkin_em`, `checkin_latitude`, `checkin_longitude` e `checkout_em` em `turno_inscricoes` — a hora real de cada entregador, na inscrição porque num turno multi-vaga cada um chega na sua hora; CHECK de saída depois da chegada; índice `ix_inscricao_checkin` para a pontualidade |
