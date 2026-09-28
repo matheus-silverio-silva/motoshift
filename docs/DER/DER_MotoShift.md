@@ -1,6 +1,6 @@
 # DER — Diagrama Entidade-Relacionamento
 
-Mapa das tabelas que compõem o banco de dados do **MotoShift**. O modelo reflete o schema real em produção (PostgreSQL no Railway), versionado por **Flyway** (migrações V1 a V19) e validado contra as entidades JPA do backend Spring Boot (`spring.jpa.hibernate.ddl-auto=validate`).
+Mapa das tabelas que compõem o banco de dados do **MotoShift**. O modelo reflete o schema real em produção (PostgreSQL no Railway), versionado por **Flyway** (migrações V1 a V20) e validado contra as entidades JPA do backend Spring Boot (`spring.jpa.hibernate.ddl-auto=validate`).
 
 > **Escopo:** 9 tabelas — `usuarios`, `turnos`, `turno_inscricoes`, `avaliacoes`, `carteiras`, `transacoes`, `cobrancas`, `notificacoes`, `notas_fiscais`.
 > Fonte da verdade: `backend/src/main/resources/db/migration` + `backend/src/main/java/com/motoshift/entity`.
@@ -238,6 +238,7 @@ deixaria de valer.
 | `numero` | INTEGER | não | Sequencial por prestador |
 | `serie` | VARCHAR(8) | não | Série única (`A1`) neste MVP |
 | `codigo_verificacao` | VARCHAR(16) | não | Derivado dos dados da própria nota (SHA-256) |
+| `chave_acesso` | VARCHAR(50) | sim | Chave de acesso de 50 dígitos no formato da NFS-e nacional (V20) — município IBGE, ambiente gerador, inscrição do emitente, número, AAMM, código numérico e DV módulo 11. Gravada na emissão; nula nas notas anteriores à V20, que a recebem derivada na leitura. Índice único parcial `uk_nota_chave_acesso` |
 | `descricao_servico` | VARCHAR(300) | não | — |
 | `valor_servico` | NUMERIC(12,2) | não | Base de cálculo |
 | `iss_aliquota`, `iss_valor` | NUMERIC(6,4) / NUMERIC(12,2) | não | ISS municipal |
@@ -284,3 +285,4 @@ deixaria de valer.
 | `V17__gorjeta` | O CHECK de `transacoes.tipo` ganha `bonus_enviado`, o lado de quem dá a gorjeta; o `bonus`, que estava no domínio desde a V10 sem fluxo, vira o lado de quem recebe. Sem coluna nova: a gorjeta é o par de lançamentos, e "uma por entregador por turno" é a chave de idempotência |
 | `V18__favoritos` | Tabela nova `favoritos (lojista_id, motoboy_id, criado_em)`, o par como chave primária, FKs para `usuarios` e índice por entregador. Aditiva: nada existente muda |
 | `V19__meta_do_mes_e_quem_cancelou` | Aditiva: `meta_mensal` em `usuarios` (CHECK positiva) e `cancelado_por_id` (FK) e `cancelado_em` em `turnos`, com índice. Os selos de reputação não têm tabela: são calculados do histórico |
+| `V20__chave_de_acesso_da_nfse` | Aditiva: `chave_acesso` em `notas_fiscais`, com índice único parcial `uk_nota_chave_acesso`. É a chave que o DANFSe (leiaute da NT SE/CGNFS-e nº 008/2026) mostra no topo; sem backfill — ver [`docs/financeiro/FISCAL.md`](../financeiro/FISCAL.md) |

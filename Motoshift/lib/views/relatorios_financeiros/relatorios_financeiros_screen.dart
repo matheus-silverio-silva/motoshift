@@ -498,6 +498,9 @@ class _RelatoriosFinanceirosScreenState
     );
   }
 
+  /// O erro com a saída: "Tentar novamente" refaz a carga. O puxar para
+  /// atualizar também refaz, mas no navegador e no desktop ninguém o
+  /// descobre, e a tela ficava só com a mensagem.
   Widget _caixaDeErro(String mensagem) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -512,6 +515,11 @@ class _RelatoriosFinanceirosScreenState
           Expanded(
             child: Text(mensagem,
                 style: tsJakarta(12.5, FontWeight.w500, color: AppColors.error)),
+          ),
+          TextButton(
+            key: const Key('relatorio-tentar-novamente'),
+            onPressed: _carregando ? null : _carregar,
+            child: const Text('Tentar novamente'),
           ),
         ],
       ),

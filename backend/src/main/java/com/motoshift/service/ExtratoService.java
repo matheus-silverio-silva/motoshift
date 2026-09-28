@@ -180,7 +180,9 @@ public class ExtratoService {
             soma.put(t.tipo(), t.total());
         }
 
-        Carteira carteira = carteiras.obterOuCriar(usuarioId);
+        // Só leitura: esta transação é READ ONLY, e criar a carteira aqui era
+        // um INSERT que o PostgreSQL recusa — ver CarteiraService.lerOuVazia.
+        Carteira carteira = carteiras.lerOuVazia(usuarioId);
 
         if (ehLojista) {
             List<ReservaAbertaResponse> reservas = transacaoRepo.reservasAbertas(usuarioId).stream()

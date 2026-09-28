@@ -247,6 +247,21 @@ a nota sai. O modelo separa as duas coisas — `prestador_id` é quem prestou,
 Numa emissão real, a plataforma precisaria de autorização do MEI no emissor;
 isso e o resto do que faltaria estão em `docs/financeiro/FISCAL.md`.
 
+**P: A nota fiscal segue algum modelo oficial, ou é um layout inventado?**
+R: Segue o **DANFSe v2.0**, o documento auxiliar da NFS-e do padrão nacional,
+definido pela Nota Técnica SE/CGNFS-e nº 008/2026: os mesmos blocos na mesma
+ordem (identificação, prestador, tomador, destinatário, intermediário,
+serviço, ISSQN, federal, IBS/CBS, totais, informações complementares), a
+chave de acesso de 50 dígitos com a composição oficial e o DV em módulo 11, e
+o QR Code. O serviço é o item 26.01 da LC 116/2003, e em 2026 a nota destaca
+IBS e CBS com as alíquotas do ano de teste da LC 214/2025. O recibo segue a
+quitação do art. 320 do Código Civil, com o valor por extenso, e o
+comprovante de Pix os campos mínimos do Regulamento Pix. O que **não** se
+copiou foi de propósito: nada de brasão ou nome de prefeitura, o QR Code não
+leva ao portal do governo, e a marca "DOCUMENTO SIMULADO — SEM VALOR FISCAL"
+está em todos — o documento tem a estrutura de um real sem poder passar por
+um. As fontes estão na seção 7 do `FISCAL.md`.
+
 **P: E se a API da IA cair?**
 R: A análise de score continua respondendo os números, só sem o texto
 (`analiseDisponivel: false`). Relatório e sugestão respondem 503, porque ali a

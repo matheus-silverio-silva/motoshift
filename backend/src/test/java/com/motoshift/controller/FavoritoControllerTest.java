@@ -2,11 +2,13 @@ package com.motoshift.controller;
 
 import com.motoshift.config.ApiExceptionHandler;
 import com.motoshift.dto.FavoritoResponse;
+import com.motoshift.repository.UsuarioRepository;
 import com.motoshift.security.JwtAuthFilter;
 import com.motoshift.security.JwtService;
 import com.motoshift.security.RespostaDeErro;
 import com.motoshift.security.SecurityConfig;
 import com.motoshift.service.FavoritoService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +24,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -42,10 +45,17 @@ class FavoritoControllerTest {
     @Autowired private MockMvc mvc;
     @Autowired private JwtService jwt;
 
+    // O filtro JWT confere que a conta do token existe; aqui toda conta existe.
+    @MockBean private UsuarioRepository usuariosDoFiltro;
     @MockBean private FavoritoService favoritos;
 
     private final FavoritoResponse ricardo =
             new FavoritoResponse(9L, "Ricardo Souza", null, 4.9, 4.8, LocalDateTime.now());
+
+    @BeforeEach
+    void contasDoTokenExistem() {
+        when(usuariosDoFiltro.existsById(anyLong())).thenReturn(true);
+    }
 
     @Test
     @DisplayName("o entregador não tem favoritos: 403 nas três rotas, e o serviço nem é chamado")

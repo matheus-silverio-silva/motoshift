@@ -25,6 +25,10 @@ class FormatoFiscal {
   static String dataHora(DateTime d) =>
       DateFormat("dd/MM/yyyy 'às' HH:mm", 'pt_BR').format(d);
 
+  /// "15/08/2025 09:30:00" — data e hora como o DANFSe as escreve.
+  static String dataHoraDocumento(DateTime d) =>
+      DateFormat('dd/MM/yyyy HH:mm:ss', 'pt_BR').format(d);
+
   /// "CNPJ **.345.678/0001-**", ou "CPF não informado no cadastro".
   static String documento(String tipo, String? numero) =>
       numero == null || numero.isEmpty

@@ -217,6 +217,9 @@ class _SaldoLojistaScreenState extends State<SaldoLojistaScreen> {
     );
   }
 
+  /// O erro no lugar do "Adicionar saldo", com a saída: sem saldo carregado
+  /// a tela não oferece recarga, e "Tentar novamente" é o caminho de volta —
+  /// o puxar para atualizar faz o mesmo, mas no navegador ninguém o descobre.
   Widget _avisoDeErro(String mensagem) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -225,7 +228,7 @@ class _SaldoLojistaScreenState extends State<SaldoLojistaScreen> {
         borderRadius: BorderRadius.circular(11),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const Icon(Icons.error_outline, size: 17, color: Color(0xFFBFE5E3)),
           const SizedBox(width: 8),
@@ -233,6 +236,12 @@ class _SaldoLojistaScreenState extends State<SaldoLojistaScreen> {
             child: Text(mensagem,
                 style: tsJakarta(11, FontWeight.w400,
                     color: const Color(0xFFBFE5E3), height: 1.45)),
+          ),
+          TextButton(
+            key: const Key('saldo-lojista-tentar-novamente'),
+            onPressed: _carregando ? null : _carregar,
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            child: const Text('Tentar novamente'),
           ),
         ],
       ),

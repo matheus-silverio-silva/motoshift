@@ -75,7 +75,27 @@ public class CarteiraService {
         return lancamentos.map(t -> TransacaoResponse.from(t).comDocumento(documentos.get(t.getId())));
     }
 
-    /** Carteira do usuario, criada na hora se ainda nao existir. */
+    /**
+     * A carteira para quem só vai ler: a gravada ou, se o usuário ainda não
+     * tem, uma vazia que não é salva — o saldo de quem não tem carteira é
+     * zero, e ler não é motivo para criar linha.
+     *
+     * <p>Existe porque o /resumo, que roda numa transação só de leitura,
+     * chamava {@link #obterOuCriar}. No PostgreSQL o INSERT dentro de uma
+     * transação READ ONLY é recusado ("cannot execute INSERT in a read-only
+     * transaction") e o resumo de quem não tinha carteira dava 500. O H2 dos
+     * testes ignora o read-only, e por isso a suíte não via.
+     */
+    @Transactional(readOnly = true)
+    public Carteira lerOuVazia(Long usuarioId) {
+        return carteiraRepo.findByUsuarioId(usuarioId).orElseGet(() -> {
+            Carteira vazia = new Carteira();
+            vazia.setUsuarioId(usuarioId);
+            return vazia;
+        });
+    }
+
+    /** Carteira do usuario, criada na hora se ainda nao existir. Para quem vai gravar. */
     @Transactional
     public Carteira obterOuCriar(Long usuarioId) {
         return carteiraRepo.findByUsuarioId(usuarioId)

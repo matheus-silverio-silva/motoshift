@@ -10,6 +10,7 @@ import com.motoshift.entity.Turno;
 import com.motoshift.repository.CarteiraRepository;
 import com.motoshift.repository.NotificacaoRepository;
 import com.motoshift.repository.TransacaoRepository;
+import com.motoshift.service.fiscal.ChaveDeAcessoNfse;
 import com.motoshift.support.CenarioFinanceiro;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -86,6 +87,27 @@ class NotaFiscalServiceTest {
         assertThat(nota.getPrestadorDocumentoTipo()).isEqualTo("CPF");
         assertThat(nota.getPrestadorDocumento()).isNull();
         assertThat(nota.getPrestadorCidade()).isEqualTo("Curitiba/PR");
+    }
+
+    @Test
+    @DisplayName("a emissão grava a chave de acesso do padrão nacional e a nota sai no leiaute do DANFSe")
+    void chaveDeAcessoEDanfse() {
+        Turno turno = cenario.turnoPago(lojista, "120.00", motoboy);
+
+        NotaFiscalResponse nota = notas.emitir(turno.getId(), motoboy, lojista).nota();
+
+        // Curitiba (IBGE 4106902), Sistema Nacional (2), CPF (1) — zerado,
+        // porque o entregador não tem CPF no cadastro — e o número da nota.
+        String chave = nota.getChaveAcesso();
+        assertThat(ChaveDeAcessoNfse.valida(chave)).isTrue();
+        assertThat(chave).startsWith("4106902" + "2" + "1" + "00000000000000");
+        assertThat(chave.substring(23, 36)).isEqualTo(String.format("%013d", nota.getNumero()));
+
+        assertThat(nota.getDanfse().chaveAcesso()).isEqualTo(chave);
+        assertThat(nota.getDanfse().quadros()).extracting(q -> q.id()).startsWith("prestador", "tomador");
+
+        // Pedir de novo devolve a mesma nota — e a mesma chave, lida do banco.
+        assertThat(notas.emitir(turno.getId(), motoboy, lojista).nota().getChaveAcesso()).isEqualTo(chave);
     }
 
     @Test

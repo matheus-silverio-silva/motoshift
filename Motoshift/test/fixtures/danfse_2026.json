@@ -1,0 +1,345 @@
+{
+  "versao": "DANFSe v2.0",
+  "norma": "Nota Técnica SE/CGNFS-e nº 008/2026",
+  "chaveAcesso": "41069022100000000000000000000000001226087697394433",
+  "municipioEmissor": "Curitiba - PR",
+  "codigoMunicipio": "4106902",
+  "numeroDps": 12,
+  "serieDps": "A1",
+  "conteudoQrCode": "DOCUMENTO SIMULADO - SEM VALOR FISCAL | MotoShift | NFS-e chave 41069022100000000000000000000000001226087697394433",
+  "avisoQrCode": "Na NFS-e real, a autenticidade é verificada lendo este QR Code ou consultando a chave de acesso no Portal Nacional da NFS-e. Aqui ele só repete a chave simulada — esta nota não existe no portal.",
+  "quadros": [
+    {
+      "id": "prestador",
+      "titulo": "EMITENTE DA NFS-e — PRESTADOR DO SERVIÇO",
+      "campos": [
+        {
+          "rotulo": "CNPJ / CPF / NIF",
+          "valor": "CPF não informado no cadastro"
+        },
+        {
+          "rotulo": "Inscrição Municipal",
+          "valor": "-"
+        },
+        {
+          "rotulo": "Telefone",
+          "valor": "-"
+        },
+        {
+          "rotulo": "Nome / Nome Empresarial",
+          "valor": "Ricardo Souza",
+          "largo": true
+        },
+        {
+          "rotulo": "E-mail",
+          "valor": "-"
+        },
+        {
+          "rotulo": "Endereço",
+          "valor": "-",
+          "largo": true
+        },
+        {
+          "rotulo": "Município",
+          "valor": "Curitiba - PR"
+        },
+        {
+          "rotulo": "CEP",
+          "valor": "-"
+        },
+        {
+          "rotulo": "Simples Nacional na Data de Competência",
+          "valor": "Não optante"
+        },
+        {
+          "rotulo": "Regime de Apuração Tributária pelo SN",
+          "valor": "-"
+        }
+      ]
+    },
+    {
+      "id": "tomador",
+      "titulo": "TOMADOR DO SERVIÇO",
+      "campos": [
+        {
+          "rotulo": "CNPJ / CPF / NIF",
+          "valor": "CNPJ **.345.678/0001-**"
+        },
+        {
+          "rotulo": "Inscrição Municipal",
+          "valor": "-"
+        },
+        {
+          "rotulo": "Telefone",
+          "valor": "-"
+        },
+        {
+          "rotulo": "Nome / Nome Empresarial",
+          "valor": "Hamburgueria da Cláudia",
+          "largo": true
+        },
+        {
+          "rotulo": "E-mail",
+          "valor": "-"
+        },
+        {
+          "rotulo": "Endereço",
+          "valor": "Av. Água Verde, 1200 — Água Verde, Curitiba/PR",
+          "largo": true
+        },
+        {
+          "rotulo": "Município",
+          "valor": "Curitiba - PR"
+        },
+        {
+          "rotulo": "CEP",
+          "valor": "-"
+        }
+      ]
+    },
+    {
+      "id": "destinatario",
+      "titulo": "DESTINATÁRIO DA OPERAÇÃO",
+      "campos": [],
+      "observacao": "O destinatário da operação é o próprio tomador do serviço."
+    },
+    {
+      "id": "intermediario",
+      "titulo": "INTERMEDIÁRIO DO SERVIÇO",
+      "campos": [],
+      "observacao": "INTERMEDIÁRIO DO SERVIÇO NÃO IDENTIFICADO NA NFS-e"
+    },
+    {
+      "id": "servico",
+      "titulo": "SERVIÇO PRESTADO",
+      "campos": [
+        {
+          "rotulo": "Código de Tributação Nacional",
+          "valor": "26.01.01 - Serviços de coleta, remessa ou entrega de correspondências, documentos, objetos, bens ou valores, inclusive pelos correios e suas agências franqueadas; courrier e congêneres.",
+          "largo": true
+        },
+        {
+          "rotulo": "Código de Tributação Municipal",
+          "valor": "-"
+        },
+        {
+          "rotulo": "Código NBS",
+          "valor": "1.0702.00.00"
+        },
+        {
+          "rotulo": "Local da Prestação",
+          "valor": "Curitiba - PR"
+        },
+        {
+          "rotulo": "País da Prestação",
+          "valor": "Brasil"
+        },
+        {
+          "rotulo": "Descrição do Serviço",
+          "valor": "Serviço de entrega em turno agendado — Turno Noite. Data: 14/08/2026, das 18:00 às 22:00. Região: Batel, Curitiba.",
+          "largo": true
+        }
+      ]
+    },
+    {
+      "id": "issqn",
+      "titulo": "TRIBUTAÇÃO MUNICIPAL (ISSQN)",
+      "campos": [
+        {
+          "rotulo": "Tributação do ISSQN",
+          "valor": "Operação Tributável"
+        },
+        {
+          "rotulo": "Município de Incidência do ISSQN",
+          "valor": "Curitiba - PR"
+        },
+        {
+          "rotulo": "Regime Especial de Tributação",
+          "valor": "Nenhum"
+        },
+        {
+          "rotulo": "Tipo de Imunidade",
+          "valor": "-"
+        },
+        {
+          "rotulo": "Suspensão da Exigibilidade do ISSQN",
+          "valor": "Não"
+        },
+        {
+          "rotulo": "Benefício Municipal",
+          "valor": "-"
+        },
+        {
+          "rotulo": "Valor do Serviço",
+          "valor": "R$ 200,00"
+        },
+        {
+          "rotulo": "Desconto Incondicionado",
+          "valor": "-"
+        },
+        {
+          "rotulo": "Total Deduções/Reduções",
+          "valor": "-"
+        },
+        {
+          "rotulo": "BC ISSQN",
+          "valor": "R$ 200,00"
+        },
+        {
+          "rotulo": "Alíquota Aplicada",
+          "valor": "5,00%"
+        },
+        {
+          "rotulo": "Retenção do ISSQN",
+          "valor": "Não Retido"
+        },
+        {
+          "rotulo": "ISSQN Apurado",
+          "valor": "R$ 10,00"
+        }
+      ]
+    },
+    {
+      "id": "federal",
+      "titulo": "TRIBUTAÇÃO FEDERAL",
+      "campos": [
+        {
+          "rotulo": "IRRF",
+          "valor": "-"
+        },
+        {
+          "rotulo": "Contribuição Previdenciária - Retida",
+          "valor": "-"
+        },
+        {
+          "rotulo": "Contribuições Sociais - Retidas",
+          "valor": "-"
+        },
+        {
+          "rotulo": "PIS - Débito Apuração Própria",
+          "valor": "-"
+        },
+        {
+          "rotulo": "COFINS - Débito Apuração Própria",
+          "valor": "-"
+        }
+      ],
+      "observacao": "Não houve retenção de tributos federais nesta nota."
+    },
+    {
+      "id": "ibscbs",
+      "titulo": "TRIBUTAÇÃO IBS / CBS",
+      "campos": [
+        {
+          "rotulo": "CST",
+          "valor": "000 - Tributação integral"
+        },
+        {
+          "rotulo": "Classificação Tributária",
+          "valor": "000001"
+        },
+        {
+          "rotulo": "Base de Cálculo IBS/CBS",
+          "valor": "R$ 190,00"
+        },
+        {
+          "rotulo": "Alíquota IBS UF",
+          "valor": "0,10%"
+        },
+        {
+          "rotulo": "Valor IBS UF",
+          "valor": "R$ 0,19"
+        },
+        {
+          "rotulo": "Alíquota IBS Mun.",
+          "valor": "0,00%"
+        },
+        {
+          "rotulo": "Valor IBS Mun.",
+          "valor": "R$ 0,00"
+        },
+        {
+          "rotulo": "Alíquota CBS",
+          "valor": "0,90%"
+        },
+        {
+          "rotulo": "Valor CBS",
+          "valor": "R$ 1,71"
+        }
+      ],
+      "observacao": "Ano de teste da reforma tributária: CBS de 0,9% (LC 214/2025, art. 346) e IBS de 0,1% (art. 343), sobre a base sem o ISSQN (art. 12, §2º)."
+    },
+    {
+      "id": "totais",
+      "titulo": "VALOR TOTAL DA NFS-e",
+      "campos": [
+        {
+          "rotulo": "Valor do Serviço",
+          "valor": "R$ 200,00"
+        },
+        {
+          "rotulo": "Desconto Condicionado",
+          "valor": "R$ 0,00"
+        },
+        {
+          "rotulo": "Desconto Incondicionado",
+          "valor": "R$ 0,00"
+        },
+        {
+          "rotulo": "ISSQN Retido",
+          "valor": "-"
+        },
+        {
+          "rotulo": "Total das Retenções Federais",
+          "valor": "-"
+        },
+        {
+          "rotulo": "PIS/COFINS - Débito Apur. Própria",
+          "valor": "-"
+        },
+        {
+          "rotulo": "Valor Líquido da NFS-e",
+          "valor": "R$ 200,00"
+        },
+        {
+          "rotulo": "Total IBS/CBS",
+          "valor": "R$ 1,90"
+        },
+        {
+          "rotulo": "Valor Líquido da NFS-e + IBS/CBS",
+          "valor": "R$ 201,90",
+          "destaque": true
+        }
+      ],
+      "observacao": "Em 2026 o IBS e a CBS são destacados sem recolhimento (LC 214/2025, art. 348, §1º): o valor pago ao prestador é o Valor Líquido da NFS-e."
+    },
+    {
+      "id": "complementares",
+      "titulo": "INFORMAÇÕES COMPLEMENTARES",
+      "campos": [
+        {
+          "rotulo": "Tributos aproximados — Federais",
+          "valor": "R$ 3,00"
+        },
+        {
+          "rotulo": "Tributos aproximados — Estaduais",
+          "valor": "R$ 0,00"
+        },
+        {
+          "rotulo": "Tributos aproximados — Municipais",
+          "valor": "R$ 10,00"
+        },
+        {
+          "rotulo": "Código de verificação",
+          "valor": "A1B2-C3D4"
+        },
+        {
+          "rotulo": "Operação no extrato",
+          "valor": "2f1c9c30-0000-4000-8000-000000000001",
+          "largo": true
+        }
+      ],
+      "observacao": "Totais aproximados dos tributos conforme a Lei 12.741/2012. Nota emitida pela plataforma por conta do prestador, a pedido do tomador. Alíquotas de exemplo."
+    }
+  ]
+}

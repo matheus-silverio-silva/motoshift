@@ -20,6 +20,7 @@ import 'package:provider/provider.dart';
 
 import 'package:moto_shift/models/carteira.dart';
 import 'package:moto_shift/models/cobranca.dart';
+import 'package:moto_shift/models/danfse.dart';
 import 'package:moto_shift/models/documento_fiscal.dart';
 import 'package:moto_shift/models/extrato_filtro.dart';
 import 'package:moto_shift/models/informe_anual.dart';
@@ -368,6 +369,7 @@ NotaFiscal fakeNotaFiscal({
   bool retidos = false,
   bool cancelada = false,
   String papel = 'prestador',
+  bool anoDeTeste = false,
 }) {
   const base = 200.0;
   const iss = 10.0;
@@ -389,7 +391,7 @@ NotaFiscal fakeNotaFiscal({
     tomadorCidade: 'Curitiba/PR',
     descricaoServico: 'Serviço de entrega em turno agendado — Turno Noite. '
         'Data: 14/08/2025, das 18:00 às 22:00. Região: Batel, Curitiba.',
-    competencia: DateTime(2025, 8, 14, 18),
+    competencia: DateTime(anoDeTeste ? 2026 : 2025, 8, 14, 18),
     valorServico: base,
     issAliquota: 0.05,
     issValor: iss,
@@ -398,14 +400,35 @@ NotaFiscal fakeNotaFiscal({
     totalTributos: iss + irrf,
     valorLiquido: retidos ? base - iss - irrf : base,
     tributosRetidos: retidos,
-    emitidaEm: DateTime(2025, 8, 15, 9, 30),
+    emitidaEm: DateTime(anoDeTeste ? 2026 : 2025, 8, 15, 9, 30),
     canceladaEm: cancelada ? DateTime(2025, 8, 16, 10) : null,
     cancelada: cancelada,
     motivoCancelamento: cancelada ? 'Emitida por engano' : null,
     papel: papel,
     transacaoId: 92,
     operacaoId: '2f1c9c30-0000-4000-8000-000000000001',
+    chaveAcesso: anoDeTeste
+        ? '41069022100000000000000000000000001226087697394433'
+        : '41069022100000000000000000000000001225087697394438',
+    danfse: fakeDanfse(retidos: retidos, anoDeTeste: anoDeTeste),
   );
+}
+
+/// O DANFSe da nota de [fakeNotaFiscal], como o backend o manda.
+///
+/// Os JSONs em `test/fixtures` foram gerados pelo próprio `LeiauteDanfse` do
+/// backend a partir desta nota: a tela é testada com o que o servidor
+/// produz, não com uma cópia escrita à mão. Competência 14/08/2025, sem
+/// IBS/CBS; com [anoDeTeste], 14/08/2026 — o ano de teste da reforma, com o
+/// quadro de IBS/CBS preenchido (só sem retenção).
+Danfse fakeDanfse({bool retidos = false, bool anoDeTeste = false}) {
+  final arquivo = File(anoDeTeste
+      ? 'test/fixtures/danfse_2026.json'
+      : retidos
+          ? 'test/fixtures/danfse_com_retencao.json'
+          : 'test/fixtures/danfse_sem_retencao.json');
+  return Danfse.fromJson(
+      jsonDecode(arquivo.readAsStringSync()) as Map<String, dynamic>);
 }
 
 Comprovante fakeComprovante({
@@ -431,11 +454,19 @@ Comprovante fakeComprovante({
       LinhaComprovante('Situação', 'Pagamento confirmado'),
       LinhaComprovante('Crédito em', 'Saldo disponível'),
     ],
+    valorPorExtenso: 'quinhentos reais',
+    fundamento: 'Modelo de quitação do Código Civil, art. 320',
+    declaracao: 'Recebemos de Ricardo Souza a importância de R\$ 500,00 '
+        '(quinhentos reais), referente à recarga de saldo na carteira '
+        'MotoShift, paga via Pix em 15/08/2025 às 09:00, dando por este recibo '
+        'plena quitação do valor. Curitiba - PR, 15 de agosto de 2025. '
+        'Emitente (credor): MotoShift, em ambiente de simulação — o código de '
+        'autenticação abaixo faz as vezes da assinatura.',
   );
 }
 
-DocumentoFiscal fakeDocumentoNota({bool retidos = false}) =>
-    DocumentoFiscal.daNota(fakeNotaFiscal(retidos: retidos));
+DocumentoFiscal fakeDocumentoNota({bool retidos = false, bool anoDeTeste = false}) =>
+    DocumentoFiscal.daNota(fakeNotaFiscal(retidos: retidos, anoDeTeste: anoDeTeste));
 
 DocumentoFiscal fakeDocumentoComprovante() => DocumentoFiscal(
       tipo: TipoDocumento.reciboRecarga,

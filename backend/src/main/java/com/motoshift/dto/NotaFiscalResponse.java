@@ -3,6 +3,7 @@ package com.motoshift.dto;
 import com.motoshift.entity.NotaFiscal;
 import com.motoshift.entity.Usuario;
 import com.motoshift.service.fiscal.DocumentoDaParte;
+import com.motoshift.service.fiscal.LeiauteDanfse;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -23,6 +24,9 @@ public class NotaFiscalResponse {
     private Integer numero;
     private String serie;
     private String codigoVerificacao;
+
+    /** Os 50 dígitos da chave de acesso — o mesmo que {@code danfse.chaveAcesso}. */
+    private String chaveAcesso;
 
     private Long prestadorId;
     private String prestadorNome;
@@ -74,6 +78,14 @@ public class NotaFiscalResponse {
      */
     private String papel;
 
+    /**
+     * A nota no leiaute oficial do DANFSe v2.0 (NT SE/CGNFS-e nº 008/2026):
+     * os quadros na ordem e com os rótulos do modelo. É o que a tela e o PDF
+     * do app desenham; os campos soltos acima continuam para as listas e
+     * filtros.
+     */
+    private DanfseResponse danfse;
+
     public static NotaFiscalResponse from(NotaFiscal n, Usuario prestador, Usuario tomador,
                                           Long solicitanteId) {
         NotaFiscalResponse r = new NotaFiscalResponse();
@@ -116,6 +128,8 @@ public class NotaFiscalResponse {
         r.cancelada = n.isCancelada();
         r.motivoCancelamento = n.getMotivoCancelamento();
         r.papel = n.getPrestadorId().equals(solicitanteId) ? "prestador" : "tomador";
+        r.danfse = LeiauteDanfse.montar(n, prestador, tomador);
+        r.chaveAcesso = r.danfse.chaveAcesso();
         return r;
     }
 
@@ -158,4 +172,6 @@ public class NotaFiscalResponse {
     public boolean isCancelada() { return cancelada; }
     public String getMotivoCancelamento() { return motivoCancelamento; }
     public String getPapel() { return papel; }
+    public String getChaveAcesso() { return chaveAcesso; }
+    public DanfseResponse getDanfse() { return danfse; }
 }
