@@ -329,6 +329,25 @@ disso, a tela diz que o aparelho não respondeu e oferece tentar de novo.
 R: Porque num turno de três vagas são três chegadas. No turno ficaria uma hora
 só — a do primeiro —, e a pontualidade dos outros dois não existiria.
 
+### Publicar de novo: o turno que acabou vira rascunho
+
+- **Regra.** Turno finalizado, cancelado ou expirado do lojista tem
+  "Publicar de novo" (lista e detalhe). O formulário abre com título,
+  descrição, região, ponto, raio, valor, vagas e duração do turno de origem;
+  a data vai para o mesmo dia da semana da semana seguinte, mesmo horário —
+  e, se essa data já passou ou fura as 2 h de antecedência, para a próxima
+  semana que dá.
+- **Nada muda nas regras.** É o mesmo formulário e o mesmo
+  `POST /api/turnos`: confirmação do custo, antecedência e saldo valem igual,
+  e o backend confere de novo. Por isso não há endpoint novo.
+- **Onde.** `RepeticaoDeTurno` (a data e o que se copia),
+  `AgendarTurnoScreen(origem:)`, botão em `AcoesDoTurno` e no card de
+  `TurnosLojistaListaScreen`.
+
+**P: Por que não um endpoint "repetir turno"?**
+R: Porque repetir sem olhar é publicar sem confirmar o custo. O app só
+preenche; quem publica é o lojista, pelo caminho de sempre.
+
 ### Gorjeta: dinheiro a mais, pelo mesmo livro
 
 - **Regra.** Só o lojista do turno, só com o turno finalizado e só a quem

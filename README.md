@@ -435,6 +435,7 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | RF09 | Relatório financeiro/operacional mensal via IA |
 | RF10 | Turno publicado guarda o ponto de partida (lat/lng), que alimenta o filtro por distância e o mapa das duas pontas |
 | Check-in | O entregador registra chegada e saída (V16). A pontualidade — % de chegadas até 10 min após o início, nos últimos 90 dias — aparece no perfil e no perfil público; sem check-in, "Sem histórico" |
+| Publicar de novo | Turno finalizado, cancelado ou expirado do lojista abre o formulário de publicar já preenchido (mesmo lugar, raio, valor, vagas e duração), com a data no mesmo dia da semana da semana seguinte. Só no app: publica pelo mesmo `POST /api/turnos`, com a mesma confirmação de custo, antecedência e saldo |
 | Gorjeta | Na avaliação do entregador, o lojista pode dar R$ 5, 10, 20 ou outro valor (até R$ 50) do saldo disponível. Transferência no ledger (`bonus_enviado` → `bonus`), com comprovante, não NFS-e |
 | RF11 | Turno finalizado gera NFS-e — entregador é o prestador, lojista é o tomador, e **só o lojista emite e cancela**; o entregador vê, baixa e imprime. Todo lançamento do extrato gera o documento correspondente (nota, recibo ou comprovante), sempre simulado — ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |
 

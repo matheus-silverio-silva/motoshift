@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' show DateFormat;
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import '../../models/repeticao_de_turno.dart';
 import '../../models/turno.dart';
 import '../../models/usuario.dart';
 import '../../services/api_service.dart';
@@ -22,7 +23,12 @@ import '../../widgets/mapa_raio.dart';
 import '../../widgets/status_pill.dart';
 
 class AgendarTurnoScreen extends StatefulWidget {
-  const AgendarTurnoScreen({super.key});
+  const AgendarTurnoScreen({this.origem, super.key});
+
+  /// O turno que está sendo publicado de novo ("Publicar de novo"). Também
+  /// chega pela rota: `pushNamed(AppRoutes.publicarTurno, arguments: turno)`.
+  /// Nulo é o formulário em branco de sempre.
+  final Turno? origem;
 
   @override
   State<AgendarTurnoScreen> createState() => _AgendarTurnoScreenState();
@@ -57,6 +63,19 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
 
   bool _buscandoGps = false;
 
+  /// Preenchida quando o formulário nasce de um turno anterior.
+  RepeticaoDeTurno? _repeticao;
+  bool _origemLida = false;
+
+  /// Título e descrição do turno de origem, que o formulário não edita.
+  /// Título nulo é o automático ("Turno dd/MM"), gerado pela data escolhida.
+  String? _tituloFixo;
+  String? _descricao;
+
+  /// O endereço do turno de origem vale enquanto a região for a dele; se o
+  /// lojista reescrever a região, o texto novo é o endereço, como sempre.
+  String? _enderecoDaOrigem;
+
   @override
   void initState() {
     super.initState();
@@ -65,13 +84,53 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _definirPontoInicial());
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_origemLida) return;
+    _origemLida = true;
+    final daRota = ModalRoute.of(context)?.settings.arguments;
+    final origem = widget.origem ?? (daRota is Turno ? daRota : null);
+    if (origem != null) _preencherCom(origem);
+  }
+
+  /// Copia o turno de origem para o formulário. A data é a da
+  /// [RepeticaoDeTurno]; o resto, igual.
+  void _preencherCom(Turno origem) {
+    final r = RepeticaoDeTurno.de(origem);
+    _repeticao = r;
+    _tituloFixo = r.titulo;
+    _descricao = r.descricao;
+    _data = DateTime(r.inicio.year, r.inicio.month, r.inicio.day);
+    _horaInicio = TimeOfDay.fromDateTime(r.inicio);
+    _horaFim = TimeOfDay.fromDateTime(r.fim);
+    // Os limites são os dos controles: um turno antigo fora deles não pode
+    // deixar o slider num valor que ele não sabe desenhar.
+    _raio = origem.raioEntregaKm.clamp(1, 20).roundToDouble();
+    _vagas = origem.vagas.clamp(1, 20);
+    _valorCtrl.text =
+        origem.valorEstimado.toStringAsFixed(2).replaceAll('.', ',');
+    _regiaoCtrl.text = origem.regiao;
+    _enderecoDaOrigem = origem.endereco;
+    if (origem.latitude != null && origem.longitude != null) {
+      _centro = LatLng(origem.latitude!, origem.longitude!);
+      _origem = _OrigemDoPonto.repetido;
+    }
+  }
+
   /// Ordem de preferência para o ponto inicial: a loja cadastrada, o GPS e,
   /// enquanto o GPS não responde (ou se ele não responder), a cidade.
   Future<void> _definirPontoInicial() async {
     if (!mounted) return;
     final usuario = context.read<AuthService>().usuario;
 
-    _regiaoCtrl.text = _regiaoDoCadastro(usuario);
+    // Publicar de novo: região e ponto são os do turno de origem. O GPS nem é
+    // consultado quando o ponto veio junto — é o lugar onde o turno já foi.
+    if (_repeticao != null) {
+      if (_origem == _OrigemDoPonto.repetido) return;
+    } else {
+      _regiaoCtrl.text = _regiaoDoCadastro(usuario);
+    }
 
     // A loja marcada é o endereço que o texto diz: o GPS nem é consultado.
     if (usuario != null && usuario.temPontoDaLoja) {
@@ -151,7 +210,8 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: clock.now().add(const Duration(days: 1)),
+      // Preenchido (publicar de novo), o calendário abre na data sugerida.
+      initialDate: _data ?? clock.now().add(const Duration(days: 1)),
       firstDate: clock.now(),
       lastDate: clock.now().add(const Duration(days: 90)),
       builder: (ctx, child) => Theme(
@@ -172,8 +232,8 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
     final picked = await showTimePicker(
       context: context,
       initialTime: isStart
-          ? const TimeOfDay(hour: 8, minute: 0)
-          : const TimeOfDay(hour: 12, minute: 0),
+          ? _horaInicio ?? const TimeOfDay(hour: 8, minute: 0)
+          : _horaFim ?? const TimeOfDay(hour: 12, minute: 0),
       initialEntryMode: TimePickerEntryMode.inputOnly,
       builder: (ctx, child) => MediaQuery(
         data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true),
@@ -431,10 +491,15 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
     final regiao = _regiaoCtrl.text.trim().isEmpty
         ? 'Região não informada'
         : _regiaoCtrl.text.trim();
+    final endereco = _enderecoDaOrigem != null &&
+            regiao == _repeticao?.origem.regiao.trim()
+        ? _enderecoDaOrigem!
+        : regiao;
 
     final turno = Turno(
       lojistId: auth.usuario!.id!,
-      titulo: 'Turno ${DateFormat('dd/MM').format(inicio)}',
+      titulo: _tituloFixo ?? 'Turno ${DateFormat('dd/MM').format(inicio)}',
+      descricao: _descricao,
       regiao: regiao,
       dataInicio: inicio,
       dataFim: fim,
@@ -446,7 +511,7 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       // era o app que não mandava.
       latitude: _centro.latitude,
       longitude: _centro.longitude,
-      endereco: regiao,
+      endereco: endereco,
       vagas: _vagas,
     );
 
@@ -481,8 +546,10 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
       // pela barra lateral esta tela é a única da pilha — um `pop` seco ali
       // deixaria o Navigator vazio. Sem pilha, segue para a lista de turnos,
       // que é onde o turno recém-publicado aparece.
+      // `true` avisa quem abriu (a lista, o "Publicar de novo") que há turno
+      // novo para mostrar.
       if (Navigator.of(context).canPop()) {
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       } else {
         Navigator.pushReplacementNamed(context, AppRoutes.turnosLojista);
       }
@@ -522,7 +589,7 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Novo turno',
+                _repeticao == null ? 'Novo turno' : 'Publicar de novo',
                 style: tsBricolage(20, FontWeight.w800,
                     color: AppColors.ink),
               ),
@@ -533,6 +600,10 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
                     color: AppColors.muted),
               ),
               const SizedBox(height: 18),
+              if (_repeticao != null) ...[
+                _buildAvisoDaRepeticao(_repeticao!),
+                const SizedBox(height: 14),
+              ],
               // Data + Horário
               Row(
                 children: [
@@ -596,6 +667,10 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (_repeticao != null) ...[
+                  _buildAvisoDaRepeticao(_repeticao!),
+                  const SizedBox(height: 16),
+                ],
                 IntrinsicHeight(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -689,9 +764,10 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
     final horario = (_horaInicio != null && _horaFim != null)
         ? '${_fmtHora(_horaInicio!)} – ${_fmtHora(_horaFim!)}'
         : '--:-- – --:--';
-    final titulo = _data != null
-        ? 'Turno ${DateFormat('dd/MM').format(_data!)}'
-        : 'Novo turno';
+    final titulo = _tituloFixo ??
+        (_data != null
+            ? 'Turno ${DateFormat('dd/MM').format(_data!)}'
+            : 'Novo turno');
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -768,6 +844,35 @@ class _AgendarTurnoScreenState extends State<AgendarTurnoScreen> {
                 style: tsBricolage(16, FontWeight.w800, color: AppColors.ink),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// O que veio do turno de origem e o que mudou — a data. Nada é publicado
+  /// por estar preenchido: o botão e a confirmação do custo são os mesmos.
+  Widget _buildAvisoDaRepeticao(RepeticaoDeTurno r) {
+    final nome = r.origem.titulo.trim();
+    return Container(
+      key: const Key('aviso-repeticao'),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.tealSoft,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.replay_rounded, size: 18, color: AppColors.tealDeep),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Copiado de "$nome": mesmo lugar, raio, valor, vagas e horário. '
+              'A data foi para ${r.dataPorExtenso}. Confira antes de publicar.',
+              style: tsJakarta(12, FontWeight.w600,
+                  color: AppColors.tealDeep, height: 1.45),
+            ),
           ),
         ],
       ),
@@ -943,7 +1048,10 @@ enum _OrigemDoPonto {
   cidade,
   gps,
   loja,
-  escolhido;
+  escolhido,
+
+  /// O ponto do turno que está sendo publicado de novo.
+  repetido;
 
   /// O GPS só substitui o que é palpite. Loja cadastrada e ponto tocado no
   /// mapa são decisões do lojista.
@@ -958,6 +1066,7 @@ enum _OrigemDoPonto {
         _OrigemDoPonto.gps => Icons.my_location_rounded,
         _OrigemDoPonto.loja => Icons.storefront_rounded,
         _OrigemDoPonto.escolhido => Icons.touch_app_outlined,
+        _OrigemDoPonto.repetido => Icons.replay_rounded,
         _ => Icons.info_outline_rounded,
       };
 
@@ -968,6 +1077,8 @@ enum _OrigemDoPonto {
           'Ponto da sua loja, marcado em Dados pessoais. Toque no mapa para '
               'ajustar só este turno.',
         _OrigemDoPonto.escolhido => 'Ponto escolhido por você no mapa.',
+        _OrigemDoPonto.repetido =>
+          'Mesmo ponto do turno de origem. Toque no mapa para ajustar.',
         _OrigemDoPonto.cidade =>
           'Centro aproximado da sua cidade. Toque no mapa para marcar o ponto exato.',
         _OrigemDoPonto.padrao =>

@@ -184,8 +184,8 @@ regras de `TurnoService` no backend.
 | Aberto, com vaga | **Aceitar turno** | **Cancelar turno** (e **Finalizar turno**, se já há entregador) |
 | Aberto (já aceito por mim, multi-vaga), aceito | **Cheguei** (presença) · **Finalizar turno** · **Cancelar turno** | **Finalizar turno** · **Cancelar turno** |
 | Em andamento (alguém fez check-in) | **Encerrar turno** (presença) · **Finalizar turno** | **Finalizar turno** |
-| Finalizado, com avaliação pendente | **Avaliar a loja** | **Avaliar o entregador** / **Avaliar entregadores** |
-| Finalizado sem pendência, cancelado, expirado | Só o status por extenso — "Turno finalizado", "Turno cancelado" | idem |
+| Finalizado, com avaliação pendente | **Avaliar a loja** | **Avaliar o entregador** / **Avaliar entregadores** · **Publicar de novo** |
+| Finalizado sem pendência, cancelado, expirado | Só o status por extenso — "Turno finalizado", "Turno cancelado" | O status por extenso · **Publicar de novo** |
 
 - **Os dois participantes finalizam.** O backend aceita desde que o dinheiro
   passou a ser reservado na publicação: finalizar não cria compromisso, só
@@ -204,6 +204,13 @@ regras de `TurnoService` no backend.
   desconta 0,5 do score do entregador; o valor reservado volta inteiro.
 - O lojista vê **todos os inscritos** do turno, cada um com "Ver perfil" e,
   quando a nota dele falta, "Avaliar".
+- **Publicar de novo** (lojista, turno finalizado, cancelado ou expirado —
+  no detalhe e no card da lista, no celular; no desktop, no painel ao lado da
+  lista) abre *Publicar turno* preenchido com título, descrição, região,
+  ponto, raio, valor, vagas e duração. A data vai para o mesmo dia da semana
+  da semana seguinte, no mesmo horário (se já passou, a próxima que ainda
+  respeita as 2 h de antecedência). Nada é publicado sem a confirmação do
+  custo; ao publicar, a lista recarrega com o turno novo.
 - **A gorjeta mora na avaliação do entregador** (Avaliar o entregador e
   Avaliar entregadores, um seletor por card): opcional, "Sem gorjeta" vem
   marcado, R$ 5 · 10 · 20 ou outro valor até R$ 50. Não é tela nem botão

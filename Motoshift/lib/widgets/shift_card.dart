@@ -15,6 +15,7 @@ class ShiftCard extends StatelessWidget {
     this.pillLabel,
     this.pillVariant = PillVariant.ghost,
     this.trailing,
+    this.acao,
     this.onTap,
     super.key,
   });
@@ -37,6 +38,11 @@ class ShiftCard extends StatelessWidget {
 
   /// Widget opcional no lugar da pill (ex: botão "Aceitar")
   final Widget? trailing;
+
+  /// Ação secundária numa faixa própria, abaixo do conteúdo (ex.: "Publicar
+  /// de novo"), para não disputar a linha com a pill de status. Só na
+  /// hierarquia nova (com [horario]).
+  final Widget? acao;
   final VoidCallback? onTap;
 
   @override
@@ -135,7 +141,7 @@ class ShiftCard extends StatelessWidget {
           border: Border.all(color: AppColors.line, width: 1.5),
           boxShadow: AppColors.cardShadow,
         ),
-        child: Row(
+        child: _comAcao(Row(
           children: [
             Container(
               width: 44,
@@ -204,8 +210,22 @@ class ShiftCard extends StatelessWidget {
               ),
             ),
           ],
-        ),
+        )),
       ),
+    );
+  }
+
+  Widget _comAcao(Widget linha) {
+    if (acao == null) return linha;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        linha,
+        const SizedBox(height: 8),
+        const Divider(height: 1, color: AppColors.line),
+        Align(alignment: Alignment.centerRight, child: acao!),
+      ],
     );
   }
 }

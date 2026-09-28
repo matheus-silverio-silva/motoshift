@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/repeticao_de_turno.dart';
 import '../models/turno.dart';
 import '../models/usuario.dart';
 import '../presentation/providers/pendencias_provider.dart';
 import '../presentation/providers/turno_provider.dart';
 import '../routes/abrir_avaliacao.dart';
+import '../routes/app_routes.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import 'app_buttons.dart';
@@ -28,7 +30,10 @@ import 'app_buttons.dart';
 ///   cancelar o turno em andamento: com check-in feito, ele já começou;
 /// * qualquer participante pode fazer as duas coisas;
 /// * o turno finalizado não tem mais nada a fazer além de avaliar — e é o
-///   [OQueFalta] logo acima que lista a nota fiscal.
+///   [OQueFalta] logo acima que lista a nota fiscal;
+/// * o lojista publica de novo o turno que acabou (finalizado, cancelado ou
+///   expirado): o formulário abre preenchido, e publicar continua passando
+///   pela confirmação do custo — ver [RepeticaoDeTurno].
 class AcoesDoTurno extends StatefulWidget {
   const AcoesDoTurno({
     required this.turno,
@@ -76,6 +81,17 @@ class _AcoesDoTurnoState extends State<AcoesDoTurno> {
   @override
   Widget build(BuildContext context) {
     final acoes = _acoes();
+    if (_ehLojista && RepeticaoDeTurno.podeRepetir(_turno)) {
+      // Sem outra ação, o estado continua dito ao lado do botão.
+      if (acoes.isEmpty) acoes.add(_Inerte(turno: _turno));
+      acoes.add(GhostButton(
+        key: const Key('acao-publicar-de-novo'),
+        label: 'Publicar de novo',
+        icon: const Icon(Icons.replay_rounded,
+            size: 17, color: AppColors.tealDeep),
+        onPressed: _publicarDeNovo,
+      ));
+    }
     if (acoes.isEmpty) return _Inerte(turno: _turno);
     if (acoes.length == 1) return acoes.first;
     return widget.emLinha
@@ -102,12 +118,12 @@ class _AcoesDoTurnoState extends State<AcoesDoTurno> {
     switch (_turno.status) {
       case StatusTurno.cancelado:
       case StatusTurno.expirado:
-        return const [];
+        return [];
 
       case StatusTurno.finalizado:
         final pendentes =
             context.watch<PendenciasProvider>().avaliacoesDoTurno(_turno.id);
-        if (pendentes.isEmpty) return const [];
+        if (pendentes.isEmpty) return [];
         return [
           PrimaryButton(
             key: const Key('acao-avaliar'),
@@ -156,6 +172,14 @@ class _AcoesDoTurnoState extends State<AcoesDoTurno> {
             ),
         ];
     }
+  }
+
+  /// Abre o formulário de publicar preenchido com este turno. Se o novo for
+  /// publicado, quem hospeda recarrega (desktop) ou volta à lista (mobile).
+  Future<void> _publicarDeNovo() async {
+    final publicou = await Navigator.of(context)
+        .pushNamed(AppRoutes.publicarTurno, arguments: _turno);
+    if (publicou == true && mounted) widget.onMudou?.call();
   }
 
   Future<void> _avaliar() async {
