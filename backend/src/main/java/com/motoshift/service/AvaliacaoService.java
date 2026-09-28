@@ -91,7 +91,7 @@ public class AvaliacaoService {
         av.setComentario(req.getComentario());
         avaliacaoRepo.save(av);
 
-        atualizarMedia(avaliadoId);
+        recalcularMedia(avaliadoId);
 
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("mensagem", "Avaliação registrada com sucesso!");
@@ -229,10 +229,19 @@ public class AvaliacaoService {
         return ids;
     }
 
-    private void atualizarMedia(Long usuarioId) {
+    /**
+     * A média do avaliado, recalculada das avaliações que ele recebeu — a
+     * única fonte de {@code usuarios.media_avaliacao}. Ninguém grava a média à
+     * mão, nem a massa de demonstração: ela avalia por {@link #avaliar}, que
+     * passa por aqui. Sem avaliação nenhuma, a média é nula ("Sem
+     * avaliações"), e não zero.
+     */
+    @Transactional
+    public void recalcularMedia(Long usuarioId) {
         List<Avaliacao> todas = avaliacaoRepo.findByAvaliadoIdOrderByCriadoEmDesc(usuarioId);
-        double media = Math.round(
-                todas.stream().mapToInt(Avaliacao::getNota).average().orElse(0.0) * 10.0) / 10.0;
+        Double media = todas.isEmpty() ? null
+                : Math.round(todas.stream().mapToInt(Avaliacao::getNota).average().orElse(0.0)
+                        * 10.0) / 10.0;
 
         usuarioRepo.findById(usuarioId).ifPresent(u -> {
             u.setMediaAvaliacao(media);

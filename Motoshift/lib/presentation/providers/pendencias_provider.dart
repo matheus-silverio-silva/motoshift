@@ -24,7 +24,12 @@ class TurnoAAvaliar {
   final List<PendenteAvaliacao> pendentes;
 }
 
-/// O que ainda falta fazer depois que o turno acabou — avaliar e emitir nota.
+/// O que ainda falta fazer depois que o turno acabou — avaliar e, para o
+/// lojista, emitir a nota fiscal.
+///
+/// Nota a emitir é pendência só do lojista: é ele quem emite. Para o
+/// entregador, o mesmo dado vira [aguardandoEmissao] — informação, nunca
+/// tarefa, e por isso fora de [quantidadeNotas] e do painel de pendências.
 ///
 /// <h3>Por que é um provider, e não uma consulta por tela</h3>
 /// A mesma pendência aparecia em quatro lugares (painel do início, central de
@@ -47,12 +52,16 @@ class PendenciasProvider extends ChangeNotifier {
 
   List<TurnoAAvaliar> _avaliacoes = const [];
   List<NotaFiscalPendente> _notas = const [];
+  List<NotaFiscalPendente> _aguardando = const [];
   bool _carregando = false;
   bool _carregado = false;
   int? _usuarioCarregado;
 
   List<TurnoAAvaliar> get turnosAAvaliar => _avaliacoes;
   List<NotaFiscalPendente> get notasAEmitir => _notas;
+
+  /// Notas do entregador que o lojista ainda não emitiu. Vazia para o lojista.
+  List<NotaFiscalPendente> get aguardandoEmissao => _aguardando;
   bool get carregando => _carregando;
   bool get carregado => _carregado;
 
@@ -62,7 +71,10 @@ class PendenciasProvider extends ChangeNotifier {
   int get quantidadeAvaliacoes =>
       _avaliacoes.fold(0, (soma, t) => soma + t.pendentes.length);
 
+  /// Notas a emitir — sempre zero para o entregador.
   int get quantidadeNotas => _notas.length;
+
+  int get quantidadeAguardandoEmissao => _aguardando.length;
 
   /// Quem este usuário ainda precisa avaliar num turno específico.
   List<PendenteAvaliacao> avaliacoesDoTurno(int? turnoId) {
@@ -73,8 +85,8 @@ class PendenciasProvider extends ChangeNotifier {
     return const [];
   }
 
-  /// Notas que ainda podem ser emitidas por este usuário naquele turno — uma
-  /// por entregador, quando o turno tem mais de um.
+  /// Notas que o lojista ainda pode emitir naquele turno — uma por
+  /// entregador, quando o turno tem mais de um. Vazia para o entregador.
   List<NotaFiscalPendente> notasDoTurno(int? turnoId) {
     if (turnoId == null) return const [];
     return _notas.where((n) => n.turnoId == turnoId).toList();
@@ -97,9 +109,11 @@ class PendenciasProvider extends ChangeNotifier {
 
     final avaliacoes = await _carregarAvaliacoes(usuario!, id);
     final notas = await _carregarNotas();
+    final ehLojista = usuario.tipo == TipoUsuario.lojista;
 
     _avaliacoes = avaliacoes;
-    _notas = notas;
+    _notas = ehLojista ? notas : const [];
+    _aguardando = ehLojista ? const [] : notas;
     _carregando = false;
     _carregado = true;
     _usuarioCarregado = id;
@@ -111,6 +125,7 @@ class PendenciasProvider extends ChangeNotifier {
   void limpar() {
     _avaliacoes = const [];
     _notas = const [];
+    _aguardando = const [];
     _carregado = false;
     _usuarioCarregado = null;
     notifyListeners();

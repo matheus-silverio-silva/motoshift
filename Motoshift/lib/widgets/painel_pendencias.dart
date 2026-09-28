@@ -9,7 +9,8 @@ import '../theme/app_theme.dart';
 ///
 /// Existe por causa de duas coisas que o painel não mostrava: a avaliação
 /// pendente, que só aparecia se a pessoa fosse até o histórico procurar, e a
-/// nota fiscal, que é nova. Em vez de mais um card fixo ocupando espaço, o
+/// nota fiscal a emitir — que é do lojista: o entregador não emite, então a
+/// nota dele "aguardando emissão" não é pendência e não entra aqui. Em vez de mais um card fixo ocupando espaço, o
 /// painel só é montado quando há pendência — sem nada a fazer, ele não existe,
 /// e o início continua limpo.
 ///

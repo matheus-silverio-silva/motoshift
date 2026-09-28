@@ -65,11 +65,11 @@ class DocumentoFiscalServiceTest {
     // ── Cada lançamento, o seu documento ────────────────────────────────────
 
     @Test
-    @DisplayName("pagamento_recebido gera NFS-e com o entregador como prestador")
-    void pagamentoRecebido_nfse() {
+    @DisplayName("pagamento de turno gera NFS-e com o entregador como prestador — pedida pelo lojista")
+    void pagamento_nfse() {
         Turno t = cenario.turnoPago(lojista, "150.00", entregador);
 
-        DocumentoResponse doc = gerar(cenario.pagamentoRecebido(t, entregador), entregador);
+        DocumentoResponse doc = gerar(cenario.pagamentoEnviado(t, lojista, entregador), lojista);
 
         assertThat(doc.tipoDocumento()).isEqualTo(TipoDocumento.NFSE);
         assertThat(doc.nota().getPrestadorId()).isEqualTo(entregador);
@@ -80,21 +80,47 @@ class DocumentoFiscalServiceTest {
     }
 
     @Test
-    @DisplayName("os dois lados de um pagamento recebem a MESMA nota, não uma cada")
+    @DisplayName("os dois lados de um pagamento veem a MESMA nota: o lojista gera, o entregador consulta")
     void osDoisLadosMesmaNota() {
         Turno t = cenario.turnoPago(lojista, "150.00", entregador);
         Transacao enviado = cenario.pagamentoEnviado(t, lojista, entregador);
         Transacao recebido = cenario.pagamentoRecebido(t, entregador);
 
         DocumentoFiscalService.Resultado pelaLoja = documentos.emitir(enviado.getId(), lojista);
-        DocumentoFiscalService.Resultado peloEntregador = documentos.emitir(recebido.getId(), entregador);
+        DocumentoResponse peloEntregador = documentos.buscar(recebido.getId(), entregador);
 
         assertThat(pelaLoja.criado()).isTrue();
-        assertThat(peloEntregador.criado()).isFalse();
-        assertThat(peloEntregador.documento().nota().getId())
-                .isEqualTo(pelaLoja.documento().nota().getId());
+        assertThat(peloEntregador.nota().getId()).isEqualTo(pelaLoja.documento().nota().getId());
         assertThat(pelaLoja.documento().nota().getPapel()).isEqualTo("tomador");
-        assertThat(peloEntregador.documento().nota().getPapel()).isEqualTo("prestador");
+        assertThat(peloEntregador.nota().getPapel()).isEqualTo("prestador");
+    }
+
+    @Test
+    @DisplayName("o entregador que pede a NFS-e do próprio pagamento leva 403; o comprovante dele continua")
+    void entregadorNaoEmiteNfse() {
+        Turno t = cenario.turnoPago(lojista, "150.00", entregador);
+        Transacao recebido = cenario.pagamentoRecebido(t, entregador);
+
+        assertThatExceptionOfType(ResponseStatusException.class)
+                .isThrownBy(() -> documentos.emitir(recebido.getId(), entregador))
+                .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(403))
+                .withMessageContaining("emitida pelo lojista");
+        // E a consulta diz o que está acontecendo, em vez de "não encontrado".
+        assertThatExceptionOfType(ResponseStatusException.class)
+                .isThrownBy(() -> documentos.buscar(recebido.getId(), entregador))
+                .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(404))
+                .withMessageContaining("Aguardando emissão pelo lojista");
+
+        // Mesmo depois de emitida, o POST do entregador é pedido de emissão.
+        documentos.emitir(cenario.pagamentoEnviado(t, lojista, entregador).getId(), lojista);
+        assertThatExceptionOfType(ResponseStatusException.class)
+                .isThrownBy(() -> documentos.emitir(recebido.getId(), entregador))
+                .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(403));
+
+        // Comprovante não é nota: o dono continua gerando o dele.
+        cenario.recarregar(entregador, "50.00");
+        assertThat(gerar(doTipo(entregador, TipoTransacao.RECARGA), entregador).tipoDocumento())
+                .isEqualTo(TipoDocumento.RECIBO_RECARGA);
     }
 
     @Test
@@ -169,11 +195,11 @@ class DocumentoFiscalServiceTest {
     @DisplayName("gerar duas vezes devolve o mesmo documento")
     void idempotencia() {
         Turno t = cenario.turnoPago(lojista, "90.00", entregador);
-        Transacao recebido = cenario.pagamentoRecebido(t, entregador);
+        Transacao enviado = cenario.pagamentoEnviado(t, lojista, entregador);
         Transacao recarga = doTipo(lojista, TipoTransacao.RECARGA);
 
-        DocumentoFiscalService.Resultado a = documentos.emitir(recebido.getId(), entregador);
-        DocumentoFiscalService.Resultado b = documentos.emitir(recebido.getId(), entregador);
+        DocumentoFiscalService.Resultado a = documentos.emitir(enviado.getId(), lojista);
+        DocumentoFiscalService.Resultado b = documentos.emitir(enviado.getId(), lojista);
         assertThat(a.criado()).isTrue();
         assertThat(b.criado()).isFalse();
         assertThat(b.documento().nota().getId()).isEqualTo(a.documento().nota().getId());
@@ -228,16 +254,22 @@ class DocumentoFiscalServiceTest {
         Turno t = cenario.turnoPago(lojista, "120.00", entregador);
         Transacao recebido = cenario.pagamentoRecebido(t, entregador);
 
-        TransacaoResponse antes = linha(entregador, recebido.getId());
-        assertThat(antes.isDocumentoDisponivel()).isTrue();
-        assertThat(antes.getTipoDocumento()).isEqualTo(TipoDocumento.NFSE);
-        assertThat(antes.getDocumentoId()).isNull();
-
-        Long nota = documentos.emitir(recebido.getId(), entregador).documento().nota().getId();
-
-        assertThat(linha(entregador, recebido.getId()).getDocumentoId()).isEqualTo(nota);
-        // O lado do lojista aponta para a mesma nota.
         Transacao enviado = cenario.pagamentoEnviado(t, lojista, entregador);
+
+        // Antes da emissão: o lojista pode gerar; o entregador ainda não tem o
+        // que abrir — a nota é NFS-e, sem id, "aguardando emissão".
+        TransacaoResponse antesDoEntregador = linha(entregador, recebido.getId());
+        assertThat(antesDoEntregador.isDocumentoDisponivel()).isFalse();
+        assertThat(antesDoEntregador.getTipoDocumento()).isEqualTo(TipoDocumento.NFSE);
+        assertThat(antesDoEntregador.getDocumentoId()).isNull();
+        assertThat(linha(lojista, enviado.getId()).isDocumentoDisponivel()).isTrue();
+
+        Long nota = documentos.emitir(enviado.getId(), lojista).documento().nota().getId();
+
+        TransacaoResponse depoisDoEntregador = linha(entregador, recebido.getId());
+        assertThat(depoisDoEntregador.getDocumentoId()).isEqualTo(nota);
+        assertThat(depoisDoEntregador.isDocumentoDisponivel()).isTrue();
+        // O lado do lojista aponta para a mesma nota.
         assertThat(linha(lojista, enviado.getId()).getDocumentoId()).isEqualTo(nota);
         // E a reserva do lojista tem comprovante, não nota.
         Transacao reserva = cenario.doTurno(t, lojista, TipoTransacao.RESERVA);

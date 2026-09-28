@@ -47,7 +47,8 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(repo, carteiras, encoder, new JwtService("", 168));
+        authService = new AuthService(repo, carteiras, encoder, new JwtService("", 168),
+                mock(Reputacao.class));
 
         usuarioValido = new Usuario();
         // id é gerado pelo JPA (sem setter); simula um usuário já persistido
@@ -280,7 +281,8 @@ class AuthServiceTest {
 
         // "Restart": um AuthService novo, sem nenhum estado em memoria. Com o
         // mapa antigo este login passaria; o bloqueio estava so no objeto velho.
-        AuthService depoisDoDeploy = new AuthService(repo, carteiras, encoder, new JwtService("", 168));
+        AuthService depoisDoDeploy = new AuthService(repo, carteiras, encoder,
+                new JwtService("", 168), mock(Reputacao.class));
         LoginRequest certo = buildLoginRequest("motoboy@teste.com", "senha123");
 
         assertThatExceptionOfType(ResponseStatusException.class)

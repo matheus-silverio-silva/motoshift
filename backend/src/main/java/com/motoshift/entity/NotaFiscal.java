@@ -23,10 +23,10 @@ import java.util.UUID;
  * esse lançamento concluído.
  *
  * <p><b>Quem é quem.</b> Em uma entrega agendada o serviço é prestado pelo
- * entregador e tomado pelo lojista — sempre nessa direção, mesmo quando é o
- * lojista quem clica em "emitir". Por isso {@link #emitidaPorId} é separado de
- * {@link #prestadorId}: os dois lados podem disparar a emissão, mas o
- * documento tem um prestador só.
+ * entregador e tomado pelo lojista — sempre nessa direção, e quem clica em
+ * "emitir" é o lojista: a plataforma emite por conta do prestador, a pedido
+ * do tomador. Por isso {@link #emitidaPorId} é separado de
+ * {@link #prestadorId}: quem disparou a emissão não é quem prestou o serviço.
  *
  * <p>Uma nota por par (turno, prestador): um turno com três vagas gera três
  * notas, uma para cada entregador.
@@ -62,7 +62,10 @@ public class NotaFiscal {
     @Column(nullable = false)
     private Long tomadorId;
 
-    /** Quem disparou a emissão — pode ser qualquer um dos dois lados. */
+    /**
+     * Quem disparou a emissão — o lojista, desde que só ele emite. Notas
+     * anteriores a essa regra podem ter o entregador aqui.
+     */
     @Column(nullable = false)
     private Long emitidaPorId;
 

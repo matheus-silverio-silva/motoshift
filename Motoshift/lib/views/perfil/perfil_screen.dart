@@ -116,7 +116,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
         nome: nome,
         initials: initials,
         tipo: isLojista ? 'Lojista' : 'Motoboy',
-        score: usuario?.score,
+        // Score é do entregador. O lojista carregava um 5,0 fixo, que nunca
+        // mudava e aparecia aqui como "5.0 reputação".
+        score: isLojista ? null : usuario?.score,
+        novoNaPlataforma: !isLojista && usuario?.score == null,
       ),
       desktopTitle: 'Perfil',
       desktopSubtitle: isLojista ? 'Conta de lojista' : 'Conta de entregador',
@@ -317,12 +320,16 @@ class _PerfilHeader extends StatelessWidget {
     required this.initials,
     required this.tipo,
     this.score,
+    this.novoNaPlataforma = false,
   });
 
   final String nome;
   final String initials;
   final String tipo;
   final double? score;
+
+  /// Entregador sem histórico: no lugar do score, "Novo na plataforma".
+  final bool novoNaPlataforma;
 
   @override
   Widget build(BuildContext context) {
@@ -413,6 +420,14 @@ class _PerfilHeader extends StatelessWidget {
                           const SizedBox(width: 3),
                           Text(
                             '${score!.toStringAsFixed(1)} reputação',
+                            style: tsJakarta(11, FontWeight.w700,
+                                color: Colors.white),
+                          ),
+                        ] else if (novoNaPlataforma) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            'Novo na plataforma',
+                            key: const Key('perfil-novo-na-plataforma'),
                             style: tsJakarta(11, FontWeight.w700,
                                 color: Colors.white),
                           ),

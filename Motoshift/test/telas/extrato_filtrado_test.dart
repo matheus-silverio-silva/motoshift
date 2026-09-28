@@ -172,6 +172,8 @@ void main() {
 
     await tester.tap(find.byKey(const Key('extrato-exportar')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('exportar-planilha')));
+    await tester.pumpAndSettle();
 
     // O botão baixava o CSV e dizia "N exportados" sem entregar nada: o
     // conteúdo morria na memória do app. Agora o aviso diz onde ele está.

@@ -69,8 +69,9 @@ class LancamentoDetalheScreen extends StatelessWidget {
         const SizedBox(height: 16),
         // O documento deste lançamento: NFS-e para pagamento de turno, recibo
         // ou comprovante para o resto. O botão some quando não há documento
-        // (lançamento não concluído, Pix ainda pendente).
-        if (lancamento.documentoDisponivel) ...[
+        // (lançamento não concluído, Pix ainda pendente). A nota do entregador
+        // que a loja ainda não emitiu aparece como aviso, sem botão.
+        if (lancamento.documentoDisponivel || lancamento.aguardandoEmissao) ...[
           if (lancamento.documentoEmitido) ...[
             const Align(alignment: Alignment.center, child: SeloNotaEmitida()),
             const SizedBox(height: 8),

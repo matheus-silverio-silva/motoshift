@@ -64,17 +64,20 @@ public class RelatorioService {
     private final TransacaoRepository transacaoRepo;
     private final CobrancaRepository cobrancaRepo;
     private final AnthropicService anthropicService;
+    private final Reputacao reputacao;
 
     public RelatorioService(TurnoRepository turnoRepo,
                             UsuarioRepository usuarioRepo,
                             TransacaoRepository transacaoRepo,
                             CobrancaRepository cobrancaRepo,
-                            AnthropicService anthropicService) {
+                            AnthropicService anthropicService,
+                            Reputacao reputacao) {
         this.turnoRepo = turnoRepo;
         this.usuarioRepo = usuarioRepo;
         this.transacaoRepo = transacaoRepo;
         this.cobrancaRepo = cobrancaRepo;
         this.anthropicService = anthropicService;
+        this.reputacao = reputacao;
     }
 
     // -- Entregador ----------------------------------------------------------
@@ -109,7 +112,10 @@ public class RelatorioService {
                 ? emReais(total.divide(BigDecimal.valueOf(horas), 2, RoundingMode.HALF_UP))
                 : BigDecimal.ZERO.setScale(2));
         numeros.put("saquesNoPeriodo", emReais(saques));
-        numeros.put("score", motoboy.getScore() == null ? 5.0 : motoboy.getScore());
+        // Sem histórico o score não é reputação, é o ponto de partida da conta:
+        // o relatório diz isso em vez de apresentar um 5,0 que nada produziu.
+        Double score = reputacao.scoreVisivel(motoboy);
+        numeros.put("score", score);
         numeros.put("mediaAvaliacao", motoboy.getMediaAvaliacao());
 
         Map<String, List<ItemDeQuebra>> series = new LinkedHashMap<>();
@@ -354,7 +360,7 @@ public class RelatorioService {
                 + "- Horas trabalhadas: %s%n"
                 + "- Valor por hora: R$ %s%n"
                 + "- Saques no período: R$ %s%n"
-                + "- Score na plataforma: %s/5%n"
+                + "- Score na plataforma: %s%n"
                 + "- Ganhos por lojista: %s%n"
                 + "- Ganhos por dia da semana: %s%n"
                 + "- Ganhos por faixa de horário: %s%n%n"
@@ -369,7 +375,8 @@ public class RelatorioService {
                 numeros.get("turnosPagos"), numeros.get("ganhosTotais"),
                 numeros.get("ticketMedioPorTurno"), numeros.get("horasTrabalhadas"),
                 numeros.get("valorPorHora"), numeros.get("saquesNoPeriodo"),
-                numeros.get("score"),
+                numeros.get("score") == null ? "sem histórico ainda (novo na plataforma)"
+                        : numeros.get("score") + "/5",
                 resumir(series.get("porLojista")),
                 resumir(series.get("porDiaDaSemana")),
                 resumir(series.get("porFaixaDeHorario")));

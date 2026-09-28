@@ -159,7 +159,7 @@ Usuario fakeLojista() => Usuario(
       telefone: '(41) 99111-2222',
       tipo: TipoUsuario.lojista,
       documentoFederal: '12.345.678/0001-90',
-      score: 5.0,
+      // Lojista não tem score: a API não manda o campo.
       mediaAvaliacao: 4.8,
       dataNascimento: DateTime(1985, 3, 12),
       cidade: 'Curitiba',
@@ -354,7 +354,13 @@ Map<String, dynamic> fakeDashboardLojista() => {
 /// [retidos] escolhe a política de tributo: falso (padrão) é o valor
 /// aproximado, com líquido igual ao valor do serviço; verdadeiro é a retenção
 /// na fonte, com o líquido menor.
-NotaFiscal fakeNotaFiscal({bool retidos = false, bool cancelada = false}) {
+/// [papel] é o lado de quem abriu a nota: `prestador` (o entregador, que só
+/// vê) ou `tomador` (o lojista, que emite e cancela).
+NotaFiscal fakeNotaFiscal({
+  bool retidos = false,
+  bool cancelada = false,
+  String papel = 'prestador',
+}) {
   const base = 200.0;
   const iss = 10.0;
   const irrf = 3.0;
@@ -388,7 +394,7 @@ NotaFiscal fakeNotaFiscal({bool retidos = false, bool cancelada = false}) {
     canceladaEm: cancelada ? DateTime(2025, 8, 16, 10) : null,
     cancelada: cancelada,
     motivoCancelamento: cancelada ? 'Emitida por engano' : null,
-    papel: 'prestador',
+    papel: papel,
     transacaoId: 92,
     operacaoId: '2f1c9c30-0000-4000-8000-000000000001',
   );
@@ -487,18 +493,48 @@ List<Transacao> fakeExtrato() {
   ];
 }
 
-ResumoFinanceiro fakeResumoFinanceiro() {
+/// O resumo do entregador, como o backend o manda: sem nenhum campo de
+/// lojista.
+ResumoFinanceiro fakeResumoFinanceiro({double? retencoes}) {
   final dia = DateTime(
       dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
   return ResumoFinanceiro(
+    papel: 'prestador',
     dataInicio: dia.subtract(const Duration(days: 29)),
     dataFim: dia,
-    entradas: 620,
-    saidas: 200,
-    liquido: 420,
     disponivel: 820,
-    bloqueado: 360,
+    recebido: 620,
+    retencoes: retencoes,
+    sacado: 200,
     aReceber: 240,
+    porTipo: const [
+      TotalPorTipo(
+          tipo: TipoTransacao.pagamentoRecebido,
+          natureza: NaturezaTransacao.credito,
+          total: 620,
+          quantidade: 5),
+      TotalPorTipo(
+          tipo: TipoTransacao.saque,
+          natureza: NaturezaTransacao.debito,
+          total: 200,
+          quantidade: 1),
+    ],
+  );
+}
+
+/// O resumo do lojista: sem recebido, sacado nem a receber.
+ResumoFinanceiro fakeResumoLojista() {
+  final dia = DateTime(
+      dataAncoraGolden.year, dataAncoraGolden.month, dataAncoraGolden.day);
+  return ResumoFinanceiro(
+    papel: 'tomador',
+    dataInicio: dia.subtract(const Duration(days: 29)),
+    dataFim: dia,
+    disponivel: 820,
+    recarregado: 500,
+    pagoAEntregadores: 360,
+    devolvido: 120,
+    bloqueado: 360,
     comprometido: 360,
     reservasAbertas: const [
       ReservaAberta(turnoId: 301, titulo: 'Turno Noite — Hamburgueria', valor: 240),
@@ -511,10 +547,10 @@ ResumoFinanceiro fakeResumoFinanceiro() {
           total: 500,
           quantidade: 1),
       TotalPorTipo(
-          tipo: TipoTransacao.saque,
+          tipo: TipoTransacao.pagamentoEnviado,
           natureza: NaturezaTransacao.debito,
-          total: 200,
-          quantidade: 1),
+          total: 360,
+          quantidade: 3),
     ],
   );
 }
@@ -768,7 +804,10 @@ class FakeTurnoApi extends TurnoApi {
 /// que voltou. Um fake que devolvesse tudo faria o teste passar mesmo se a tela
 /// parasse de filtrar.
 class FakeCarteiraApi extends CarteiraApi {
-  FakeCarteiraApi() : super(ApiClient());
+  FakeCarteiraApi({this.papel = TipoUsuario.motoboy}) : super(ApiClient());
+
+  /// De quem é a carteira: o resumo do backend depende do papel.
+  final TipoUsuario papel;
 
   /// Registro do que a tela pediu — para o teste conferir o filtro enviado.
   final List<ExtratoFiltro> filtrosRecebidos = [];
@@ -782,6 +821,10 @@ class FakeCarteiraApi extends CarteiraApi {
   /// Documentos gerados pela tela — o teste confere qual lançamento foi pedido.
   final List<int> documentosGerados = [];
 
+  /// Documentos só consultados (GET). A NFS-e do entregador tem de vir por
+  /// aqui: quem emite é o lojista.
+  final List<int> documentosBuscados = [];
+
   @override
   Future<Carteira> buscarCarteira(int motoboyId) async => fakeCarteira();
 
@@ -792,8 +835,10 @@ class FakeCarteiraApi extends CarteiraApi {
   }
 
   @override
-  Future<DocumentoFiscal> buscarDocumento(int transacaoId) async =>
-      _documentoDe(transacaoId);
+  Future<DocumentoFiscal> buscarDocumento(int transacaoId) async {
+    documentosBuscados.add(transacaoId);
+    return _documentoDe(transacaoId);
+  }
 
   /// A regra do backend em miniatura: pagamento de turno vira NFS-e, o resto
   /// vira comprovante.
@@ -804,6 +849,17 @@ class FakeCarteiraApi extends CarteiraApi {
         : fakeDocumentoComprovante();
   }
 
+  /// Filtros pedidos na exportação em lista (a base do PDF).
+  final List<ExtratoFiltro> exportacoesEmLista = [];
+
+  @override
+  Future<List<Transacao>> exportarExtratoLista({
+    ExtratoFiltro filtro = const ExtratoFiltro(),
+  }) async {
+    exportacoesEmLista.add(filtro);
+    return _filtrar(filtro);
+  }
+
   @override
   Future<PaginaDoExtrato> buscarExtrato({
     ExtratoFiltro filtro = const ExtratoFiltro(),
@@ -812,8 +868,19 @@ class FakeCarteiraApi extends CarteiraApi {
   }) async {
     filtrosRecebidos.add(filtro);
 
+    final filtrados = _filtrar(filtro);
+
+    final de = pagina * tamanho;
+    final ate = (de + tamanho).clamp(0, filtrados.length);
+    return (
+      itens: de >= filtrados.length ? <Transacao>[] : filtrados.sublist(de, ate),
+      total: filtrados.length,
+    );
+  }
+
+  List<Transacao> _filtrar(ExtratoFiltro filtro) {
     final todos = fakeExtrato();
-    final filtrados = todos.where((t) {
+    return todos.where((t) {
       if (filtro.tipos.isNotEmpty && !filtro.tipos.contains(t.tipo)) {
         return false;
       }
@@ -827,13 +894,6 @@ class FakeCarteiraApi extends CarteiraApi {
       }
       return true;
     }).toList();
-
-    final de = pagina * tamanho;
-    final ate = (de + tamanho).clamp(0, filtrados.length);
-    return (
-      itens: de >= filtrados.length ? <Transacao>[] : filtrados.sublist(de, ate),
-      total: filtrados.length,
-    );
   }
 
   @override
@@ -841,7 +901,7 @@ class FakeCarteiraApi extends CarteiraApi {
     DateTime? dataInicio,
     DateTime? dataFim,
   }) async =>
-      fakeResumoFinanceiro();
+      papel == TipoUsuario.lojista ? fakeResumoLojista() : fakeResumoFinanceiro();
 
   @override
   Future<List<PontoDeFluxo>> buscarFluxo({
@@ -1129,7 +1189,10 @@ class FakeUsuarioApi extends UsuarioApi {
 /// O ApiService dos testes: mesma montagem do de produção, com cada domínio
 /// trocado pelo seu fake.
 class FakeApiService extends ApiService {
-  FakeApiService();
+  /// [tipoUsuario] é o papel da conta logada — o fake da carteira devolve o
+  /// resumo daquele papel, como o backend faz.
+  FakeApiService({TipoUsuario tipoUsuario = TipoUsuario.motoboy})
+      : _carteira = FakeCarteiraApi(papel: tipoUsuario);
 
   @override
   AuthApi get auth => _auth;
@@ -1149,7 +1212,7 @@ class FakeApiService extends ApiService {
 
   @override
   CarteiraApi get carteira => _carteira;
-  final CarteiraApi _carteira = FakeCarteiraApi();
+  final CarteiraApi _carteira;
 
   @override
   DashboardApi get dashboard => _dashboard;
@@ -1281,6 +1344,7 @@ Future<void> pumpGolden(
   Duration settle = const Duration(milliseconds: 600),
   int? turnoSelecionado,
   ApiService? apiFake,
+  Usuario? usuario,
 }) async {
   // A ordem importa: `physicalSize` precisa ser calculado com o DPR final.
   // Fazendo o inverso (multiplicar pelo DPR padrão da view, 3.0, e só depois
@@ -1294,10 +1358,10 @@ Future<void> pumpGolden(
 
   // Telas que imprimem data absoluta precisam de um fake de data fixa, senão
   // o golden vira o dia junto com o calendário — ver [FakeApiHistorico].
-  final api = apiFake ?? FakeApiService();
-  final usuario =
-      tipoUsuario == TipoUsuario.motoboy ? fakeMotoboy() : fakeLojista();
-  final auth = AuthService(api)..atualizarUsuarioLocal(usuario);
+  final api = apiFake ?? FakeApiService(tipoUsuario: tipoUsuario);
+  final logado = usuario ??
+      (tipoUsuario == TipoUsuario.motoboy ? fakeMotoboy() : fakeLojista());
+  final auth = AuthService(api)..atualizarUsuarioLocal(logado);
 
   final turnoProv = TurnoProvider(api);
   turnoProv.setDisponiveisExterno(fakeTurnosDisponiveis());
@@ -1762,6 +1826,31 @@ const List<int> _pngTransparente1x1 = <int>[
 /// espera a cópia terminar fica girando o spinner para sempre — `pumpAndSettle`
 /// estoura em vez de falhar a asserção. Quem exercita "Exportar CSV" chama
 /// isto antes do toque.
+/// Finge o plugin `printing` e guarda o que ele recebeu: o PDF e o nome do
+/// arquivo. Sem isto, "Baixar PDF" num teste cai num canal de plataforma que
+/// não existe.
+class PdfEntregue {
+  Uint8List? bytes;
+  String? nome;
+}
+
+PdfEntregue fingirImpressora(WidgetTester tester) {
+  final entregue = PdfEntregue();
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+    const MethodChannel('net.nfet.printing'),
+    (call) async {
+      if (call.method == 'sharePdf') {
+        final args = (call.arguments as Map).cast<String, dynamic>();
+        entregue.bytes = args['doc'] as Uint8List;
+        entregue.nome = args['name'] as String?;
+        return 1;
+      }
+      return null;
+    },
+  );
+  return entregue;
+}
+
 void fingirAreaDeTransferencia(WidgetTester tester) {
   tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
     SystemChannels.platform,

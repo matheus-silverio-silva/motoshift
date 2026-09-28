@@ -3,7 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 
-/// Entrega ao usuário o CSV que o backend gerou.
+/// Entrega ao usuário o CSV que o backend gerou — a opção "Planilha" do
+/// botão Exportar (a outra, PDF, é [entregarPdf]).
 ///
 /// <h3>Por que a área de transferência</h3>
 /// O botão "Exportar CSV" existia desde o extrato e não exportava nada: ele

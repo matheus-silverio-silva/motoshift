@@ -3,10 +3,12 @@ package com.motoshift.service;
 import com.motoshift.dto.NotaFiscalPendenteResponse;
 import com.motoshift.dto.NotaFiscalResponse;
 import com.motoshift.entity.Carteira;
+import com.motoshift.entity.Notificacao;
 import com.motoshift.entity.TipoTransacao;
 import com.motoshift.entity.Transacao;
 import com.motoshift.entity.Turno;
 import com.motoshift.repository.CarteiraRepository;
+import com.motoshift.repository.NotificacaoRepository;
 import com.motoshift.repository.TransacaoRepository;
 import com.motoshift.support.CenarioFinanceiro;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,8 +31,9 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
  *
  * O que estes testes prendem é a parte da regra que não é óbvia lendo o
  * serviço: que a nota documenta o pagamento que está no extrato (e concorda
- * com ele), que os dois lados emitem o MESMO documento, que a segunda chamada
- * não cria uma segunda nota, e que cancelar a nota não mexe no dinheiro.
+ * com ele), que só o lojista (tomador) emite e cancela — o entregador vê o
+ * MESMO documento, mas leva 403 ao pedir —, que a segunda chamada não cria uma
+ * segunda nota, e que cancelar a nota não mexe no dinheiro.
  *
  * Pagamentos de verdade, pela liquidação: um turno gravado direto como
  * FINALIZADO não tem pagamento nenhum no extrato, e a nota não tem o que
@@ -46,6 +49,7 @@ class NotaFiscalServiceTest {
     @Autowired private CenarioFinanceiro cenario;
     @Autowired private CarteiraRepository carteiraRepo;
     @Autowired private TransacaoRepository transacaoRepo;
+    @Autowired private NotificacaoRepository notificacaoRepo;
 
     private Long lojista;
     private Long motoboy;
@@ -64,13 +68,15 @@ class NotaFiscalServiceTest {
     void partesDaNota() {
         Turno turno = cenario.turnoPago(lojista, "120.00", motoboy);
 
-        NotaFiscalResponse nota = notas.emitir(turno.getId(), motoboy, motoboy).nota();
+        NotaFiscalResponse nota = notas.emitir(turno.getId(), motoboy, lojista).nota();
 
+        // Quem emite é o lojista, mas o documento continua do entregador:
+        // prestador é quem prestou, não quem clicou.
         assertThat(nota.getPrestadorId()).isEqualTo(motoboy);
         assertThat(nota.getPrestadorNome()).isEqualTo("Entregador de Teste");
         assertThat(nota.getTomadorId()).isEqualTo(lojista);
         assertThat(nota.getTomadorNome()).isEqualTo("Loja de Teste");
-        assertThat(nota.getPapel()).isEqualTo("prestador");
+        assertThat(nota.getPapel()).isEqualTo("tomador");
         assertThat(nota.getNumero()).isPositive();
         assertThat(nota.getCodigoVerificacao()).matches("[0-9A-F]{4}-[0-9A-F]{4}");
 
@@ -88,7 +94,7 @@ class NotaFiscalServiceTest {
         Turno turno = cenario.turnoPago(lojista, "200.00", motoboy);
         Transacao pagamento = cenario.pagamentoRecebido(turno, motoboy);
 
-        NotaFiscalResponse nota = notas.emitir(turno.getId(), motoboy, motoboy).nota();
+        NotaFiscalResponse nota = notas.emitir(turno.getId(), motoboy, lojista).nota();
 
         // 5% de 200 = 10,00 ; 1,5% de 200 = 3,00 — valor aproximado, não retido.
         assertThat(nota.isTributosRetidos()).isFalse();
@@ -126,21 +132,50 @@ class NotaFiscalServiceTest {
     }
 
     @Test
-    @DisplayName("lojista e entregador emitem o mesmo documento, não um cada")
-    void osDoisLadosEmitemAMesmaNota() {
+    @DisplayName("o lojista emite; o entregador lê a MESMA nota, com o papel dele")
+    void lojistaEmiteEntregadorLe() {
         Turno turno = cenario.turnoPago(lojista, "90.00", motoboy);
 
         NotaFiscalService.Emissao pelaLoja = notas.emitir(turno.getId(), motoboy, lojista);
-        NotaFiscalService.Emissao peloEntregador = notas.emitirParaPagamento(
-                cenario.pagamentoRecebido(turno, motoboy), motoboy);
+        NotaFiscalService.Emissao denovo = notas.emitirParaPagamento(
+                cenario.pagamentoRecebido(turno, motoboy), lojista);
+        NotaFiscalResponse lidaPeloEntregador = notas.buscar(pelaLoja.nota().getId(), motoboy);
 
         assertThat(pelaLoja.criada()).isTrue();
-        assertThat(peloEntregador.criada()).isFalse();
-        assertThat(peloEntregador.nota().getId()).isEqualTo(pelaLoja.nota().getId());
+        assertThat(denovo.criada()).isFalse();
+        assertThat(denovo.nota().getId()).isEqualTo(pelaLoja.nota().getId());
 
         // O papel muda com quem pergunta; o documento, não.
         assertThat(pelaLoja.nota().getPapel()).isEqualTo("tomador");
-        assertThat(peloEntregador.nota().getPapel()).isEqualTo("prestador");
+        assertThat(lidaPeloEntregador.getPapel()).isEqualTo("prestador");
+        assertThat(lidaPeloEntregador.getId()).isEqualTo(pelaLoja.nota().getId());
+    }
+
+    @Test
+    @DisplayName("o entregador que pede a emissão leva 403 — pelo turno e pelo pagamento, antes e depois da nota existir")
+    void entregadorNaoEmite() {
+        Turno turno = cenario.turnoPago(lojista, "90.00", motoboy);
+        Transacao recebido = cenario.pagamentoRecebido(turno, motoboy);
+
+        assertThatExceptionOfType(ResponseStatusException.class)
+                .isThrownBy(() -> notas.emitir(turno.getId(), motoboy, motoboy))
+                .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(403))
+                .withMessageContaining("emitida pelo lojista");
+        assertThatExceptionOfType(ResponseStatusException.class)
+                .isThrownBy(() -> notas.emitir(turno.getId(), null, motoboy))
+                .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(403));
+        assertThatExceptionOfType(ResponseStatusException.class)
+                .isThrownBy(() -> notas.emitirParaPagamento(recebido, motoboy))
+                .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(403))
+                .withMessageContaining("emitida pelo lojista");
+        assertThat(notas.listarDoUsuario(motoboy)).isEmpty();
+
+        // Com a nota já emitida o pedido continua sendo de emissão, e continua 403:
+        // o caminho do entregador é a consulta.
+        notas.emitir(turno.getId(), motoboy, lojista);
+        assertThatExceptionOfType(ResponseStatusException.class)
+                .isThrownBy(() -> notas.emitirParaPagamento(recebido, motoboy))
+                .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(403));
     }
 
     @Test
@@ -151,7 +186,7 @@ class NotaFiscalServiceTest {
         cenario.inscrever(turno, motoboy);
 
         assertThatExceptionOfType(ResponseStatusException.class)
-                .isThrownBy(() -> notas.emitir(turno.getId(), motoboy, motoboy))
+                .isThrownBy(() -> notas.emitir(turno.getId(), motoboy, lojista))
                 .withMessageContaining("finalizado");
     }
 
@@ -159,7 +194,7 @@ class NotaFiscalServiceTest {
     @DisplayName("quem não participou do turno não emite nem lê a nota")
     void estranhoNaoPassa() {
         Turno turno = cenario.turnoPago(lojista, "70.00", motoboy);
-        NotaFiscalResponse nota = notas.emitir(turno.getId(), motoboy, motoboy).nota();
+        NotaFiscalResponse nota = notas.emitir(turno.getId(), motoboy, lojista).nota();
 
         assertThatExceptionOfType(ResponseStatusException.class)
                 .isThrownBy(() -> notas.emitir(turno.getId(), motoboy, estranho));
@@ -174,30 +209,34 @@ class NotaFiscalServiceTest {
     }
 
     @Test
-    @DisplayName("o turno sai das pendências assim que a nota é emitida")
+    @DisplayName("o turno sai das pendências — a emitir do lojista, aguardando do entregador — assim que a nota é emitida")
     void pendenciaSomeDepoisDeEmitir() {
         Turno turno = cenario.turnoPago(lojista, "110.00", motoboy);
 
         assertThat(idsPendentes(motoboy, false)).contains(turno.getId());
         assertThat(idsPendentes(lojista, true)).contains(turno.getId());
 
-        notas.emitir(turno.getId(), motoboy, motoboy);
+        notas.emitir(turno.getId(), motoboy, lojista);
 
         assertThat(idsPendentes(motoboy, false)).doesNotContain(turno.getId());
         assertThat(idsPendentes(lojista, true)).doesNotContain(turno.getId());
     }
 
     @Test
-    @DisplayName("cancelar a nota não estorna o pagamento, e gerar de novo devolve a cancelada")
+    @DisplayName("só o lojista cancela; cancelar não estorna o pagamento, e gerar de novo devolve a cancelada")
     void cancelarNaoMexeNoDinheiro() {
         Turno turno = cenario.turnoPago(lojista, "60.00", motoboy);
-        NotaFiscalResponse nota = notas.emitir(turno.getId(), motoboy, motoboy).nota();
+        NotaFiscalResponse nota = notas.emitir(turno.getId(), motoboy, lojista).nota();
 
         assertThatExceptionOfType(ResponseStatusException.class)
-                .isThrownBy(() -> notas.cancelar(nota.getId(), "engano", lojista))
-                .withMessageContaining("prestador");
+                .isThrownBy(() -> notas.cancelar(nota.getId(), "engano", motoboy))
+                .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(403))
+                .withMessageContaining("cancelada pelo lojista");
+        assertThatExceptionOfType(ResponseStatusException.class)
+                .isThrownBy(() -> notas.cancelar(nota.getId(), "engano", estranho))
+                .satisfies(e -> assertThat(e.getStatusCode().value()).isEqualTo(403));
 
-        NotaFiscalResponse cancelada = notas.cancelar(nota.getId(), "engano", motoboy);
+        NotaFiscalResponse cancelada = notas.cancelar(nota.getId(), "engano", lojista);
         assertThat(cancelada.isCancelada()).isTrue();
         assertThat(cancelada.getMotivoCancelamento()).isEqualTo("engano");
 
@@ -207,10 +246,35 @@ class NotaFiscalServiceTest {
                 .noneMatch(t -> t.getTipo() == TipoTransacao.ESTORNO);
 
         // Uma nota por pagamento: a cancelada não é substituída.
-        NotaFiscalService.Emissao denovo = notas.emitir(turno.getId(), motoboy, motoboy);
+        NotaFiscalService.Emissao denovo = notas.emitir(turno.getId(), motoboy, lojista);
         assertThat(denovo.criada()).isFalse();
         assertThat(denovo.nota().getId()).isEqualTo(nota.getId());
         assertThat(denovo.nota().isCancelada()).isTrue();
+    }
+
+    @Test
+    @DisplayName("o entregador é avisado quando a nota dele é emitida e quando é cancelada")
+    void entregadorAvisado() {
+        Turno turno = cenario.turnoPago(lojista, "75.00", motoboy);
+        NotaFiscalResponse nota = notas.emitir(turno.getId(), motoboy, lojista).nota();
+
+        assertThat(avisos(motoboy, "nota_fiscal_emitida"))
+                .anySatisfy(n -> {
+                    assertThat(n.getReferenciaId()).isEqualTo(nota.getId());
+                    assertThat(n.getMensagem()).contains("Loja de Teste emitiu");
+                });
+        // Quem clicou acabou de ver a nota: não recebe aviso da própria ação.
+        assertThat(avisos(lojista, "nota_fiscal_emitida")).isEmpty();
+
+        notas.cancelar(nota.getId(), null, lojista);
+
+        assertThat(avisos(motoboy, "nota_fiscal_cancelada"))
+                .anySatisfy(n -> {
+                    assertThat(n.getReferenciaId()).isEqualTo(nota.getId());
+                    assertThat(n.getMensagem()).contains("Loja de Teste cancelou")
+                            .doesNotContain("prestador");
+                });
+        assertThat(avisos(lojista, "nota_fiscal_cancelada")).isEmpty();
     }
 
     @Test
@@ -222,7 +286,7 @@ class NotaFiscalServiceTest {
                 .extracting(NotaFiscalPendenteResponse::getPrestadorId)
                 .containsExactlyInAnyOrder(motoboy, estranho);
 
-        NotaFiscalResponse doEstranho = notas.emitir(turno.getId(), estranho, estranho).nota();
+        NotaFiscalResponse doEstranho = notas.emitir(turno.getId(), estranho, lojista).nota();
 
         assertThat(idsPendentes(estranho, false)).doesNotContain(turno.getId());
         assertThat(notas.pendentes(lojista, true))
@@ -238,7 +302,7 @@ class NotaFiscalServiceTest {
     @DisplayName("a nota aparece na lista dos dois participantes, e só deles")
     void listaDosDoisLados() {
         Turno turno = cenario.turnoPago(lojista, "130.00", motoboy);
-        NotaFiscalResponse nota = notas.emitir(turno.getId(), motoboy, motoboy).nota();
+        NotaFiscalResponse nota = notas.emitir(turno.getId(), motoboy, lojista).nota();
 
         assertThat(notas.listarDoUsuario(motoboy))
                 .extracting(NotaFiscalResponse::getId).contains(nota.getId());
@@ -253,6 +317,12 @@ class NotaFiscalServiceTest {
     private List<Long> idsPendentes(Long usuarioId, boolean ehLojista) {
         return notas.pendentes(usuarioId, ehLojista).stream()
                 .map(NotaFiscalPendenteResponse::getTurnoId)
+                .toList();
+    }
+
+    private List<Notificacao> avisos(Long usuarioId, String tipo) {
+        return notificacaoRepo.findTop50ByUsuarioIdOrderByCriadoEmDesc(usuarioId).stream()
+                .filter(n -> tipo.equals(n.getTipo()))
                 .toList();
     }
 

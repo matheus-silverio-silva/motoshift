@@ -75,12 +75,14 @@ class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
       final lista = await api.turnos.listarInscritos(turnoId);
       // A nota vem do perfil público, uma consulta por inscrito. São poucos —
       // no máximo o número de vagas — e é a rota que a LGPD deixou de pé.
+      // É a MÉDIA DAS AVALIAÇÕES, que é o que a estrela significa em todo o
+      // app; antes vinha o score (reputação) desenhado com estrela.
       final inscritos = await Future.wait(lista.map((m) async {
         final id = (m['motoboyId'] as num).toInt();
         final nome = m['nome'] as String? ?? 'Entregador';
         double? nota;
         try {
-          nota = (await api.usuarios.buscarPerfilPublico(id)).score;
+          nota = (await api.usuarios.buscarPerfilPublico(id)).mediaAvaliacao;
         } catch (_) {
           nota = null;
         }

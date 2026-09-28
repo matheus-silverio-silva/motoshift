@@ -50,7 +50,7 @@ Pacote raiz: `com.motoshift`. Arquitetura em camadas clássica:
 | **Repository** | `repository/` | Acesso a dados (Spring Data JPA) |
 | **Entity** | `entity/` | Tabelas do banco (`Usuario`, `Turno`, `Carteira`, `Transacao`, `Avaliacao`) |
 | **DTO** | `dto/` | Objetos de transferência (separa API do modelo interno) |
-| **Config** | `config/` | `MassaDemonstracao` (massa de teste: `popular()` e `resetar()`), `DataInitializer` (gatilho em dev) e `ResetDaMassaNoBoot` (reset com trava em qualquer ambiente) |
+| **Config** | `config/` | `MassaDemonstracao` (massa de teste: `popular()`, `resetar()` e `apagarTudoERecriar()`), `DataInitializer` (gatilho em dev) e `ResetDaMassaNoBoot` (os dois resets, com trava, em qualquer ambiente) |
 
 **Fluxo de uma requisição** (ex: aceitar turno):
 `PUT /api/turnos/{id}/aceitar` → `TurnoController` → `TurnoService.aceitar()`
@@ -93,8 +93,8 @@ Android) ou `localhost:8080`.
 | RF03 | Cadastro: CNPJ (14 díg.) / CNH (11 díg.) | `AuthService.registrar()` | parcial |
 | RF04 | Publicar turno, antecedência mínima de 2h | `TurnoService.criar()` | ✅ |
 | RF05 | Reservar turno, sem conflito de horário | `TurnoService.aceitar()` | ✅ |
-| RF06 | Confirmação dupla credita a carteira (Wallet) | `TurnoService.finalizar()` + `confirmar*()` | — |
-| RF07 | Cancelar < 1h penaliza o score (−0.5) | `TurnoService.cancelar()` | — |
+| RF06 | Finalizar transfere o valor reservado para o entregador, na mesma transação | `TurnoService.finalizar()` + `PagamentoTurnoService.liquidar()` | ✅ |
+| RF07 | Cancelar < 1h penaliza o score do entregador (−0.5) | `TurnoService.cancelar()` + `Reputacao` | ✅ |
 
 **Regras de negócio mais "perguntáveis":**
 - *Antecedência de 2h:* `LocalDateTime.now().plusHours(2)` — turno antes disso é rejeitado (HTTP 400).
@@ -106,6 +106,7 @@ Android) ou `localhost:8080`.
   **disponível** do entregador. Não há confirmação a dar: o compromisso foi assumido na publicação.
   A dupla confirmação manual que existia aqui foi removida (V13) — ver `docs/financeiro/FLUXO-FINANCEIRO.md`.
 - *Penalidade de score:* cancelamento com menos de 1h subtrai 0.5 (mínimo 0.0).
+  A regra (valor inicial e penalidade) mora em `Reputacao`, num lugar só.
 
 ---
 
@@ -133,10 +134,14 @@ Android) ou `localhost:8080`.
 - **Integridade no banco.** Desde a V11 são 16 `FOREIGN KEY` com
   `ON DELETE RESTRICT`. As entidades continuam referenciando por `Long`, sem
   `@ManyToOne` — decisões separadas, explicadas no DER.
-- **Massa de demonstração:** `MassaDemonstracao` (`popular()` / `resetar()`).
-  Em dev nasce com o banco vazio; em produção é recriada pelo reset com trava
-  (`MOTOSHIFT_SEED_RESET=confirmo`), com datas sempre calculadas a partir do
-  momento em que roda. O passo a passo está no README.
+- **Massa de demonstração:** `MassaDemonstracao` — cerca de cinco meses de
+  história (recargas, turnos pagos toda semana, saques, avaliações, notas
+  emitidas pelo lojista) gravados pelos mesmos serviços do app, e não por
+  INSERT. Em dev nasce com o banco vazio; em produção é recriada por um de dois
+  resets com trava: `MOTOSHIFT_SEED_RESET=confirmo` (só a massa) ou
+  `MOTOSHIFT_SEED_RESET=confirmo-apagar-tudo` (todos os dados de negócio, com
+  DELETE na ordem das FKs; o `flyway_schema_history` fica). Datas sempre
+  calculadas a partir do momento em que roda. O passo a passo está no README.
 
 ---
 
@@ -204,11 +209,43 @@ As entidades continuam com `Long` em vez de `@ManyToOne` porque o app nunca
 navega por objeto — integridade é do banco, navegação seria custo sem uso.
 
 **P: O que é o score?**
-R: Reputação do motoboy (0 a 5). Cancelamento tardio (<1h) penaliza em 0.5;
-avaliações dos lojistas alimentam a média. O "score de 30 dias atrás" da tela
-de análise é **estimativa** (reverte as penalizações da janela) e vai rotulado
-como tal na resposta da API — medir de verdade exigiria uma tabela de eventos
-de score.
+R: Reputação do **entregador** (0 a 5) — o lojista não tem score. Começa em
+5.0 e cada cancelamento tardio (<1h) tira 0.5; nenhum outro evento o muda, e
+ninguém o grava à mão (nem a massa de demonstração, que cancela pelo próprio
+`TurnoService`). Enquanto o entregador não tem histórico — nenhum turno
+concluído nem cancelado —, a API devolve o score **nulo** e o app diz "Novo na
+plataforma": 5.0 ali seria o ponto de partida da conta apresentado como
+reputação conquistada. A **avaliação** é outra coisa: a média das notas que a
+pessoa recebeu, recalculada por `AvaliacaoService` a cada avaliação e nula
+antes da primeira. No app, estrela é sempre avaliação, nunca score. O "score
+de 30 dias atrás" da tela de análise é **estimativa** (reverte as penalizações
+da janela) e vai rotulado como tal na resposta da API — medir de verdade
+exigiria uma tabela de eventos de score.
+
+**P: Os números da demonstração foram escritos à mão?**
+R: Não. A massa passa pelos serviços de verdade: a recarga pelo
+`CobrancaService`, o aceite, a finalização e o cancelamento pelo
+`TurnoService`, a avaliação pelo `AvaliacaoService` e a nota pelo
+`NotaFiscalService`, a pedido do lojista. Por isso o score do Thiago é 4,5 —
+ele cancelou um turno a menos de 1h do início, e a regra tirou 0,5 —, as
+médias são as das notas que cada um recebeu, as notificações são as que o
+código gera hoje, e a massa passa na mesma conferência de consistência do
+ledger que o banco de produção. A única coisa que vai direto ao repositório é
+o turno do passado: a RF04 não deixa publicar com menos de 2h de antecedência,
+e um turno de três meses atrás não tem como respeitá-la hoje — ele nasce pelo
+repositório e reserva o dinheiro pelo mesmo serviço da publicação.
+
+**P: Quem emite a nota fiscal? A NFS-e não é do prestador?**
+R: No mundo real, sim: a NFS-e sai do CNPJ de quem presta — aqui, o entregador
+MEI. No MotoShift o documento continua com o entregador como **prestador** e o
+lojista como **tomador**, mas quem **pede** a emissão (e o cancelamento) é só o
+lojista: a plataforma emite por conta do entregador, a pedido de quem pagou. É
+o lojista quem precisa do documento para lançar a despesa e quem tem o
+cadastro fiscal completo; o entregador vê, baixa e imprime, e é avisado quando
+a nota sai. O modelo separa as duas coisas — `prestador_id` é quem prestou,
+`emitida_por_id` é quem pediu —, e o entregador que tenta emitir leva 403.
+Numa emissão real, a plataforma precisaria de autorização do MEI no emissor;
+isso e o resto do que faltaria estão em `docs/financeiro/FISCAL.md`.
 
 **P: E se a API da IA cair?**
 R: A análise de score continua respondendo os números, só sem o texto
@@ -236,7 +273,9 @@ agendados (hoje a saída é ligar os jobs em uma instância só).
 
 ### Glossário rápido
 - **Turno:** bloco de tempo que o lojista publica e o motoboy reserva.
-- **Wallet/Carteira:** saldo do motoboy, creditado ao concluir turnos.
-- **Score:** nota de reputação do motoboy.
+- **Wallet/Carteira:** saldo de cada conta. O lojista recarrega e reserva o
+  valor de cada turno publicado; o entregador recebe na finalização e saca.
+- **Score:** reputação do entregador; só aparece depois do primeiro turno.
+- **Avaliação:** média das notas recebidas, dos dois lados.
 - **DTO:** objeto que trafega entre app e API (não expõe a entidade do banco).
 - **Provider:** mecanismo de gerência de estado do Flutter usado no app.

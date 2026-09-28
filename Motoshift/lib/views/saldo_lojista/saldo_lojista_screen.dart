@@ -248,7 +248,7 @@ class _SaldoLojistaScreenState extends State<SaldoLojistaScreen> {
   /// Agora o número é o que está de fato bloqueado na carteira, turno a turno.
   Widget _buildComprometidos() {
     final reservas = _resumo?.reservasAbertas ?? const <ReservaAberta>[];
-    final total = _resumo?.comprometido ?? 0;
+    final total = _resumo?.comprometido;
 
     return PanelCard(
       title: 'Comprometido em turnos',
@@ -299,7 +299,7 @@ class _SaldoLojistaScreenState extends State<SaldoLojistaScreen> {
                               style: tsJakarta(12.5, FontWeight.w700,
                                   color: AppColors.text)),
                         ),
-                        Text('R\$ ${total.toStringAsFixed(0)}',
+                        Text(total == null ? '—' : 'R\$ ${total.toStringAsFixed(0)}',
                             key: const Key('saldo-lojista-comprometido'),
                             style: tsBricolage(15, FontWeight.w800,
                                 color: AppColors.ink)),

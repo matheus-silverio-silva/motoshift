@@ -30,7 +30,12 @@ public class UsuarioResponse {
     private String enderecoComercial;
     private LocalDateTime criadoEm;
 
-    public static UsuarioResponse from(Usuario u) {
+    /**
+     * @param score o score visível ({@code Reputacao.scoreVisivel}): nulo para
+     *              o lojista e para o entregador sem histórico. Não sai de
+     *              {@code u.getScore()} direto — ver {@code Reputacao}.
+     */
+    public static UsuarioResponse from(Usuario u, Double score) {
         UsuarioResponse r = new UsuarioResponse();
         r.id = u.getId();
         r.nome = u.getNome();
@@ -39,7 +44,7 @@ public class UsuarioResponse {
         r.tipo = u.getTipo();
         r.documentoFederal = u.getDocumentoFederal();
         r.fotoPerfil = u.getFotoPerfil();
-        r.score = u.getScore();
+        r.score = score;
         r.mediaAvaliacao = u.getMediaAvaliacao();
         r.dataNascimento = u.getDataNascimento();
         r.cidade = u.getCidade();

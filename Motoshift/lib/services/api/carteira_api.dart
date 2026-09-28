@@ -70,6 +70,22 @@ class CarteiraApi {
     return _client.getTexto('/carteira/extrato/exportar${_query(query)}');
   }
 
+  /// O mesmo extrato do CSV, em JSON e sem paginação — a base do PDF.
+  ///
+  /// Uma chamada só, com os mesmos filtros: baixar página por página em laço
+  /// para montar o arquivo seria N idas ao servidor para o que ele já sabe
+  /// devolver de uma vez.
+  Future<List<Transacao>> exportarExtratoLista({
+    ExtratoFiltro filtro = const ExtratoFiltro(),
+  }) async {
+    final query = {...filtro.parametros, 'formato': 'json'};
+    final lista =
+        await _client.get('/carteira/extrato/exportar${_query(query)}') as List<dynamic>;
+    return lista
+        .map((e) => Transacao.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   /// Série de entradas e saídas para o gráfico.
   Future<List<PontoDeFluxo>> buscarFluxo({
     String agrupamento = 'dia',

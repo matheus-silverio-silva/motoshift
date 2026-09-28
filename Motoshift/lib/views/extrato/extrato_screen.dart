@@ -4,11 +4,16 @@ import 'package:provider/provider.dart';
 
 import '../../models/extrato_filtro.dart';
 import '../../models/transacao.dart';
+import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/relatorio_pdf.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../utils/exportar_csv.dart';
+import '../../utils/exportar_pdf.dart';
+import '../../widgets/escolher_exportacao.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/documento/botao_documento.dart';
 import 'extrato_filtros.dart';
@@ -19,7 +24,8 @@ import 'lancamento_tile.dart';
 /// Serve lojista e entregador com a mesma tela porque a pergunta é a mesma — o
 /// que entrou, o que saiu, quando e com quem —, e o sinal de cada linha vem da
 /// `natureza` gravada no lançamento, não de um `switch` sobre o tipo que esta
-/// versão do app conhece.
+/// versão do app conhece. O que muda por papel são os tipos que o filtro
+/// oferece: cada um só vê os lançamentos que existem para ele.
 ///
 /// O filtro vai para a API. Antes a tela baixava o extrato inteiro e escondia
 /// linhas; com isso não dava para paginar, e a resposta crescia sem limite.
@@ -116,7 +122,11 @@ class _ExtratoScreenState extends State<ExtratoScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => ExtratoFiltros(inicial: _filtro, hoje: _hoje),
+      builder: (_) => ExtratoFiltros(
+        inicial: _filtro,
+        hoje: _hoje,
+        papel: context.read<AuthService>().usuario?.tipo ?? TipoUsuario.motoboy,
+      ),
     );
     if (novo != null) {
       setState(() => _filtro = novo);
@@ -124,16 +134,37 @@ class _ExtratoScreenState extends State<ExtratoScreen> {
     }
   }
 
+  /// Planilha (o CSV de sempre) ou PDF, sempre com o filtro da tela.
   Future<void> _exportar() async {
+    final formato = await escolherFormatoExportacao(context);
+    if (formato == null || !mounted) return;
     setState(() => _exportando = true);
     try {
-      final csv = await context
-          .read<ApiService>()
-          .carteira
-          .exportarExtratoCsv(filtro: _filtro);
+      final carteira = context.read<ApiService>().carteira;
+      if (formato == FormatoExportacao.planilha) {
+        final csv = await carteira.exportarExtratoCsv(filtro: _filtro);
+        if (!mounted) return;
+        // Entrega o conteúdo, em vez de só dizer que exportou: ver entregarCsv.
+        await entregarCsv(context, csv, nomeSugerido: 'extrato.csv');
+        return;
+      }
+      // O PDF leva o filtro inteiro, não a página que está na tela: uma
+      // chamada ao mesmo recorte do CSV, em JSON.
+      final lancamentos = await carteira.exportarExtratoLista(filtro: _filtro);
       if (!mounted) return;
-      // Entrega o conteúdo, em vez de só dizer que exportou: ver entregarCsv.
-      await entregarCsv(context, csv, nomeSugerido: 'extrato.csv');
+      final usuario = context.read<AuthService>().usuario;
+      final bytes = await RelatorioPdf.extrato(
+        titular: TitularDoPdf(
+          nome: usuario?.nome ?? '',
+          papel: usuario?.tipo ?? TipoUsuario.motoboy,
+        ),
+        filtro: _filtro,
+        lancamentos: lancamentos,
+        geradoEm: _hoje,
+      );
+      if (!mounted) return;
+      await entregarPdf(context, bytes,
+          nomeDoArquivo: RelatorioPdf.nomeDoExtrato(_hoje));
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -200,7 +231,7 @@ class _ExtratoScreenState extends State<ExtratoScreen> {
           const SizedBox(width: 8),
           IconButton(
             key: const Key('extrato-exportar'),
-            tooltip: 'Exportar CSV',
+            tooltip: 'Exportar',
             icon: _exportando
                 ? const SizedBox(
                     width: 18,
@@ -268,7 +299,7 @@ class _ExtratoScreenState extends State<ExtratoScreen> {
                   // Gera o documento sem passar pelo detalhe: no extrato de um
                   // mês inteiro, exigir dois toques por linha para pegar a nota
                   // de cada turno é o que faz ninguém pegar.
-                  onDocumento: () => gerarEAbrirDocumento(context, t),
+                  onDocumento: () => abrirDocumentoDoLancamento(context, t),
                 ),
             ],
           );

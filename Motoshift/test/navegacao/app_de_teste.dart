@@ -114,7 +114,7 @@ Future<AppDeTeste> montarApp(
   await tester.binding.setSurfaceSize(largura);
   addTearDown(() => tester.binding.setSurfaceSize(null));
 
-  final servico = api ?? FakeApiService();
+  final servico = api ?? FakeApiService(tipoUsuario: papel);
   final usuario =
       papel == TipoUsuario.lojista ? fakeLojista() : fakeMotoboy();
   final auth = AuthService(servico)..atualizarUsuarioLocal(usuario);

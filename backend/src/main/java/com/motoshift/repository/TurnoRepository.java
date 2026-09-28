@@ -73,6 +73,9 @@ public interface TurnoRepository extends JpaRepository<Turno, Long> {
 
     long countByLojistIdAndStatusIn(Long lojistId, List<StatusTurno> statuses);
 
+    /** Se o entregador já tem turno encerrado — a base de "tem histórico". */
+    boolean existsByMotoboyIdAndStatusIn(Long motoboyId, List<StatusTurno> statuses);
+
     // Histórico de turnos finalizados pelo motoboy a partir de uma data
     List<Turno> findByMotoboyIdAndStatusAndDataInicioAfter(
             Long motoboyId, StatusTurno status, LocalDateTime inicio);

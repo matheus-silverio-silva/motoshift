@@ -51,8 +51,9 @@ public class TransacaoResponse {
     private Long motoboyId;
 
     /**
-     * Se o lançamento tem documento (NFS-e ou comprovante) que dá para gerar
-     * agora. Falso para o que não concluiu e para saque com Pix pendente.
+     * Se o lançamento tem documento (NFS-e ou comprovante) que quem olha
+     * consegue abrir agora. Falso para o que não concluiu, para saque com Pix
+     * pendente e para a NFS-e do entregador que o lojista ainda não emitiu.
      */
     private boolean documentoDisponivel;
 

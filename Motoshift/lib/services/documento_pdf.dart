@@ -1,13 +1,12 @@
-import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../models/documento_fiscal.dart';
 import '../models/nota_fiscal.dart';
 import '../utils/formato_fiscal.dart';
+import 'identidade_pdf.dart';
 
 /// O documento fiscal em PDF — NFS-e ou comprovante, SIMULADO.
 ///
@@ -17,15 +16,14 @@ import '../utils/formato_fiscal.dart';
 /// informa; a marca d'água é a que sobrevive a recorte e print de tela.
 ///
 /// Funciona no Flutter web: quem baixa e imprime é o pacote `printing`, com o
-/// diálogo do navegador.
+/// diálogo do navegador. O visual (cabeçalho, blocos, faixa, marca d'água)
+/// mora em [IdentidadePdf], que as exportações de extrato, relatório e
+/// informe também usam.
 class DocumentoPdf {
   DocumentoPdf._();
 
-  static const _teal = PdfColor.fromInt(0xFF0E7C7B);
-  static const _cinza = PdfColor.fromInt(0xFF6B7280);
-  static const _borda = PdfColor.fromInt(0xFFE5E7EB);
-  static const _ambar = PdfColor.fromInt(0xFFFFF4DB);
-  static const _vermelho = PdfColor.fromInt(0xFFC0392B);
+  static const _cinza = IdentidadePdf.cinza;
+  static const _vermelho = IdentidadePdf.vermelho;
 
   /// Nome sugerido para o arquivo baixado.
   static String nomeDoArquivo(DocumentoFiscal d) {
@@ -39,10 +37,8 @@ class DocumentoPdf {
   /// Latin-1 e quebram o "—" da própria marca.
   static Future<Uint8List> gerar(DocumentoFiscal d,
       {pw.Font? regular, pw.Font? negrito}) async {
-    final base = regular ??
-        pw.Font.ttf(await rootBundle.load('assets/fonts/pdf/Roboto-Regular.ttf'));
-    final forte = negrito ??
-        pw.Font.ttf(await rootBundle.load('assets/fonts/pdf/Roboto-Bold.ttf'));
+    final (base, forte) =
+        await IdentidadePdf.fontes(regular: regular, negrito: negrito);
 
     final doc = pw.Document(
       title: d.nota != null ? 'NFS-e simulada' : d.comprovante!.titulo,
@@ -76,31 +72,9 @@ class DocumentoPdf {
 
   // ── Partes do documento ────────────────────────────────────────────────
 
-  static pw.Widget _faixa(String marca) => pw.Container(
-        padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        decoration: pw.BoxDecoration(
-          color: _ambar,
-          border: pw.Border.all(color: PdfColors.orange, width: 1),
-          borderRadius: pw.BorderRadius.circular(4),
-        ),
-        child: pw.Text(marca,
-            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
-      );
+  static pw.Widget _faixa(String marca) => IdentidadePdf.faixa(marca);
 
-  static pw.Widget _marcaDagua(String marca) => pw.FullPage(
-        ignoreMargins: true,
-        child: pw.Center(
-          child: pw.Transform.rotate(
-            angle: math.pi / 5,
-            child: pw.Opacity(
-              opacity: 0.12,
-              child: pw.Text(marca,
-                  style: pw.TextStyle(
-                      fontSize: 34, fontWeight: pw.FontWeight.bold, color: _vermelho)),
-            ),
-          ),
-        ),
-      );
+  static pw.Widget _marcaDagua(String marca) => IdentidadePdf.marcaDagua(marca);
 
   static List<pw.Widget> _nota(NotaFiscal n) {
     final retidos = n.tributosRetidos;
@@ -172,63 +146,12 @@ class DocumentoPdf {
     ];
   }
 
-  static pw.Widget _cabecalho(String sobretitulo, String titulo, List<String> linhas) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(14),
-      decoration: pw.BoxDecoration(color: _teal, borderRadius: pw.BorderRadius.circular(6)),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text(sobretitulo, style: const pw.TextStyle(fontSize: 8, color: PdfColors.white)),
-          pw.SizedBox(height: 4),
-          pw.Text(titulo,
-              style: pw.TextStyle(
-                  fontSize: 20, fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
-          for (final l in linhas)
-            pw.Text(l, style: const pw.TextStyle(fontSize: 9, color: PdfColors.white)),
-        ],
-      ),
-    );
-  }
+  static pw.Widget _cabecalho(String sobretitulo, String titulo, List<String> linhas) =>
+      IdentidadePdf.cabecalho(sobretitulo, titulo, linhas);
 
-  static pw.Widget _bloco(String titulo, List<pw.Widget> filhos) {
-    return pw.Container(
-      margin: const pw.EdgeInsets.only(bottom: 10),
-      padding: const pw.EdgeInsets.all(10),
-      decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: _borda, width: 1),
-        borderRadius: pw.BorderRadius.circular(6),
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-        children: [
-          pw.Text(titulo.toUpperCase(),
-              style: pw.TextStyle(fontSize: 8, color: _cinza, fontWeight: pw.FontWeight.bold)),
-          pw.SizedBox(height: 6),
-          ...filhos,
-        ],
-      ),
-    );
-  }
+  static pw.Widget _bloco(String titulo, List<pw.Widget> filhos) =>
+      IdentidadePdf.bloco(titulo, filhos);
 
-  static pw.Widget _linha(String rotulo, String valor, {bool forte = false}) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 2),
-      child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Expanded(
-              flex: 4,
-              child: pw.Text(rotulo, style: const pw.TextStyle(fontSize: 10, color: _cinza))),
-          pw.Expanded(
-            flex: 6,
-            child: pw.Text(valor,
-                textAlign: pw.TextAlign.right,
-                style: pw.TextStyle(
-                    fontSize: 10, fontWeight: forte ? pw.FontWeight.bold : pw.FontWeight.normal)),
-          ),
-        ],
-      ),
-    );
-  }
+  static pw.Widget _linha(String rotulo, String valor, {bool forte = false}) =>
+      IdentidadePdf.linha(rotulo, valor, forte: forte);
 }

@@ -21,6 +21,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -53,7 +54,7 @@ class NotaFiscalControllerTest {
         transacoes.executeWithoutResult(s -> {
             for (String valor : new String[]{"100.00", "80.00"}) {
                 var t = cenario.turnoPago(loja.id(), valor, entregador.id());
-                notas.emitir(t.getId(), entregador.id(), entregador.id());
+                notas.emitir(t.getId(), entregador.id(), loja.id());
             }
         });
         String bearer = "Bearer " + entregador.token();
@@ -85,6 +86,55 @@ class NotaFiscalControllerTest {
                 .andExpect(header().string(HttpHeaders.CONTENT_TYPE, startsWith("text/csv")))
                 .andExpect(content().string(startsWith("DOCUMENTO SIMULADO — SEM VALOR FISCAL")))
                 .andExpect(content().string(containsString("TOTAL;;180.00;")));
+    }
+
+    @Test
+    @DisplayName("pelo HTTP, só o lojista emite e cancela: o entregador leva 403 nas três rotas")
+    void soOLojistaEmiteECancela() throws Exception {
+        Conta loja = registrar("nfloja2", "lojista", "55666777000188");
+        Conta entregador = registrar("nfentregador2", "motoboy", "98765432100");
+        long[] ids = new long[3];
+        transacoes.executeWithoutResult(s -> {
+            var t = cenario.turnoPago(loja.id(), "90.00", entregador.id());
+            ids[0] = t.getId();
+            ids[1] = cenario.pagamentoRecebido(t, entregador.id()).getId();
+            ids[2] = cenario.pagamentoEnviado(t, loja.id(), entregador.id()).getId();
+        });
+        String doEntregador = "Bearer " + entregador.token();
+        String daLoja = "Bearer " + loja.token();
+        String turno = "{\"turnoId\":" + ids[0] + "}";
+
+        mvc.perform(post("/api/notas-fiscais").contentType(MediaType.APPLICATION_JSON).content(turno)
+                        .header(HttpHeaders.AUTHORIZATION, doEntregador))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensagem", containsString("emitida pelo lojista")));
+        mvc.perform(post("/api/carteira/transacoes/" + ids[1] + "/documento")
+                        .header(HttpHeaders.AUTHORIZATION, doEntregador))
+                .andExpect(status().isForbidden());
+
+        String resposta = mvc.perform(post("/api/carteira/transacoes/" + ids[2] + "/documento")
+                        .header(HttpHeaders.AUTHORIZATION, daLoja))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long nota = json.readTree(resposta).at("/nota/id").asLong();
+
+        // O entregador abre a nota pelo GET do lançamento dele.
+        mvc.perform(get("/api/carteira/transacoes/" + ids[1] + "/documento")
+                        .header(HttpHeaders.AUTHORIZATION, doEntregador))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nota.id").value(nota))
+                .andExpect(jsonPath("$.nota.papel").value("prestador"));
+
+        mvc.perform(put("/api/notas-fiscais/" + nota + "/cancelar")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}")
+                        .header(HttpHeaders.AUTHORIZATION, doEntregador))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensagem", containsString("cancelada pelo lojista")));
+        mvc.perform(put("/api/notas-fiscais/" + nota + "/cancelar")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}")
+                        .header(HttpHeaders.AUTHORIZATION, daLoja))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cancelada").value(true));
     }
 
     private record Conta(long id, String token) {}

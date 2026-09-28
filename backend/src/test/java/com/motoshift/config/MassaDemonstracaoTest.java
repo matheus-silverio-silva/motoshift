@@ -12,7 +12,12 @@ import com.motoshift.entity.Transacao;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.entity.Usuario;
+import com.motoshift.entity.NotaFiscal;
+import com.motoshift.entity.Notificacao;
 import com.motoshift.repository.AvaliacaoRepository;
+import com.motoshift.repository.NotaFiscalRepository;
+import com.motoshift.service.NotaFiscalService;
+import com.motoshift.service.Reputacao;
 import com.motoshift.repository.CarteiraRepository;
 import com.motoshift.repository.NotificacaoRepository;
 import com.motoshift.repository.TransacaoRepository;
@@ -38,10 +43,14 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * O reset leve da massa de demonstração, contra o banco.
+ * A massa de demonstração e o reset leve ({@code confirmo}), contra o banco.
  *
- * As chaves estrangeiras não existem no H2; a mesma operação roda sobre o
- * PostgreSQL com as FKs da V11 em SchemaPostgresTest.
+ * Além do escopo do reset, confere a história que a massa conta: meses de
+ * recarga, turno e saque; notas emitidas pelo lojista; score e média saídos
+ * da regra; notificações dos tipos de hoje.
+ *
+ * As chaves estrangeiras não existem no H2; os dois modos de reset rodam
+ * sobre o PostgreSQL, com as FKs da V11, em ResetDaMassaPostgresTest.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -57,6 +66,9 @@ class MassaDemonstracaoTest {
     @Autowired private AvaliacaoRepository avaliacaoRepo;
     @Autowired private NotificacaoRepository notificacaoRepo;
     @Autowired private ConsistenciaService consistencia;
+    @Autowired private NotaFiscalRepository notaRepo;
+    @Autowired private NotaFiscalService notasFiscais;
+    @Autowired private Reputacao reputacao;
 
     @Test
     @DisplayName("sem MOTOSHIFT_SEED_RESET o boot nao apaga nem cria nada")
@@ -178,36 +190,47 @@ class MassaDemonstracaoTest {
         LocalDate hoje = agora.toLocalDate();
 
         List<Usuario> contas = contasDaMassa();
-        Set<Long> ids = contas.stream().map(Usuario::getId).collect(Collectors.toSet());
-        List<Turno> turnos = turnoRepo.findAll().stream()
-                .filter(t -> ids.contains(t.getLojistId()))
-                .toList();
+        List<Turno> turnos = turnosDaMassa();
 
         assertThat(turnos).filteredOn(t -> t.getStatus() == StatusTurno.ABERTO)
-                .hasSize(5)
+                .hasSize(6)
                 .allSatisfy(t -> assertThat(t.getDataInicio()).isAfter(agora));
 
+        // Dois confirmados para amanhã e um em andamento.
         assertThat(turnos).filteredOn(t -> t.getStatus() == StatusTurno.ACEITO)
-                .hasSize(2)
+                .hasSize(3)
                 .anySatisfy(t -> {
-                    // em andamento: comecou e ainda nao terminou
                     assertThat(t.getDataInicio()).isBefore(agora);
                     assertThat(t.getDataFim()).isAfter(agora);
                 })
-                .anySatisfy(t -> assertThat(t.getDataInicio()).isAfter(agora));
+                .filteredOn(t -> t.getDataInicio().isAfter(agora))
+                .hasSize(2);
 
         assertThat(turnos).filteredOn(t -> t.getStatus() == StatusTurno.FINALIZADO)
-                .hasSize(11)
+                .hasSizeGreaterThan(60)
                 .allSatisfy(t -> assertThat(t.getDataFim()).isBefore(agora));
 
-        // Dois cancelados, um deles tardio pela regra do ScoreService
-        // (atualizado a menos de 1h do inicio) — e o tardio e do Thiago.
-        Long thiago = usuarioRepo.findByEmail("thiago@teste.com").orElseThrow().getId();
+        // Vencido pelo próprio job de expiração, sem ninguém.
+        assertThat(turnos).filteredOn(t -> t.getStatus() == StatusTurno.EXPIRADO)
+                .singleElement()
+                .satisfies(t -> {
+                    assertThat(t.getMotoboyId()).isNull();
+                    assertThat(t.getExpiradoEm()).isBefore(agora);
+                });
+
+        // Dois cancelados: um com folga, pelo Ricardo, e um tardio pela regra
+        // do ScoreService (atualizado a menos de 1h do início) — do Thiago.
+        Long thiago = id("thiago@teste.com");
+        Long ricardo = id("ricardo@teste.com");
         assertThat(turnos).filteredOn(t -> t.getStatus() == StatusTurno.CANCELADO)
                 .hasSize(2)
                 .anySatisfy(t -> {
                     assertThat(t.getMotoboyId()).isEqualTo(thiago);
                     assertThat(t.getAtualizadoEm()).isAfter(t.getDataInicio().minusHours(1));
+                })
+                .anySatisfy(t -> {
+                    assertThat(t.getMotoboyId()).isEqualTo(ricardo);
+                    assertThat(t.getAtualizadoEm()).isBefore(t.getDataInicio().minusHours(1));
                 });
 
         assertThat(contas).filteredOn(u -> "motoboy".equals(u.getTipo()))
@@ -215,12 +238,154 @@ class MassaDemonstracaoTest {
         assertThat(contas)
                 .allSatisfy(u -> assertThat(u.getDataNascimento()).isBefore(hoje.minusYears(18)));
 
+        Set<Long> ids = Set.copyOf(idsDaMassa());
         assertThat(transacaoRepo.findAll()).filteredOn(t -> ids.contains(t.getUsuarioId()))
                 .isNotEmpty()
                 .allSatisfy(t -> assertThat(t.getCriadoEm()).isBeforeOrEqualTo(agora));
 
-        Long claudia = usuarioRepo.findByEmail("claudia@teste.com").orElseThrow().getId();
-        assertThat(notificacaoRepo.findTop50ByUsuarioIdOrderByCriadoEmDesc(claudia)).isNotEmpty();
+        assertThat(notificacaoRepo.findTop50ByUsuarioIdOrderByCriadoEmDesc(id("claudia@teste.com")))
+                .isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("quatro a seis meses de história: recarga e saque por mês, turno pago todo mês")
+    void historiaDeMeses() {
+        massa.resetar();
+        LocalDate hoje = LocalDate.now();
+        Set<Long> ids = Set.copyOf(idsDaMassa());
+        List<Transacao> extrato = transacaoRepo.findAll().stream()
+                .filter(t -> ids.contains(t.getUsuarioId()))
+                .toList();
+
+        LocalDate primeira = extrato.stream().map(t -> t.getCriadoEm().toLocalDate())
+                .min(LocalDate::compareTo).orElseThrow();
+        assertThat(primeira).isBetween(hoje.minusMonths(6), hoje.minusMonths(4));
+
+        // Cada um dos quatro meses anteriores tem recarga, saque e pagamento.
+        for (int m = 1; m <= 4; m++) {
+            java.time.YearMonth mes = java.time.YearMonth.from(hoje.minusMonths(m));
+            Set<TipoTransacao> doMes = extrato.stream()
+                    .filter(t -> java.time.YearMonth.from(t.getCriadoEm()).equals(mes))
+                    .map(Transacao::getTipo)
+                    .collect(Collectors.toSet());
+            assertThat(doMes).as("tipos de %s", mes)
+                    .contains(TipoTransacao.RECARGA, TipoTransacao.SAQUE,
+                              TipoTransacao.PAGAMENTO_ENVIADO, TipoTransacao.PAGAMENTO_RECEBIDO);
+        }
+
+        // Todo entregador sacou e toda loja recarregou pelo gateway.
+        for (Usuario u : contasDaMassa()) {
+            TipoTransacao esperado = "motoboy".equals(u.getTipo()) ? TipoTransacao.SAQUE : TipoTransacao.RECARGA;
+            assertThat(extrato).as("%s de %s", esperado, u.getEmail())
+                    .anyMatch(t -> t.getUsuarioId().equals(u.getId()) && t.getTipo() == esperado);
+        }
+    }
+
+    @Test
+    @DisplayName("notas: quem emite é o lojista; o turno de três vagas tem três; uma cancelada; recentes sem nota")
+    void notasDoLojista() {
+        massa.resetar();
+        Set<Long> turnos = turnosDaMassa().stream().map(Turno::getId).collect(Collectors.toSet());
+        List<NotaFiscal> notas = notaRepo.findByTurnoIdIn(turnos);
+
+        assertThat(notas).hasSizeGreaterThan(50)
+                .allSatisfy(n -> assertThat(n.getEmitidaPorId())
+                        .as("nota %s emitida pelo tomador", n.getNumero())
+                        .isEqualTo(n.getTomadorId()));
+
+        Turno tresVagas = turnosDaMassa().stream()
+                .filter(t -> t.getVagas() == 3)
+                .findFirst().orElseThrow();
+        assertThat(notaRepo.findByTurnoId(tresVagas.getId()))
+                .extracting(NotaFiscal::getPrestadorId)
+                .containsExactlyInAnyOrder(id("ricardo@teste.com"), id("lucas@teste.com"), id("thiago@teste.com"));
+
+        assertThat(notas).filteredOn(NotaFiscal::isCancelada)
+                .singleElement()
+                .satisfies(n -> {
+                    assertThat(n.getTomadorId()).isEqualTo(id("fernando@teste.com"));
+                    assertThat(n.getCanceladaEm()).isAfter(n.getEmitidaEm());
+                });
+
+        // Pagamentos ainda sem nota: "a emitir" para a loja, "aguardando
+        // emissão" para o entregador — os dois lados da mesma pendência.
+        assertThat(notasFiscais.pendentes(id("lojista@teste.com"), true)).hasSize(1);
+        assertThat(notasFiscais.pendentes(id("motoboy@teste.com"), false)).hasSize(1);
+        assertThat(notasFiscais.pendentes(id("ana@teste.com"), true)).hasSize(1);
+        assertThat(notasFiscais.pendentes(id("claudia@teste.com"), true)).hasSize(1);
+        assertThat(notasFiscais.pendentes(id("fernando@teste.com"), true)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("score e média saem da regra: Thiago 4,5 pelo cancelamento tardio, lojista sem score")
+    void reputacaoDerivada() {
+        massa.resetar();
+
+        for (Usuario u : contasDaMassa()) {
+            Double visivel = reputacao.scoreVisivel(u);
+            if ("lojista".equals(u.getTipo())) {
+                assertThat(visivel).as("score de %s", u.getEmail()).isNull();
+            } else if (u.getEmail().equals("thiago@teste.com")) {
+                assertThat(visivel).isEqualTo(Reputacao.SCORE_INICIAL - Reputacao.PENALIDADE_CANCELAMENTO_TARDIO);
+            } else {
+                assertThat(visivel).as("score de %s", u.getEmail()).isEqualTo(Reputacao.SCORE_INICIAL);
+            }
+
+            // A média gravada é a média das avaliações recebidas, com uma casa
+            // como o AvaliacaoService grava — nunca um número escrito à mão.
+            List<Avaliacao> recebidas = avaliacaoRepo.findByAvaliadoIdOrderByCriadoEmDesc(u.getId());
+            assertThat(recebidas).as("avaliações de %s", u.getEmail()).isNotEmpty();
+            double media = recebidas.stream().mapToInt(Avaliacao::getNota).average().orElseThrow();
+            assertThat(u.getMediaAvaliacao()).as("média de %s", u.getEmail())
+                    .isEqualTo(Math.round(media * 10.0) / 10.0);
+        }
+
+        // Notas variadas, com algumas abaixo de 5.
+        List<Integer> notas = avaliacaoRepo.findAll().stream()
+                .filter(a -> Set.copyOf(idsDaMassa()).contains(a.getAvaliadoId()))
+                .map(Avaliacao::getNota).toList();
+        assertThat(notas).contains(3, 4, 5).allSatisfy(n -> assertThat(n).isBetween(1, 5));
+    }
+
+    @Test
+    @DisplayName("comentários usam as tags do papel de quem é avaliado")
+    void comentariosComTagsDoPapel() {
+        massa.resetar();
+        Map<Long, String> tipo = contasDaMassa().stream()
+                .collect(Collectors.toMap(Usuario::getId, Usuario::getTipo));
+
+        List<Avaliacao> comTags = avaliacaoRepo.findAll().stream()
+                .filter(a -> tipo.containsKey(a.getAvaliadoId()))
+                .filter(a -> a.getComentario() != null && a.getComentario().contains(" • "))
+                .toList();
+        assertThat(comTags).isNotEmpty();
+        for (Avaliacao a : comTags) {
+            Set<String> permitidas = "lojista".equals(tipo.get(a.getAvaliadoId())) ? TAGS_DA_LOJA : TAGS_DO_ENTREGADOR;
+            String tags = a.getComentario().split(" — ")[0];
+            for (String tag : tags.split(" • ")) {
+                assertThat(permitidas).as("tag de \"%s\"", a.getComentario()).contains(tag);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("notificações: só os tipos que o código gera hoje, sem texto de fluxo aposentado")
+    void notificacoesAtuais() {
+        massa.resetar();
+        Set<Long> ids = Set.copyOf(idsDaMassa());
+        List<Notificacao> todas = notificacaoRepo.findAll().stream()
+                .filter(n -> ids.contains(n.getUsuarioId()))
+                .toList();
+
+        assertThat(todas).isNotEmpty()
+                .allSatisfy(n -> {
+                    assertThat(TIPOS_DE_NOTIFICACAO).contains(n.getTipo());
+                    assertThat(n.getMensagem()).doesNotContainIgnoringCase("confirme")
+                            .doesNotContainIgnoringCase("confirmação");
+                });
+        assertThat(todas).extracting(Notificacao::getTipo)
+                .contains("turno_aceito", "avaliacao_pendente", "turno_cancelado", "turno_expirado",
+                          "nota_fiscal_emitida", "nota_fiscal_cancelada");
     }
 
     /**
@@ -313,6 +478,30 @@ class MassaDemonstracaoTest {
                                 + "|" + c.getChavePix())
                         .sorted().toList());
     }
+
+    private List<Turno> turnosDaMassa() {
+        Set<Long> ids = Set.copyOf(idsDaMassa());
+        return turnoRepo.findAll().stream()
+                .filter(t -> ids.contains(t.getLojistId()))
+                .toList();
+    }
+
+    private Long id(String email) {
+        return usuarioRepo.findByEmail(email).orElseThrow().getId();
+    }
+
+    /** Os tipos que o backend gera hoje — ver o comentário de Notificacao. */
+    private static final Set<String> TIPOS_DE_NOTIFICACAO = Set.of(
+            "turno_aceito", "turno_lotado", "turno_vencendo", "turno_expirado", "turno_cancelado",
+            "turno_pendente_finalizacao", "avaliacao_pendente", "pagamento_confirmado",
+            "nota_fiscal_emitida", "nota_fiscal_cancelada");
+
+    /** As tags do app (lib/models/tags_de_avaliacao.dart), por papel de quem é avaliado. */
+    private static final Set<String> TAGS_DO_ENTREGADOR = Set.of(
+            "Pontual", "Cuidado com a carga", "Educado", "Conhece a região", "Boa comunicação");
+    private static final Set<String> TAGS_DA_LOJA = Set.of(
+            "Pedidos prontos no horário", "Carga bem embalada", "Endereços corretos",
+            "Boa comunicação", "Valor justo");
 
     private List<Usuario> contasDaMassa() {
         return usuarioRepo.findAll().stream()

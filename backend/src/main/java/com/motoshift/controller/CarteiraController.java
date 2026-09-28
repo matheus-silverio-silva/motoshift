@@ -64,9 +64,9 @@ public class CarteiraController {
 
     @Operation(summary = "Gerar o documento de um lançamento (SIMULADO)",
             description = "Emite — ou devolve, se já existir — o documento do lançamento: "
-                    + "NFS-e para pagamento de turno (a mesma nota nos dois lados: o "
-                    + "entregador pelo pagamento_recebido, o lojista pelo pagamento_enviado), "
-                    + "recibo para recarga, comprovante Pix para saque concluído e comprovante "
+                    + "NFS-e para pagamento de turno (a mesma nota nos dois lados, emitida "
+                    + "pelo lojista a partir do pagamento_enviado; o entregador consulta a "
+                    + "dele pelo GET e leva 403 no POST), recibo para recarga, comprovante Pix para saque concluído e comprovante "
                     + "de movimentação para o resto. Reserva e liberação não são serviço "
                     + "prestado e nunca geram nota. Idempotente. Tudo simulado: nenhuma "
                     + "transmissão à prefeitura ou à Receita, e o documento traz a marca "
@@ -74,7 +74,8 @@ public class CarteiraController {
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "NFS-e emitida agora"),
         @ApiResponse(responseCode = "200", description = "Documento que já existia (ou comprovante, que é derivado)"),
-        @ApiResponse(responseCode = "403", description = "O lançamento não é do usuário"),
+        @ApiResponse(responseCode = "403",
+                description = "O lançamento não é do usuário, ou é a NFS-e do entregador — só o lojista emite"),
         @ApiResponse(responseCode = "404", description = "Lançamento não encontrado"),
         @ApiResponse(responseCode = "409", description = "Lançamento sem documento ainda (não concluído, Pix pendente)")
     })
@@ -89,7 +90,8 @@ public class CarteiraController {
 
     @Operation(summary = "Consultar o documento de um lançamento (SIMULADO)",
             description = "O documento já gerado. Comprovante sempre existe (é derivado do "
-                    + "lançamento); NFS-e responde 404 até ser gerada pelo POST.")
+                    + "lançamento); NFS-e responde 404 até o lojista emiti-la. É por aqui que "
+                    + "o entregador abre a nota do pagamento dele.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Documento"),
         @ApiResponse(responseCode = "403", description = "O lançamento não é do usuário"),
@@ -200,19 +202,27 @@ public class CarteiraController {
         return Paginacao.resposta(extrato.extrato(atual.id(), filtro, pedido));
     }
 
-    @Operation(summary = "Exportar o extrato em CSV",
+    @Operation(summary = "Exportar o extrato (CSV ou JSON)",
             description = "Mesmos filtros de /extrato, sem paginação — exportar meia página "
-                    + "não exporta nada. Separador ';' porque o Excel em português usa a "
-                    + "vírgula como separador decimal.")
-    @ApiResponse(responseCode = "200", description = "Arquivo CSV")
+                    + "não exporta nada. formato=csv (padrão): separador ';' porque o Excel "
+                    + "em português usa a vírgula como separador decimal. formato=json: a "
+                    + "mesma lista, no formato das linhas de /extrato — é a base do PDF que "
+                    + "o app monta.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Arquivo CSV ou lista JSON"),
+        @ApiResponse(responseCode = "400", description = "Formato ou filtro inválido")
+    })
     @GetMapping("/extrato/exportar")
-    public ResponseEntity<String> exportarExtrato(
+    public ResponseEntity<?> exportarExtrato(
             ExtratoFiltro filtro,
             @RequestParam(defaultValue = "csv") String formato,
             @AuthenticationPrincipal UsuarioAutenticado atual) {
+        if ("json".equalsIgnoreCase(formato)) {
+            return ResponseEntity.ok(extrato.exportarLista(atual.id(), filtro));
+        }
         if (!"csv".equalsIgnoreCase(formato)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Formato não suportado: use csv.");
+                    "Formato não suportado: use csv ou json.");
         }
         String csv = extrato.exportarCsv(atual.id(), filtro);
         return ResponseEntity.ok()
@@ -222,10 +232,13 @@ public class CarteiraController {
     }
 
     @Operation(summary = "Resumo financeiro do período",
-            description = "Entradas, saídas e líquido do período, mais o retrato atual da "
-                    + "carteira: disponível, bloqueado, a receber (entregador: turnos aceitos "
-                    + "ainda não finalizados) e comprometido (lojista: reservas abertas, com "
-                    + "a lista por turno). Sem datas, usa os últimos 30 dias.")
+            description = "O retrato do período para o papel de quem pergunta, e só ele. "
+                    + "Entregador (papel=prestador): recebido, retencoes (com retenção na "
+                    + "fonte), sacado, disponível e aReceber (turnos aceitos ainda não "
+                    + "finalizados). Lojista (papel=tomador): recarregado, pagoAEntregadores, "
+                    + "devolvido (liberação de reserva e estorno), disponível, bloqueado e "
+                    + "comprometido, com a lista de reservas abertas. Os campos do outro "
+                    + "papel não vêm no JSON. Sem datas, usa os últimos 30 dias.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Resumo do período"),
         @ApiResponse(responseCode = "400", description = "Data final anterior à inicial")
@@ -235,13 +248,15 @@ public class CarteiraController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataInicio,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dataFim,
             @AuthenticationPrincipal UsuarioAutenticado atual) {
-        return extrato.resumo(atual.id(), dataInicio, dataFim);
+        return extrato.resumo(atual.id(), atual.isLojista(), dataInicio, dataFim);
     }
 
     @Operation(summary = "Série de fluxo de caixa",
-            description = "Entradas e saídas agrupadas por dia, semana ou mês, somadas no "
-                    + "banco. Períodos sem lançamento vêm com zero, para o gráfico não "
-                    + "mentir sobre o intervalo. Sem datas, usa os últimos 30 dias.")
+            description = "Entradas e saídas da carteira agrupadas por dia, semana ou mês, "
+                    + "somadas no banco. Reserva e liberação ficam de fora: são dinheiro "
+                    + "trocando de bolso dentro da carteira, não entrando nem saindo. "
+                    + "Períodos sem lançamento vêm com zero, para o gráfico não mentir sobre "
+                    + "o intervalo. Sem datas, usa os últimos 30 dias.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Série do gráfico"),
         @ApiResponse(responseCode = "400", description = "Agrupamento ou período inválido")

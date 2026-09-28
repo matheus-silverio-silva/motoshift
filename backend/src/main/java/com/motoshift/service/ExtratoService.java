@@ -10,8 +10,11 @@ import com.motoshift.entity.Carteira;
 import com.motoshift.entity.NaturezaTransacao;
 import com.motoshift.entity.StatusInscricao;
 import com.motoshift.entity.StatusTurno;
+import com.motoshift.entity.TipoTransacao;
 import com.motoshift.entity.Transacao;
 import com.motoshift.repository.PontoDeFluxo;
+import com.motoshift.repository.TotalPorTipo;
+import com.motoshift.service.fiscal.CalculoTributario;
 import com.motoshift.service.fiscal.IndiceDeDocumentos;
 import com.motoshift.util.Csv;
 import com.motoshift.repository.TransacaoRepository;
@@ -34,6 +37,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.WeekFields;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,17 +74,20 @@ public class ExtratoService {
     private final TurnoRepository turnoRepo;
     private final TurnoInscricaoRepository inscricaoRepo;
     private final IndiceDeDocumentos indice;
+    private final CalculoTributario tributos;
 
     public ExtratoService(TransacaoRepository transacaoRepo,
                           CarteiraService carteiras,
                           TurnoRepository turnoRepo,
                           TurnoInscricaoRepository inscricaoRepo,
-                          IndiceDeDocumentos indice) {
+                          IndiceDeDocumentos indice,
+                          CalculoTributario tributos) {
         this.transacaoRepo = transacaoRepo;
         this.carteiras = carteiras;
         this.turnoRepo = turnoRepo;
         this.inscricaoRepo = inscricaoRepo;
         this.indice = indice;
+        this.tributos = tributos;
     }
 
     // -- Extrato -------------------------------------------------------------
@@ -93,6 +100,22 @@ public class ExtratoService {
         // O documento de cada linha, em duas consultas para a página inteira.
         var documentos = indice.indexar(lancamentos.getContent());
         return lancamentos.map(t -> TransacaoResponse.from(t).comDocumento(documentos.get(t.getId())));
+    }
+
+    /**
+     * O extrato inteiro do filtro, sem paginação, como a tela o recebe — a base
+     * do PDF que o app gera. É o mesmo recorte do CSV, com o documento de cada
+     * linha: o PDF não precisa baixar página por página em laço.
+     */
+    @Transactional(readOnly = true)
+    public List<TransacaoResponse> exportarLista(Long usuarioId, ExtratoFiltro filtro) {
+        List<Transacao> lancamentos = transacaoRepo.findAll(
+                TransacaoSpecs.de(usuarioId, filtro),
+                Sort.by(Sort.Direction.DESC, "criadoEm"));
+        var documentos = indice.indexar(lancamentos);
+        return lancamentos.stream()
+                .map(t -> TransacaoResponse.from(t).comDocumento(documentos.get(t.getId())))
+                .toList();
     }
 
     /**
@@ -133,44 +156,67 @@ public class ExtratoService {
 
     // -- Resumo --------------------------------------------------------------
 
+    /**
+     * O retrato do período para o papel de quem pergunta — ver
+     * {@link ResumoFinanceiroResponse}. Cada número é a soma de tipos de
+     * lançamento, feita no banco; nenhum vem de "entradas menos saídas", que
+     * misturava recarga com receita e saque com custo.
+     */
     @Transactional(readOnly = true)
-    public ResumoFinanceiroResponse resumo(Long usuarioId, LocalDate inicio, LocalDate fim) {
+    public ResumoFinanceiroResponse resumo(Long usuarioId, boolean ehLojista,
+                                           LocalDate inicio, LocalDate fim) {
         LocalDate de = inicio != null ? inicio : LocalDate.now().minusDays(DIAS_PADRAO - 1L);
         LocalDate ate = fim != null ? fim : LocalDate.now();
         exigirPeriodoValido(de, ate);
 
-        BigDecimal entradas = BigDecimal.ZERO;
-        BigDecimal saidas = BigDecimal.ZERO;
-        for (Object[] linha : transacaoRepo.somarPorNatureza(
-                usuarioId, de.atStartOfDay(), ate.plusDays(1).atStartOfDay())) {
-            BigDecimal total = (BigDecimal) linha[1];
-            if (linha[0] == NaturezaTransacao.CREDITO) {
-                entradas = total;
-            } else {
-                saidas = total;
-            }
+        List<TotalPorTipo> totais = transacaoRepo.totalPorTipo(
+                usuarioId, de.atStartOfDay(), ate.plusDays(1).atStartOfDay());
+        List<TotalPorTipoResponse> porTipo = totais.stream()
+                .map(t -> new TotalPorTipoResponse(t.tipo(), naturezaDe(t.tipo()),
+                        emReais(t.total()), t.quantidade()))
+                .toList();
+        Map<TipoTransacao, BigDecimal> soma = new EnumMap<>(TipoTransacao.class);
+        for (TotalPorTipo t : totais) {
+            soma.put(t.tipo(), t.total());
         }
 
         Carteira carteira = carteiras.obterOuCriar(usuarioId);
 
-        List<ReservaAbertaResponse> reservas = transacaoRepo.reservasAbertas(usuarioId).stream()
-                .map(r -> new ReservaAbertaResponse(r.turnoId(), r.titulo(), emReais(r.valor())))
-                .toList();
+        if (ehLojista) {
+            List<ReservaAbertaResponse> reservas = transacaoRepo.reservasAbertas(usuarioId).stream()
+                    .map(r -> new ReservaAbertaResponse(r.turnoId(), r.titulo(), emReais(r.valor())))
+                    .toList();
+            return ResumoFinanceiroResponse.doLojista(de, ate,
+                    emReais(carteira.getSaldoDisponivel()),
+                    emReais(somaDe(soma, TipoTransacao.RECARGA)),
+                    emReais(somaDe(soma, TipoTransacao.PAGAMENTO_ENVIADO)),
+                    emReais(somaDe(soma, TipoTransacao.LIBERACAO_RESERVA, TipoTransacao.ESTORNO)),
+                    emReais(carteira.getSaldoBloqueado()),
+                    reservas, porTipo);
+        }
 
-        List<TotalPorTipoResponse> porTipo = transacaoRepo.totalPorTipo(
-                        usuarioId, de.atStartOfDay(), ate.plusDays(1).atStartOfDay()).stream()
-                .map(t -> new TotalPorTipoResponse(t.tipo(), naturezaDe(t.tipo()),
-                        emReais(t.total()), t.quantidade()))
-                .toList();
-
-        return new ResumoFinanceiroResponse(
-                de, ate,
-                emReais(entradas), emReais(saidas), emReais(entradas.subtract(saidas)),
+        BigDecimal retencoes = somaDe(soma, TipoTransacao.RETENCAO_ISS, TipoTransacao.RETENCAO_IRRF);
+        // Estorno, para o entregador, é sempre a volta de um saque recusado
+        // (Movimento.estornoDeSaque): o que foi sacado de verdade é a diferença.
+        BigDecimal sacado = somaDe(soma, TipoTransacao.SAQUE)
+                .subtract(somaDe(soma, TipoTransacao.ESTORNO)).max(BigDecimal.ZERO);
+        return ResumoFinanceiroResponse.doEntregador(de, ate,
                 emReais(carteira.getSaldoDisponivel()),
-                emReais(carteira.getSaldoBloqueado()),
+                emReais(somaDe(soma, TipoTransacao.PAGAMENTO_RECEBIDO, TipoTransacao.BONUS)),
+                // Sem retenção ligada e sem retenção no período, o número não
+                // existe para esta pessoa — não vai como zero.
+                tributos.reterNaFonte() || retencoes.signum() > 0 ? emReais(retencoes) : null,
+                emReais(sacado),
                 emReais(aReceber(usuarioId)),
-                emReais(carteira.getSaldoBloqueado()),
-                reservas, porTipo);
+                porTipo);
+    }
+
+    private static BigDecimal somaDe(Map<TipoTransacao, BigDecimal> soma, TipoTransacao... tipos) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (TipoTransacao t : tipos) {
+            total = total.add(soma.getOrDefault(t, BigDecimal.ZERO));
+        }
+        return total;
     }
 
     /**
@@ -216,6 +262,14 @@ public class ExtratoService {
 
     /**
      * Série de entradas e saídas por período.
+     *
+     * <p><b>É fluxo de caixa da carteira, não movimento entre bolsos.</b>
+     * Reserva e liberação ficam de fora: são o lojista passando o próprio
+     * dinheiro do disponível para o bloqueado e de volta, e contá-las como
+     * saída e entrada fazia um turno de R$ 120 aparecer como R$ 240 de saída
+     * (a reserva e depois o pagamento). O que sobra é o que entrou na carteira
+     * ou saiu dela: para o lojista, recarga contra pagamento a entregadores e
+     * saque; para o entregador, pagamento recebido contra saque e retenção.
      *
      * <p>Os baldes vêm somados do banco, um por dia; aqui eles são dobrados no
      * agrupamento pedido. Períodos sem lançamento nenhum entram com zero — uma
@@ -310,7 +364,7 @@ public class ExtratoService {
      * não há de onde ler a coluna {@code natureza} — ela é derivada do tipo,
      * que é a mesma regra que o ledger aplica ao gravar.
      */
-    private static NaturezaTransacao naturezaDe(com.motoshift.entity.TipoTransacao tipo) {
+    private static NaturezaTransacao naturezaDe(TipoTransacao tipo) {
         return switch (tipo) {
             case SAQUE, RESERVA, PAGAMENTO_ENVIADO, RETENCAO_ISS, RETENCAO_IRRF ->
                     NaturezaTransacao.DEBITO;

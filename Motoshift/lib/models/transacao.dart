@@ -1,4 +1,5 @@
 import 'documento_fiscal.dart';
+import 'usuario.dart';
 
 /// Tipos que o backend emite, em `Transacao.tipo`:
 ///   recarga | reserva | liberacao_reserva | pagamento_enviado
@@ -90,6 +91,15 @@ class Transacao {
 
   /// A NFS-e deste pagamento já foi gerada.
   bool get documentoEmitido => documentoId != null;
+
+  /// A NFS-e vista pelo entregador: o pagamento recebido dele. Ele consulta,
+  /// baixa e imprime; quem emite (e cancela) é o lojista.
+  bool get notaDoPrestador =>
+      tipoDocumento?.ehNota == true && tipo == TipoTransacao.pagamentoRecebido;
+
+  /// O lojista ainda não emitiu a nota deste pagamento. Não há o que abrir, e
+  /// não é o entregador quem resolve — a tela informa, sem botão.
+  bool get aguardandoEmissao => notaDoPrestador && !documentoEmitido;
 
   const Transacao({
     this.id,
@@ -211,18 +221,36 @@ enum TipoTransacao {
     };
   }
 
-  /// Os tipos que o filtro do extrato oferece, na ordem em que fazem sentido
-  /// para quem lê: primeiro o dinheiro que entra e sai de verdade, depois os
-  /// movimentos internos da carteira.
-  static List<TipoTransacao> get filtraveis => const [
-        TipoTransacao.recarga,
-        TipoTransacao.pagamentoRecebido,
-        TipoTransacao.pagamentoEnviado,
-        TipoTransacao.saque,
-        TipoTransacao.reserva,
-        TipoTransacao.liberacaoReserva,
-        TipoTransacao.estorno,
-      ];
+  /// Os tipos de lançamento que existem para cada papel — a lista única que
+  /// o filtro do extrato, os relatórios e a exportação usam.
+  ///
+  /// Antes havia uma lista só para os dois, e o entregador via "Recarga",
+  /// "Reserva" e "Pagamento enviado" no filtro — lançamentos que nunca
+  /// aparecem no extrato dele —, enquanto o lojista via "Pagamento recebido".
+  /// A ordem é a de leitura: primeiro o dinheiro que entra e sai de verdade,
+  /// depois os movimentos internos e as correções.
+  ///
+  /// - Entregador (prestador): pagamento recebido, saque, estorno (de saque
+  ///   recusado) e as retenções na fonte.
+  /// - Lojista (tomador): recarga, reserva, liberação de reserva, pagamento
+  ///   enviado e estorno.
+  static List<TipoTransacao> filtraveisPara(TipoUsuario papel) =>
+      switch (papel) {
+        TipoUsuario.motoboy => const [
+            TipoTransacao.pagamentoRecebido,
+            TipoTransacao.saque,
+            TipoTransacao.estorno,
+            TipoTransacao.retencaoIss,
+            TipoTransacao.retencaoIrrf,
+          ],
+        TipoUsuario.lojista => const [
+            TipoTransacao.recarga,
+            TipoTransacao.reserva,
+            TipoTransacao.liberacaoReserva,
+            TipoTransacao.pagamentoEnviado,
+            TipoTransacao.estorno,
+          ],
+      };
 
   /// Só para lançamento sem `natureza` — ver [Transacao.credito].
   bool? get credito => switch (this) {

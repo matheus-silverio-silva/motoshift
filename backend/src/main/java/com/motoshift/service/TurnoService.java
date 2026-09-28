@@ -273,10 +273,11 @@ public class TurnoService {
         boolean cancelamentoTardio = LocalDateTime.now().isAfter(
                 turno.getDataInicio().minusHours(1));
 
+        // A regra da reputação mora em Reputacao — valor inicial e penalidade
+        // num lugar só, o mesmo que a análise de score usa.
         if (cancelamentoTardio && turno.getMotoboyId() != null) {
             usuarioRepo.findById(turno.getMotoboyId()).ifPresent(motoboy -> {
-                double novoScore = Math.max(0.0, motoboy.getScore() - 0.5);
-                motoboy.setScore(novoScore);
+                motoboy.setScore(Reputacao.penalizar(motoboy.getScore()));
                 usuarioRepo.save(motoboy);
             });
         }

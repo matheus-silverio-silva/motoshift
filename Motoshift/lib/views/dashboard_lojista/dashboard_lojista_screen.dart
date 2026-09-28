@@ -89,8 +89,9 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
   int get _turnosMes => (_dashData?['turnosMes'] as num?)?.toInt() ?? 0;
 
   /// Nota que este lojista recebeu (não a reputação dos entregadores dele).
-  double get _avaliacaoMedia =>
-      (_dashData?['avaliacaoMedia'] as num?)?.toDouble() ?? 0;
+  /// Nula enquanto ninguém avaliou a loja.
+  double? get _avaliacaoMedia =>
+      (_dashData?['avaliacaoMedia'] as num?)?.toDouble();
 
   /// Quantos turnos ativos começam hoje — vira o subtítulo do card "Turnos
   /// ativos", nas duas larguras.
@@ -221,10 +222,10 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
                 icon: Icons.star_outline_rounded,
                 iconColor: AppColors.amber,
                 label: 'Avaliação',
-                value: _avaliacaoMedia > 0
-                    ? _avaliacaoMedia.toStringAsFixed(1)
+                value: _avaliacaoMedia != null
+                    ? _avaliacaoMedia!.toStringAsFixed(1)
                     : 'N/D',
-                sub: _avaliacaoMedia > 0 ? '★ recebida' : 'sem notas',
+                sub: _avaliacaoMedia != null ? '★ recebida' : 'sem notas',
                 subColor: AppColors.amber,
               ),
             ),
@@ -362,10 +363,10 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
               Expanded(
                 child: StatCard(
                   label: 'Avaliação',
-                  value: _avaliacaoMedia > 0
-                      ? _avaliacaoMedia.toStringAsFixed(1)
+                  value: _avaliacaoMedia != null
+                      ? _avaliacaoMedia!.toStringAsFixed(1)
                       : 'N/D',
-                  sub: _avaliacaoMedia > 0 ? '★ recebida' : 'sem notas',
+                  sub: _avaliacaoMedia != null ? '★ recebida' : 'sem notas',
                   subColor: AppColors.amber,
                 ),
               ),

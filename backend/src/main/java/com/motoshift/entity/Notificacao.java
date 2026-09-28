@@ -29,9 +29,11 @@ public class Notificacao {
     @Column(nullable = false)
     private Long usuarioId;
 
-    // turno_expirado | turno_vencendo | turno_aceito | turno_lotado
-    // | turno_cancelado | turno_pendente_finalizacao | pagamento_pendente
-    // | pagamento_confirmado | avaliacao_pendente
+    // Os tipos que o código gera hoje:
+    // turno_aceito | turno_lotado | turno_vencendo | turno_expirado
+    // | turno_cancelado | turno_pendente_finalizacao | avaliacao_pendente
+    // | pagamento_confirmado | nota_fiscal_emitida | nota_fiscal_cancelada
+    // (pagamento_pendente era da dupla confirmação, removida na V13.)
     @Column(nullable = false, length = 40)
     private String tipo;
 
