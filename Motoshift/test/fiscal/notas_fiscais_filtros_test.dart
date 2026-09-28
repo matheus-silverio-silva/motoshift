@@ -206,10 +206,35 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(botao);
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('exportar-planilha')));
+      await tester.pumpAndSettle();
 
       expect(api.notasApi.exportacoesDoResumo, 1);
       // O aviso diz o que fazer com o conteúdo — ver entregarCsv.
       expect(find.textContaining('Cole numa planilha'), findsOneWidget);
+    });
+
+    testWidgets('exportar em PDF monta o informe no app e o entrega',
+        (tester) async {
+      final api = _api(notas: const [], total: 0);
+      final impressora = fingirImpressora(tester);
+
+      await _abrir(tester, api);
+      await tester.tap(find.text('Informe anual'));
+      await tester.pumpAndSettle();
+      final botao = find.byKey(const Key('informe-exportar'));
+      await tester.ensureVisible(botao);
+      await tester.pumpAndSettle();
+      await tester.tap(botao);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('exportar-pdf')));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(seconds: 2)));
+      await tester.pumpAndSettle();
+
+      // O PDF sai do informe que a tela já tem — o CSV do backend não é pedido.
+      expect(api.notasApi.exportacoesDoResumo, 0);
+      expect(impressora.nome, 'informe-${DateTime.now().year}-simulado.pdf');
+      expect(String.fromCharCodes(impressora.bytes!.take(4)), '%PDF');
     });
   });
 }

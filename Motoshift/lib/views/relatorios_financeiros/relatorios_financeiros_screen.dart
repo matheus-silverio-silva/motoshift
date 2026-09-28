@@ -9,8 +9,11 @@ import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/relatorio_pdf.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/exportar_csv.dart';
+import '../../utils/exportar_pdf.dart';
+import '../../widgets/escolher_exportacao.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/desktop/content_grid.dart';
@@ -92,15 +95,41 @@ class _RelatoriosFinanceirosScreenState
     }
   }
 
+  /// Planilha: o extrato do período em CSV, como sempre foi. PDF: o que a
+  /// tela mostra — os cartões do papel, a quebra por tipo e o fluxo — mais os
+  /// lançamentos do período.
   Future<void> _exportar() async {
+    final formato = await escolherFormatoExportacao(context);
+    if (formato == null || !mounted) return;
     final (de, ate) = _periodo.intervalo(_hoje);
+    final filtro = ExtratoFiltro(dataInicio: de, dataFim: ate);
     setState(() => _exportando = true);
     try {
-      final csv = await context.read<ApiService>().carteira.exportarExtratoCsv(
-            filtro: ExtratoFiltro(dataInicio: de, dataFim: ate),
-          );
+      final carteira = context.read<ApiService>().carteira;
+      if (formato == FormatoExportacao.planilha) {
+        final csv = await carteira.exportarExtratoCsv(filtro: filtro);
+        if (!mounted) return;
+        await entregarCsv(context, csv, nomeSugerido: 'relatorio.csv');
+        return;
+      }
+      // Os números do PDF são os da tela: o resumo e o fluxo já carregados
+      // para este período, e não uma segunda consulta que poderia discordar.
+      final resumo = _resumo ?? await carteira.buscarResumo(dataInicio: de, dataFim: ate);
+      final lancamentos = await carteira.exportarExtratoLista(filtro: filtro);
       if (!mounted) return;
-      await entregarCsv(context, csv, nomeSugerido: 'relatorio.csv');
+      final usuario = context.read<AuthService>().usuario;
+      final bytes = await RelatorioPdf.relatorio(
+        titular: TitularDoPdf(nome: usuario?.nome ?? '', papel: _papel),
+        de: de,
+        ate: ate,
+        resumo: resumo,
+        fluxo: _fluxo,
+        lancamentos: lancamentos,
+        geradoEm: _hoje,
+      );
+      if (!mounted) return;
+      await entregarPdf(context, bytes,
+          nomeDoArquivo: RelatorioPdf.nomeDoRelatorio(de, ate));
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -187,37 +216,13 @@ class _RelatoriosFinanceirosScreenState
   }
 
   /// Os cartões do papel de quem abriu a tela, dois por linha. O que é do
-  /// outro papel não aparece — nem zerado.
+  /// outro papel não aparece — nem zerado. A lista é a mesma do PDF
+  /// ([ResumoFinanceiro.numerosPara]).
   Widget _cartoesDeResumo() {
-    final r = _resumo;
-    final cartoes = _souLojista
-        ? [
-            _cartao('Recarregado', r?.recarregado, AppColors.good,
-                const Key('relatorio-recarregado')),
-            _cartao('Pago a entregadores', r?.pagoAEntregadores, AppColors.ink,
-                const Key('relatorio-pago')),
-            _cartao('Devolvido', r?.devolvido, AppColors.ink,
-                const Key('relatorio-devolvido')),
-            _cartao('Disponível', r?.disponivel, AppColors.teal,
-                const Key('relatorio-disponivel')),
-            _cartao('Comprometido em turnos', r?.comprometido, AppColors.muted,
-                const Key('relatorio-comprometido')),
-          ]
-        : [
-            _cartao('Recebido por serviços', r?.recebido, AppColors.good,
-                const Key('relatorio-recebido')),
-            _cartao('Sacado', r?.sacado, AppColors.ink,
-                const Key('relatorio-sacado')),
-            // Só existe com retenção na fonte: sem ela o backend não manda o
-            // campo, e a tela não inventa um "R$ 0,00 retido".
-            if (r?.retencoes != null)
-              _cartao('Retido na fonte', r?.retencoes, AppColors.error,
-                  const Key('relatorio-retencoes')),
-            _cartao('Disponível', r?.disponivel, AppColors.teal,
-                const Key('relatorio-disponivel')),
-            _cartao('A receber', r?.aReceber, AppColors.muted,
-                const Key('relatorio-a-receber')),
-          ];
+    final cartoes = [
+      for (final n in ResumoFinanceiro.numerosPara(_papel, _resumo))
+        _cartao(n.rotulo, n.valor, _corDo(n.chave), Key('relatorio-${n.chave}')),
+    ];
 
     final linhas = <Widget>[];
     for (var i = 0; i < cartoes.length; i += 2) {
@@ -234,6 +239,14 @@ class _RelatoriosFinanceirosScreenState
     }
     return Column(children: linhas);
   }
+
+  static Color _corDo(String chave) => switch (chave) {
+        'recebido' || 'recarregado' => AppColors.good,
+        'retencoes' => AppColors.error,
+        'disponivel' => AppColors.teal,
+        'a-receber' || 'comprometido' => AppColors.muted,
+        _ => AppColors.ink,
+      };
 
   Widget _cartao(String rotulo, double? valor, Color cor, Key key) {
     return Container(
@@ -475,7 +488,7 @@ class _RelatoriosFinanceirosScreenState
           ? const SizedBox(
               width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
           : const Icon(Icons.download_rounded, size: 18),
-      label: const Text('Exportar CSV'),
+      label: const Text('Exportar'),
       // Largura mínima zero, e não `Size.fromHeight`: aquela forma pede largura
       // infinita, o que no celular (numa coluna) esticava o botão como
       // desejado, mas no desktop — dentro de um Row, ao lado do seletor de

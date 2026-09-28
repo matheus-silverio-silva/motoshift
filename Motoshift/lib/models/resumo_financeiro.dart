@@ -1,4 +1,5 @@
 import 'transacao.dart';
+import 'usuario.dart';
 
 /// O retrato financeiro do período, como o backend o devolve em `/resumo` —
 /// um para cada papel.
@@ -103,6 +104,43 @@ class ResumoFinanceiro {
 
   /// Disponível mais bloqueado — só existe para quem tem bloqueado (lojista).
   double? get saldoTotal => bloqueado == null ? null : disponivel + bloqueado!;
+
+  /// Os números que o [papel] vê, na ordem e com os rótulos da tela — a tela
+  /// de relatórios os desenha em cartões e o PDF em linhas, da mesma lista.
+  /// Com [r] nulo (ainda carregando), os rótulos vêm sem valor.
+  static List<NumeroDoResumo> numerosPara(TipoUsuario papel, ResumoFinanceiro? r) {
+    if (papel == TipoUsuario.lojista) {
+      return [
+        NumeroDoResumo('recarregado', 'Recarregado', r?.recarregado),
+        NumeroDoResumo('pago', 'Pago a entregadores', r?.pagoAEntregadores),
+        NumeroDoResumo('devolvido', 'Devolvido', r?.devolvido),
+        NumeroDoResumo('disponivel', 'Disponível', r?.disponivel),
+        NumeroDoResumo('comprometido', 'Comprometido em turnos', r?.comprometido),
+      ];
+    }
+    return [
+      NumeroDoResumo('recebido', 'Recebido por serviços', r?.recebido),
+      // Só existe com retenção na fonte: sem ela o backend não manda o campo,
+      // e ninguém inventa um "R$ 0,00 retido".
+      if (r?.retencoes != null)
+        NumeroDoResumo('retencoes', 'Retido na fonte', r?.retencoes),
+      NumeroDoResumo('sacado', 'Sacado', r?.sacado),
+      NumeroDoResumo('disponivel', 'Disponível', r?.disponivel),
+      NumeroDoResumo('a-receber', 'A receber', r?.aReceber),
+    ];
+  }
+}
+
+/// Um número do resumo como a tela e o PDF o mostram.
+class NumeroDoResumo {
+  const NumeroDoResumo(this.chave, this.rotulo, this.valor);
+
+  /// Identifica o número na tela (`relatorio-<chave>`).
+  final String chave;
+  final String rotulo;
+
+  /// Nulo enquanto o resumo não chegou.
+  final double? valor;
 }
 
 /// Quanto um turno específico ainda segura na carteira do lojista.

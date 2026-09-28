@@ -103,6 +103,22 @@ public class ExtratoService {
     }
 
     /**
+     * O extrato inteiro do filtro, sem paginação, como a tela o recebe — a base
+     * do PDF que o app gera. É o mesmo recorte do CSV, com o documento de cada
+     * linha: o PDF não precisa baixar página por página em laço.
+     */
+    @Transactional(readOnly = true)
+    public List<TransacaoResponse> exportarLista(Long usuarioId, ExtratoFiltro filtro) {
+        List<Transacao> lancamentos = transacaoRepo.findAll(
+                TransacaoSpecs.de(usuarioId, filtro),
+                Sort.by(Sort.Direction.DESC, "criadoEm"));
+        var documentos = indice.indexar(lancamentos);
+        return lancamentos.stream()
+                .map(t -> TransacaoResponse.from(t).comDocumento(documentos.get(t.getId())))
+                .toList();
+    }
+
+    /**
      * O mesmo extrato em CSV.
      *
      * <p>Sem paginação de propósito: exportar meia página não exporta nada. O

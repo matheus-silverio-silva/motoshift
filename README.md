@@ -256,7 +256,7 @@ nova. Para testar o reset localmente, suba com `MOTOSHIFT_SEED_RESET=confirmo`.
 | GET | /api/dashboard/lojista/{id} | Métricas do Lojista |
 | GET | /api/carteira/{id} | Saldo, ganhos e a primeira página do extrato |
 | GET | /api/carteira/extrato | Extrato filtrado e paginado (período, tipo, natureza, turno, contraparte, valor, busca) |
-| GET | /api/carteira/extrato/exportar | O mesmo extrato em CSV, sem paginação |
+| GET | /api/carteira/extrato/exportar | O mesmo extrato sem paginação: `formato=csv` (planilha, padrão) ou `formato=json` (a base do PDF que o app gera) |
 | GET | /api/carteira/resumo | O resumo do período para o papel de quem pergunta — entregador: recebido, retido, sacado, disponível e a receber; lojista: recarregado, pago, devolvido, disponível e comprometido. Os campos do outro papel não vêm |
 | GET | /api/carteira/fluxo | Série de fluxo de caixa por dia, semana ou mês (sem reserva e liberação, que são o dinheiro trocando de bolso) |
 | POST | /api/carteira/recargas | Abre uma cobrança Pix simulada (não credita) |
@@ -343,6 +343,20 @@ entregador**, e a emissão é idempotente: pedir de novo devolve a que já exist
 Só as partes do lançamento veem o documento (terceiro leva 403), CPF e CNPJ
 saem mascarados, e **cancelar a nota não estorna dinheiro** — o serviço foi
 prestado e o pagamento está no extrato.
+
+### Exportação: planilha ou PDF
+
+Extrato, relatórios e informe anual têm um botão **Exportar** com duas opções:
+**Planilha (Excel/CSV)**, que é o CSV de sempre, e **PDF**, gerado no próprio
+app com os pacotes `pdf` e `printing` e a identidade visual do documento
+fiscal (`lib/services/identidade_pdf.dart`). O PDF traz cabeçalho com nome,
+papel, período e filtros aplicados, os mesmos números da tela e a tabela de
+lançamentos — e segue o papel: o do entregador não tem coluna de saldo
+bloqueado, o do lojista não tem "a receber". O informe anual, que imita um
+documento fiscal, sai com a marca **DOCUMENTO SIMULADO — SEM VALOR FISCAL** em
+faixa e em marca d'água. Para montar o PDF com o filtro inteiro, o app pede o
+mesmo recorte do CSV em JSON (`/api/carteira/extrato/exportar?formato=json`),
+numa chamada só, em vez de baixar página por página.
 
 ### Tributos e retenção
 

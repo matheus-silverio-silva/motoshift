@@ -849,6 +849,17 @@ class FakeCarteiraApi extends CarteiraApi {
         : fakeDocumentoComprovante();
   }
 
+  /// Filtros pedidos na exportação em lista (a base do PDF).
+  final List<ExtratoFiltro> exportacoesEmLista = [];
+
+  @override
+  Future<List<Transacao>> exportarExtratoLista({
+    ExtratoFiltro filtro = const ExtratoFiltro(),
+  }) async {
+    exportacoesEmLista.add(filtro);
+    return _filtrar(filtro);
+  }
+
   @override
   Future<PaginaDoExtrato> buscarExtrato({
     ExtratoFiltro filtro = const ExtratoFiltro(),
@@ -857,8 +868,19 @@ class FakeCarteiraApi extends CarteiraApi {
   }) async {
     filtrosRecebidos.add(filtro);
 
+    final filtrados = _filtrar(filtro);
+
+    final de = pagina * tamanho;
+    final ate = (de + tamanho).clamp(0, filtrados.length);
+    return (
+      itens: de >= filtrados.length ? <Transacao>[] : filtrados.sublist(de, ate),
+      total: filtrados.length,
+    );
+  }
+
+  List<Transacao> _filtrar(ExtratoFiltro filtro) {
     final todos = fakeExtrato();
-    final filtrados = todos.where((t) {
+    return todos.where((t) {
       if (filtro.tipos.isNotEmpty && !filtro.tipos.contains(t.tipo)) {
         return false;
       }
@@ -872,13 +894,6 @@ class FakeCarteiraApi extends CarteiraApi {
       }
       return true;
     }).toList();
-
-    final de = pagina * tamanho;
-    final ate = (de + tamanho).clamp(0, filtrados.length);
-    return (
-      itens: de >= filtrados.length ? <Transacao>[] : filtrados.sublist(de, ate),
-      total: filtrados.length,
-    );
   }
 
   @override
@@ -1810,6 +1825,31 @@ const List<int> _pngTransparente1x1 = <int>[
 /// espera a cópia terminar fica girando o spinner para sempre — `pumpAndSettle`
 /// estoura em vez de falhar a asserção. Quem exercita "Exportar CSV" chama
 /// isto antes do toque.
+/// Finge o plugin `printing` e guarda o que ele recebeu: o PDF e o nome do
+/// arquivo. Sem isto, "Baixar PDF" num teste cai num canal de plataforma que
+/// não existe.
+class PdfEntregue {
+  Uint8List? bytes;
+  String? nome;
+}
+
+PdfEntregue fingirImpressora(WidgetTester tester) {
+  final entregue = PdfEntregue();
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+    const MethodChannel('net.nfet.printing'),
+    (call) async {
+      if (call.method == 'sharePdf') {
+        final args = (call.arguments as Map).cast<String, dynamic>();
+        entregue.bytes = args['doc'] as Uint8List;
+        entregue.nome = args['name'] as String?;
+        return 1;
+      }
+      return null;
+    },
+  );
+  return entregue;
+}
+
 void fingirAreaDeTransferencia(WidgetTester tester) {
   tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
     SystemChannels.platform,

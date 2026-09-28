@@ -8,12 +8,15 @@ import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/relatorio_pdf.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/desktop/panel_card.dart';
 import '../../utils/exportar_csv.dart';
+import '../../utils/exportar_pdf.dart';
+import '../../widgets/escolher_exportacao.dart';
 import '../../widgets/empty_state.dart';
 import 'nota_fiscal_detalhe.dart';
 
@@ -141,15 +144,36 @@ class _NotasFiscaisScreenState extends State<NotasFiscaisScreen> {
     }
   }
 
+  /// Planilha (o CSV do backend) ou PDF, montado aqui com o informe que a
+  /// tela já tem — com a marca de documento simulado, como a nota.
   Future<void> _exportarInforme() async {
+    final formato = await escolherFormatoExportacao(context);
+    if (formato == null || !mounted) return;
     setState(() => _exportando = true);
     try {
-      final csv = await context
-          .read<ApiService>()
-          .notasFiscais
-          .exportarResumo(ano: _anoInforme);
+      if (formato == FormatoExportacao.planilha) {
+        final csv = await context
+            .read<ApiService>()
+            .notasFiscais
+            .exportarResumo(ano: _anoInforme);
+        if (!mounted) return;
+        await entregarCsv(context, csv, nomeSugerido: 'informe-$_anoInforme.csv');
+        return;
+      }
+      final informe = _informe;
+      if (informe == null) return;
+      final usuario = context.read<AuthService>().usuario;
+      final bytes = await RelatorioPdf.informe(
+        titular: TitularDoPdf(
+          nome: usuario?.nome ?? '',
+          papel: usuario?.tipo ?? TipoUsuario.motoboy,
+        ),
+        informe: informe,
+        geradoEm: DateTime.now(),
+      );
       if (!mounted) return;
-      await entregarCsv(context, csv, nomeSugerido: 'informe-$_anoInforme.csv');
+      await entregarPdf(context, bytes,
+          nomeDoArquivo: RelatorioPdf.nomeDoInforme(informe.ano));
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -987,7 +1011,7 @@ class _NotasFiscaisScreenState extends State<NotasFiscaisScreen> {
                 child: CircularProgressIndicator(
                     strokeWidth: 2, color: AppColors.teal))
             : const Icon(Icons.download_rounded, size: 18, color: AppColors.tealDeep),
-        label: Text('Exportar CSV',
+        label: Text('Exportar',
             style: tsJakarta(12.5, FontWeight.w700, color: AppColors.tealDeep)),
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(0, 46),

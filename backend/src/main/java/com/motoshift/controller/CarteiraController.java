@@ -202,19 +202,27 @@ public class CarteiraController {
         return Paginacao.resposta(extrato.extrato(atual.id(), filtro, pedido));
     }
 
-    @Operation(summary = "Exportar o extrato em CSV",
+    @Operation(summary = "Exportar o extrato (CSV ou JSON)",
             description = "Mesmos filtros de /extrato, sem paginação — exportar meia página "
-                    + "não exporta nada. Separador ';' porque o Excel em português usa a "
-                    + "vírgula como separador decimal.")
-    @ApiResponse(responseCode = "200", description = "Arquivo CSV")
+                    + "não exporta nada. formato=csv (padrão): separador ';' porque o Excel "
+                    + "em português usa a vírgula como separador decimal. formato=json: a "
+                    + "mesma lista, no formato das linhas de /extrato — é a base do PDF que "
+                    + "o app monta.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Arquivo CSV ou lista JSON"),
+        @ApiResponse(responseCode = "400", description = "Formato ou filtro inválido")
+    })
     @GetMapping("/extrato/exportar")
-    public ResponseEntity<String> exportarExtrato(
+    public ResponseEntity<?> exportarExtrato(
             ExtratoFiltro filtro,
             @RequestParam(defaultValue = "csv") String formato,
             @AuthenticationPrincipal UsuarioAutenticado atual) {
+        if ("json".equalsIgnoreCase(formato)) {
+            return ResponseEntity.ok(extrato.exportarLista(atual.id(), filtro));
+        }
         if (!"csv".equalsIgnoreCase(formato)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Formato não suportado: use csv.");
+                    "Formato não suportado: use csv ou json.");
         }
         String csv = extrato.exportarCsv(atual.id(), filtro);
         return ResponseEntity.ok()

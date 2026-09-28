@@ -205,6 +205,13 @@ campo de CPF, que é o erro que qualquer preenchimento automático cometeria.
 | GET | `/api/notas-fiscais/resumo?ano=` | Informe anual simulado |
 | GET | `/api/notas-fiscais/resumo/exportar?ano=` | O mesmo informe em CSV |
 
+O informe também sai em **PDF**, montado no app a partir do mesmo
+`/resumo` que a tela já carregou (`RelatorioPdf.informe`). Como imita um
+documento fiscal, leva a marca **DOCUMENTO SIMULADO — SEM VALOR FISCAL** na
+faixa do topo e em marca d'água, igual à NFS-e — e o rodapé diz que ele não
+substitui o informe de rendimentos oficial. O PDF do entregador fala de
+"fonte pagadora", o do lojista de "prestador", como a tela.
+
 Para o lojista, "gerar" e "ver" são o mesmo pedido: como a emissão é
 idempotente, o POST devolve 201 na primeira vez e 200 depois. Para o
 entregador, a NFS-e é só GET: o POST dele é sempre um pedido de emissão, e
@@ -290,6 +297,8 @@ autoriza na hora.
 | Migração | `db/migration/V14__fiscal_por_lancamento.sql` |
 | App: tela do documento | `Motoshift/lib/views/documento_fiscal/`, `lib/widgets/documento/` |
 | App: PDF e impressão | `Motoshift/lib/services/documento_pdf.dart` |
+| App: identidade visual comum aos PDFs | `Motoshift/lib/services/identidade_pdf.dart` |
+| App: PDF do informe anual (e do extrato e do relatório) | `Motoshift/lib/services/relatorio_pdf.dart` |
 
 ### Testes que sustentam este documento
 
@@ -304,4 +313,5 @@ autoriza na hora.
 | `service/fiscal/DocumentoDaParteTest.java` | máscara de CPF/CNPJ e o entregador sem CPF |
 | `Motoshift/test/documento/documento_fiscal_test.dart` | marca sempre visível, PDF gerado, caminhos até o documento |
 | `Motoshift/test/fiscal/notas_fiscais_filtros_test.dart` | filtro indo para a API, paginação, informe e exportação |
+| `Motoshift/test/exportacao/exportar_pdf_test.dart` | os três PDFs gerados, com os totais da tela lidos de volta do arquivo, as colunas por papel e a marca no informe |
 | `Motoshift/test/fiscal/quem_emite_test.dart` | entregador sem "Emitir" nem "Cancelar", "aguardando emissão" sem botão, nota aberta por GET |

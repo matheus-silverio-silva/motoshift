@@ -242,6 +242,26 @@ class ExtratoServiceTest {
         assertThat(extrato.exportarCsv(usuario, f)).contains("'=SOMA(A1:A9)");
     }
 
+    @Test
+    @DisplayName("exportar em lista traz o filtro inteiro, sem paginação, na ordem do extrato")
+    void exportarLista_semPaginacao() {
+        for (int i = 0; i < 25; i++) {
+            lancamento(TipoTransacao.RECARGA, "10.00", dia(20).plusMinutes(i), null, null, "Recarga " + i);
+        }
+        ExtratoFiltro f = new ExtratoFiltro();
+        f.setTipos(List.of(TipoTransacao.RECARGA));
+
+        List<TransacaoResponse> lista = extrato.exportarLista(usuario, f);
+
+        // 25 novas + a do cenário: mais que uma página padrão (20), e nada de
+        // outro tipo.
+        assertThat(lista).hasSize(26)
+                .allSatisfy(t -> assertThat(t.getTipo()).isEqualTo(TipoTransacao.RECARGA));
+        assertThat(lista).extracting(TransacaoResponse::getCriadoEm)
+                .isSortedAccordingTo(java.util.Comparator.reverseOrder());
+        assertThat(extrato.exportarCsv(usuario, f).split("\n")).hasSize(27);
+    }
+
     // -- Resumo --------------------------------------------------------------
 
     @Test

@@ -8,9 +8,12 @@ import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/relatorio_pdf.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../utils/exportar_csv.dart';
+import '../../utils/exportar_pdf.dart';
+import '../../widgets/escolher_exportacao.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/documento/botao_documento.dart';
 import 'extrato_filtros.dart';
@@ -131,16 +134,37 @@ class _ExtratoScreenState extends State<ExtratoScreen> {
     }
   }
 
+  /// Planilha (o CSV de sempre) ou PDF, sempre com o filtro da tela.
   Future<void> _exportar() async {
+    final formato = await escolherFormatoExportacao(context);
+    if (formato == null || !mounted) return;
     setState(() => _exportando = true);
     try {
-      final csv = await context
-          .read<ApiService>()
-          .carteira
-          .exportarExtratoCsv(filtro: _filtro);
+      final carteira = context.read<ApiService>().carteira;
+      if (formato == FormatoExportacao.planilha) {
+        final csv = await carteira.exportarExtratoCsv(filtro: _filtro);
+        if (!mounted) return;
+        // Entrega o conteúdo, em vez de só dizer que exportou: ver entregarCsv.
+        await entregarCsv(context, csv, nomeSugerido: 'extrato.csv');
+        return;
+      }
+      // O PDF leva o filtro inteiro, não a página que está na tela: uma
+      // chamada ao mesmo recorte do CSV, em JSON.
+      final lancamentos = await carteira.exportarExtratoLista(filtro: _filtro);
       if (!mounted) return;
-      // Entrega o conteúdo, em vez de só dizer que exportou: ver entregarCsv.
-      await entregarCsv(context, csv, nomeSugerido: 'extrato.csv');
+      final usuario = context.read<AuthService>().usuario;
+      final bytes = await RelatorioPdf.extrato(
+        titular: TitularDoPdf(
+          nome: usuario?.nome ?? '',
+          papel: usuario?.tipo ?? TipoUsuario.motoboy,
+        ),
+        filtro: _filtro,
+        lancamentos: lancamentos,
+        geradoEm: _hoje,
+      );
+      if (!mounted) return;
+      await entregarPdf(context, bytes,
+          nomeDoArquivo: RelatorioPdf.nomeDoExtrato(_hoje));
     } on ApiException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -207,7 +231,7 @@ class _ExtratoScreenState extends State<ExtratoScreen> {
           const SizedBox(width: 8),
           IconButton(
             key: const Key('extrato-exportar'),
-            tooltip: 'Exportar CSV',
+            tooltip: 'Exportar',
             icon: _exportando
                 ? const SizedBox(
                     width: 18,
