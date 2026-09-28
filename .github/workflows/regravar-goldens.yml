@@ -1,0 +1,49 @@
+name: Regravar goldens (temporario)
+
+# Temporario: regrava os goldens dos documentos fiscais no mesmo ambiente do
+# CI (windows-latest, Segoe UI, Flutter 3.41.5) e devolve as imagens a esta
+# branch. Existe porque a NFS-e passou a seguir o leiaute do DANFSe v2.0 e o
+# recibo ganhou o texto de quitação, e os goldens so podem ser gravados no
+# Windows. Sai da branch antes do merge.
+on:
+  push:
+    branches: ['claude/dreamy-davinci-gu076z']
+    paths: ['.github/workflows/regravar-goldens.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  regravar:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.5
+          cache: true
+
+      - name: Dependencias
+        working-directory: Motoshift
+        run: flutter pub get
+
+      # So o arquivo que grava as telas de documento — as unicas que mudaram.
+      - name: Regravar
+        working-directory: Motoshift
+        run: flutter test --update-goldens test/goldens/documento_screens_test.dart
+
+      - name: Devolver as imagens a branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Motoshift/test/goldens/goldens
+          git status --short
+          if git diff --cached --quiet; then
+            echo "Nenhum golden mudou."
+          else
+            git commit -m "test(goldens): regrava no Windows com Flutter 3.41.5 as telas de documento"
+            git push
+          fi
