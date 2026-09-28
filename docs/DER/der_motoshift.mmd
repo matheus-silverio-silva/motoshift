@@ -16,6 +16,7 @@ erDiagram
     TURNOS   ||--o{ NOTAS_FISCAIS : "documenta"
     TRANSACOES ||--o| NOTAS_FISCAIS : "pagamento documentado por"
     USUARIOS ||--o{ FAVORITOS : "favorita (lojista_id)"
+    USUARIOS ||--o{ TURNOS : "cancela (cancelado_por_id)"
     USUARIOS ||--o{ FAVORITOS : "e favorito (motoboy_id)"
 
     USUARIOS {
@@ -36,6 +37,7 @@ erDiagram
         VARCHAR endereco_comercial "lojista"
         FLOAT latitude "lojista - ponto da loja (V15)"
         FLOAT longitude "lojista - ponto da loja (V15)"
+        NUMERIC meta_mensal "motoboy - meta de ganhos do mes (V19) - CHECK maior que zero"
         VARCHAR cnh_numero "motoboy"
         VARCHAR cnh_categoria "motoboy - A|AB"
         DATE cnh_validade "motoboy"
@@ -66,6 +68,8 @@ erDiagram
         VARCHAR status "NOT NULL - aberto|aceito|em_andamento|finalizado|cancelado|expirado"
         VARCHAR pagamento_status "null|pendente|pago"
         TIMESTAMP expirado_em "SCRUM-19"
+        BIGINT cancelado_por_id FK "usuarios.id - quem cancelou (V19)"
+        TIMESTAMP cancelado_em "V19"
         TIMESTAMP criado_em "NOT NULL"
         TIMESTAMP atualizado_em ""
     }

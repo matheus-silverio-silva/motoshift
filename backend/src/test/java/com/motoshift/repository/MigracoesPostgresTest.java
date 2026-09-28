@@ -113,9 +113,9 @@ public class MigracoesPostgresTest {
         flyway(url, null).migrate();
 
         try (Connection c = conectar(url); Statement s = c.createStatement()) {
-            // As 18 da V11 e as 2 de favoritos (V18).
+            // As 18 da V11, as 2 de favoritos (V18) e a de quem cancelou (V19).
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f'"))
-                    .isEqualTo(20);
+                    .isEqualTo(21);
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated"))
                     .isZero();
         }
@@ -367,6 +367,28 @@ public class MigracoesPostgresTest {
         }
     }
 
+    @Test
+    @DisplayName("V19: meta positiva ou nula; quem cancelou aponta para usuarios")
+    void v19_metaEQuemCancelou() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v19");
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("moto-v19@teste.com", "x"));
+            long moto = contar(s, "SELECT id FROM usuarios WHERE email = 'moto-v19@teste.com'");
+
+            s.execute("UPDATE usuarios SET meta_mensal = 2000.00 WHERE id = " + moto);
+            s.execute("UPDATE usuarios SET meta_mensal = NULL WHERE id = " + moto);
+            assertThatThrownBy(() -> s.execute("UPDATE usuarios SET meta_mensal = 0 WHERE id = " + moto))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_usuario_meta_positiva");
+
+            assertThat(validada(s, "fk_turno_cancelado_por")).isTrue();
+            assertThat(contar(s, "SELECT count(*) FROM pg_indexes WHERE indexname = 'ix_turno_cancelado_por'"))
+                    .isEqualTo(1);
+        }
+    }
+
     // ── Apoio ──────────────────────────────────────────────────────────────
 
     /** INSERT valido ATE a V11 — antes de a coluna natureza existir. */
@@ -430,7 +452,7 @@ public class MigracoesPostgresTest {
      * um número só.
      */
     public static String ultimaVersao() {
-        return "18";
+        return "19";
     }
 
     static Connection conectar(String url) throws SQLException {

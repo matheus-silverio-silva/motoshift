@@ -33,6 +33,8 @@ public class PerfilPublicoResponse {
     /** % de check-ins até 10 min após o início, 90 dias — só entregador; nulo = sem histórico. */
     private Integer pontualidade;
     private Integer checkinsPontualidade;
+    /** Selos de reputação (Fase 7), com o critério de cada um. */
+    private java.util.List<com.motoshift.service.Selos.Selo> selos = java.util.List.of();
 
     /**
      * @param score o score visível ({@code Reputacao.scoreVisivel}): só o
@@ -64,6 +66,13 @@ public class PerfilPublicoResponse {
         this.checkinsPontualidade = checkins;
         return this;
     }
+
+    public PerfilPublicoResponse comSelos(java.util.List<com.motoshift.service.Selos.Selo> selos) {
+        this.selos = selos == null ? java.util.List.of() : selos;
+        return this;
+    }
+
+    public java.util.List<com.motoshift.service.Selos.Selo> getSelos() { return selos; }
 
     public Long getId() { return id; }
     public String getNome() { return nome; }

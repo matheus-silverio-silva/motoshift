@@ -35,6 +35,7 @@ public class Notificacao {
     // | pagamento_confirmado | nota_fiscal_emitida | nota_fiscal_cancelada
     // | entregador_chegou | entregador_saiu (check-in e check-out, V16)
     // | gorjeta_recebida (V17) | turno_de_favorito (V18)
+    // | turno_lembrete (1 h antes do turno aceito, TurnoLembreteService)
     // (pagamento_pendente era da dupla confirmação, removida na V13.)
     @Column(nullable = false, length = 40)
     private String tipo;

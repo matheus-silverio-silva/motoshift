@@ -42,6 +42,11 @@ class Usuario {
   final double? latitude;
   final double? longitude;
 
+  /// Meta de ganhos do mês do entregador (V19) — pagamentos recebidos mais
+  /// gorjetas. Nula = sem meta: o painel convida a definir, e nunca desenha
+  /// uma barra zerada.
+  final double? metaMensal;
+
   final DateTime? criadoEm;
 
   /// A loja já marcou o ponto no mapa?
@@ -70,6 +75,7 @@ class Usuario {
     this.nomeFantasia,
     this.enderecoComercial,
     this.latitude,
+    this.metaMensal,
     this.longitude,
     this.criadoEm,
   });
@@ -109,6 +115,7 @@ class Usuario {
       enderecoComercial: json['enderecoComercial'] as String?,
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
+      metaMensal: (json['metaMensal'] as num?)?.toDouble(),
       criadoEm: parseDate('criadoEm'),
     );
   }
@@ -149,6 +156,7 @@ class Usuario {
     String? enderecoComercial,
     double? latitude,
     double? longitude,
+    double? metaMensal,
     DateTime? criadoEm,
   }) {
     return Usuario(
@@ -175,6 +183,7 @@ class Usuario {
       enderecoComercial: enderecoComercial ?? this.enderecoComercial,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      metaMensal: metaMensal ?? this.metaMensal,
       criadoEm: criadoEm ?? this.criadoEm,
     );
   }

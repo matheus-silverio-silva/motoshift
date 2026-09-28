@@ -114,6 +114,7 @@ class _FavoritosDoLojistaState extends State<FavoritosDoLojista> {
                         color: AppColors.muted)),
               ),
               TextButton(
+                style: TextButton.styleFrom(minimumSize: const Size(64, 44)),
                 onPressed: () => p.carregar(
                     context.read<AuthService>().usuario?.id,
                     forcar: true),

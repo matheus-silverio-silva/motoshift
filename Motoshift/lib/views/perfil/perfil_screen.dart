@@ -1,6 +1,7 @@
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/selo.dart';
 import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
@@ -8,6 +9,8 @@ import '../../presentation/providers/pendencias_provider.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import 'favoritos_do_lojista.dart';
+import '../../widgets/meta_do_mes.dart';
+import '../../widgets/selos_de_reputacao.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/menu_row.dart';
@@ -28,6 +31,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
   /// Métricas do dashboard. O perfil não tem endpoint próprio, e
   /// `turnosFinalizados` já é calculado lá — reaproveita em vez de recontar.
   Map<String, dynamic>? _dash;
+
+  List<Selo> get _selos => Selo.listaDe(_dash?['selos']);
+
+  double? get _meta => context.read<AuthService>().usuario?.metaMensal;
 
   @override
   void initState() {
@@ -145,6 +152,12 @@ class _PerfilScreenState extends State<PerfilScreen> {
             offset: const Offset(0, -28),
             child: _buildStatsCard(usuario),
           ),
+          // Os selos da própria conta — os mesmos que os outros veem.
+          if (_selos.isNotEmpty)
+            Transform.translate(
+              offset: const Offset(0, -16),
+              child: SelosDeReputacao(selos: _selos),
+            ),
           const SizedBox(height: 4),
           ..._buildMenus(context, isLojista, nome),
         ],
@@ -212,6 +225,10 @@ class _PerfilScreenState extends State<PerfilScreen> {
               ),
               const SizedBox(height: 16),
               _buildStatsCard(usuario),
+              if (_selos.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                SelosDeReputacao(selos: _selos),
+              ],
             ],
           ),
         ),
@@ -239,6 +256,20 @@ class _PerfilScreenState extends State<PerfilScreen> {
               onTap: () => Navigator.pushNamed(
                   context, AppRoutes.dadosPessoais),
             ),
+            // Meta do mês (V19) — só o entregador recebe pagamento.
+            if (!isLojista)
+              MenuRow(
+                key: const Key('perfil-meta'),
+                icon: Icons.flag_outlined,
+                label: 'Meta do mês',
+                subtitle: _meta == null
+                    ? 'Não definida'
+                    : reaisSemCentavos(_meta!),
+                onTap: () async {
+                  final mudou = await editarMetaDoMes(context);
+                  if (mudou != false && mounted) setState(() {});
+                },
+              ),
             MenuRow(
               icon: isLojista
                   ? Icons.location_on_outlined

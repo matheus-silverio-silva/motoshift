@@ -74,6 +74,12 @@ public class Turno {
     // Preenchido pelo job de vencimento quando o turno passa a EXPIRADO (SCRUM-19).
     private LocalDateTime expiradoEm;
 
+    // Quem cancelou e quando (V19). Os dois lados podem cancelar, e o selo
+    // "30 dias sem cancelar" do entregador só pode contar o que ELE cancelou.
+    // Nulos no turno não cancelado e no cancelado antes da V19.
+    private Long canceladoPorId;
+    private LocalDateTime canceladoEm;
+
     // null (nao finalizado) | pendente | pago
     // PAGO so quando AMBOS confirmaram (lojista pagou + motoboy recebeu)
     private StatusPagamento pagamentoStatus;
@@ -133,6 +139,11 @@ public class Turno {
 
     public String getEndereco() { return endereco; }
     public void setEndereco(String endereco) { this.endereco = endereco; }
+
+    public Long getCanceladoPorId() { return canceladoPorId; }
+    public void setCanceladoPorId(Long canceladoPorId) { this.canceladoPorId = canceladoPorId; }
+    public LocalDateTime getCanceladoEm() { return canceladoEm; }
+    public void setCanceladoEm(LocalDateTime canceladoEm) { this.canceladoEm = canceladoEm; }
 
     public LocalDateTime getExpiradoEm() { return expiradoEm; }
     public void setExpiradoEm(LocalDateTime expiradoEm) { this.expiradoEm = expiradoEm; }

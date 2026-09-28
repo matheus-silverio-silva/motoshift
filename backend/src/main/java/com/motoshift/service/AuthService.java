@@ -28,17 +28,20 @@ public class AuthService {
     private final PasswordEncoder encoder;
     private final JwtService jwt;
     private final Reputacao reputacao;
+    private final Selos selos;
 
     public AuthService(UsuarioRepository repo,
                        CarteiraService carteiras,
                        PasswordEncoder encoder,
                        JwtService jwt,
-                       Reputacao reputacao) {
+                       Reputacao reputacao,
+                       Selos selos) {
         this.repo = repo;
         this.carteiras = carteiras;
         this.encoder = encoder;
         this.jwt = jwt;
         this.reputacao = reputacao;
+        this.selos = selos;
     }
 
     /** O perfil completo, com o score que se mostra — ver {@link Reputacao}. */
@@ -170,7 +173,8 @@ public class AuthService {
             Reputacao.Pontualidade p = reputacao.pontualidade(u.getId());
             r.comPontualidade(p.percentual(), p.checkins());
         }
-        return r;
+        // Selos de reputação (calculados, sem tabela) — ver Selos.
+        return r.comSelos(selos.de(u));
     }
 
     private Usuario carregar(Long id) {
@@ -210,8 +214,40 @@ public class AuthService {
         if (body.containsKey("latitude") || body.containsKey("longitude")) {
             definirPontoDaLoja(u, body.get("latitude"), body.get("longitude"));
         }
+        if (body.containsKey("metaMensal")) {
+            definirMeta(u, body.get("metaMensal"));
+        }
 
         return resposta(repo.save(u));
+    }
+
+    /** Teto da meta: um número de erro de digitação, não de ambição. */
+    static final java.math.BigDecimal META_MAXIMA = new java.math.BigDecimal("100000.00");
+
+    /**
+     * A meta do mês do entregador (V19): positiva, até {@link #META_MAXIMA},
+     * ou nula para tirar. Só o entregador tem — a loja não recebe pagamento.
+     */
+    private static void definirMeta(Usuario u, Object valor) {
+        if (!"motoboy".equals(u.getTipo())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Só o entregador tem meta de ganhos.");
+        }
+        if (valor == null) {
+            u.setMetaMensal(null);
+            return;
+        }
+        java.math.BigDecimal meta;
+        try {
+            meta = new java.math.BigDecimal(valor.toString());
+        } catch (NumberFormatException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Meta inválida.");
+        }
+        if (meta.signum() <= 0 || meta.compareTo(META_MAXIMA) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "A meta vai de R$ 1 a R$ 100.000.");
+        }
+        u.setMetaMensal(meta.setScale(2, java.math.RoundingMode.HALF_UP));
     }
 
     /**

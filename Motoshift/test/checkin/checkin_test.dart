@@ -143,7 +143,12 @@ void main() {
           tipoUsuario: TipoUsuario.lojista,
           apiFake: api);
 
-      expect(find.text('Chegou às 14:03 (2 min antes) · saiu às 18:02'), findsOneWidget);
+      // O card do entregador fica abaixo do mapa (e do "Adicionar ao
+      // calendário"): numa lista preguiçosa, só existe depois de rolar.
+      final presenca = find.text('Chegou às 14:03 (2 min antes) · saiu às 18:02');
+      await tester.scrollUntilVisible(presenca, 200,
+          scrollable: find.byType(Scrollable).first);
+      expect(presenca, findsOneWidget);
       // O lojista não faz check-in.
       expect(find.byKey(const Key('acao-cheguei')), findsNothing);
     });

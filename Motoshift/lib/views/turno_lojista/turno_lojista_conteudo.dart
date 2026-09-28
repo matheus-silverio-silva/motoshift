@@ -11,6 +11,7 @@ import '../../theme/app_theme.dart';
 import '../perfil_publico/perfil_publico_screen.dart';
 import '../../widgets/botao_favorito.dart';
 import '../../widgets/acoes_do_turno.dart';
+import '../../widgets/atalhos_do_turno.dart';
 import '../../widgets/desktop/info_tile_grid.dart';
 import '../../widgets/mapa_turno.dart';
 import '../../widgets/o_que_falta.dart';
@@ -178,6 +179,11 @@ class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
       // ação, e depois do turno encerrado é a razão de o lojista ter aberto
       // esta tela. Some sozinho quando não há pendência.
       OQueFalta(
+        turno: turno,
+        margem: EdgeInsets.only(bottom: widget.desktop ? 16 : 12),
+      ),
+      // "Adicionar ao calendário" do turno publicado que ainda vale.
+      AtalhosDoTurno(
         turno: turno,
         margem: EdgeInsets.only(bottom: widget.desktop ? 16 : 12),
       ),

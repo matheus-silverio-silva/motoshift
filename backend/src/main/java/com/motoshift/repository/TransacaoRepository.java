@@ -72,6 +72,19 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long>,
                                  @Param("desde") LocalDateTime desde);
 
     /**
+     * Gorjetas que a loja deu em turnos que começaram desde uma data — o selo
+     * "Paga gorjeta". Pela data do turno, e não do lançamento: é o turno que
+     * diz quando a loja contratou.
+     */
+    @Query("SELECT COUNT(t) FROM Transacao t, Turno tu "
+         + "WHERE t.turnoId = tu.id AND t.usuarioId = :lojistaId AND t.tipo = :tipo "
+         + "AND t.status = :status AND tu.dataInicio >= :desde")
+    long contarGorjetasDadasDesde(@Param("lojistaId") Long lojistaId,
+                                  @Param("tipo") TipoTransacao tipo,
+                                  @Param("status") StatusTransacao status,
+                                  @Param("desde") LocalDateTime desde);
+
+    /**
      * Total por mes, somado no banco — a base do grafico de ganhos.
      *
      * Antes o servico carregava TODAS as transacoes do usuario e filtrava mes

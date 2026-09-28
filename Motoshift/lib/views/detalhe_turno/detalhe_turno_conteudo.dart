@@ -4,6 +4,7 @@ import '../../models/turno.dart';
 import '../../presentation/providers/turno_provider.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/atalhos_do_turno.dart';
 import '../../widgets/acoes_do_turno.dart';
 import '../../widgets/checkin_do_turno.dart';
 import '../../widgets/desktop/info_tile_grid.dart';
@@ -96,6 +97,8 @@ class _DetalheTurnoConteudoState extends State<DetalheTurnoConteudo> {
               _InfoCard(turno: turno),
               const SizedBox(height: 12),
               _GridInfo(turno: turno),
+              // Abrir rota / calendário — somem quando não cabem.
+              AtalhosDoTurno(turno: turno, margem: const EdgeInsets.only(top: 12)),
               // Some sozinho quando não há pendência — ver OQueFalta.
               OQueFalta(turno: turno, margem: const EdgeInsets.only(top: 12)),
               // "Cheguei" / "Encerrar turno": só para quem está no turno.
@@ -131,6 +134,7 @@ class _DetalheTurnoConteudoState extends State<DetalheTurnoConteudo> {
           _CabecalhoDesktop(turno: turno),
           const SizedBox(height: 16),
           InfoTileGrid(itens: _infoDoTurno(turno)),
+          AtalhosDoTurno(turno: turno, margem: const EdgeInsets.only(top: 16)),
           const SizedBox(height: 16),
           Expanded(
             // O mapa ocupa a altura que sobrar do painel; o LayoutBuilder

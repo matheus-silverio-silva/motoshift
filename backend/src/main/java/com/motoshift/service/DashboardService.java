@@ -37,17 +37,20 @@ public class DashboardService {
     private final CarteiraRepository carteiraRepo;
     private final CarteiraService carteiraService;
     private final Reputacao reputacao;
+    private final Selos selos;
 
     public DashboardService(UsuarioRepository usuarioRepo,
                             TurnoRepository turnoRepo,
                             CarteiraRepository carteiraRepo,
                             CarteiraService carteiraService,
-                            Reputacao reputacao) {
+                            Reputacao reputacao,
+                            Selos selos) {
         this.usuarioRepo = usuarioRepo;
         this.turnoRepo = turnoRepo;
         this.carteiraRepo = carteiraRepo;
         this.carteiraService = carteiraService;
         this.reputacao = reputacao;
+        this.selos = selos;
     }
 
     public Map<String, Object> doLojista(Long id) {
@@ -115,6 +118,8 @@ public class DashboardService {
         resp.put("reputacaoEntregadores", reputacaoEntregadores);
         resp.put("totalGasto", totalGasto);
         resp.put("turnosRecentes", turnosRecentes);
+        // Os selos da própria loja, para o perfil — os mesmos do perfil público.
+        resp.put("selos", selos.de(lojista));
         return resp;
     }
 
@@ -191,6 +196,10 @@ public class DashboardService {
         Reputacao.Pontualidade pontualidade = reputacao.pontualidade(id);
         resp.put("pontualidade", pontualidade.percentual());
         resp.put("checkinsPontualidade", pontualidade.checkins());
+        // Meta do mês (V19): a barra compara ganhosMensais — pagamentos
+        // recebidos + gorjetas do mês — com ela. Nula = sem meta.
+        resp.put("metaMensal", motoboy.getMetaMensal());
+        resp.put("selos", selos.de(motoboy));
         return resp;
     }
 }

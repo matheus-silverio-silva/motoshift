@@ -211,6 +211,20 @@ regras de `TurnoService` no backend.
   da semana seguinte, no mesmo horário (se já passou, a próxima que ainda
   respeita as 2 h de antecedência). Nada é publicado sem a confirmação do
   custo; ao publicar, a lista recarrega com o turno novo.
+- **Abrir rota / Calendário.** No detalhe do turno, abaixo das informações:
+  o entregador tem "Abrir rota" (Google Maps; no celular, também Waze, se
+  estiver instalado) em turno que ainda vale e tem ponto no mapa, e
+  "Calendário" nos turnos em que está; a loja tem "Adicionar ao calendário"
+  nos turnos que publicou e ainda não acabaram. O calendário baixa um `.ics`
+  pelo mesmo caminho da planilha.
+- **Lembrete.** 1 h antes do turno aceito, entregador e loja recebem
+  `turno_lembrete`, que abre o turno (seção 6).
+- **Meta do mês** (entregador): no Início, abaixo dos números do mês — a
+  barra "R$ 1.340 de R$ 2.000 (67%)" ou, sem meta, o convite "Definir meta";
+  no Perfil, a linha "Meta do mês". Os dois abrem o mesmo diálogo.
+- **Selos de reputação**: chips no perfil público (abaixo do nome) e no
+  próprio Perfil (abaixo dos números); tocar mostra o critério. Sem selo, nada
+  aparece.
 - **Favoritos** (lojista): o coração aparece no perfil público do
   entregador, na avaliação ("Avaliar o entregador" e cada card de "Avaliar
   entregadores") e no card do entregador no turno finalizado. A lista

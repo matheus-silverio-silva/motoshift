@@ -91,6 +91,12 @@ class Notificacao {
             fundo: AppColors.goodSoft,
             frente: Color(0xFF0F6E4E),
           ),
+        // Turno aceito que começa em até 1 h — entregador e loja.
+        'turno_lembrete' => const NotificacaoEstilo(
+            icone: Icons.alarm_rounded,
+            fundo: AppColors.tealSoft,
+            frente: AppColors.tealDeep,
+          ),
         // Turno novo de uma loja que favoritou o entregador (V18).
         'turno_de_favorito' => const NotificacaoEstilo(
             icone: Icons.favorite_rounded,

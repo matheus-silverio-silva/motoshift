@@ -25,6 +25,15 @@ public interface TurnoInscricaoRepository extends JpaRepository<TurnoInscricao, 
     /** Trabalhou em algum turno, inclusive em vaga extra. */
     boolean existsByMotoboyIdAndStatus(Long motoboyId, StatusInscricao status);
 
+    /** Turnos concluídos pelo entregador — o selo "25 turnos concluídos". */
+    long countByMotoboyIdAndStatus(Long motoboyId, StatusInscricao status);
+
+    /** Início do primeiro turno que o entregador concluiu — o selo "30 dias sem cancelar". */
+    @Query("select min(t.dataInicio) from TurnoInscricao i, Turno t "
+            + "where i.turnoId = t.id and i.motoboyId = :motoboyId "
+            + "and i.status = com.motoshift.entity.StatusInscricao.FINALIZADO")
+    java.time.LocalDateTime primeiroTurnoConcluido(@Param("motoboyId") Long motoboyId);
+
     Optional<TurnoInscricao> findByTurnoIdAndMotoboyId(Long turnoId, Long motoboyId);
 
     /** Alguém já chegou? Turno com check-in já começou, mesmo que o status diga outra coisa. */

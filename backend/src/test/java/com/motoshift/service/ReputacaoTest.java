@@ -103,6 +103,11 @@ class ReputacaoTest {
         Usuario depois = usuarioRepo.findById(entregador).orElseThrow();
         assertThat(depois.getScore()).isEqualTo(4.5);
         assertThat(reputacao.scoreVisivel(depois)).isEqualTo(4.5);
+        // V19: o turno guarda quem cancelou — o selo "30 dias sem cancelar"
+        // conta só o que o entregador cancelou.
+        Turno cancelado = turnoRepo.findById(t.getId()).orElseThrow();
+        assertThat(cancelado.getCanceladoPorId()).isEqualTo(entregador);
+        assertThat(cancelado.getCanceladoEm()).isNotNull();
     }
 
     @Test

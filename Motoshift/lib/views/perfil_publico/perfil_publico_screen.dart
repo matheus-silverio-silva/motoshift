@@ -5,6 +5,7 @@ import '../../models/perfil_publico.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/iniciais.dart';
+import '../../widgets/selos_de_reputacao.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/botao_favorito.dart';
@@ -124,6 +125,11 @@ class _PerfilPublicoScreenState extends State<PerfilPublicoScreen> {
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 32),
       children: [
         _cabecalho(p),
+        // Selos de reputação — o critério aparece ao tocar.
+        if (p.selos.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          SelosDeReputacao(selos: p.selos, centralizar: true),
+        ],
         const SizedBox(height: 18),
         if (p.localidade != null)
           _linha(Icons.place_outlined, 'Cidade', p.localidade!),

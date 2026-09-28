@@ -1,3 +1,5 @@
+import 'selo.dart';
+
 /// O que uma conta pode ver do perfil de OUTRA conta.
 ///
 /// Espelha o `PerfilPublicoResponse` do backend, e o que ele **não** traz é
@@ -24,6 +26,7 @@ class PerfilPublico {
     this.nomeFantasia,
     this.pontualidade,
     this.checkinsPontualidade = 0,
+    this.selos = const [],
   });
 
   final int id;
@@ -48,6 +51,9 @@ class PerfilPublico {
   final int? pontualidade;
   final int checkinsPontualidade;
 
+  /// Selos de reputação, com o critério de cada um (calculados no backend).
+  final List<Selo> selos;
+
   factory PerfilPublico.fromJson(Map<String, dynamic> json) => PerfilPublico(
         id: json['id'] as int,
         nome: json['nome'] as String? ?? 'Usuário',
@@ -63,6 +69,7 @@ class PerfilPublico {
         pontualidade: (json['pontualidade'] as num?)?.toInt(),
         checkinsPontualidade:
             (json['checkinsPontualidade'] as num?)?.toInt() ?? 0,
+        selos: Selo.listaDe(json['selos']),
       );
 
   /// O backend grava `tipo` em minúsculas; o `toLowerCase` é só para o JSON

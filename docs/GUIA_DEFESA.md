@@ -348,6 +348,58 @@ só — a do primeiro —, e a pontualidade dos outros dois não existiria.
 R: Porque repetir sem olhar é publicar sem confirmar o custo. O app só
 preenche; quem publica é o lojista, pelo caminho de sempre.
 
+### Abrir rota e calendário: o turno fora do app
+
+- **Rota.** Google Maps pela URL universal (`maps/dir/?api=1&destination=`),
+  que funciona no navegador e no celular; o Waze só aparece quando o
+  `waze://` responde — AndroidManifest e Info.plist declaram a consulta. No
+  navegador não dá para saber que apps a pessoa tem, então é o Google Maps.
+- **Calendário.** `.ics` pela RFC 5545: `DTSTART;TZID=America/Sao_Paulo`,
+  com o VTIMEZONE junto (o backend devolve horário de parede, sem fuso — sem
+  o TZID, "18:00" viraria 18:00 de quem abre o arquivo), VALARM de 1 h, texto
+  escapado e linhas dobradas em 75 octetos sem partir "ç". Baixa pelo
+  `baixarArquivo`, o mesmo da planilha.
+- **Onde.** `AbrirRota`, `CalendarioIcs`, `AtalhosDoTurno`.
+
+### Lembrete de 1 hora
+
+- **Regra.** Job de 5 em 5 min (padrão do vencimento): turno aberto, aceito
+  ou em andamento que começa em até 1 h; lembra cada entregador com inscrição
+  aceita que ainda não chegou, e a loja uma vez ("com Ricardo e mais 1").
+- **Sem duplicar.** `criarUnica` — a notificação que já existe para aquela
+  pessoa, tipo e turno é o controle; não precisou de coluna.
+- **Onde.** `TurnoLembreteService`; no app, o estilo de `turno_lembrete`.
+
+### Meta do mês
+
+- **Regra.** `usuarios.meta_mensal` (V19), só do entregador, de R$ 1 a
+  R$ 100.000, editável no perfil e no painel. A barra compara com
+  `ganhosMensais` — pagamentos recebidos + gorjetas do mês, a mesma soma do
+  "Ganhos mês". Sem meta, o painel convida a definir: uma barra zerada diria
+  "você não ganhou nada", quando o que falta é a meta.
+- **Onde.** `AuthService.definirMeta`, `DashboardService.doMotoboy`; no app,
+  `MetaDoMes` e `editarMetaDoMes`.
+
+### Selos de reputação
+
+- **Regra.** Calculados na hora a partir do histórico — sem tabela, porque um
+  selo guardado envelhece. Entregador: 25 turnos concluídos; 30 dias sem
+  cancelar (histórico mais velho que 30 dias e nenhum cancelamento DELE no
+  período); nota acima de 4,8 com 10 avaliações ou mais; pontual (90% ou mais
+  com 10 check-ins ou mais). Loja: paga gorjeta (3 ou mais em turnos dos
+  últimos 90 dias); nota acima de 4,8; contrata toda semana (turno concluído
+  em cada uma das últimas 4 semanas).
+- **Quem cancelou.** Cancelar é dos dois lados, e sem saber quem cancelou um
+  cancelamento da loja tiraria o selo do entregador. Por isso a V19 grava
+  `cancelado_por_id` e `cancelado_em` no turno.
+- **Onde.** `Selos` (os limites são constantes no topo), no perfil público
+  (`AuthService.buscarPerfilPublico`) e nos painéis; no app,
+  `SelosDeReputacao`, com o critério num diálogo ao tocar.
+
+**P: Por que o selo não é guardado?**
+R: Porque ele é uma pergunta sobre o histórico ("cancelou nos últimos 30
+dias?"). Guardado, ficaria verdadeiro depois de deixar de ser.
+
 ### Favoritos: a loja guarda quem trabalhou bem
 
 - **Regra.** Só o lojista favorita, e só entregador é favorito. Um favorito

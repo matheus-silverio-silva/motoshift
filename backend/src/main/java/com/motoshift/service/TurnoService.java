@@ -313,6 +313,10 @@ public class TurnoService {
         pagamentos.liberarReserva(turno, MotivoLiberacao.CANCELAMENTO);
 
         turno.setStatus(StatusTurno.CANCELADO);
+        // Quem cancelou (V19): o selo "30 dias sem cancelar" conta só o que o
+        // entregador cancelou, não o que a loja cancelou com ele no turno.
+        turno.setCanceladoPorId(usuarioId);
+        turno.setCanceladoEm(LocalDateTime.now());
         turnoRepo.save(turno);
 
         // SCRUM-20: todo mundo que estava no turno precisa saber.
