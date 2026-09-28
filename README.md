@@ -245,12 +245,12 @@ calculada a partir do momento em que roda.
 
 ### 🏪 Lojistas
 
-| Email | Nome | Estabelecimento | Cidade |
-|-------|------|-----------------|--------|
-| `claudia@teste.com` | Cláudia Oliveira | Hamburgueria da Cláudia | Curitiba/PR |
-| `fernando@teste.com` | Fernando Costa | Pizzaria do Fernando | Curitiba/PR |
-| `ana@teste.com` | Ana Souza | Farmácia Ana | Curitiba/PR |
-| `lojista@teste.com` | Maria Andrade | Mercado Andrade | Curitiba/PR |
+| Email | Nome | Estabelecimento | Cidade | Selos | Favoritos | Gorjeta |
+|-------|------|-----------------|--------|-------|-----------|---------|
+| `claudia@teste.com` | Cláudia Oliveira | Hamburgueria da Cláudia | Curitiba/PR | Paga gorjeta · Contrata toda semana | Ricardo, Lucas | R$ 10 a cada três semanas |
+| `fernando@teste.com` | Fernando Costa | Pizzaria do Fernando | Curitiba/PR | — | Lucas | duas vezes, R$ 5 |
+| `ana@teste.com` | Ana Souza | Farmácia Ana | Curitiba/PR | — | — | nunca |
+| `lojista@teste.com` | Maria Andrade | Mercado Andrade | Curitiba/PR | Nota acima de 4,8 · Contrata toda semana | Carlos | nunca |
 
 Lojista não tem score (a reputação é do entregador); a média de avaliação de
 cada loja é a das notas que os entregadores deram a ela.
@@ -263,12 +263,16 @@ turno dela parte desse ponto — ver [Testar a localização à mão](#-testar-a
 
 ### 🏍️ Motoboys
 
-| Email | Nome | Veículo | Score | Por quê |
-|-------|------|---------|-------|---------|
-| `ricardo@teste.com` | Ricardo Souza | Honda CG 160 Titan | 5.0 | cancelou um turno com folga — sem penalidade |
-| `lucas@teste.com` | Lucas Mendes | Yamaha Factor 150 | 5.0 | nenhum cancelamento |
-| `thiago@teste.com` | Thiago Alves | Honda Biz 125 | 4.5 | cancelou um turno a menos de 1h do início (−0,5) |
-| `motoboy@teste.com` | Carlos Mendes | Honda PCX 150 | 5.0 | nenhum cancelamento |
+| Email | Nome | Veículo | Score | Por quê | Pontualidade | Meta do mês | Selos |
+|-------|------|---------|-------|---------|--------------|-------------|-------|
+| `ricardo@teste.com` | Ricardo Souza | Honda CG 160 Titan | 5.0 | cancelou um turno com folga — sem penalidade | 100% (chega sempre antes) | R$ 2.000 | Pontual |
+| `lucas@teste.com` | Lucas Mendes | Yamaha Factor 150 | 5.0 | nenhum cancelamento | ~73% (atrasa às vezes) | — (o painel convida) | 20 turnos concluídos · 30 dias sem cancelar |
+| `thiago@teste.com` | Thiago Alves | Honda Biz 125 | 4.5 | cancelou um turno a menos de 1h do início (−0,5) | ~30% (atrasa com frequência) | — | nenhum |
+| `motoboy@teste.com` | Carlos Mendes | Honda PCX 150 | 5.0 | nenhum cancelamento | ~92% | R$ 1.500 | 20 turnos concluídos · 30 dias sem cancelar · Nota acima de 4,8 · Pontual |
+
+Pontualidade, selos e o "Loja que já te chamou" saem do histórico da massa,
+calculados como no app — os valores acima são os de uma massa recém-criada e
+se movem um pouco com a data (a janela é de 90 dias).
 
 Nenhum desses números é gravado à mão: o score é o que a regra da RF07 produz
 (5,0 inicial, −0,5 por cancelamento tardio) a partir do que aconteceu na massa,
@@ -294,15 +298,32 @@ Cerca de cinco meses de história, gravados pelos mesmos serviços que o app usa
   para Maria, Ana e Cláudia; "aguardando emissão" para Carlos, Ricardo e
   Lucas) e avaliações por fazer.
 - Um turno da Ana que **expirou** sem entregador (vencido pelo próprio job).
-- **O presente:** seis turnos abertos, um em andamento (Cláudia + Ricardo),
-  dois confirmados para amanhã e os dois cancelamentos que explicam os scores.
+- **Chegada e saída** em todo turno pago, pelo `CheckinService` com a hora do
+  turno: o Ricardo chega sempre antes, o Carlos quase sempre no horário, o
+  Lucas se atrasa de vez em quando e o Thiago com frequência — daí as
+  pontualidades diferentes.
+- **Gorjetas** da Cláudia (a cada três semanas) e duas do Fernando, pelo
+  `GorjetaService`; aparecem no extrato dos dois lados e nas notificações.
+- **Favoritos:** a Cláudia favoritou Ricardo e Lucas; a Maria, o Carlos; o
+  Fernando, o Lucas. Os turnos abertos dessas lojas aparecem com o selo
+  "Loja que já te chamou" para eles, e a publicação deles avisou os
+  favoritos ("A Hamburgueria da Cláudia publicou um turno para amanhã, 18h").
+- **Maria e Carlos**, a dupla de toda semana, dão nota 5 um ao outro — de onde
+  saem os dois selos "Nota acima de 4,8".
+- **O presente:** seis turnos abertos, um **em andamento com check-in** (o
+  Ricardo chegou 4 min antes; a Cláudia recebeu "Ricardo chegou às…"), três
+  aceitos por começar — dois amanhã e um da Pizzaria do Fernando com o Lucas
+  daqui a menos de 1 hora, que já gerou o **lembrete** para os dois — e os dois
+  cancelamentos que explicam os scores.
 - **Notificações** só dos tipos que o código gera hoje, com os textos de hoje;
   as de mais de três dias já aparecem como lidas.
 
 > 💡 Para explorar o fluxo completo, recomendamos **`claudia@teste.com`**
-> (lojista com o turno de três vagas, pendências e um turno em andamento) e
-> **`ricardo@teste.com`** (entregador com histórico, saques, notas e um turno
-> em andamento). Para o fluxo de nota fiscal dos dois lados, use
+> (lojista com o turno de três vagas, pendências, gorjetas, favoritos e um turno
+> em andamento com check-in) e **`ricardo@teste.com`** (entregador com
+> histórico, saques, notas, meta do mês e um turno em andamento). Para o
+> lembrete de 1 hora, **`lucas@teste.com`** ou **`fernando@teste.com`**. Para
+> o fluxo de nota fiscal dos dois lados, use
 > **`lojista@teste.com`** e **`motoboy@teste.com`**.
 
 ### 🔄 Resetar a massa de demonstração
@@ -444,7 +465,7 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | Adicionar ao calendário | Baixa um `.ics` (RFC 5545, fuso America/Sao_Paulo, alarme 1 h antes) — o entregador nos turnos em que está, a loja nos que publicou |
 | Lembrete | Um job de 5 em 5 min lembra entregador e loja do turno aceito que começa em até 1 h (`turno_lembrete`), uma vez só por pessoa e turno |
 | Meta do mês | O entregador define no perfil quanto quer ganhar no mês; o painel mostra "R$ 1.340 de R$ 2.000 (67%)", somando pagamentos recebidos e gorjetas. Sem meta, um convite — nunca uma barra zerada (V19) |
-| Selos de reputação | Calculados do histórico, sem tabela, no perfil público e no próprio, com o critério ao tocar. Entregador: 25 turnos concluídos, 30 dias sem cancelar, nota acima de 4,8 (10+ avaliações), pontual (90%+, 10+ check-ins). Loja: paga gorjeta (3+ em 90 dias), nota acima de 4,8, contrata toda semana (4 semanas seguidas) |
+| Selos de reputação | Calculados do histórico, sem tabela, no perfil público e no próprio, com o critério ao tocar. Entregador: 20 turnos concluídos (limite ajustado à massa), 30 dias sem cancelar, nota acima de 4,8 (10+ avaliações), pontual (90%+, 10+ check-ins). Loja: paga gorjeta (3+ em 90 dias), nota acima de 4,8, contrata toda semana (4 semanas seguidas) |
 | Favoritos | O lojista marca entregadores com o coração (perfil público, avaliação, turno finalizado) e os vê no próprio perfil. Ao publicar, os favoritos recebem "A Hamburgueria da Cláudia publicou um turno para amanhã, 18h"; na lista de disponíveis do entregador, os turnos dessas lojas levam o selo "Loja que já te chamou". O entregador não vê quem o favoritou (V18) |
 | Gorjeta | Na avaliação do entregador, o lojista pode dar R$ 5, 10, 20 ou outro valor (até R$ 50) do saldo disponível. Transferência no ledger (`bonus_enviado` → `bonus`), com comprovante, não NFS-e |
 | RF11 | Turno finalizado gera NFS-e — entregador é o prestador, lojista é o tomador, e **só o lojista emite e cancela**; o entregador vê, baixa e imprime. Todo lançamento do extrato gera o documento correspondente (nota, recibo ou comprovante), sempre simulado — ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |

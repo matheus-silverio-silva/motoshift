@@ -8,7 +8,12 @@ import com.motoshift.entity.Usuario;
 import com.motoshift.repository.CarteiraRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
+import com.motoshift.service.AuthService;
 import com.motoshift.service.AvaliacaoService;
+import com.motoshift.service.CheckinService;
+import com.motoshift.service.FavoritoService;
+import com.motoshift.service.GorjetaService;
+import com.motoshift.service.TurnoLembreteService;
 import com.motoshift.service.CarteiraService;
 import com.motoshift.service.CobrancaService;
 import com.motoshift.service.NotaFiscalService;
@@ -18,6 +23,7 @@ import com.motoshift.service.TurnoService;
 import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -104,6 +110,12 @@ public class MassaDemonstracao {
     private final CarteiraService carteiras;
     private final AvaliacaoService avaliacoes;
     private final NotaFiscalService notasFiscais;
+    private final CheckinService checkins;
+    private final GorjetaService gorjetas;
+    private final FavoritoService favoritos;
+    private final AuthService auth;
+    // O job de lembrete só existe com os jobs ligados; a massa o usa se houver.
+    private final ObjectProvider<TurnoLembreteService> lembretes;
 
     public MassaDemonstracao(EntityManager em,
                              UsuarioRepository usuarioRepo,
@@ -116,7 +128,12 @@ public class MassaDemonstracao {
                              CobrancaService cobrancas,
                              CarteiraService carteiras,
                              AvaliacaoService avaliacoes,
-                             NotaFiscalService notasFiscais) {
+                             NotaFiscalService notasFiscais,
+                             CheckinService checkins,
+                             GorjetaService gorjetas,
+                             FavoritoService favoritos,
+                             AuthService auth,
+                             ObjectProvider<TurnoLembreteService> lembretes) {
         this.em = em;
         this.usuarioRepo = usuarioRepo;
         this.turnoRepo = turnoRepo;
@@ -129,6 +146,11 @@ public class MassaDemonstracao {
         this.carteiras = carteiras;
         this.avaliacoes = avaliacoes;
         this.notasFiscais = notasFiscais;
+        this.checkins = checkins;
+        this.gorjetas = gorjetas;
+        this.favoritos = favoritos;
+        this.auth = auth;
+        this.lembretes = lembretes;
     }
 
     // ══ Reset: só a massa ═════════════════════════════════════════════════
@@ -170,6 +192,7 @@ public class MassaDemonstracao {
         n.put("notificacoes",     contar("select count(n) from Notificacao n" + ONDE_NOTIFICACAO, e));
         n.put("turnos",           contar("select count(t) from Turno t where t.id in :turnos", e));
         n.put("carteiras",        contar("select count(c) from Carteira c" + ONDE_CARTEIRA, e));
+        n.put("favoritos",        contar("select count(f) from Favorito f" + ONDE_FAVORITO, e));
         n.put("usuarios",         contar("select count(u) from Usuario u where u.id in :demo", e));
         return n;
     }
@@ -191,6 +214,10 @@ public class MassaDemonstracao {
           + " or (n.referenciaTipo = 'nota_fiscal' and n.referenciaId in :notas)";
     private static final String ONDE_CARTEIRA =
             " where c.usuarioId in :demo or c.motoboyId in :demo";
+    // O favorito de uma loja real a um entregador da massa (ou o contrário)
+    // sai com a massa: a FK da V18 impediria apagar a conta.
+    private static final String ONDE_FAVORITO =
+            " where f.lojistaId in :demo or f.motoboyId in :demo";
 
     /**
      * Apaga, na ordem das chaves estrangeiras (de quem referencia para quem é
@@ -208,6 +235,10 @@ public class MassaDemonstracao {
         n.put("notificacoes",     executar("delete from Notificacao n" + ONDE_NOTIFICACAO, e));
         n.put("turnos",           executar("delete from Turno t where t.id in :turnos", e));
         n.put("carteiras",        executar("delete from Carteira c" + ONDE_CARTEIRA, e));
+        n.put("favoritos",        executar("delete from Favorito f" + ONDE_FAVORITO, e));
+        // Turno de conta real cancelado por uma conta da massa (V19): o turno
+        // fica, e quem cancelou vira desconhecido — a FK impediria apagar a conta.
+        executar("update Turno t set t.canceladoPorId = null where t.canceladoPorId in :demo", e);
         n.put("usuarios",         executar("delete from Usuario u where u.id in :demo", e));
         return n;
     }
@@ -414,6 +445,12 @@ public class MassaDemonstracao {
             carteiras.atualizarPix(lucas.getId(), "lucas@pix.com");
             carteiras.atualizarPix(thiago.getId(), "thiago@pix.com");
             carteiras.atualizarPix(carlos.getId(), "carlos@pix.com");
+
+            // Meta do mês (V19), pelo mesmo caminho do perfil: o Ricardo e o
+            // Carlos definiram a sua; o Lucas e o Thiago não — o painel deles
+            // convida a definir.
+            auth.atualizar(ricardo.getId(), Map.of("metaMensal", new BigDecimal("2000.00")));
+            auth.atualizar(carlos.getId(), Map.of("metaMensal", new BigDecimal("1500.00")));
         }
 
         // ── Passado: cinco meses, semana a semana ────────────────────────
@@ -453,6 +490,14 @@ public class MassaDemonstracao {
                 if (w % 3 == 0) planos.add(manhaDaAna(w, base.minusDays(5)));
                 planos.sort(Comparator.comparing(Plano::fim));
                 for (Plano p : planos) executar(p);
+
+                // Favoritos (V18): a loja marca quem trabalha bem com ela, na
+                // manhã seguinte ao último turno da semana. A Ana não tem.
+                LocalDateTime manha = base.atTime(9, 0);
+                if (w == 14) favoritar(claudia, ricardo, manha);
+                if (w == 11) favoritar(maria, carlos, manha);
+                if (w == 9)  favoritar(claudia, lucas, manha);
+                if (w == 7)  favoritar(fernando, lucas, manha);
 
                 // Cada flush confere todas as entidades gerenciadas; sem soltar
                 // as da semana que passou, o custo cresce com a história.
@@ -513,11 +558,32 @@ public class MassaDemonstracao {
                 Usuario e = p.entregadores().get(i);
                 em(p.inicio().minusHours(20).plusMinutes(10L * i), () -> turnos.aceitar(t.getId(), e.getId()));
             }
+            // Chegada e saída (V16), cada entregador com o seu jeito — ver
+            // atrasoDe. É daqui que sai a pontualidade de cada um.
+            for (int i = 0; i < p.entregadores().size(); i++) {
+                Usuario e = p.entregadores().get(i);
+                presenca(t, p.lojista(), e, p.inicio().plusMinutes(atrasoDe(e, p.semana()) + i),
+                        p.fim().minusMinutes(5L + i));
+            }
             em(p.fim(), () -> turnos.finalizar(t.getId(), p.lojista().getId()));
 
             for (int i = 0; i < p.entregadores().size(); i++) {
                 Usuario e = p.entregadores().get(i);
                 avaliarOsDois(t, p.lojista(), e, p.fim().plusHours(1).plusMinutes(10L * i), p.semana() + i);
+            }
+            // Gorjeta (V17), pelo GorjetaService: a Cláudia dá R$ 10 a cada
+            // três semanas — o selo "Paga gorjeta" é dela; o Fernando deu duas
+            // vezes, pouco para o selo. Maria e Ana não dão.
+            BigDecimal gorjeta = p.lojista() == claudia && p.semana() % 3 == 0 ? new BigDecimal("10.00")
+                    : p.lojista() == fernando && (p.semana() == 4 || p.semana() == 8) ? new BigDecimal("5.00")
+                    : null;
+            if (gorjeta != null) {
+                for (int i = 0; i < p.entregadores().size(); i++) {
+                    Usuario e = p.entregadores().get(i);
+                    LocalDateTime quando = p.fim().plusHours(1).plusMinutes(5L + 10L * i);
+                    garantirSaldo(p.lojista(), gorjeta, quando.minusMinutes(1));
+                    em(quando, () -> gorjetas.dar(t.getId(), p.lojista().getId(), e.getId(), gorjeta));
+                }
             }
             LocalDateTime emissao = p.fim().toLocalDate().plusDays(1).atTime(10, 0);
             for (int i = 0; i < p.entregadores().size(); i++) {
@@ -554,6 +620,8 @@ public class MassaDemonstracao {
                     dia4.atTime(11, 0), dia4.atTime(15, 0), "100.00", 1, List.of(thiago), 0);
             Turno t1 = publicarNoPassado(fernandoThiago);
             em(fernandoThiago.inicio().minusHours(20), () -> turnos.aceitar(t1.getId(), thiago.getId()));
+            presenca(t1, fernando, thiago, fernandoThiago.inicio().plusMinutes(atrasoDe(thiago, 0)),
+                    fernandoThiago.fim().minusMinutes(5));
             em(fernandoThiago.fim(), () -> turnos.finalizar(t1.getId(), fernando.getId()));
             avaliarOsDois(t1, fernando, thiago, fernandoThiago.fim().plusHours(1), 3);
             em(dia3.atTime(10, 0), () -> notasFiscais.emitir(t1.getId(), thiago.getId(), fernando.getId()));
@@ -566,6 +634,8 @@ public class MassaDemonstracao {
                     dia3.atTime(14, 0), dia3.atTime(18, 0), "95.00", 1, List.of(carlos), 1);
             Turno t2 = publicarNoPassado(mariaCarlos);
             em(mariaCarlos.inicio().minusHours(20), () -> turnos.aceitar(t2.getId(), carlos.getId()));
+            presenca(t2, maria, carlos, mariaCarlos.inicio().plusMinutes(atrasoDe(carlos, 1)),
+                    mariaCarlos.fim().minusMinutes(5));
             em(mariaCarlos.fim(), () -> turnos.finalizar(t2.getId(), maria.getId()));
             avaliarOsDois(t2, maria, carlos, mariaCarlos.fim().plusHours(1), 0);
             carimbarTurno(t2, mariaCarlos.publicacao(), mariaCarlos.fim());
@@ -576,6 +646,8 @@ public class MassaDemonstracao {
                     List.of(ricardo), 2);
             Turno t3 = publicarNoPassado(anaRicardo);
             em(anaRicardo.inicio().minusHours(20), () -> turnos.aceitar(t3.getId(), ricardo.getId()));
+            presenca(t3, ana, ricardo, anaRicardo.inicio().plusMinutes(atrasoDe(ricardo, 2)),
+                    anaRicardo.fim().minusMinutes(5));
             em(anaRicardo.fim(), () -> turnos.finalizar(t3.getId(), ana.getId()));
             em(anaRicardo.fim().plusHours(2), () -> avaliar(t3, ricardo, ana, 5,
                     "Pedidos prontos no horário • Endereços corretos"));
@@ -588,6 +660,8 @@ public class MassaDemonstracao {
                     "130.00", 1, List.of(lucas), 0);
             Turno t4 = publicarNoPassado(claudiaLucas);
             em(claudiaLucas.inicio().minusHours(20), () -> turnos.aceitar(t4.getId(), lucas.getId()));
+            presenca(t4, claudia, lucas, claudiaLucas.inicio().plusMinutes(atrasoDe(lucas, 1)),
+                    claudiaLucas.fim().minusMinutes(5));
             em(claudiaLucas.fim(), () -> turnos.finalizar(t4.getId(), claudia.getId()));
             carimbarTurno(t4, claudiaLucas.publicacao(), claudiaLucas.fim());
 
@@ -650,7 +724,10 @@ public class MassaDemonstracao {
             Turno andamento = publicar(claudia, "Turno Ativo — Hamburgueria da Cláudia", "Entregas em andamento",
                     "Água Verde, Curitiba", comecou, comecou.plusHours(4), "130.00", 1, comecou.minusHours(3));
             em(comecou.minusHours(2), () -> turnos.aceitar(andamento.getId(), ricardo.getId()));
-            carimbarTurno(andamento, comecou.minusHours(3), comecou.minusHours(2));
+            // O Ricardo chegou 4 minutos antes: o check-in leva o turno a
+            // EM_ANDAMENTO e avisa a Cláudia ("Ricardo chegou às ...").
+            presenca(andamento, claudia, ricardo, comecou.minusMinutes(4), null);
+            carimbarTurno(andamento, comecou.minusHours(3), comecou.minusMinutes(4));
 
             // Em cima da hora: publicado com 2h30 de antecedência, aceito pelo
             // Thiago — que cancela no fim desta história.
@@ -682,11 +759,71 @@ public class MassaDemonstracao {
             for (Turno t : List.of(a1, a2, a3, a4, a5, a6)) {
                 carimbarTurno(t, publicados, publicados);
             }
+            // Os favoritos de cada loja ficam sabendo dos turnos novos (V18),
+            // como o TurnoService.criar faz na publicação pelo app.
+            List<Turno> abertos = List.of(a1, a2, a3, a4, a5, a6);
+            for (int k = 0; k < abertos.size(); k++) {
+                Turno t = abertos.get(k);
+                em(publicados.plusMinutes(k), () -> favoritos.avisarFavoritos(t, hoje));
+            }
+
+            // Aceito pelo Lucas e começando em menos de 1 hora: o lembrete
+            // (turno_lembrete) sai para ele e para o Fernando, no fim.
+            LocalDateTime logoMais = agora.plusMinutes(50).truncatedTo(ChronoUnit.MINUTES);
+            Turno emBreve = publicar(fernando, "Turno Noite — Pizzaria do Fernando", "Entregas zona Batel e adjacências",
+                    "Batel, Curitiba", logoMais, logoMais.plusHours(4), "100.00", 1, ontem.plusHours(3));
+            em(agora.minusHours(3), () -> turnos.aceitar(emBreve.getId(), lucas.getId()));
+            carimbarTurno(emBreve, ontem.plusHours(3), agora.minusHours(3));
             carimbarTurno(tardio, logo.minusHours(2).minusMinutes(30), agora.minusMinutes(90));
 
             // Por último, e com a hora de agora: o cancelamento tardio. É o
             // TurnoService que tira 0,5 do score — ninguém grava 4,5 à mão.
             turnos.cancelar(tardio.getId(), thiago.getId());
+
+            // E o lembrete de 1 hora, pelo próprio job — depois do
+            // cancelamento, para não lembrar de um turno que não vai haver.
+            TurnoLembreteService job = lembretes.getIfAvailable();
+            if (job != null) job.lembrar(agora);
+        }
+
+        // ── Presença, favoritos ──────────────────────────────────────────
+
+        /**
+         * Chegada (e saída, se houver) pelo {@link CheckinService}, com a hora
+         * do turno — as mesmas regras da tela: janela, proximidade, status.
+         */
+        private void presenca(Turno t, Usuario lojista, Usuario e, LocalDateTime chegou,
+                              LocalDateTime saiu) {
+            // A porta da loja: uns 40 m do ponto do turno.
+            double lat = lojista.getLatitude() + 0.0004;
+            double lng = lojista.getLongitude();
+            em(chegou, () -> checkins.checkin(t.getId(), e.getId(), lat, lng, chegou));
+            if (saiu != null) em(saiu, () -> checkins.checkout(t.getId(), e.getId(), saiu));
+        }
+
+        /**
+         * Minutos entre o início e a chegada (negativo é antes). Cada um tem o
+         * seu jeito, e a pontualidade de cada um sai diferente: o Ricardo chega
+         * sempre antes; o Carlos quase sempre no horário; o Lucas se atrasa de
+         * vez em quando; o Thiago, metade das vezes.
+         */
+        private long atrasoDe(Usuario e, int semana) {
+            if (e == ricardo) return -8 + semana % 5;
+            if (e == carlos) return semana % 10 == 7 ? 14 : -3 + semana % 4;
+            if (e == lucas) return semana % 4 == 1 ? 13 : semana % 3;
+            return semana % 2 == 0 ? 16 + 4L * (semana % 3) : 5;
+        }
+
+        /** Favorito pelo FavoritoService, com a data da história. */
+        private void favoritar(Usuario loja, Usuario entregador, LocalDateTime quando) {
+            favoritos.favoritar(loja.getId(), entregador.getId());
+            em.flush();
+            em.createNativeQuery("update favoritos set criado_em = :q "
+                            + "where lojista_id = :l and motoboy_id = :m")
+                    .setParameter("q", quando)
+                    .setParameter("l", loja.getId())
+                    .setParameter("m", entregador.getId())
+                    .executeUpdate();
         }
 
         // ── Turnos ───────────────────────────────────────────────────────
@@ -793,8 +930,14 @@ public class MassaDemonstracao {
                                    LocalDateTime quando, int n) {
             Avaliacao doLojista = entregador == thiago
                     ? DO_LOJISTA_AO_THIAGO[n % DO_LOJISTA_AO_THIAGO.length]
+                    : entregador == carlos
+                    ? DO_LOJISTA_AO_CARLOS[n % DO_LOJISTA_AO_CARLOS.length]
                     : DO_LOJISTA[n % DO_LOJISTA.length];
-            Avaliacao doEntregador = DO_ENTREGADOR[(n + lojista.getId().intValue()) % DO_ENTREGADOR.length];
+            // Maria e Carlos: a dupla de toda semana, que se dá nota 5 — é de
+            // onde saem os dois selos "Nota acima de 4,8" da massa.
+            Avaliacao doEntregador = entregador == carlos && lojista == maria
+                    ? DO_CARLOS_A_MARIA[n % DO_CARLOS_A_MARIA.length]
+                    : DO_ENTREGADOR[(n + lojista.getId().intValue()) % DO_ENTREGADOR.length];
             em(quando, () -> avaliar(t, lojista, entregador, doLojista.nota(), doLojista.comentario()));
             em(quando.plusMinutes(40), () -> avaliar(t, entregador, lojista,
                     doEntregador.nota(), doEntregador.comentario()));
@@ -912,6 +1055,21 @@ public class MassaDemonstracao {
         new Avaliacao(4, "Educado • Cuidado com a carga — mas chegou atrasado"),
         new Avaliacao(5, "Pontual • Educado"),
         new Avaliacao(4, "Boa comunicação — avisou do atraso com antecedência"),
+    };
+
+    /** O Carlos, que a Maria chama toda semana: nota 5 sempre. */
+    private static final Avaliacao[] DO_LOJISTA_AO_CARLOS = {
+        new Avaliacao(5, "Pontual • Cuidado com a carga"),
+        new Avaliacao(5, "Conhece a região • Educado"),
+        new Avaliacao(5, "Pontual • Boa comunicação — sempre avisa quando sai"),
+        new Avaliacao(5, "Cuidado com a carga • Conhece a região"),
+    };
+
+    /** E a Maria, pelo Carlos. */
+    private static final Avaliacao[] DO_CARLOS_A_MARIA = {
+        new Avaliacao(5, "Pedidos prontos no horário • Endereços corretos"),
+        new Avaliacao(5, "Carga bem embalada • Valor justo"),
+        new Avaliacao(5, "Boa comunicação • Pedidos prontos no horário"),
     };
 
     /** O entregador avaliando a loja — tags de TagsDeAvaliacao.daLoja. */

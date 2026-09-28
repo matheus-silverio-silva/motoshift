@@ -86,12 +86,22 @@ public class CheckinService {
     /** "Cheguei": grava a chegada e avisa o lojista. */
     @Transactional
     public TurnoResponse checkin(Long turnoId, Long motoboyId, Double lat, Double lng) {
+        return checkin(turnoId, motoboyId, lat, lng, LocalDateTime.now());
+    }
+
+    /**
+     * O mesmo, com o relógio na mão. Existe para a massa de demonstração, que
+     * conta cinco meses de história pelos serviços reais: a chegada de um
+     * turno do passado é conferida contra a hora DELE, com as mesmas regras.
+     */
+    @Transactional
+    public TurnoResponse checkin(Long turnoId, Long motoboyId, Double lat, Double lng,
+                                 LocalDateTime agora) {
         Turno turno = acesso.carregar(turnoId);
         TurnoInscricao ins = inscricaoAtiva(turno, motoboyId);
         if (ins.getCheckinEm() != null) return mapper.toResponse(turno);
 
         exigirTurnoVivo(turno);
-        LocalDateTime agora = LocalDateTime.now();
         LocalDateTime abre = turno.getDataInicio().minus(ANTECEDENCIA);
         if (agora.isBefore(abre)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -134,6 +144,12 @@ public class CheckinService {
     /** "Encerrar turno": grava a saída. Não finaliza — finalizar é pagar. */
     @Transactional
     public TurnoResponse checkout(Long turnoId, Long motoboyId) {
+        return checkout(turnoId, motoboyId, LocalDateTime.now());
+    }
+
+    /** O mesmo, com o relógio na mão — ver {@link #checkin(Long, Long, Double, Double, LocalDateTime)}. */
+    @Transactional
+    public TurnoResponse checkout(Long turnoId, Long motoboyId, LocalDateTime agora) {
         Turno turno = acesso.carregar(turnoId);
         TurnoInscricao ins = inscricaoAtiva(turno, motoboyId);
         if (ins.getCheckinEm() == null) {
@@ -142,7 +158,6 @@ public class CheckinService {
         }
         if (ins.getCheckoutEm() != null) return mapper.toResponse(turno);
 
-        LocalDateTime agora = LocalDateTime.now();
         ins.setCheckoutEm(agora);
         inscricaoRepo.save(ins);
 

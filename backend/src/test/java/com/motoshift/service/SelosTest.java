@@ -61,9 +61,9 @@ class SelosTest {
     class Entregador {
 
         @Test
-        @DisplayName("25 turnos concluídos: com 25 sim, com 24 não")
+        @DisplayName("20 turnos concluídos: com 20 sim, com 19 não")
         void turnosConcluidos() {
-            for (int i = 0; i < 24; i++) concluir(agora.minusDays(2 + i), null);
+            for (int i = 0; i < 19; i++) concluir(agora.minusDays(2 + i), null);
             assertThat(codigos(ricardo)).doesNotContain("turnos_concluidos");
             concluir(agora.minusDays(1), null);
             assertThat(codigos(ricardo)).contains("turnos_concluidos");

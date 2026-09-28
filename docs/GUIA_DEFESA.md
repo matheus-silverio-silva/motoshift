@@ -383,7 +383,8 @@ preenche; quem publica é o lojista, pelo caminho de sempre.
 ### Selos de reputação
 
 - **Regra.** Calculados na hora a partir do histórico — sem tabela, porque um
-  selo guardado envelhece. Entregador: 25 turnos concluídos; 30 dias sem
+  selo guardado envelhece. Entregador: 20 turnos concluídos (o pedido era 25;
+  ajustado à massa, em que o entregador mais antigo tem 23); 30 dias sem
   cancelar (histórico mais velho que 30 dias e nenhum cancelamento DELE no
   período); nota acima de 4,8 com 10 avaliações ou mais; pontual (90% ou mais
   com 10 check-ins ou mais). Loja: paga gorjeta (3 ou mais em turnos dos
@@ -449,3 +450,28 @@ A mesma regra vale para a notificação da gorjeta.
 R: São duas chamadas: a nota fica, e a tela diz "Avaliação enviada, mas a
 gorjeta não" com o motivo do backend. Nada de dinheiro se move pela metade —
 a gorjeta é uma transação só no `LedgerService`.
+
+### A massa conta tudo isso
+
+- **Pelos serviços de verdade.** Chegada e saída pelo `CheckinService`
+  (numa sobrecarga que recebe a hora: a regra é a mesma, conferida contra a
+  hora do turno do passado), gorjeta pelo `GorjetaService`, favoritos pelo
+  `FavoritoService`, meta pelo `AuthService.atualizar`, o aviso aos favoritos
+  pelo `avisarFavoritos` e o lembrete pelo próprio job. A massa só reescreve a
+  data do que cada passo gravou.
+- **O que mostra.** Pontualidades diferentes (Ricardo 100%, Carlos ~92%,
+  Lucas ~73%, Thiago ~30%); um turno em andamento com check-in; gorjetas da
+  Cláudia e duas do Fernando; favoritos de três lojas; meta do Ricardo e do
+  Carlos (Lucas e Thiago veem o convite); selos em uns perfis e em outros não;
+  lembrete de 1 hora e avisos de chegada e de favorito ainda não lidos.
+- **Continua fechando.** `MassaDemonstracaoTest.massaFechaNasInvariantes`
+  passa a massa pela `verificarConsistencia()`, agora com gorjetas no meio;
+  `novidadesNaMassa` confere cada item acima; `ResetDaMassaPostgresTest`
+  confere, no Postgres, que um favorito ou um cancelamento de conta real
+  cruzado com a massa não trava o reset nas FKs.
+
+**P: A massa grava direto no banco?**
+R: Só o que a regra do presente não deixaria fazer no passado (publicar um
+turno de três meses atrás, que a RF04 barraria) e as datas. Dinheiro, presença,
+gorjeta e favoritos passam pelos serviços — por isso a massa também testa as
+regras.

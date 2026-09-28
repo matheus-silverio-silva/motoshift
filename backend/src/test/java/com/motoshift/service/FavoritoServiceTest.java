@@ -79,7 +79,7 @@ class FavoritoServiceTest {
                         .isInstanceOfSatisfying(ResponseStatusException.class,
                                 e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
             }
-            assertThat(repo.count()).isZero();
+            assertThat(favoritosDasContas()).isZero();
         }
 
         @Test
@@ -121,7 +121,7 @@ class FavoritoServiceTest {
             FavoritoResponse primeiro = favoritos.favoritar(claudia.getId(), ricardo.getId());
             FavoritoResponse segundo = favoritos.favoritar(claudia.getId(), ricardo.getId());
 
-            assertThat(repo.count()).isEqualTo(1);
+            assertThat(favoritosDasContas()).isEqualTo(1);
             assertThat(segundo.favoritadoEm()).isEqualTo(primeiro.favoritadoEm());
             assertThat(segundo.nome()).isEqualTo("Ricardo Souza");
         }
@@ -134,7 +134,7 @@ class FavoritoServiceTest {
             favoritos.desfavoritar(claudia.getId(), ricardo.getId());
 
             assertThat(favoritos.listar(claudia.getId())).isEmpty();
-            assertThat(repo.count()).isZero();
+            assertThat(favoritosDasContas()).isZero();
         }
 
         @Test
@@ -220,6 +220,18 @@ class FavoritoServiceTest {
         TurnoResponse paraOLucas = resposta(claudia);
         favoritos.marcarLojasQueTeChamaram(List.of(paraOLucas), lucas.getId());
         assertThat(paraOLucas.isLojaQueJaTeChamou()).isFalse();
+    }
+
+    /**
+     * Os favoritos das contas deste teste — e não a tabela inteira: o banco do
+     * contexto é compartilhado, e a massa de demonstração também tem os seus.
+     */
+    private long favoritosDasContas() {
+        java.util.Set<Long> contas = java.util.Set.of(
+                claudia.getId(), fernando.getId(), ricardo.getId(), lucas.getId());
+        return repo.findAll().stream()
+                .filter(f -> contas.contains(f.getLojistaId()) || contas.contains(f.getMotoboyId()))
+                .count();
     }
 
     private TurnoRequest pedido(LocalDateTime inicio) {
