@@ -68,8 +68,9 @@ estabilidade financeira para ambos os lados.
 ├── docs/                     # Auditoria, guia de defesa, planos e requisitos
 │   ├── DER/                  # Modelo de dados e rastreabilidade das migrações
 │   ├── financeiro/           # Ciclo do dinheiro (FLUXO-FINANCEIRO) e os documentos fiscais simulados (FISCAL)
-│   └── ux/                   # Navegação: mapa, regra seção × sub-página, nomes, pós-turno
-├── scripts/                  # Utilitários de linha de comando
+│   ├── ux/                   # Navegação: mapa, regra seção × sub-página, nomes, pós-turno
+│   └── historico/            # Auditorias, revisões e prompts usados, por data
+├── RODAR.bat                 # Windows: atualiza da main e sobe backend + app web
 └── .github/workflows/        # CI: mvn test, flutter analyze, flutter test
 ```
 
@@ -91,6 +92,19 @@ aparecer na revisão:
 
 
 ## ⚙️ Como Rodar Localmente
+
+### Jeito rápido (Windows)
+
+Dê dois cliques em **`RODAR.bat`**, na raiz. Ele:
+
+1. atualiza o projeto com a `main` do GitHub (se você estiver na `main`, sem
+   alterações locais e com internet — senão roda o que já está na máquina);
+2. sobe o backend em `http://localhost:8080` (H2 em memória + massa de demonstração);
+3. abre o app Flutter no Chrome em `http://localhost:5000`.
+
+Contas de demonstração (senha `senha123`): `lojista@teste.com` e
+`motoboy@teste.com`. O `.bat` desliga a trava de distância do check-in
+(`MOTOSHIFT_CHECKIN_EXIGIR_PROXIMIDADE=false`) para a demo feita de casa.
 
 ### Pré-requisitos
 - Java 17+
