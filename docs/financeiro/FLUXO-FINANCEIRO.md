@@ -355,8 +355,11 @@ com saldo disponível, e a mensagem diz quanto há.
 ## 6. As três invariantes
 
 Conferidas por `ConsistenciaService.verificarConsistencia()` e por
-`GET /api/dev/ledger/consistencia` (apenas no perfil `dev` — é trabalho
-O(banco inteiro), não rota de produção).
+`GET /api/dev/ledger/consistencia` (autenticado, e em qualquer perfil que não
+seja o `prod` — é trabalho O(banco inteiro), não rota de produção; com o perfil
+`prod` o controller nem é instanciado). É a rota para mostrar o ledger fechando
+ao vivo: suba com o `RODAR.bat`, entre com uma conta da massa e chame-a com o
+token — responde 200 com `"consistente": true` e os totais.
 
 ### (a) Nenhum saldo negativo
 

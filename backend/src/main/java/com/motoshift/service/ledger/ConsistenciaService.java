@@ -43,10 +43,12 @@ import java.util.Set;
  *       exatamente o defeito que este trabalho veio corrigir.</li>
  * </ol>
  *
- * <p><b>Por que so em perfil dev.</b> Isto varre carteiras e lancamentos
+ * <p><b>Por que fora de producao.</b> Isto varre carteiras e lancamentos
  * inteiros: e uma ferramenta de conferencia e de teste, nao um endpoint de
- * producao. O {@code ConsistenciaController} que a expoe e {@code @Profile("dev")}.
- * Os testes a chamam direto, sem HTTP.
+ * producao. O {@code ConsistenciaController} que a expoe e
+ * {@code @Profile("!prod")} — existe em desenvolvimento e nos testes, e nao e
+ * instanciado com o perfil prod. O servico em si existe sempre: o reset da
+ * massa e os testes o chamam direto, sem HTTP.
  *
  * <p><b>Lancamentos nao concluidos ficam de fora.</b> Sobraram no banco
  * lancamentos {@code pendente} de antes da liquidacao automatica — divida
