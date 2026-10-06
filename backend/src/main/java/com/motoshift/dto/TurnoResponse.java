@@ -32,6 +32,10 @@ public class TurnoResponse {
     private LocalDateTime expiradoEm;
     private Integer vagas;
     private Integer vagasPreenchidas;
+    // Alguem ja fez check-in neste turno. Com o inicio (dataInicio), e o que o
+    // app precisa para saber se "Finalizar" seria aceito: o backend recusa
+    // (409) o turno que nao comecou ou em que ninguem chegou.
+    private boolean algumCheckin;
     // Tipados como enum: o JSON continua saindo minúsculo por causa do
     // @JsonValue em StatusTurno/StatusPagamento, e o contrato com o app fica
     // preso ao enum em vez de a uma String que qualquer atribuição altera.
@@ -93,6 +97,8 @@ public class TurnoResponse {
     public Integer getVagas() { return vagas; }
     public Integer getVagasPreenchidas() { return vagasPreenchidas; }
     public void setVagasPreenchidas(Integer v) { this.vagasPreenchidas = v; }
+    public boolean isAlgumCheckin() { return algumCheckin; }
+    public void setAlgumCheckin(boolean v) { this.algumCheckin = v; }
     public StatusTurno getStatus() { return status; }
     public StatusPagamento getPagamentoStatus() { return pagamentoStatus; }
     public LocalDateTime getCriadoEm() { return criadoEm; }

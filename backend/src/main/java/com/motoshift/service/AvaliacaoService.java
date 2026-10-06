@@ -1,7 +1,6 @@
 package com.motoshift.service;
 
 import com.motoshift.dto.AvaliacaoRequest;
-import com.motoshift.entity.StatusInscricao;
 import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Avaliacao;
 import com.motoshift.entity.Turno;
@@ -208,7 +207,7 @@ public class AvaliacaoService {
         if (usuarioId.equals(turno.getLojistId())) return true;
         if (usuarioId.equals(turno.getMotoboyId())) return true;
         return inscricaoRepo.findByTurnoIdAndMotoboyId(turno.getId(), usuarioId)
-                .filter(i -> i.getStatus() != StatusInscricao.CANCELADO)
+                .filter(i -> i.getStatus().valeNoTurno())
                 .isPresent();
     }
 
@@ -218,7 +217,7 @@ public class AvaliacaoService {
             return turno.getLojistId() == null ? List.of() : List.of(turno.getLojistId());
         }
         List<Long> ids = inscricaoRepo.findByTurnoId(turno.getId()).stream()
-                .filter(i -> i.getStatus() != StatusInscricao.CANCELADO)
+                .filter(i -> i.getStatus().valeNoTurno())
                 .map(TurnoInscricao::getMotoboyId)
                 .distinct()
                 .collect(Collectors.toList());

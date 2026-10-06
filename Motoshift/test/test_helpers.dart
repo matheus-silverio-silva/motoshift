@@ -223,6 +223,9 @@ List<Turno> fakeMeusTurnos({DateTime? ancora}) {
       valorEstimado: 120,
       raioEntregaKm: 8,
       status: StatusTurno.emAndamento,
+      // Em andamento quer dizer que alguém fez check-in — é o que o backend
+      // manda, e o que deixa "Confirmar conclusão" aparecer.
+      algumCheckin: true,
     ),
     Turno(
       id: 202,

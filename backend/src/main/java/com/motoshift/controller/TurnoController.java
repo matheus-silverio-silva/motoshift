@@ -180,17 +180,19 @@ public class TurnoController {
 
     @Operation(summary = "Finalizar turno",
             description = "Encerra o turno e LIQUIDA o pagamento na mesma transação: para cada "
-                    + "entregador que trabalhou, o valor sai do saldo bloqueado do lojista e "
-                    + "entra no disponível do entregador. O que foi reservado para vagas não "
-                    + "preenchidas volta ao disponível do lojista. Qualquer um dos dois "
-                    + "participantes pode finalizar — o dinheiro já estava reservado desde a "
-                    + "publicação, então finalizar só transfere o que o lojista comprometeu. "
-                    + "Repetir a chamada não paga duas vezes (RF06).")
+                    + "entregador que FEZ CHECK-IN, o valor sai do saldo bloqueado do lojista e "
+                    + "entra no disponível do entregador. Quem aceitou e não fez check-in fica "
+                    + "como 'faltou', sem pagamento; a parte dele e a das vagas não preenchidas "
+                    + "voltam ao disponível do lojista. Só vale depois do início do turno e com "
+                    + "pelo menos um check-in. Qualquer um dos dois participantes pode finalizar "
+                    + "— o dinheiro já estava reservado desde a publicação. Repetir a chamada "
+                    + "não paga duas vezes (RF06).")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Turno finalizado e pagamentos liquidados"),
         @ApiResponse(responseCode = "403", description = "Usuário não participa do turno"),
         @ApiResponse(responseCode = "404", description = "Turno não encontrado"),
-        @ApiResponse(responseCode = "409", description = "Turno já encerrado")
+        @ApiResponse(responseCode = "409", description = "Turno já encerrado, ainda não começou "
+                + "(a mensagem diz a partir de quando) ou sem nenhum check-in")
     })
     @PutMapping("/{id}/finalizar")
     public TurnoResponse finalizar(@PathVariable Long id,

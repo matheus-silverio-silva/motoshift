@@ -98,7 +98,35 @@ public class CenarioFinanceiro {
         }
     }
 
+    /**
+     * O turno aconteceu: o início vai para o passado e cada inscrito ativo fez
+     * check-in na hora marcada.
+     *
+     * <p>Finalizar exige as duas coisas — turno começado e alguém com check-in
+     * —, e o turno do cenário é publicado pelo serviço, que só aceita início
+     * daqui a 2h ou mais. Direto no repositório, como {@link #inscrever}: o
+     * que estes testes exercitam é o dinheiro e o documento; a janela e a
+     * distância do check-in têm o {@code CheckinServiceTest}.
+     */
+    public Turno darPorTrabalhado(Turno t) {
+        Turno atual = turnoRepo.findById(t.getId()).orElseThrow();
+        LocalDateTime inicio = LocalDateTime.now().minusMinutes(1);
+        atual.setDataInicio(inicio);
+        atual.setDataFim(inicio.plusHours(4));
+        atual = turnoRepo.save(atual);
+        for (TurnoInscricao ins :
+                inscricaoRepo.findByTurnoIdAndStatus(t.getId(), StatusInscricao.ACEITO)) {
+            if (ins.getCheckinEm() == null) {
+                ins.setCheckinEm(inicio);
+                inscricaoRepo.save(ins);
+            }
+        }
+        return atual;
+    }
+
+    /** Finaliza pelo caminho feliz: o turno já começou e todos os inscritos chegaram. */
     public Turno finalizar(Turno t, Long quem) {
+        darPorTrabalhado(t);
         turnos.finalizar(t.getId(), quem);
         return turnoRepo.findById(t.getId()).orElseThrow();
     }

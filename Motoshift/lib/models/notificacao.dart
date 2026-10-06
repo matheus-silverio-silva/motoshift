@@ -103,6 +103,12 @@ class Notificacao {
             fundo: AppColors.amberSoft,
             frente: AppColors.onTertiaryContainer,
           ),
+        // O turno foi finalizado e este entregador não fez check-in.
+        'turno_falta' => const NotificacaoEstilo(
+            icone: Icons.person_off_outlined,
+            fundo: AppColors.surface3,
+            frente: AppColors.muted,
+          ),
         'turno_expirado' => const NotificacaoEstilo(
             icone: Icons.timer_off_outlined,
             fundo: AppColors.surface3,

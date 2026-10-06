@@ -408,6 +408,44 @@ public class MigracoesPostgresTest {
         }
     }
 
+    @Test
+    @DisplayName("V21: o status da inscricao ganha dominio no banco, e 'faltou' faz parte dele")
+    void v21_inscricaoFaltou() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v21");
+        flyway(url, "20").migrate();
+
+        long inscricao;
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("loja-v21@teste.com", "x"));
+            s.execute(inserirUsuario("entregador-v21@teste.com", "x"));
+            long lojista = contar(s, "SELECT id FROM usuarios WHERE email = 'loja-v21@teste.com'");
+            long entregador = contar(s, "SELECT id FROM usuarios WHERE email = 'entregador-v21@teste.com'");
+            s.execute("INSERT INTO turnos (lojist_id, titulo, data_inicio, data_fim, valor_estimado, "
+                    + "status, criado_em) VALUES (" + lojista + ", 'Turno V21', "
+                    + "'2026-03-10 18:00', '2026-03-10 22:00', 120, 'aceito', now())");
+            long turno = contar(s, "SELECT id FROM turnos WHERE titulo = 'Turno V21'");
+            // A inscricao de antes da V21: o CHECK precisa aceita-la como esta.
+            s.execute("INSERT INTO turno_inscricoes (turno_id, motoboy_id, status, criado_em) "
+                    + "VALUES (" + turno + ", " + entregador + ", 'aceito', now())");
+            inscricao = contar(s, "SELECT id FROM turno_inscricoes WHERE turno_id = " + turno);
+        }
+
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            assertThat(validada(s, "ck_inscricao_status")).isTrue();
+
+            // O status novo entra; o que o enum nao conhece, nao.
+            s.execute("UPDATE turno_inscricoes SET status = 'faltou' WHERE id = " + inscricao);
+            assertThat(contar(s, "SELECT count(*) FROM turno_inscricoes WHERE status = 'faltou'"))
+                    .isEqualTo(1);
+            assertThatThrownBy(() -> s.execute(
+                    "UPDATE turno_inscricoes SET status = 'sumiu' WHERE id = " + inscricao))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_inscricao_status");
+        }
+    }
+
     // ── Apoio ──────────────────────────────────────────────────────────────
 
     /** INSERT valido ATE a V11 — antes de a coluna natureza existir. */
@@ -471,7 +509,7 @@ public class MigracoesPostgresTest {
      * um número só.
      */
     public static String ultimaVersao() {
-        return "20";
+        return "21";
     }
 
     static Connection conectar(String url) throws SQLException {

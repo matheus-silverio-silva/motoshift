@@ -78,7 +78,7 @@ erDiagram
         BIGINT id PK "IDENTITY"
         BIGINT turno_id FK "NOT NULL - turnos.id"
         BIGINT motoboy_id FK "NOT NULL - usuarios.id"
-        VARCHAR status "NOT NULL - aceito|finalizado|cancelado"
+        VARCHAR status "NOT NULL - CHECK (V21): aceito|finalizado|faltou|cancelado"
         VARCHAR pagamento_status "null|pendente|pago - pago na finalizacao"
         TIMESTAMP checkin_em "Cheguei (V16)"
         FLOAT checkin_latitude "de onde (V16)"

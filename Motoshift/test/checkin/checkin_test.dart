@@ -157,10 +157,12 @@ void main() {
       await pumpGolden(tester,
           child: Scaffold(
               body: AcoesDoTurno(
-                  turno: _turnoAceito(status: StatusTurno.emAndamento))),
+                  turno: _turnoAceito(
+                      status: StatusTurno.emAndamento, algumCheckin: true))),
           tipoUsuario: TipoUsuario.lojista);
 
-      expect(find.byKey(const Key('acao-finalizar')), findsOneWidget);
+      // "Finalizar" tem teste próprio (turno/acoes_do_turno_test): depende da
+      // hora, e este turno começa às 14:05 de hoje.
       expect(find.byKey(const Key('acao-cancelar')), findsNothing);
     });
   });
@@ -189,7 +191,10 @@ void main() {
 
 /// Turno de 1 vaga do fake lojista (id 2), aceito pelo fake entregador (id 1),
 /// começando às 14:05.
-Turno _turnoAceito({StatusTurno status = StatusTurno.aceito}) {
+Turno _turnoAceito({
+  StatusTurno status = StatusTurno.aceito,
+  bool algumCheckin = false,
+}) {
   final hoje = DateTime.now();
   return Turno(
     id: 501,
@@ -204,6 +209,7 @@ Turno _turnoAceito({StatusTurno status = StatusTurno.aceito}) {
     latitude: -25.4560,
     longitude: -49.2820,
     status: status,
+    algumCheckin: algumCheckin,
   );
 }
 

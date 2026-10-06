@@ -740,6 +740,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
                 arguments: ativo),
             child: TurnoAtivoCard(
               turno: ativo,
+              agora: widget.agora,
               onConfirmarConclusao: () => _finalizar(ativo, provider),
             ),
           ),

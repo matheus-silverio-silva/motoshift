@@ -93,7 +93,7 @@ Android) ou `localhost:8080`.
 | RF03 | Cadastro: CNPJ (14 díg.) / CNH (11 díg.) | `AuthService.registrar()` | parcial |
 | RF04 | Publicar turno, antecedência mínima de 2h | `TurnoService.criar()` | ✅ |
 | RF05 | Reservar turno, sem conflito de horário | `TurnoService.aceitar()` | ✅ |
-| RF06 | Finalizar transfere o valor reservado para o entregador, na mesma transação | `TurnoService.finalizar()` + `PagamentoTurnoService.liquidar()` | ✅ |
+| RF06 | Finalizar transfere o valor reservado para o entregador **que fez check-in**, na mesma transação; só depois do início do turno | `TurnoService.finalizar()` + `PagamentoTurnoService.fecharInscricoes()` / `liquidar()` | ✅ |
 | RF07 | Cancelar < 1h penaliza o score do entregador (−0.5) | `TurnoService.cancelar()` + `Reputacao` | ✅ |
 
 **Regras de negócio mais "perguntáveis":**
@@ -105,6 +105,10 @@ Android) ou `localhost:8080`.
   o valor sai do saldo **bloqueado** do lojista (reservado quando ele publicou) e entra no
   **disponível** do entregador. Não há confirmação a dar: o compromisso foi assumido na publicação.
   A dupla confirmação manual que existia aqui foi removida (V13) — ver `docs/financeiro/FLUXO-FINANCEIRO.md`.
+- *Finalizar só paga quem trabalhou:* finalizar exige turno começado e pelo menos um check-in (409 fora
+  disso). Só a inscrição com check-in recebe; a aceita sem check-in vira `faltou` (V21), sem pagamento e
+  sem penalidade de score, e a parte dela volta ao lojista como sobra. Antes, aceitar um turno de amanhã
+  e tocar "Finalizar" pagava na hora.
 - *Penalidade de score:* cancelamento com menos de 1h subtrai 0.5 (mínimo 0.0).
   A regra (valor inicial e penalidade) mora em `Reputacao`, num lugar só.
 

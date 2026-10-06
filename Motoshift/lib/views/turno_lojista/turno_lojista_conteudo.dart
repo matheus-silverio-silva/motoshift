@@ -147,6 +147,9 @@ class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
 
   /// O que dizer embaixo do nome do entregador.
   ///
+  static bool _faltou(String statusInscricao) =>
+      statusInscricao.toLowerCase() == 'faltou';
+
   /// O card dizia "Turno aceito" para todo mundo, inclusive depois de o turno
   /// ter sido finalizado ou de a inscrição daquela pessoa ter sido cancelada.
   String _rotuloDaInscricao(
@@ -155,6 +158,10 @@ class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
     // (3 min antes) · saiu às 18:02".
     final presente = presenca.resumo;
     if (presente != null) return presente;
+    // Aceitou e não fez check-in: o turno foi finalizado sem ele, e a parte
+    // dele da reserva voltou para a loja. Vem antes do "concluído": o turno
+    // do faltoso também está finalizado.
+    if (_faltou(statusInscricao)) return 'Faltou — sem check-in';
     if (statusInscricao.toUpperCase() == 'FINALIZADO' ||
         statusTurno == StatusTurno.finalizado) {
       return 'Turno concluído';
@@ -198,8 +205,12 @@ class _TurnoLojistaConteudoState extends State<TurnoLojistaConteudo> {
           nota: inscrito.nota,
           statusLabel: _rotuloDaInscricao(
               inscrito.status, turno.status, inscrito.presenca),
-          onAvaliar: _podeAvaliar ? () => _avaliar(turno) : null,
-          favoritavel: turno.status == StatusTurno.finalizado,
+          // Quem faltou não trabalhou: não há o que avaliar nem favoritar.
+          onAvaliar: _podeAvaliar && !_faltou(inscrito.status)
+              ? () => _avaliar(turno)
+              : null,
+          favoritavel: turno.status == StatusTurno.finalizado &&
+              !_faltou(inscrito.status),
         ),
       ],
     ];

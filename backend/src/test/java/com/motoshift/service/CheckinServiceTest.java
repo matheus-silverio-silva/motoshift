@@ -284,6 +284,8 @@ class CheckinServiceTest {
         void finaliza() {
             Turno t = turnoAceito(ricardo, LocalDateTime.now().plusMinutes(3));
             checkins.checkin(t.getId(), ricardo.getId(), LAT, LNG);
+            // Finalizar só vale depois do início; o check-in abre 30 min antes.
+            moverInicio(t, LocalDateTime.now().minusMinutes(1));
 
             turnos.finalizar(t.getId(), loja.getId());
 

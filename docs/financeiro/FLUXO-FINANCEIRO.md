@@ -65,7 +65,7 @@ terceira invariante, na seção 6.
 |---|---|---|
 | **Recarga** | O lojista abre uma cobrança Pix e a paga. O valor entra no disponível. | `POST /api/carteira/recargas` + `/confirmar` |
 | **Reserva** | Publicar um turno move `valorEstimado × vagas` do disponível para o bloqueado. | `POST /api/turnos` |
-| **Liquidação** | Finalizar transfere, por entregador, do bloqueado do lojista para o disponível do entregador. A sobra das vagas vazias volta. | `PUT /api/turnos/{id}/finalizar` |
+| **Liquidação** | Finalizar transfere, por entregador **que fez check-in**, do bloqueado do lojista para o disponível do entregador. A sobra — vagas vazias e a parte de quem aceitou e não fez check-in — volta. Só vale depois do início do turno e com pelo menos um check-in. | `PUT /api/turnos/{id}/finalizar` |
 | **Saque** | O entregador (ou o lojista) envia o disponível para a chave Pix. | `POST /api/carteira/saques` |
 
 ---
@@ -121,13 +121,17 @@ sequenceDiagram
     C->>S: finalizar(id, usuarioId)
     Note over S: abre a transação
     S->>S: exigirParticipante
-    S->>P: finalizarInscricoes(turno)
-    loop cada inscrição finalizada
+    alt turno ainda não começou, ou ninguém fez check-in
+        S-->>Q: 409 com o motivo — nada é movido
+    end
+    S->>P: fecharInscricoes(turno)
+    Note over P: com check-in → FINALIZADO (a pagar)<br/>aceita sem check-in → FALTOU (sem pagamento)
+    loop cada inscrição com check-in
         P->>LG: transferir(pagamento_enviado, pagamento_recebido)
         LG->>DB: INSERT 2 transacoes (mesmo operacao_id)
         LG->>DB: UPDATE carteiras (lojista bloqueado −v, entregador disponível +v)
     end
-    alt sobrou reserva de vaga vazia
+    alt sobrou reserva (vaga vazia ou falta)
         P->>LG: aplicar(Movimento.liberacaoDeReserva SOBRA)
         LG->>DB: INSERT transacoes + UPDATE carteira do lojista
     end
@@ -140,6 +144,18 @@ sequenceDiagram
 > disparava uma cobrança contra o outro. Hoje finalizar **não cria compromisso
 > nenhum**: só move o dinheiro que o lojista já separou ao publicar, e nem o
 > valor nem o destinatário dependem de quem clicou.
+
+> **Mas finalizar só paga quem trabalhou.** Ser participante bastava, e era um
+> furo: o entregador aceitava um turno de amanhã, tocava "Finalizar" e recebia
+> na hora, porque a liquidação pagava **toda** inscrição aceita. Duas travas
+> fecham isso (`TurnoService.finalizar`): o turno precisa ter começado
+> (`agora >= dataInicio`) e alguém precisa ter feito check-in — fora disso, 409
+> com mensagem acionável ("finalize depois das 18:00" / "cancele-o para
+> devolver a reserva"). E na liquidação só a inscrição **com check-in** recebe;
+> a aceita sem check-in passa a `faltou` (V21) e a parte dela volta ao lojista
+> na mesma `liberacao_reserva` de motivo `sobra` das vagas vazias. Quem faltou
+> não perde score: a penalidade da RF07 continua sendo só a de quem sai em cima
+> da hora.
 
 ### 3.3 Cancelar
 

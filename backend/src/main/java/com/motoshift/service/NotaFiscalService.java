@@ -479,7 +479,8 @@ public class NotaFiscalService {
      * Quem prestou o serviço em cada turno. Para o entregador é sempre ele; para
      * o lojista, os entregadores inscritos — numa consulta para todos os turnos.
      *
-     * <p>Inscrição CANCELADA fica de fora; ACEITO e FINALIZADO entram.
+     * <p>Inscrição CANCELADA e a de quem FALTOU ficam de fora; ACEITO e
+     * FINALIZADO entram.
      */
     private Map<Long, List<Long>> prestadoresPorTurno(List<Turno> turnos, Long usuarioId,
                                                       boolean ehLojista) {
@@ -490,7 +491,7 @@ public class NotaFiscalService {
         }
 
         for (TurnoInscricao ins : inscricaoRepo.findByTurnoIdIn(turnos.stream().map(Turno::getId).toList())) {
-            if (ins.getStatus() == StatusInscricao.CANCELADO) continue;
+            if (!ins.getStatus().valeNoTurno()) continue;
             porTurno.computeIfAbsent(ins.getTurnoId(), k -> new ArrayList<>()).add(ins.getMotoboyId());
         }
         // Turno legado sem inscrição ainda tem o entregador no próprio turno.

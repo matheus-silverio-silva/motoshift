@@ -40,6 +40,21 @@ public interface TurnoInscricaoRepository extends JpaRepository<TurnoInscricao, 
     boolean existsByTurnoIdAndCheckinEmIsNotNull(Long turnoId);
 
     /**
+     * Alguma inscricao neste status ja fez check-in? Com ACEITO, e a pergunta
+     * da finalizacao: sem check-in de quem ainda esta no turno, nao ha quem
+     * pagar.
+     */
+    boolean existsByTurnoIdAndStatusAndCheckinEmIsNotNull(Long turnoId, StatusInscricao status);
+
+    /**
+     * Dos turnos pedidos, os que tem check-in — o {@code algumCheckin} das
+     * listagens, numa consulta so.
+     */
+    @Query("select distinct i.turnoId from TurnoInscricao i "
+         + "where i.turnoId in :turnos and i.checkinEm is not null")
+    List<Long> turnosComCheckin(@Param("turnos") Collection<Long> turnoIds);
+
+    /**
      * As chegadas do entregador a turnos que começaram desde [desde] — a base
      * da pontualidade. Uma linha por check-in, com a hora marcada ao lado.
      */

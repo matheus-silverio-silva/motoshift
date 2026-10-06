@@ -25,9 +25,10 @@ import 'app_buttons.dart';
 ///
 /// As regras aqui são as de `TurnoService`, não uma aproximação:
 ///
-/// * finalizar e cancelar valem para qualquer status que não seja
-///   `FINALIZADO` nem `CANCELADO`, e exigem um entregador no turno — menos
-///   cancelar o turno em andamento: com check-in feito, ele já começou;
+/// * finalizar vale para o turno que já começou e em que alguém fez check-in
+///   ([Turno.podeSerFinalizado]) — só quem fez check-in é pago;
+/// * cancelar vale para o turno que ainda não começou: com check-in feito,
+///   a saída é finalizar;
 /// * qualquer participante pode fazer as duas coisas;
 /// * o turno finalizado não tem mais nada a fazer além de avaliar — e é o
 ///   [OQueFalta] logo acima que lista a nota fiscal;
@@ -152,9 +153,10 @@ class _AcoesDoTurnoState extends State<AcoesDoTurno> {
           ];
         }
         return [
-          // Finalizar só existe com entregador no turno — é o que o backend
-          // exige, e sem ele a chamada voltaria 400.
-          if (_turno.motoboyId != null)
+          // Finalizar só existe quando o backend aceitaria: o turno já começou
+          // e alguém fez check-in. Fora disso a chamada volta 409 — e era por
+          // aqui que o entregador finalizava o turno de amanhã e recebia.
+          if (_turno.podeSerFinalizado())
             PrimaryButton(
               key: const Key('acao-finalizar'),
               label: 'Finalizar turno',

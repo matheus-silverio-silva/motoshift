@@ -421,7 +421,7 @@ para "valor errado não faz nada".
 | GET | /api/turnos/disponiveis | Listar turnos disponíveis (para o entregador, `lojaQueJaTeChamou` marca os turnos das lojas que o favoritaram) |
 | POST | /api/turnos | Criar novo turno (Lojista) |
 | PUT | /api/turnos/{id}/aceitar | Aceitar turno (Motoboy) |
-| PUT | /api/turnos/{id}/finalizar | Finalizar turno |
+| PUT | /api/turnos/{id}/finalizar | Finalizar turno — só depois do início e com pelo menos um check-in (409 fora disso). Paga quem fez check-in; quem aceitou e não chegou fica `faltou` e a parte dele volta ao lojista |
 | PUT | /api/turnos/{id}/cancelar | Cancelar turno (recusado depois do check-in: turno que começou se finaliza) |
 | PUT | /api/turnos/{id}/checkin | "Cheguei" — só o entregador aceito; de 30 min antes do início até o fim; a até 500 m do ponto (com a trava ligada). O primeiro leva o turno a `em_andamento` e avisa o lojista |
 | PUT | /api/turnos/{id}/checkout | "Encerrar turno" — a saída, só depois do check-in. Não finaliza nem paga |
@@ -479,7 +479,7 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | RF03 | Lojista exige CNPJ; Motoboy exige CNH no cadastro |
 | RF04 | Turno deve ser agendado com mínimo 2h de antecedência, e **publicar reserva** `valor × vagas` do saldo do lojista — sem lastro, 422 dizendo quanto falta |
 | RF05 | Motoboy não pode aceitar turno com conflito de horário |
-| RF06 | Finalização do turno **transfere** o valor reservado: sai do bloqueado do lojista, entra no disponível do entregador, na mesma transação. A sobra das vagas vazias volta |
+| RF06 | Finalização do turno **transfere** o valor reservado: sai do bloqueado do lojista, entra no disponível do entregador, na mesma transação. **Só vale com o turno começado e com check-in, e só paga quem fez check-in** — quem aceitou e não chegou fica `faltou`, sem pagamento e sem penalidade de score. A sobra (vagas vazias e faltas) volta |
 | RF07 | Cancelamento com menos de 1h de antecedência penaliza o score. A reserva volta inteira ao lojista, sem multa financeira |
 | RF12 | O dinheiro entra por recarga (Pix simulado) e sai por saque; a plataforma não cria nem destrói saldo — ver [`docs/financeiro/FLUXO-FINANCEIRO.md`](docs/financeiro/FLUXO-FINANCEIRO.md) |
 | RF08 | Sugestão inteligente de turnos via IA |

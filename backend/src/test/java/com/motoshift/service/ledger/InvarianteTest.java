@@ -246,7 +246,26 @@ class InvarianteTest {
             abertos.add(id);
             return;
         }
-        turnos.finalizar(id, lojista.getId());
+        // Finalizar exige turno começado e check-in. O início vai para o
+        // passado; o check-in é sorteado — sem ele a finalização é recusada, e
+        // essa recusa também não pode deixar rastro no saldo.
+        LocalDateTime inicio = LocalDateTime.now().minusMinutes(1);
+        t.setDataInicio(inicio);
+        t.setDataFim(inicio.plusHours(4));
+        turnoRepo.save(t);
+        if (sorteio.nextInt(4) > 0) {
+            for (TurnoInscricao ins : inscricaoRepo.findByTurnoIdAndStatus(id, StatusInscricao.ACEITO)) {
+                ins.setCheckinEm(inicio);
+                inscricaoRepo.save(ins);
+            }
+        }
+        try {
+            turnos.finalizar(id, lojista.getId());
+        } catch (ResponseStatusException semCheckin) {
+            // Continua em jogo: ainda pode ser cancelado mais adiante.
+            abertos.add(id);
+            throw semCheckin;
+        }
     }
 
     private void cancelar(List<Long> abertos, Usuario lojista) {

@@ -22,6 +22,8 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -35,6 +37,9 @@ import java.util.List;
  */
 @Service
 public class TurnoService {
+
+    private static final DateTimeFormatter HORA = DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter DIA = DateTimeFormatter.ofPattern("dd/MM");
 
     private final TurnoRepository turnoRepo;
     private final UsuarioRepository usuarioRepo;
@@ -216,57 +221,99 @@ public class TurnoService {
     }
 
     /**
-     * RF06 — Finalizar turno: paga cada entregador ali mesmo.
+     * RF06 — Finalizar turno: paga, ali mesmo, quem trabalhou.
      *
      * <p>A liquidacao acontece nesta transacao, nao depois: ou o turno fica
      * FINALIZADO e todo mundo esta pago, ou nada disso aconteceu. O estado
      * intermediario — "finalizado, aguardando pagamento" — deixou de existir, e
      * com ele a dupla confirmacao que o sustentava.
      *
-     * <p><b>Os dois participantes continuam podendo finalizar</b>, e isso agora
-     * e seguro: o dinheiro ja estava reservado desde a publicacao, entao
-     * finalizar nao cria compromisso nenhum — so transfere o que o lojista
-     * comprometeu. Nem o valor nem o destinatario dependem de quem clicou.
+     * <p><b>Os dois participantes continuam podendo finalizar</b>: o dinheiro
+     * ja estava reservado desde a publicacao, entao finalizar nao cria
+     * compromisso nenhum — so transfere o que o lojista comprometeu.
+     *
+     * <p><b>Mas finalizar so paga quem trabalhou.</b> Ate aqui bastava ser
+     * participante: o entregador aceitava um turno de amanha, tocava
+     * "Finalizar" e recebia na hora. Duas travas fecham isso:
+     * <ul>
+     *   <li>o turno precisa ter comecado ({@code agora >= dataInicio});</li>
+     *   <li>alguem precisa ter feito check-in.</li>
+     * </ul>
+     * E na liquidacao so recebe a inscricao com check-in. A aceita sem
+     * check-in vira {@link StatusInscricao#FALTOU} — sem pagamento e, por
+     * enquanto, sem penalidade de score — e a parte dela volta ao lojista
+     * junto com a das vagas vazias (liberacao_reserva, motivo "sobra").
      */
     @Transactional
     public TurnoResponse finalizar(Long turnoId, Long usuarioId) {
         Turno turno = acesso.carregar(turnoId);
         acesso.exigirParticipante(turno, usuarioId);
 
-        if (turno.getMotoboyId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Turno sem motoboy atribuído.");
-        }
-        if (turno.getStatus() == StatusTurno.FINALIZADO || turno.getStatus() == StatusTurno.CANCELADO) {
+        if (turno.getStatus() == StatusTurno.FINALIZADO || turno.getStatus() == StatusTurno.CANCELADO
+                || turno.getStatus() == StatusTurno.EXPIRADO) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Turno já encerrado.");
+        }
+        exigirQueTenhaComecado(turno, LocalDateTime.now());
+        if (!inscricaoRepo.existsByTurnoIdAndStatusAndCheckinEmIsNotNull(
+                turnoId, StatusInscricao.ACEITO)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Ninguém fez check-in neste turno — cancele-o para devolver a reserva.");
         }
 
         turno.setStatus(StatusTurno.FINALIZADO);
 
-        List<TurnoInscricao> finalizadas = pagamentos.finalizarInscricoes(turno);
-        if (finalizadas.isEmpty()) {
-            // Turno aceito antes do sistema de vagas e que a V5 nao alcancou:
-            // ha entregador no turno e nenhuma inscricao. Ele trabalhou e
-            // precisa receber, entao a inscricao e criada em vez de o fluxo
-            // parar — ver inscricaoDeCompatibilidade.
-            finalizadas = List.of(pagamentos.inscricaoDeCompatibilidade(turno));
-        }
+        PagamentoTurnoService.Fechamento fechamento = pagamentos.fecharInscricoes(turno);
+        pagamentos.liquidar(turno, fechamento.presentes(), fechamento.faltosos().size());
 
-        pagamentos.liquidar(turno, finalizadas);
+        // O "principal" do turno e quem as telas e os relatorios do entregador
+        // leem. Se ele faltou, passa a ser o primeiro que trabalhou — senao o
+        // turno finalizado e pago apareceria no historico de quem nao veio.
+        List<Long> pagos = fechamento.presentes().stream().map(TurnoInscricao::getMotoboyId).toList();
+        if (!pagos.isEmpty() && !pagos.contains(turno.getMotoboyId())) {
+            turno.setMotoboyId(pagos.get(0));
+        }
 
         // PAGO, e nao PENDENTE: quando esta linha roda, o dinheiro ja mudou de
         // carteira dentro desta mesma transacao.
         turno.setPagamentoStatus(StatusPagamento.PAGO);
         turnoRepo.save(turno);
 
-        for (Long destinatario : acesso.participantes(turno)) {
+        List<Long> avaliam = new ArrayList<>(pagos);
+        avaliam.add(0, turno.getLojistId());
+        for (Long destinatario : avaliam) {
             notificacoes.criar(destinatario, "avaliacao_pendente",
                     "Turno finalizado",
                     "O turno \"" + turno.getTitulo() + "\" foi finalizado e o pagamento "
                             + "foi liquidado. Avalie a outra parte.",
                     "turno", turno.getId());
         }
+        // Quem faltou fica sabendo — e sabendo por que nao recebeu.
+        for (TurnoInscricao falta : fechamento.faltosos()) {
+            notificacoes.criar(falta.getMotoboyId(), "turno_falta",
+                    "Turno finalizado sem o seu check-in",
+                    "O turno \"" + turno.getTitulo() + "\" foi finalizado e você não fez "
+                            + "check-in: ficou registrado como falta, sem pagamento.",
+                    "turno", turno.getId());
+        }
 
         return mapper.toResponse(turno);
+    }
+
+    /**
+     * 409 com a hora a partir da qual finalizar passa a valer.
+     *
+     * <p>"O turno ainda não começou" sozinho manda a pessoa adivinhar quando
+     * tentar de novo; com a hora, a mensagem e acionavel. O dia entra quando
+     * o turno nao e de hoje.
+     */
+    private static void exigirQueTenhaComecado(Turno turno, LocalDateTime agora) {
+        LocalDateTime inicio = turno.getDataInicio();
+        if (!agora.isBefore(inicio)) return;
+        String quando = inicio.toLocalDate().equals(agora.toLocalDate())
+                ? "depois das " + inicio.format(HORA)
+                : "a partir de " + inicio.format(DIA) + ", às " + inicio.format(HORA);
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "O turno ainda não começou — finalize " + quando + ".");
     }
 
     // RF07 — Cancelar turno: penalidade no score se < 1h antes do início
