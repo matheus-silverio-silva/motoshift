@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
@@ -60,15 +61,18 @@ import 'package:moto_shift/utils/baixar_arquivo.dart';
 
 /// Chame em setUpAll() de cada test file.
 ///
-/// - Bloqueia HTTP (tiles OSM, mas deixa fontes Google passar)
-/// - Pré-registra uma fonte TTF do sistema com os nomes que o tema usa
-///   (Bricolage Grotesque + Plus Jakarta Sans) para evitar Ahem quadradão
-///   no golden caso o download de fonte falhe / esteja offline.
+/// - Bloqueia todo HTTP (tiles OSM, fontes): a suíte não depende de rede
+/// - Registra as fontes do tema (Bricolage Grotesque + Plus Jakarta Sans) a
+///   partir dos arquivos embarcados em assets/fonts — os goldens mostram a
+///   fonte que o usuário vê, e não a do sistema de quem rodou o teste.
 Future<void> setupGoldenTests() async {
   TestWidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_BR');
   HttpOverrides.global = _SelectiveHttpOverrides();
-  await _registerFallbackFonts();
+  // Como no main.dart: fonte só dos assets. Um peso que o app passe a usar
+  // sem embarcar o arquivo aparece aqui como erro, em vez de ser baixado.
+  GoogleFonts.config.allowRuntimeFetching = false;
+  await _registrarFontesDoTema();
 
   // Mock dos canais nativos usados em testes:
   // - path_provider: google_fonts salva fontes no diretório de suporte
@@ -89,15 +93,18 @@ Future<void> setupGoldenTests() async {
     },
   );
 
-  // Silencia avisos residuais — overflow ocorre só em teste por causa das
-  // métricas diferentes da fonte fallback (Roboto vs Bricolage/Jakarta).
+  // Silencia avisos residuais de teste (tiles do mapa, timers).
+  //
+  // "RenderFlex overflowed" NÃO está mais nesta lista. Estava porque os
+  // testes desenhavam com a fonte do sistema, de métricas diferentes das do
+  // app, e todo estouro era tratado como artefato de teste. Com as fontes do
+  // tema embarcadas, um estouro aqui é o estouro que o usuário vê no celular
+  // — o primeiro que apareceu foi a linha do extrato, 16 px além da tela.
   FlutterError.onError = (FlutterErrorDetails details) {
     final msg = details.exceptionAsString();
     if (msg.contains('google_fonts') ||
         msg.contains('Failed to load font') ||
         msg.contains('tile.openstreetmap') ||
-        msg.contains('RenderFlex overflowed') ||
-        msg.contains('A RenderFlex overflowed') ||
         msg.contains('Timer is still pending') ||
         msg.contains('timersPending')) {
       return;
@@ -1520,66 +1527,63 @@ class _BlankPage extends StatelessWidget {
       const Scaffold(body: SizedBox.shrink());
 }
 
-/// Procura uma fonte TTF do sistema e registra com os nomes que o app usa.
-/// Tenta caminhos comuns em Windows/Mac/Linux. Se não achar, o teste continua
-/// usando Ahem (caixas quadradas) — sem crash.
-Future<void> _registerFallbackFonts() async {
-  const candidatos = [
-    r'C:\Windows\Fonts\segoeui.ttf',
-    r'C:\Windows\Fonts\arial.ttf',
-    r'C:\Windows\Fonts\calibri.ttf',
-    '/Library/Fonts/Arial.ttf',
-    '/System/Library/Fonts/Helvetica.ttc',
-    '/System/Library/Fonts/Supplemental/Arial.ttf',
-    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-    '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
-  ];
+/// Registra as fontes do tema a partir dos arquivos EMBARCADOS (assets/fonts),
+/// com os nomes de família que o google_fonts usa.
+///
+/// Antes isto registrava uma fonte do sistema (Segoe UI no Windows, Arial,
+/// DejaVu...) com os nomes da Bricolage e da Jakarta: os goldens não mostravam
+/// a cara do app, e mudavam de máquina para máquina. Com as fontes no
+/// repositório, o teste desenha o que o usuário vê.
+///
+/// Por que registrar à mão, se o google_fonts acharia os arquivos nos assets:
+/// ele carrega a fonte de forma assíncrona na primeira vez em que o estilo é
+/// pedido, e dentro de um testWidgets essa E/S não termina antes do frame que
+/// o golden fotografa. Aqui (setUpAll, fora do relógio falso) ela já chega
+/// carregada.
+///
+/// O google_fonts gera fontFamily no formato `FamiliaSemEspaco_variante`:
+/// "regular" para o peso 400 e o número para os demais ("700"). Os pesos que o
+/// app não embarca (100 a 300, 900) caem no vizinho mais próximo, como o motor
+/// de texto faria.
+Future<void> _registrarFontesDoTema() async {
+  const arquivoDoPeso = {
+    '100': 'Regular',
+    '200': 'Regular',
+    '300': 'Regular',
+    'regular': 'Regular',
+    '400': 'Regular',
+    '500': 'Medium',
+    '600': 'SemiBold',
+    '700': 'Bold',
+    '800': 'ExtraBold',
+    '900': 'ExtraBold',
+  };
 
-  File? fonte;
-  for (final p in candidatos) {
-    final f = File(p);
-    if (f.existsSync()) {
-      fonte = f;
-      break;
-    }
-  }
-  if (fonte == null) {
-    // ignore: avoid_print
-    print('[golden-fonts] nenhuma fonte do sistema encontrada — Ahem ativo');
-    return;
-  }
-  // ignore: avoid_print
-  print('[golden-fonts] usando ${fonte.path}');
+  final cache = <String, ByteData>{};
+  ByteData bytesDe(String familia, String peso) => cache.putIfAbsent(
+      '$familia-$peso',
+      () => ByteData.sublistView(
+          File('assets/fonts/$familia-$peso.ttf').readAsBytesSync()));
 
-  final bytes = await fonte.readAsBytes();
+  int total = 0;
+  for (final familia in const ['BricolageGrotesque', 'PlusJakartaSans']) {
+    // O nome puro da família é o fontFamilyFallback dos estilos gerados.
+    final nomes = <String, String>{familia: 'Regular'};
+    arquivoDoPeso.forEach((variante, peso) => nomes['${familia}_$variante'] = peso);
 
-  // google_fonts gera fontFamily no formato "FamiliaSemEspaco_<peso>".
-  // Pesos: "regular" (== 400), "100", "200", "300", "500", "600", "700", "800", "900",
-  // sufixos "i" para italic. Também há fontFamilyFallback = ["FamiliaSemEspaco"].
-  // Pré-registramos todos os nomes que podem aparecer nos TextStyle gerados.
-  final families = <String>['BricolageGrotesque', 'PlusJakartaSans'];
-  final variants = <String>[
-    'regular',
-    '100', '200', '300', '400', '500', '600', '700', '800', '900',
-    '100i', '200i', '300i', '400i', '500i', '600i', '700i', '800i', '900i',
-  ];
-
-  int count = 0;
-  for (final fam in families) {
-    final names = <String>{fam, ...variants.map((v) => '${fam}_$v')};
-    for (final name in names) {
-      final loader = FontLoader(name)
-        ..addFont(Future.value(ByteData.sublistView(bytes)));
-      await loader.load();
-      count++;
+    for (final entrada in nomes.entries) {
+      final carregador = FontLoader(entrada.key)
+        ..addFont(Future.value(bytesDe(familia, entrada.value)));
+      await carregador.load();
+      total++;
     }
   }
   // ignore: avoid_print
-  print('[golden-fonts] registradas $count variações');
+  print('[golden-fonts] fontes do tema (assets/fonts): $total variações');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HttpOverrides seletivo: deixa fontes Google passar, bloqueia tiles OSM
+// HttpOverrides: nenhuma requisição sai da suíte (tiles OSM, fontes, nada)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SelectiveHttpOverrides extends HttpOverrides {
@@ -1592,12 +1596,10 @@ class _SelectiveHttpClient implements HttpClient {
   _SelectiveHttpClient(this._real);
   final HttpClient _real;
 
-  bool _allow(Uri url) {
-    final host = url.host;
-    return host.contains('gstatic.com') ||
-        host.contains('googleapis.com') ||
-        host.contains('fonts.google.com');
-  }
+  /// Nada passa. As fontes do Google passavam — a suíte baixava fonte da
+  /// internet no meio dos testes —, e não precisam mais: estão embarcadas em
+  /// assets/fonts. Teste que depende de rede passa ou falha conforme o Wi-Fi.
+  bool _allow(Uri url) => false;
 
   @override
   Future<HttpClientRequest> getUrl(Uri url) => _allow(url)

@@ -68,7 +68,12 @@ Serviços principais: `AuthService`, `TurnoService`, `CarteiraService`,
 - **Telas:** `views/` (uma pasta por tela: login, dashboards, agenda, carteira…).
 - **Acesso à API:** `services/api_service.dart` centraliza as chamadas HTTP;
   `services/auth_service.dart` cuida da sessão.
-- **Tema:** `theme/app_theme.dart` (Material Design 3, fontes via `google_fonts`).
+- **Tema:** `theme/app_theme.dart` (Material Design 3). As fontes (Bricolage
+  Grotesque e Plus Jakarta Sans, SIL OFL) vão **embarcadas** em `assets/fonts`:
+  o `google_fonts` as usa dos assets e a busca em rede está desligada
+  (`GoogleFonts.config.allowRuntimeFetching = false` no `main.dart`). Antes o
+  app baixava cada peso na primeira vez em que ele aparecia — sem internet, a
+  tela abria na fonte do sistema.
 - **Mapa:** `flutter_map` (OpenStreetMap) para região de entrega.
 
 > **Se perguntarem por Clean Architecture:** existiam `domain/` e `data/` de uma
@@ -184,9 +189,14 @@ Android) ou `localhost:8080`.
   primeira execução real das migrações era o deploy.
 - **Front-end:** 91 testes — unidade, widget, acessibilidade (alvo de toque) e
   *golden tests* (comparação visual das telas).
-- *Observação:* os goldens rodam no CI em `windows-latest` porque foram
-  gravados com a fonte do sistema; em outro SO o texto sairia em outra fonte e
-  todos falhariam por diferença de renderização, não por regressão.
+- *Observação:* os goldens são desenhados com as **fontes do próprio app**
+  (os arquivos de `assets/fonts`), e não mais com a fonte do sistema de quem
+  roda o teste — eram gravados em Segoe UI, e por isso não mostravam a cara do
+  app. A troca revelou um estouro de layout de verdade na linha do extrato
+  (16 px além da tela no celular), que a fonte do sistema escondia; desde
+  então "RenderFlex overflowed" deixou de ser silenciado na suíte. O CI segue
+  em `windows-latest` com o Flutter fixo em 3.41.5, que é onde os goldens são
+  gravados: a rasterização muda entre sistemas e entre versões.
 
 ---
 

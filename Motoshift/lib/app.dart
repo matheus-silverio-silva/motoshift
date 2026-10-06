@@ -92,7 +92,9 @@ class MotoShiftApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'Moto Shift',
+        // O nome do app para o sistema — no web, é o que fica na aba depois que
+        // o Flutter sobe (sobrescreve o <title> do index.html).
+        title: 'MotoShift',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         locale: const Locale('pt', 'BR'),

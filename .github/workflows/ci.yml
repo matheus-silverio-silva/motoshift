@@ -41,11 +41,12 @@ jobs:
 
   flutter:
     name: App (Flutter)
-    # windows-latest de proposito, e nao ubuntu: os golden tests renderizam
-    # com a fonte do sistema (test_helpers procura segoeui.ttf, depois arial,
-    # e so entao as fontes do Linux). As imagens em test/goldens/goldens
-    # foram geradas com Segoe UI; no Ubuntu o texto sai em DejaVu Sans e
-    # todos os goldens falhariam por diferenca de fonte, nao por regressao.
+    # windows-latest de proposito, e nao ubuntu: e onde as imagens de
+    # test/goldens/goldens sao gravadas. O texto delas ja nao depende da fonte
+    # do sistema — os testes desenham com as fontes do proprio app
+    # (assets/fonts) —, mas a rasterizacao (antialiasing, icones, sombras)
+    # muda de um sistema para outro, e um golden gravado no Windows falharia
+    # no Ubuntu por alguns pixels, nao por regressao.
     runs-on: windows-latest
 
     steps:

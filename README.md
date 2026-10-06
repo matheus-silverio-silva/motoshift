@@ -167,6 +167,34 @@ backend local em `http://10.0.2.2:8080` — o release precisa de
 flutter build apk --release --dart-define=API_URL=https://seu-backend.up.railway.app
 ```
 
+**Nome, ícone e fontes.** O app se chama **MotoShift** em todas as plataformas
+(`android:label`, `CFBundleDisplayName`/`CFBundleName`, `<title>` e
+`web/manifest.json`).
+
+- **Ícone.** A fonte é `Motoshift/assets/icon/icon.png` — o monograma "MS" na
+  fonte da marca, sobre o gradiente verde-água do tema —, desenhada pelo
+  próprio projeto em `tool/gerar_icone_test.dart`. Os ícones de Android
+  (inclusive o adaptativo), iOS e web/favicon saem dela pelo
+  `flutter_launcher_icons` e estão versionados. Para redesenhar:
+
+  ```bash
+  flutter test tool/gerar_icone_test.dart
+  ```
+
+  ```bash
+  dart run flutter_launcher_icons
+  ```
+
+  (o gerador troca uma linha que não deve no `ios/Runner.xcodeproj/project.pbxproj`
+  — `ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS` —; desfaça com
+  `git checkout -- ios/Runner.xcodeproj/project.pbxproj` antes de commitar.)
+- **Fontes.** Bricolage Grotesque e Plus Jakarta Sans vão **embarcadas** em
+  `Motoshift/assets/fonts/` (licença SIL OFL 1.1, nos arquivos `OFL-*.txt` ao
+  lado). O `google_fonts` as usa dos assets, e o `main.dart` desliga a busca em
+  rede (`GoogleFonts.config.allowRuntimeFetching = false`): o app tem a mesma
+  cara sem internet. Estão lá os pesos que o app usa (400 a 800); usar um peso
+  novo exige pôr o arquivo dele na pasta e no `pubspec.yaml`.
+
 ### 📍 Testar a localização à mão (Chrome)
 
 O navegador só libera a localização em **HTTPS ou `localhost`**: rode o app

@@ -66,9 +66,16 @@ class LancamentoTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Row(
                     children: [
-                      Text(lancamento.tipo.label,
-                          style: tsJakarta(11, FontWeight.w400,
-                              color: AppColors.muted)),
+                      // Flexible: num celular estreito "Pagamento recebido"
+                      // mais os selos não cabem na linha, e quem cede é o
+                      // rótulo — os selos dizem o que o título não diz.
+                      Flexible(
+                        child: Text(lancamento.tipo.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tsJakarta(11, FontWeight.w400,
+                                color: AppColors.muted)),
+                      ),
                       if (!lancamento.status.liquidado) ...[
                         const SizedBox(width: 6),
                         _selo(lancamento.status.label),

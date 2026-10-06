@@ -66,7 +66,7 @@ class _SplashScreenState extends State<SplashScreen> {
             // caía na fonte padrão do sistema enquanto todo o resto usa
             // Bricolage + Jakarta.
             Text(
-              'Moto Shift',
+              'MotoShift',
               style: tsBricolage(34, FontWeight.w800, color: Colors.white)
                   .copyWith(letterSpacing: -1.5),
             ),
