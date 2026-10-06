@@ -138,7 +138,10 @@ Acesse o console H2 em: `http://localhost:8080/h2-console`
 - JDBC URL: `jdbc:h2:mem:motoshiftdb`
 - User: `sa` | Password: *(vazio)*
 
-Swagger UI: `http://localhost:8080/swagger-ui.html`
+Swagger UI: `http://localhost:8080/swagger-ui.html` — **só em desenvolvimento**.
+No perfil `prod` a documentação fica desligada (`springdoc.api-docs.enabled` e
+`springdoc.swagger-ui.enabled` em `false`) e as rotas dela deixam de ser
+públicas: sem token, respondem 401.
 
 ### Front-end (Flutter)
 
@@ -301,6 +304,9 @@ Roda com o perfil `prod` (PostgreSQL). Variáveis principais:
 | `MOTOSHIFT_FISCAL_CHAVE` | **sim** | Chave do HMAC que autentica os comprovantes (recarga, Pix, movimentação). Sem ela o boot falha: o código de autenticação viraria um hash que qualquer um refaz. Trocar a chave muda o código de todos os comprovantes já emitidos |
 | `MOTOSHIFT_FISCAL_RETER_NA_FONTE` | não | `true` faz a liquidação reter ISS e IRRF do entregador, como lançamentos próprios no extrato; padrão `false`, com os tributos apenas informativos na nota. Ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |
 | `JWT_EXPIRACAO_HORAS` | não | Validade do token; padrão 168 (7 dias) |
+| `ANTHROPIC_MODEL` | não | Modelo da Anthropic usado pela IA (propriedade `anthropic.model`); padrão `claude-sonnet-4-20250514`. Trocar de modelo deixou de pedir commit e deploy de código |
+| `MOTOSHIFT_LIMITE_HABILITADO` | não | `false` desliga o limite de requisições (10/h por usuário nas sugestões da IA; 20 a cada 10 min por IP no cadastro e no "esqueci minha senha"). Padrão `true`. Útil na **apresentação com a turma inteira atrás do mesmo Wi-Fi**: todos saem pelo mesmo IP, e o 21º cadastro em 10 minutos levaria 429 |
+| `MOTOSHIFT_LIMITE_CABECALHO_IP` | não | De qual cabeçalho o limite lê o IP do cliente. Padrão `X-Forwarded-For` em produção (vazio em dev, onde não há proxy em que confiar); `X-Real-IP` é a alternativa documentada pelo Railway — ver "Limite de requisições" |
 | `MOTOSHIFT_CHECKIN_EXIGIR_PROXIMIDADE` | não | `false` desliga a trava de distância do check-in (o "Cheguei" passa a valer de qualquer lugar). É para a **apresentação feita de casa**, longe de qualquer loja da massa; a janela de horário e a regra de papel continuam valendo. Padrão `true` |
 | `MOTOSHIFT_CHECKIN_RAIO_METROS` | não | A que distância do ponto do turno o check-in ainda vale; padrão 500 |
 | `MOTOSHIFT_GORJETA_MAXIMO` | não | Teto de uma gorjeta, em reais; padrão 50 |
@@ -471,10 +477,10 @@ para "valor errado não faz nada".
 
 | Método | Endpoint | Descrição |
 |--------|----------|-----------|
-| POST | /api/auth/registro | Cadastro de usuário. O e-mail é gravado sem espaço nas pontas e em minúsculas; `MARIA@x.com` com `maria@x.com` já cadastrado responde 409 |
+| POST | /api/auth/registro | Cadastro de usuário. O e-mail é gravado sem espaço nas pontas e em minúsculas; `MARIA@x.com` com `maria@x.com` já cadastrado responde 409. No máximo 20 a cada 10 minutos por IP |
 | POST | /api/auth/login | Autenticação. O e-mail não diferencia maiúsculas: `Claudia@Teste.com` entra na conta de `claudia@teste.com` |
 | POST | /api/auth/trocar-senha | **Com token.** Troca a senha de quem está logado: `{senhaAtual, senhaNova}`, senha nova com 6 caracteres ou mais. Senha atual errada responde 400 (não 401) e **não conta como tentativa de login** |
-| POST | /api/auth/esqueci-senha | `{email}`. Gera um código de 6 dígitos válido por 15 minutos e o envia ao e-mail da conta (**envio simulado** — ver abaixo). Responde **202 sempre**, exista ou não a conta |
+| POST | /api/auth/esqueci-senha | `{email}`. Gera um código de 6 dígitos válido por 15 minutos e o envia ao e-mail da conta (**envio simulado** — ver abaixo). Responde **202 sempre**, exista ou não a conta. No máximo 20 a cada 10 minutos por IP |
 | POST | /api/auth/redefinir-senha | `{email, codigo, senhaNova}`. Troca a senha e destrava o login bloqueado. Cada código aceita **5 tentativas**; código errado, vencido ou esgotado respondem o mesmo 400 |
 | GET | /api/turnos/disponiveis | Listar turnos disponíveis (para o entregador, `lojaQueJaTeChamou` marca os turnos das lojas que o favoritaram) |
 | POST | /api/turnos | Criar novo turno (Lojista) |
@@ -501,7 +507,7 @@ para "valor errado não faz nada".
 | POST | /api/carteira/recargas/{id}/confirmar | Simula o webhook e credita o saldo (idempotente) |
 | POST | /api/carteira/saques | Saque via Pix — estorna sozinho se o gateway recusar |
 | GET | /api/carteira/cobrancas | Recargas e saques do usuário |
-| GET | /api/sugestoes/turnos/{id} | Sugestões por IA |
+| GET | /api/sugestoes/turnos/{id} | Sugestões por IA — no máximo 10 por hora por usuário (429 com `Retry-After` acima disso) |
 | GET | /api/relatorio/motoboy/{id} | Relatório financeiro por IA |
 | GET | /api/relatorio/lojista/{id} | Relatório operacional por IA |
 | GET | /api/score/{id}/analise | Análise de score por IA |
@@ -514,7 +520,45 @@ para "valor errado não faz nada".
 | POST | /api/notas-fiscais | Emitir NFS-e do turno (só o lojista; o entregador leva 403) |
 | PUT | /api/notas-fiscais/{id}/cancelar | Cancelar a nota (só o lojista) |
 
-Documentação completa: `http://localhost:8080/swagger-ui.html`
+Documentação completa: `http://localhost:8080/swagger-ui.html` (em
+desenvolvimento; desligada em produção).
+
+### 🚦 Limite de requisições
+
+| Rota | Limite | Chave |
+|------|--------|-------|
+| `/api/sugestoes/**` | 10 por hora | o usuário logado |
+| `POST /api/auth/registro` | 20 a cada 10 minutos | o IP |
+| `POST /api/auth/esqueci-senha` | 20 a cada 10 minutos | o IP |
+
+Acima do limite a resposta é **429**, no mesmo formato de erro do resto da API
+(`{codigo: "muitas_tentativas", mensagem, campo}`), com o cabeçalho
+**`Retry-After`** dizendo em quantos segundos a próxima requisição cabe. A
+janela é **deslizante** (10 por hora quer dizer 10 em qualquer intervalo de 60
+minutos, não 10 até a virada da hora) e cada rota pública tem a própria conta.
+O login não entra: ele já tem o bloqueio por conta do RF01.
+
+O estado é **em memória** (`LimiteDeRequisicoesFilter` + `JanelaDeslizante`,
+sem dependência nova): some no deploy e é por instância — com duas réplicas, o
+limite efetivo dobra. Basta para o que protege, que é o custo da IA e o abuso
+de cadastro e de e-mail.
+
+**De onde vem o IP.** Atrás do proxy do Railway, o endereço da conexão é o do
+*proxy* — o mesmo para todo mundo. Um limite por ele seria um limite global:
+vinte cadastros a cada dez minutos para o aplicativo inteiro, e uma pessoa só
+trancaria a porta para todas. Por isso, em produção, o IP sai do cabeçalho
+**`X-Forwarded-For`**, e dele vale a **última** entrada: cada proxy acrescenta
+ao fim o endereço de quem falou com ele, então a última foi escrita pelo proxy
+em que se confia, e as anteriores são o que o cliente quis mandar (forjar a
+primeira não cria um limite novo). Em desenvolvimento o cabeçalho é
+**ignorado**: sem proxy na frente, quem o escreve é o próprio cliente.
+
+> A documentação do Railway cita o `X-Real-IP` como o cabeçalho do IP do
+> cliente, e não descreve o `X-Forwarded-For`. O filtro usa o `X-Real-IP` como
+> reserva quando o cabeçalho configurado não vem, e
+> `MOTOSHIFT_LIMITE_CABECALHO_IP=X-Real-IP` faz dele a fonte única, sem mexer
+> no código. Vale conferir em produção: 21 cadastros seguidos de uma máquina
+> devem dar 429 **só para ela**.
 
 ---
 

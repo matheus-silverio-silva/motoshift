@@ -29,7 +29,8 @@ motoshift.cors.origins=*
 # Anthropic API
 anthropic.api.key=SUA_CHAVE_ANTHROPIC_AQUI
 anthropic.api.url=https://api.anthropic.com/v1/messages
-anthropic.model=claude-sonnet-4-20250514
+# O modelo pode ser trocado sem recompilar: variavel ANTHROPIC_MODEL.
+anthropic.model=${ANTHROPIC_MODEL:claude-sonnet-4-20250514}
 
 # Configuracoes do App
 spring.application.name=motoshift-backend

@@ -17,6 +17,9 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * O boot de PRODUÇÃO: perfil {@code prod}, PostgreSQL, Flyway e as variáveis
@@ -68,5 +71,43 @@ class PerfilDeProducaoTest {
     void semMassaEmProd() {
         assertThat(contexto.getBeansOfType(DataInitializer.class)).isEmpty();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM usuarios", Integer.class)).isZero();
+    }
+
+    // ── SCRUM-36: configuração de produção ────────────────────────────────
+
+    @Test
+    @DisplayName("em produção o Swagger está desligado: os beans do springdoc não existem")
+    void swaggerDesligadoEmProd() {
+        assertThat(contexto.getEnvironment().getProperty("springdoc.api-docs.enabled")).isEqualTo("false");
+        assertThat(contexto.getEnvironment().getProperty("springdoc.swagger-ui.enabled")).isEqualTo("false");
+        // Não é só a rota que deixa de ser pública: quem serve o JSON da API
+        // e a página do Swagger nem é montado. (O OpenApiConfig do projeto,
+        // que só guarda título e versão, continua — sem quem o publique.)
+        assertThat(contexto.getBeansOfType(org.springdoc.webmvc.api.OpenApiWebMvcResource.class)).isEmpty();
+        assertThat(contexto.getBeansOfType(org.springdoc.webmvc.ui.SwaggerWelcomeWebMvc.class)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("em produção as rotas do Swagger deixam de ser públicas: sem token, 401 — e não um 404 que confirma o que havia ali")
+    void rotasDoSwaggerDeixamDeSerPublicas() throws Exception {
+        for (String rota : new String[] {
+                "/v3/api-docs", "/v3/api-docs/swagger-config", "/swagger-ui.html", "/swagger-ui/index.html"}) {
+            mvc.perform(get(rota))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.codigo").value("nao_autenticado"));
+        }
+        // As que são públicas de verdade continuam: o healthcheck do Railway
+        // depende disso.
+        mvc.perform(get("/actuator/health")).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("em produção o modelo da IA é o padrão quando ANTHROPIC_MODEL não vem, e o limite lê o IP do X-Forwarded-For")
+    void padroesDeProducao() {
+        assertThat(contexto.getEnvironment().getProperty("anthropic.model"))
+                .isEqualTo("claude-sonnet-4-20250514");
+        assertThat(contexto.getEnvironment().getProperty("motoshift.limite.habilitado")).isEqualTo("true");
+        assertThat(contexto.getEnvironment().getProperty("motoshift.limite.cabecalho-do-ip"))
+                .isEqualTo("X-Forwarded-For");
     }
 }

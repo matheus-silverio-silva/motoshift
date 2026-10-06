@@ -132,10 +132,13 @@ Android) ou `localhost:8080`.
 
 ## 6. Inteligência Artificial (Claude / Anthropic)
 
-- `AnthropicService` chama a API da Anthropic (modelo `claude-sonnet-4`).
+- `AnthropicService` chama a API da Anthropic (modelo `claude-sonnet-4`, trocável
+  pela variável `ANTHROPIC_MODEL`, sem recompilar).
 - Usado em: **sugestão de turnos**, **relatórios** (financeiro/operacional) e
   **análise de score** — endpoints `/api/sugestoes`, `/api/relatorio`, `/api/score`.
 - A chave (`ANTHROPIC_API_KEY`) vem de variável de ambiente — **nunca** fica no código.
+- Como cada sugestão é uma chamada paga, `/api/sugestoes` aceita **10 por hora por
+  usuário**; acima disso, 429 com `Retry-After` (`LimiteDeRequisicoesFilter`).
 
 > Se perguntarem "a IA é essencial?": *"Não para o fluxo central de turnos;
 > é uma camada de valor agregado (recomendação e relatórios em linguagem natural)."*
@@ -174,6 +177,13 @@ Android) ou `localhost:8080`.
 - **Variáveis obrigatórias:** `JWT_SECRET` e `MOTOSHIFT_CORS_ORIGINS`. Sem
   elas o boot falha de propósito — melhor o deploy não subir do que subir
   assinando token com chave de exemplo ou liberando qualquer origem.
+- **O que produção desliga:** o Swagger (`springdoc.*.enabled=false`, e as
+  rotas dele saem das públicas: sem token, 401), a conferência do ledger
+  (`@Profile("!prod")`) e a massa de demonstração no boot.
+- **Limite de requisições:** cadastro e "esqueci minha senha" aceitam 20 a
+  cada 10 minutos por IP. Atrás do proxy do Railway o endereço da conexão é o
+  do proxy, igual para todos; o IP de quem chamou vem do `X-Forwarded-For`
+  (a última entrada, que é a que o proxy escreve). Em memória, por instância.
 
 ---
 

@@ -121,9 +121,12 @@ public class AuthService {
      *
      * Limite conhecido e aceito: bloquear por conta permite que alguem que sabe
      * o seu e-mail erre a senha 5 vezes e o deixe 15 minutos fora. E o custo do
-     * RF01 como esta escrito (bloqueio da conta). Mitigar pede sinal que o
-     * backend nao tem hoje — IP confiavel atras do proxy do Railway, captcha ou
-     * segundo fator — e fica registrado como evolucao, nao como descuido.
+     * RF01 como esta escrito (bloqueio da conta). Mitigar pede bloquear por
+     * origem em vez de por conta — o IP do cliente ja e lido do proxy para o
+     * limite de cadastro e de recuperacao de senha (LimiteDeRequisicoesFilter),
+     * mas o login continua contando por conta —, captcha ou segundo fator. Fica
+     * registrado como evolucao, nao como descuido. Quem ficou trancado assim
+     * sai pela recuperacao de senha, que destrava a conta (SenhaService).
      *
      * E-mail inexistente responde 401 sem contador: nao ha conta para bloquear,
      * e fingir "4 tentativas restantes" nao esconderia nada — o cadastro ja

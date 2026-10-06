@@ -19,6 +19,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -38,8 +39,9 @@ import java.util.List;
 public class SecurityConfig {
 
     /**
-     * Rotas abertas: cadastro, login e recuperação de senha, documentação,
-     * health e o console H2 do dev.
+     * Rotas abertas: cadastro, login e recuperação de senha, health e o console
+     * H2 do dev. A documentação (Swagger) entra à parte — ver
+     * {@link #rotasPublicas()}.
      *
      * <p>As de {@code /api/auth} são listadas uma a uma, e não mais como
      * {@code /api/auth/**}: {@code /api/auth/trocar-senha} mora no mesmo
@@ -53,14 +55,12 @@ public class SecurityConfig {
             "/api/auth/redefinir-senha",
             "/actuator/health",
             "/actuator/health/**",
-            "/v3/api-docs/**",
-            "/swagger-ui/**",
-            "/swagger-ui.html",
             "/h2-console/**",
             "/error"
     };
 
     private final JwtAuthFilter jwtFilter;
+    private final LimiteDeRequisicoesFilter limiteFilter;
     private final RespostaDeErro erros;
 
     /**
@@ -72,9 +72,47 @@ public class SecurityConfig {
     @Value("${motoshift.cors.origins}")
     private String origens;
 
-    public SecurityConfig(JwtAuthFilter jwtFilter, RespostaDeErro erros) {
+    /**
+     * A documentação da API está ligada? As mesmas duas propriedades do
+     * springdoc, com o mesmo padrão dele (ligado). Em produção as duas vêm
+     * {@code false} do application-prod.properties.
+     */
+    @Value("${springdoc.api-docs.enabled:true}")
+    private boolean apiDocsLigado;
+
+    @Value("${springdoc.swagger-ui.enabled:true}")
+    private boolean swaggerUiLigado;
+
+    public SecurityConfig(JwtAuthFilter jwtFilter,
+                          LimiteDeRequisicoesFilter limiteFilter,
+                          RespostaDeErro erros) {
         this.jwtFilter = jwtFilter;
+        this.limiteFilter = limiteFilter;
         this.erros = erros;
+    }
+
+    /**
+     * As rotas abertas desta instância.
+     *
+     * <p>As do Swagger só são públicas enquanto o Swagger existe. Desligado
+     * (produção), elas saem daqui e caem na regra geral: sem token, 401 —
+     * como qualquer rota que não é de ninguém. Deixá-las liberadas seria
+     * manter uma exceção de segurança para algo que não está mais lá, à
+     * espera de alguém religar a propriedade sem lembrar que a porta já
+     * estava aberta.
+     */
+    String[] rotasPublicas() {
+        List<String> rotas = new ArrayList<>(Arrays.asList(PUBLICAS));
+        if (apiDocsLigado) {
+            rotas.add("/v3/api-docs/**");
+        }
+        // A interface só serve para ler o /v3/api-docs: sem ele, não há o
+        // que mostrar.
+        if (apiDocsLigado && swaggerUiLigado) {
+            rotas.add("/swagger-ui/**");
+            rotas.add("/swagger-ui.html");
+        }
+        return rotas.toArray(String[]::new);
     }
 
     @Bean
@@ -90,7 +128,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                     // O preflight não carrega o Authorization — barrá-lo quebra o app web.
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                    .requestMatchers(PUBLICAS).permitAll()
+                    .requestMatchers(rotasPublicas()).permitAll()
                     .anyRequest().authenticated())
             .exceptionHandling(e -> e
                     .authenticationEntryPoint((req, resp, ex) -> erros.escrever(resp, 401,
@@ -98,7 +136,9 @@ public class SecurityConfig {
                             "Autenticação necessária. Faça login para continuar."))
                     .accessDeniedHandler((req, resp, ex) -> erros.escrever(resp, 403,
                             "acesso_negado", "Acesso negado.")))
-            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+            // Depois do JWT: o limite por usuário precisa saber quem é o usuário.
+            .addFilterAfter(limiteFilter, JwtAuthFilter.class);
 
         return http.build();
     }
@@ -121,8 +161,8 @@ public class SecurityConfig {
         cfg.setAllowedHeaders(List.of("*"));
         // O navegador esconde do JavaScript qualquer header de resposta que não
         // esteja aqui — sem isto o app web não leria o total das listagens
-        // paginadas.
-        cfg.setExposedHeaders(List.of("X-Total-Count"));
+        // paginadas, nem o Retry-After do 429 (limite de requisições).
+        cfg.setExposedHeaders(List.of("X-Total-Count", "Retry-After"));
         cfg.setAllowCredentials(false);
         cfg.setMaxAge(3600L);
 
