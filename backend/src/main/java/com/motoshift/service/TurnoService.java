@@ -272,25 +272,9 @@ public class TurnoService {
                     "Ninguém fez check-in neste turno — cancele-o para devolver a reserva.");
         }
 
-        turno.setStatus(StatusTurno.FINALIZADO);
+        PagamentoTurnoService.Fechamento fechamento = pagarQuemTrabalhou(turno);
 
-        PagamentoTurnoService.Fechamento fechamento = pagamentos.fecharInscricoes(turno);
-        pagamentos.liquidar(turno, fechamento.presentes(), fechamento.faltosos().size());
-
-        // O "principal" do turno e quem as telas e os relatorios do entregador
-        // leem. Se ele faltou, passa a ser o primeiro que trabalhou — senao o
-        // turno finalizado e pago apareceria no historico de quem nao veio.
-        List<Long> pagos = fechamento.presentes().stream().map(TurnoInscricao::getMotoboyId).toList();
-        if (!pagos.isEmpty() && !pagos.contains(turno.getMotoboyId())) {
-            turno.setMotoboyId(pagos.get(0));
-        }
-
-        // PAGO, e nao PENDENTE: quando esta linha roda, o dinheiro ja mudou de
-        // carteira dentro desta mesma transacao.
-        turno.setPagamentoStatus(StatusPagamento.PAGO);
-        turnoRepo.save(turno);
-
-        List<Long> avaliam = new ArrayList<>(pagos);
+        List<Long> avaliam = new ArrayList<>(pagos(fechamento));
         avaliam.add(0, turno.getLojistId());
         for (Long destinatario : avaliam) {
             notificacoes.criar(destinatario, "avaliacao_pendente",
@@ -309,6 +293,137 @@ public class TurnoService {
         }
 
         return mapper.toResponse(turno);
+    }
+
+    /**
+     * O que finalizar faz com o turno e com o dinheiro — o mesmo para quem
+     * tocou o botão ({@link #finalizar}) e para o job de finalização
+     * automática ({@link #finalizarPeloSistema}). Duas finalizações com regras
+     * de pagamento escritas duas vezes acabariam pagando diferente.
+     *
+     * <p>Quem chama já conferiu que há ao menos um check-in.
+     */
+    private PagamentoTurnoService.Fechamento pagarQuemTrabalhou(Turno turno) {
+        turno.setStatus(StatusTurno.FINALIZADO);
+
+        PagamentoTurnoService.Fechamento fechamento = pagamentos.fecharInscricoes(turno);
+        pagamentos.liquidar(turno, fechamento.presentes(), fechamento.faltosos().size());
+
+        // O "principal" do turno e quem as telas e os relatorios do entregador
+        // leem. Se ele faltou, passa a ser o primeiro que trabalhou — senao o
+        // turno finalizado e pago apareceria no historico de quem nao veio.
+        List<Long> pagos = pagos(fechamento);
+        if (!pagos.isEmpty() && !pagos.contains(turno.getMotoboyId())) {
+            turno.setMotoboyId(pagos.get(0));
+        }
+
+        // PAGO, e nao PENDENTE: quando esta linha roda, o dinheiro ja mudou de
+        // carteira dentro desta mesma transacao.
+        turno.setPagamentoStatus(StatusPagamento.PAGO);
+        turnoRepo.save(turno);
+        return fechamento;
+    }
+
+    private static List<Long> pagos(PagamentoTurnoService.Fechamento fechamento) {
+        return fechamento.presentes().stream().map(TurnoInscricao::getMotoboyId).toList();
+    }
+
+    /** O que o job de finalização automática fez com um turno. */
+    public enum FinalizacaoAutomatica {
+        /** Havia check-in: quem trabalhou foi pago, como em {@link #finalizar}. */
+        PAGA,
+        /** Ninguém fez check-in: faltas, reserva de volta e turno EXPIRADO. */
+        SEM_CHECKIN,
+        /** O turno já não estava mais em jogo — alguém finalizou ou cancelou antes. */
+        IGNORADA
+    }
+
+    /**
+     * Finalização pelo SISTEMA — o turno que terminou e ninguém finalizou.
+     *
+     * <p>Chamado só pelo job ({@code TurnoExpiracaoService.finalizarTurnosEsquecidos}),
+     * depois que o prazo de {@code motoshift.finalizacao.automatica-horas}
+     * passou do fim do turno. Sem ele o dinheiro ficava reservado para sempre:
+     * o job só cobrava a finalização por notificação, e bastava as duas partes
+     * esquecerem o turno.
+     *
+     * <p><b>Pula {@code exigirParticipante}, de propósito.</b> Aquela trava
+     * responde "esta pessoa pode mexer neste turno?", e aqui não há pessoa:
+     * quem chama é um job do próprio backend, e este método não é alcançável
+     * por rota nenhuma. As regras de DINHEIRO são as mesmas de
+     * {@link #finalizar} — o mesmo {@link #pagarQuemTrabalhou}: só recebe quem
+     * fez check-in, quem aceitou e não chegou vira FALTOU e a sobra volta ao
+     * lojista. A trava de "já começou" é dispensável: o turno já terminou.
+     *
+     * <p><b>Sem nenhum check-in</b> não há quem pagar, e finalizar não é a
+     * palavra: as inscrições aceitas viram FALTOU, a reserva volta inteira
+     * (motivo próprio, {@code sem_checkin}) e o turno vai para EXPIRADO — ele
+     * venceu sem acontecer.
+     *
+     * <p>As duas partes são avisadas com {@code criarUnica}: se o job repetir
+     * o turno (uma falha depois do aviso, duas instâncias), ninguém é avisado
+     * duas vezes.
+     *
+     * @param prazoHoras o prazo que venceu — só para o texto do aviso
+     */
+    @Transactional
+    public FinalizacaoAutomatica finalizarPeloSistema(Long turnoId, int prazoHoras) {
+        Turno turno = acesso.carregar(turnoId);
+        if (turno.getStatus() != StatusTurno.ACEITO && turno.getStatus() != StatusTurno.EM_ANDAMENTO) {
+            return FinalizacaoAutomatica.IGNORADA;
+        }
+        String prazo = "há mais de " + prazoHoras + (prazoHoras == 1 ? " hora" : " horas");
+
+        if (inscricaoRepo.existsByTurnoIdAndStatusAndCheckinEmIsNotNull(turnoId, StatusInscricao.ACEITO)) {
+            PagamentoTurnoService.Fechamento fechamento = pagarQuemTrabalhou(turno);
+
+            notificacoes.criarUnica(turno.getLojistId(), TIPO_FINALIZACAO_AUTOMATICA,
+                    "Turno finalizado automaticamente",
+                    "O turno \"" + turno.getTitulo() + "\" terminou " + prazo + " sem ser "
+                            + "finalizado. Quem fez check-in foi pago. Avalie o entregador.",
+                    "turno", turno.getId());
+            for (Long pago : pagos(fechamento)) {
+                notificacoes.criarUnica(pago, TIPO_FINALIZACAO_AUTOMATICA,
+                        "Turno finalizado automaticamente",
+                        "O turno \"" + turno.getTitulo() + "\" terminou " + prazo + " sem ser "
+                                + "finalizado. O pagamento foi creditado na sua carteira. "
+                                + "Avalie a loja.",
+                        "turno", turno.getId());
+            }
+            avisarFaltas(turno, fechamento);
+            return FinalizacaoAutomatica.PAGA;
+        }
+
+        // Ninguém chegou. As inscrições aceitas viram FALTOU e nada é pago.
+        PagamentoTurnoService.Fechamento fechamento = pagamentos.fecharInscricoes(turno);
+        pagamentos.liberarReserva(turno, MotivoLiberacao.SEM_CHECKIN);
+
+        turno.setStatus(StatusTurno.EXPIRADO);
+        turno.setExpiradoEm(LocalDateTime.now());
+        // Sem ninguém que tenha trabalhado, o turno não é de entregador nenhum.
+        turno.setMotoboyId(null);
+        turnoRepo.save(turno);
+
+        notificacoes.criarUnica(turno.getLojistId(), TIPO_FINALIZACAO_AUTOMATICA,
+                "Turno encerrado sem check-in",
+                "O turno \"" + turno.getTitulo() + "\" terminou " + prazo + " sem nenhum "
+                        + "check-in e foi encerrado. A reserva voltou inteira ao seu saldo.",
+                "turno", turno.getId());
+        avisarFaltas(turno, fechamento);
+        return FinalizacaoAutomatica.SEM_CHECKIN;
+    }
+
+    /** O tipo da notificação da finalização automática — um por pessoa e turno. */
+    public static final String TIPO_FINALIZACAO_AUTOMATICA = "turno_finalizado_automaticamente";
+
+    private void avisarFaltas(Turno turno, PagamentoTurnoService.Fechamento fechamento) {
+        for (TurnoInscricao falta : fechamento.faltosos()) {
+            notificacoes.criarUnica(falta.getMotoboyId(), "turno_falta",
+                    "Turno encerrado sem o seu check-in",
+                    "O turno \"" + turno.getTitulo() + "\" foi encerrado e você não fez "
+                            + "check-in: ficou registrado como falta, sem pagamento.",
+                    "turno", turno.getId());
+        }
     }
 
     /**

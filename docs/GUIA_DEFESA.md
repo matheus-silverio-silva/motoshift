@@ -406,6 +406,40 @@ preenche; quem publica é o lojista, pelo caminho de sempre.
   `baixarArquivo`, o mesmo da planilha.
 - **Onde.** `AbrirRota`, `CalendarioIcs`, `AtalhosDoTurno`.
 
+### Turno esquecido se finaliza sozinho
+
+- **O buraco.** Finalizar transfere dinheiro, e por isso é decisão de quem
+  estava lá — o job só **cobrava** a finalização por notificação. Mas cobrar
+  não fecha nada: se as duas partes esquecessem o turno, a reserva ficava
+  bloqueada na carteira do lojista para sempre e o entregador que trabalhou
+  não recebia.
+- **Regra.** Passadas `motoshift.finalizacao.automatica-horas` (padrão 12) do
+  **fim** do turno, o job o fecha. Com check-in: finaliza pelo mesmo caminho do
+  botão (`TurnoService.pagarQuemTrabalhou`) — paga quem chegou, marca `faltou`
+  quem não chegou, devolve a sobra. Sem nenhum check-in: as inscrições viram
+  `faltou`, a reserva volta inteira (motivo `sem_checkin`) e o turno vai para
+  `expirado`. As duas partes são avisadas com `criarUnica`.
+- **Por que um método próprio (`finalizarPeloSistema`) e não um "usuário
+  sistema".** O que o job precisa pular é só o `exigirParticipante`, que
+  responde "esta pessoa pode mexer neste turno?" — e não há pessoa. Inventar
+  uma conta de sistema para passar pela trava deixaria um id mágico no banco e
+  um caminho para alguém se passar por ele; o método interno não é alcançável
+  por rota nenhuma.
+- **Uma transação por turno.** Numa só, um turno que não fechasse desfaria o
+  fechamento de todos os outros a cada 5 minutos.
+- **Onde.** `TurnoExpiracaoService.finalizarTurnosEsquecidos` (a regra) e
+  `TurnoExpiracaoJobs` (o agendamento); `FinalizacaoAutomaticaTest` cobre com
+  check-in, sem nenhum check-in e dentro do prazo.
+
+**P: E se a instância com os jobs cair?**
+R: Nada se perde: o job procura "turnos com fim + prazo no passado", não
+"turnos que venceram desde a última volta". Quando a instância volta, fecha o
+que ficou. Com réplicas, só uma roda os jobs (`MOTOSHIFT_JOBS_HABILITADOS=false`
+nas outras) — e essa configuração **derrubava o boot**: o serviço de expiração
+inteiro era condicional aos jobs, e a massa de demonstração depende dele. O
+agendamento saiu para uma classe própria (`TurnoExpiracaoJobs`), e
+`JobsDesligadosTest` sobe o contexto com os jobs desligados.
+
 ### Lembrete de 1 hora
 
 - **Regra.** Job de 5 em 5 min (padrão do vencimento): turno aberto, aceito

@@ -111,7 +111,7 @@ erDiagram
 | `vagas` | INTEGER | sim | Default 1 na aplicação |
 | `status` | VARCHAR(255) | não | `aberto` \| `aceito` \| `em_andamento` \| `finalizado` \| `cancelado` \| `expirado` |
 | `pagamento_status` | VARCHAR(255) | sim | `null` (não finalizado) \| `pendente` \| `pago` |
-| `expirado_em` | TIMESTAMP(6) | sim | Preenchido pelo job de vencimento (SCRUM-19) |
+| `expirado_em` | TIMESTAMP(6) | sim | Preenchido quando o turno vai a `expirado`: pelo job de vencimento (ninguém aceitou até o início, SCRUM-19) ou pela finalização automática (terminou sem nenhum check-in, SCRUM-31) |
 | `cancelado_por_id` | BIGINT | sim | FK `fk_turno_cancelado_por` → `usuarios.id` (V19): quem cancelou o TURNO. Só o lojista dono cancela o turno inteiro; em turno cancelado antes da V22 pode ser um entregador, da época em que os dois lados cancelavam. A saída de um entregador (desistência) não cancela o turno e mora em `turno_inscricoes`. Nulo no turno não cancelado e no cancelado antes da V19 |
 | `cancelado_em` | TIMESTAMP(6) | sim | Quando foi cancelado (V19); índice `ix_turno_cancelado_por (cancelado_por_id, cancelado_em)` |
 | `criado_em`, `atualizado_em` | TIMESTAMP(6) | criação obrigatória | Auditoria |

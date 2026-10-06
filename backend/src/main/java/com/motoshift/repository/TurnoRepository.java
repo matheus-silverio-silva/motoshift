@@ -148,6 +148,14 @@ public interface TurnoRepository extends JpaRepository<Turno, Long> {
     List<Turno> findByStatusInAndDataFimBetween(List<StatusTurno> statuses,
                                                 LocalDateTime de, LocalDateTime ate);
 
+    // Turnos aceitos ou em andamento cujo fim passou do prazo — os que a
+    // finalizacao automatica fecha. So os ids: cada um e fechado na propria
+    // transacao, e carrega-lo aqui o prenderia a esta.
+    @Query("select t.id from Turno t where t.status in :statuses and t.dataFim < :limite "
+         + "order by t.dataFim asc")
+    List<Long> idsComFimAntesDe(@Param("statuses") List<StatusTurno> statuses,
+                                @Param("limite") LocalDateTime limite);
+
     // Turnos que começam dentro de uma janela (aviso de "vai vencer").
     List<Turno> findByStatusAndDataInicioBetween(
             StatusTurno status, LocalDateTime de, LocalDateTime ate);

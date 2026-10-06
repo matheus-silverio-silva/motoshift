@@ -256,6 +256,8 @@ Roda com o perfil `prod` (PostgreSQL). Variáveis principais:
 | `MOTOSHIFT_CHECKIN_EXIGIR_PROXIMIDADE` | não | `false` desliga a trava de distância do check-in (o "Cheguei" passa a valer de qualquer lugar). É para a **apresentação feita de casa**, longe de qualquer loja da massa; a janela de horário e a regra de papel continuam valendo. Padrão `true` |
 | `MOTOSHIFT_CHECKIN_RAIO_METROS` | não | A que distância do ponto do turno o check-in ainda vale; padrão 500 |
 | `MOTOSHIFT_GORJETA_MAXIMO` | não | Teto de uma gorjeta, em reais; padrão 50 |
+| `MOTOSHIFT_FINALIZACAO_AUTOMATICA_HORAS` | não | Propriedade `motoshift.finalizacao.automatica-horas`: quantas horas depois do **fim** do turno o job o finaliza sozinho, se ninguém finalizou. Paga quem fez check-in; sem nenhum check-in, devolve a reserva e o turno vai para `expirado`. Mínimo 1; padrão 12 |
+| `MOTOSHIFT_JOBS_HABILITADOS` | não | `false` desliga os jobs agendados (vencimento, lembrete, cobrança e finalização automática) nesta instância — para as réplicas extras, deixando uma só com os jobs. Padrão `true` |
 | `PORT` | não | Porta do servidor (injetada automaticamente pelo Railway) |
 
 ---
@@ -495,6 +497,7 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | Publicar de novo | Turno finalizado, cancelado ou expirado do lojista abre o formulário de publicar já preenchido (mesmo lugar, raio, valor, vagas e duração), com a data no mesmo dia da semana da semana seguinte. Só no app: publica pelo mesmo `POST /api/turnos`, com a mesma confirmação de custo, antecedência e saldo |
 | Abrir rota | No detalhe do turno, o entregador abre a rota até o ponto no Google Maps (no celular, também no Waze, se instalado) |
 | Adicionar ao calendário | Baixa um `.ics` (RFC 5545, fuso America/Sao_Paulo, alarme 1 h antes) — o entregador nos turnos em que está, a loja nos que publicou |
+| Finalização automática | Turno aceito ou em andamento que terminou e ninguém finalizou é primeiro **cobrado** por notificação; passadas 12 h do fim (`motoshift.finalizacao.automatica-horas`), um job o finaliza pelo mesmo caminho do botão: paga quem fez check-in, marca `faltou` quem não chegou e devolve a sobra. Sem nenhum check-in, a reserva volta inteira e o turno vai para `expirado`. As duas partes são avisadas uma vez só. Antes o dinheiro podia ficar reservado para sempre |
 | Lembrete | Um job de 5 em 5 min lembra entregador e loja do turno aceito que começa em até 1 h (`turno_lembrete`), uma vez só por pessoa e turno |
 | Meta do mês | O entregador define no perfil quanto quer ganhar no mês; o painel mostra "R$ 1.340 de R$ 2.000 (67%)", somando pagamentos recebidos e gorjetas. Sem meta, um convite — nunca uma barra zerada (V19) |
 | Selos de reputação | Calculados do histórico, sem tabela, no perfil público e no próprio, com o critério ao tocar. Entregador: 20 turnos concluídos (limite ajustado à massa), 30 dias sem cancelar, nota acima de 4,8 (10+ avaliações), pontual (90%+, 10+ check-ins). Loja: paga gorjeta (3+ em 90 dias), nota acima de 4,8, contrata toda semana (4 semanas seguidas) |

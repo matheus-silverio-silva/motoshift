@@ -217,6 +217,53 @@ sequenceDiagram
     end
 ```
 
+### 3.5 Finalizar sozinho o turno esquecido (job)
+
+Finalizar é decisão de quem estava lá, e por isso o job primeiro **cobra**
+(`turno_pendente_finalizacao`). Mas só cobrar deixava um buraco: bastava as duas
+partes esquecerem o turno para o dinheiro ficar reservado na carteira do lojista
+para sempre, e o entregador que trabalhou, sem receber. Passadas
+`motoshift.finalizacao.automatica-horas` (padrão **12**) do **fim** do turno, o
+job fecha sozinho.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant J as TurnoExpiracaoService
+    participant S as TurnoService
+    participant P as PagamentoTurnoService
+    participant LG as LedgerService
+
+    Note over J: a cada 5 min, turnos ACEITOS/EM ANDAMENTO com fim + prazo no passado
+    loop cada turno esquecido — uma transação por turno
+        J->>S: finalizarPeloSistema(turno)
+        alt alguém fez check-in
+            S->>P: fecharInscricoes + liquidar (o mesmo de "Finalizar")
+            P->>LG: pagamento_enviado / pagamento_recebido + sobra
+            S->>S: turno → FINALIZADO, pagamento PAGO
+        else ninguém fez check-in
+            S->>P: fecharInscricoes (todas → FALTOU)
+            S->>P: liberarReserva(turno, SEM_CHECKIN)
+            P->>LG: aplicar(liberacao_reserva, valor integral)
+            S->>S: turno → EXPIRADO
+        end
+        Note over S: as duas partes são avisadas com criarUnica
+    end
+```
+
+- **As regras de pagamento são as de "Finalizar"**, pelo mesmo código
+  (`TurnoService.pagarQuemTrabalhou`): só recebe quem fez check-in, quem aceitou
+  e não chegou vira `faltou`, a sobra volta. O que o job pula é só o
+  `exigirParticipante` — não há pessoa pedindo, e o método não é alcançável por
+  rota nenhuma.
+- **Sem nenhum check-in não há quem pagar**: a reserva volta inteira, num
+  lançamento com motivo próprio (`liberacao:turno:{id}:sem_checkin`), e o turno
+  vai para `expirado` — venceu sem acontecer.
+- **Uma transação por turno.** Numa só, um turno que não fechasse (a carteira
+  disputada naquele instante) desfaria o fechamento de todos os outros, a cada 5
+  minutos. O que falha vai para o log e é tentado de novo na volta seguinte; as
+  chaves de idempotência garantem que nada é pago duas vezes.
+
 ---
 
 ## 4. Diagramas de estado
@@ -274,7 +321,8 @@ a mesma que está codificada em `service/ledger/Movimento.java`, em um lugar só
 | `retencao_iss` | débito | −v | 0 | **−v** | — | `liquidacao:inscricao:{id}:retencao-iss` |
 | `retencao_irrf` | débito | −v | 0 | **−v** | — | `liquidacao:inscricao:{id}:retencao-irrf` |
 
-`{motivo}` ∈ `cancelamento` | `expiracao` | `sobra`.
+`{motivo}` ∈ `cancelamento` | `expiracao` | `sobra` | `sem_checkin` (o turno
+esquecido que a finalização automática encerrou sem ninguém ter chegado).
 
 ### Natureza não é a aritmética do saldo
 

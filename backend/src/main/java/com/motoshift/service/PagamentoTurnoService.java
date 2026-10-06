@@ -221,10 +221,11 @@ public class PagamentoTurnoService {
     /**
      * Devolve a reserva inteira ao disponivel do lojista.
      *
-     * <p>Turno cancelado ou expirado nao gera pagamento nenhum, entao nada fica
-     * bloqueado. Sem multa: a penalidade do cancelamento tardio e de score
-     * (RF07) e continua onde estava — inventar uma multa financeira aqui seria
-     * criar regra de negocio no meio de uma refatoracao.
+     * <p>Turno cancelado, expirado ou encerrado sem check-in nao gera pagamento
+     * nenhum, entao nada fica bloqueado. Sem multa: a unica penalidade e a de
+     * score, de quem desiste da vaga em cima da hora (RF07) — inventar uma
+     * multa financeira aqui seria criar regra de negocio no meio de uma
+     * refatoracao.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void liberarReserva(Turno turno, MotivoLiberacao motivo) {
@@ -277,6 +278,7 @@ public class PagamentoTurnoService {
             case CANCELAMENTO -> "Turno cancelado: " + turno.getTitulo();
             case EXPIRACAO -> "Turno expirou sem entregador: " + turno.getTitulo();
             case SOBRA -> "Vagas não preenchidas: " + turno.getTitulo();
+            case SEM_CHECKIN -> "Turno encerrado sem check-in: " + turno.getTitulo();
         };
     }
 

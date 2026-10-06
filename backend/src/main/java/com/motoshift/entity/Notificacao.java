@@ -36,6 +36,9 @@ public class Notificacao {
     // | entregador_chegou | entregador_saiu (check-in e check-out, V16)
     // | gorjeta_recebida (V17) | turno_de_favorito (V18)
     // | turno_lembrete (1 h antes do turno aceito, TurnoLembreteService)
+    // | turno_falta (o turno foi finalizado e este entregador não fez check-in)
+    // | entregador_desistiu (para a loja: um entregador saiu da vaga dele)
+    // | turno_finalizado_automaticamente (o job fechou o turno esquecido)
     // (pagamento_pendente era da dupla confirmação, removida na V13.)
     @Column(nullable = false, length = 40)
     private String tipo;
