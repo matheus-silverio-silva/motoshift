@@ -71,10 +71,15 @@ class MotoShiftApp extends StatelessWidget {
           create: (_) => TurnoSelecionadoProvider(),
         ),
 
-        // Notificações (RF09) — lista e badge do sino
-        ChangeNotifierProxyProvider<ApiService, NotificacaoProvider>(
+        // Notificações (RF09) — lista e badge do sino. Depende também da
+        // sessão: com alguém logado o provider busca a contagem a cada 45 s,
+        // e para no logout (ver NotificacaoProvider.acompanharSessao).
+        ChangeNotifierProxyProvider2<ApiService, AuthService,
+            NotificacaoProvider>(
           create: (ctx) => NotificacaoProvider(ctx.read<ApiService>()),
-          update: (_, api, prev) => prev ?? NotificacaoProvider(api),
+          update: (_, api, auth, prev) =>
+              (prev ?? NotificacaoProvider(api))
+                ..acompanharSessao(auth.usuario?.id),
         ),
 
         // O que falta depois do turno — avaliação e nota fiscal. Fonte única

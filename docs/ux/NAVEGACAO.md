@@ -306,6 +306,32 @@ sumir da fila depois da primeira avaliação.
 Turno que não existe mais (ou fora do alcance da conta) não navega e avisa
 "Não foi possível abrir este turno."
 
+### 6.1 Telas que se atualizam
+
+As telas só buscavam os dados ao abrir. Com a tela aberta, o que muda é
+justamente o que está nela — um entregador aceita, faz check-in, desiste; outro
+turno é publicado — e a única saída era sair e voltar.
+
+- **O sino se atualiza sozinho.** Com alguém logado, o `NotificacaoProvider`
+  busca a contagem de não lidas a cada **45 s** (`acompanharSessao`, ligado
+  pelo `app.dart` a cada mudança do `AuthService`). Em segundo plano o relógio
+  para — ninguém está olhando, e no celular é bateria e dados —; ao voltar,
+  busca na hora e retoma. No logout o relógio é cancelado e o sino zera. É
+  polling, e não push, de propósito: uma requisição pequena resolve o caso sem
+  infraestrutura nova no backend.
+- **Puxar para atualizar** (celular e tablet) nos dois painéis, em Turnos do
+  entregador (meus turnos e disponíveis), Turnos do lojista, Agenda e nos dois
+  detalhes de turno. O rolável dessas telas é sempre rolável
+  (`AlwaysScrollableScrollPhysics`): com a lista curta o gesto nem começaria.
+- **"Atualizar" na topbar** (desktop), nas mesmas telas: com mouse não há o
+  que puxar. O botão vira um indicador enquanto recarrega.
+- A tela declara uma coisa só — `AdaptiveScaffold(onAtualizar: …)` — e o
+  scaffold escolhe o gesto de cada tamanho. Tela que não declara não ganha
+  botão.
+- No **detalhe do turno**, atualizar busca o turno de novo no backend e refaz
+  o que a tela guarda: para o lojista, os inscritos e a presença — é onde
+  aparece o "Chegou às 14:03".
+
 ---
 
 ## 7. Botões que não levavam a lugar nenhum

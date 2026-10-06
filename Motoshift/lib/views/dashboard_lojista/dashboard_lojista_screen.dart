@@ -58,10 +58,16 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
       final data = await api.dashboard.dashboardLojista(id);
       if (mounted) setState(() => _dashData = data);
     } catch (_) {}
-    if (mounted) setState(() => _loadingDash = false);
+    if (!mounted) return;
+    setState(() => _loadingDash = false);
 
-    turnoProvider.carregarTurnosLojista(id);
-    if (mounted) context.read<NotificacaoProvider>().carregarContagem(id);
+    // Esperadas, e não disparadas ao vento: o método só termina com a tela
+    // atualizada — é o que segura o indicador de "puxar para atualizar" e o
+    // do botão Atualizar do desktop.
+    await Future.wait([
+      turnoProvider.carregarTurnosLojista(id),
+      context.read<NotificacaoProvider>().carregarContagem(id),
+    ]);
   }
 
   String _greeting() {
@@ -131,7 +137,12 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
         onNotificacoes: () =>
             Navigator.pushNamed(context, AppRoutes.notificacoes),
       ),
+      // Puxar para baixo (celular) ou "Atualizar" na topbar (desktop).
+      onAtualizar: _carregar,
       body: ListView(
+        // Sempre rolável: com pouco conteúdo a lista não rolaria, e o gesto
+        // de puxar para atualizar nem começaria.
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 32),
         children: [
           _buildStats(),

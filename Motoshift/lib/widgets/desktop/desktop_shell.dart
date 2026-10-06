@@ -25,8 +25,12 @@ class DesktopShell extends StatelessWidget {
     this.selectedRoute,
     this.showBack,
     this.onBack,
+    this.onRefresh,
     super.key,
   });
+
+  /// Recarrega a tela — vira o botão "Atualizar" da topbar.
+  final Future<void> Function()? onRefresh;
 
   final String title;
   final Widget body;
@@ -81,6 +85,7 @@ class DesktopShell extends StatelessWidget {
                   title: title,
                   subtitle: subtitle,
                   primaryAction: primaryAction,
+                  onRefresh: onRefresh,
                   onBack: podeVoltar
                       ? (onBack ?? () => Navigator.maybePop(context))
                       : null,

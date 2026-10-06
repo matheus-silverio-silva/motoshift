@@ -25,8 +25,13 @@ class TurnosConteudoDesktop extends StatelessWidget {
     required this.hasFilters,
     required this.onAceito,
     this.erroDaBusca,
+    this.versaoDoDetalhe = 0,
     super.key,
   });
+
+  /// Sobe a cada "Atualizar" da tela: entra na chave do painel de detalhe,
+  /// que assim busca de novo o que guarda (a presença do turno aberto).
+  final int versaoDoDetalhe;
 
   /// O controle de "perto de mim" — montado pela tela, que é quem tem o estado
   /// de localização. Aparece no topo da coluna da esquerda.
@@ -111,8 +116,10 @@ class TurnosConteudoDesktop extends StatelessWidget {
                 )
               : DetalheTurnoConteudo(
                   // A key troca junto com o turno para o estado interno
-                  // (o "aceitando") não vazar de um turno para o outro.
-                  key: ValueKey(selecionado.id),
+                  // (o "aceitando") não vazar de um turno para o outro — e
+                  // com a versão, para o "Atualizar" da topbar refazer também
+                  // a presença (check-in e check-out) do turno aberto.
+                  key: ValueKey('${selecionado.id}-$versaoDoDetalhe'),
                   turno: selecionado,
                   desktop: true,
                   onMudou: () {

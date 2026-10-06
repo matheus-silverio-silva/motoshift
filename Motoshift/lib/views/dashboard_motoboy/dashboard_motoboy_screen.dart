@@ -64,13 +64,17 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
     final id = auth.usuario?.id;
     if (id == null) return;
 
-    context.read<TurnoProvider>().carregarMeusTurnos(id);
-    context.read<NotificacaoProvider>().carregarContagem(id);
+    // As três buscas saem juntas, e o método só termina quando todas
+    // voltaram: é o que segura o indicador de "puxar para atualizar" (e o do
+    // botão Atualizar do desktop) até a tela estar de fato atualizada.
+    final turnos = context.read<TurnoProvider>().carregarMeusTurnos(id);
+    final sino = context.read<NotificacaoProvider>().carregarContagem(id);
 
     try {
       final data = await api.dashboard.dashboardMotoboy(id);
       if (mounted) setState(() => _dashData = data);
     } catch (_) {}
+    await Future.wait([turnos, sino]);
   }
 
   String _greeting() {
@@ -107,7 +111,12 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
         onNotificacoes: () =>
             Navigator.pushNamed(context, AppRoutes.notificacoes),
       ),
+      // Puxar para baixo (celular) ou "Atualizar" na topbar (desktop).
+      onAtualizar: _carregar,
       body: ListView(
+        // Sempre rolável: com pouco conteúdo a lista não rolaria, e o gesto
+        // de puxar para atualizar nem começaria.
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 32),
         children: [
           _buildScoreRow(auth),

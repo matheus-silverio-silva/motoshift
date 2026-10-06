@@ -116,8 +116,12 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     final id = auth.usuario?.id;
     if (id == null) return;
 
-    provider.carregarMeusTurnos(id);
-    _carregarDisponiveis();
+    // Esperadas juntas: o método só termina com as duas listas na tela — é o
+    // que segura o indicador de "puxar para atualizar" e o do botão Atualizar.
+    await Future.wait([
+      provider.carregarMeusTurnos(id),
+      _carregarDisponiveis(),
+    ]);
   }
 
   Future<void> _carregarDisponiveis() async {
@@ -474,11 +478,18 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         name: nome,
         avatarInitials: initials,
       ),
+      // Puxar para baixo (celular) ou "Atualizar" na topbar (desktop): os
+      // turnos disponíveis mudam enquanto a tela está aberta — outro
+      // entregador aceita, uma loja publica.
+      onAtualizar: _atualizar,
       body: Consumer<TurnoProvider>(
         builder: (context, provider, _) {
           _talvezFocarAceitos(provider);
           return ListView(
             controller: _scroll,
+            // Sempre rolável: sem turno nenhum a lista é curta, e o gesto de
+            // puxar para atualizar nem começaria.
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
             children: [
               _buildControleRaio(provider.turnosDisponiveis),
@@ -526,9 +537,20 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         hasFilters: _hasFilters,
         onAceito: _carregar,
         erroDaBusca: _erroDaBusca != null ? _buildErroDaBusca() : null,
+        versaoDoDetalhe: _versaoDoDetalhe,
       ),
     );
   }
+
+  /// O "puxar para atualizar" do celular e o botão Atualizar do desktop.
+  Future<void> _atualizar() async {
+    await _carregar();
+    // O painel de detalhe do desktop guarda a presença (check-in e
+    // check-out) do turno aberto: a versão nova o faz buscá-la de novo.
+    if (mounted) setState(() => _versaoDoDetalhe++);
+  }
+
+  int _versaoDoDetalhe = 0;
 
   // ── Desktop — subtítulo da topbar ─────────────────────────────────────────
 

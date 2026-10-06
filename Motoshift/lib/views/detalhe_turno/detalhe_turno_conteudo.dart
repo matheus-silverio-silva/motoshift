@@ -90,6 +90,9 @@ class _DetalheTurnoConteudoState extends State<DetalheTurnoConteudo> {
       children: [
         Expanded(
           child: ListView(
+            // Sempre rolável: é o que deixa a tela que hospeda este conteúdo
+            // oferecer "puxar para atualizar" mesmo quando tudo cabe nela.
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
             children: [
               MapaTurno(turno: turno, altura: 160),
