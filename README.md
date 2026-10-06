@@ -155,6 +155,18 @@ flutter run
 flutter run -d chrome --dart-define=API_URL=http://localhost:8080
 ```
 
+**App de celular em release.** O `AndroidManifest.xml` principal declara
+`INTERNET` e as duas permissões de localização que o `geolocator` usa
+(`ACCESS_FINE_LOCATION` e `ACCESS_COARSE_LOCATION`); o `Info.plist` do iOS traz
+o texto de `NSLocationWhenInUseUsageDescription`. HTTP sem TLS
+(`usesCleartextTraffic`) vale **só no build de debug**, que é o que fala com o
+backend local em `http://10.0.2.2:8080` — o release precisa de
+`--dart-define=API_URL=https://...`:
+
+```bash
+flutter build apk --release --dart-define=API_URL=https://seu-backend.up.railway.app
+```
+
 ### 📍 Testar a localização à mão (Chrome)
 
 O navegador só libera a localização em **HTTPS ou `localhost`**: rode o app
