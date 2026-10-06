@@ -27,7 +27,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Ciclo de vida do turno: publicar, aceitar, finalizar, cancelar.
+ * Ciclo de vida do turno: publicar, aceitar, finalizar, cancelar (a loja) e
+ * desistir da vaga (o entregador).
  *
  * Este arquivo tinha 604 linhas e fazia tambem consulta, filtro geografico,
  * confirmacao de pagamento, credito em carteira e transacao. Ficou com o que e
@@ -170,6 +171,13 @@ public class TurnoService {
         if (inscricaoRepo.existsByTurnoIdAndMotoboyIdAndStatus(turnoId, motoboyId, StatusInscricao.ACEITO)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Você já aceitou este turno.");
+        }
+        // Quem desistiu da vaga não a aceita de novo: a inscrição é uma por
+        // pessoa e turno (uk_turno_motoboy), e é ela que guarda a desistência.
+        // Sem esta recusa o INSERT esbarraria na unicidade e viraria um 500.
+        if (inscricaoRepo.findByTurnoIdAndMotoboyId(turnoId, motoboyId).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Você desistiu deste turno e não pode aceitá-lo de novo.");
         }
 
         // Capacidade: respeita o número de vagas do turno.
@@ -316,13 +324,27 @@ public class TurnoService {
                 "O turno ainda não começou — finalize " + quando + ".");
     }
 
-    // RF07 — Cancelar turno: penalidade no score se < 1h antes do início
+    /**
+     * RF07 — Cancelar o turno: só o lojista que o publicou.
+     *
+     * <p>Derruba o turno inteiro, devolve a reserva e <b>não penaliza
+     * ninguém</b>. Era um botão só para os dois lados, e a penalidade do
+     * cancelamento tardio caía no primeiro inscrito fosse quem fosse que
+     * tivesse cancelado: a loja cancelava a 20 minutos do início e o
+     * entregador perdia 0,5 de score. Quem sai do turno por conta própria é o
+     * entregador, por {@link #desistir} — e é lá que mora a penalidade.
+     */
     @Transactional
-    public TurnoResponse cancelar(Long turnoId, Long usuarioId) {
+    public TurnoResponse cancelar(Long turnoId, Long lojistaId) {
         Turno turno = acesso.carregar(turnoId);
-        acesso.exigirParticipante(turno, usuarioId);
+        if (lojistaId == null || !lojistaId.equals(turno.getLojistId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Só o lojista que publicou o turno pode cancelá-lo. Para sair da sua vaga, "
+                            + "use \"Desistir da vaga\".");
+        }
 
-        if (turno.getStatus() == StatusTurno.FINALIZADO || turno.getStatus() == StatusTurno.CANCELADO) {
+        if (turno.getStatus() == StatusTurno.FINALIZADO || turno.getStatus() == StatusTurno.CANCELADO
+                || turno.getStatus() == StatusTurno.EXPIRADO) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Turno já encerrado.");
         }
         // Turno que começou não é cancelado como se não tivesse começado:
@@ -336,43 +358,127 @@ public class TurnoService {
                             + "pagar quem trabalhou.");
         }
 
-        boolean cancelamentoTardio = LocalDateTime.now().isAfter(
-                turno.getDataInicio().minusHours(1));
+        LocalDateTime agora = LocalDateTime.now();
+
+        // Cancela também as inscrições ativas, registrando que foi a loja:
+        // é o que impede este cancelamento de contar contra o entregador.
+        List<Long> avisados = new ArrayList<>();
+        for (TurnoInscricao ins : inscricaoRepo.findByTurnoIdAndStatus(turnoId, StatusInscricao.ACEITO)) {
+            ins.cancelar(lojistaId, agora);
+            inscricaoRepo.save(ins);
+            avisados.add(ins.getMotoboyId());
+        }
+
+        // O dinheiro reservado volta inteiro ao disponivel do lojista, sem
+        // multa.
+        pagamentos.liberarReserva(turno, MotivoLiberacao.CANCELAMENTO);
+
+        turno.setStatus(StatusTurno.CANCELADO);
+        turno.setCanceladoPorId(lojistaId);
+        turno.setCanceladoEm(agora);
+        turnoRepo.save(turno);
+
+        // SCRUM-20: todo mundo que estava no turno precisa saber. A lista sai
+        // das inscrições que estavam ativas — depois de canceladas, elas não
+        // contam mais como participantes, e num turno de várias vagas só o
+        // primeiro inscrito era avisado.
+        notificacoes.criar(lojistaId, "turno_cancelado",
+                "Turno cancelado",
+                "O turno \"" + turno.getTitulo() + "\" foi cancelado e a reserva voltou "
+                        + "ao seu saldo.",
+                "turno", turno.getId());
+        for (Long entregador : avisados) {
+            notificacoes.criar(entregador, "turno_cancelado",
+                    "Turno cancelado pela loja",
+                    "O turno \"" + turno.getTitulo() + "\" foi cancelado pela loja. "
+                            + "Isso não muda o seu score.",
+                    "turno", turno.getId());
+        }
+
+        return mapper.toResponse(turno);
+    }
+
+    /**
+     * RF07 — Desistir da vaga: só o entregador inscrito, e só da vaga dele.
+     *
+     * <p>Cancela a inscrição de quem desiste e mais nada: os colegas de um
+     * turno de várias vagas continuam nele, e a reserva do lojista continua
+     * bloqueada — a vaga existe, só ficou sem dono. Antes disso o entregador
+     * que saía de um turno de três vagas derrubava o turno dos outros dois.
+     *
+     * <ul>
+     *   <li>a vaga reabre: se o turno estava lotado (ACEITO) e ainda não
+     *       começou, volta a ABERTO;</li>
+     *   <li>se quem saiu era o "principal" do turno, o posto passa ao próximo
+     *       inscrito ativo, ou fica vazio;</li>
+     *   <li>a menos de {@link Reputacao#FOLGA_SEM_PENALIDADE} do início, a
+     *       desistência custa {@link Reputacao#PENALIDADE_CANCELAMENTO_TARDIO}
+     *       de score — a ele, e só a ele;</li>
+     *   <li>depois do check-in não há desistência: o turno começou para ele,
+     *       e a saída é finalizar.</li>
+     * </ul>
+     *
+     * <p>Quem desistiu não volta para o mesmo turno ({@link #aceitar}): a
+     * inscrição é a identidade de "esta pessoa neste turno", e é ela que
+     * guarda a desistência.
+     */
+    @Transactional
+    public TurnoResponse desistir(Long turnoId, Long motoboyId) {
+        Turno turno = acesso.carregar(turnoId);
+        TurnoInscricao ins = inscricaoRepo.findByTurnoIdAndMotoboyId(turnoId, motoboyId)
+                .filter(i -> i.getStatus() == StatusInscricao.ACEITO || i.getStatus() == StatusInscricao.FINALIZADO)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Você não tem vaga neste turno."));
+
+        if (ins.getStatus() != StatusInscricao.ACEITO
+                || turno.getStatus() == StatusTurno.FINALIZADO
+                || turno.getStatus() == StatusTurno.CANCELADO
+                || turno.getStatus() == StatusTurno.EXPIRADO) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Turno já encerrado.");
+        }
+        if (ins.getCheckinEm() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Você já fez check-in — o turno começou para você. Finalize o turno "
+                            + "em vez de desistir.");
+        }
+
+        LocalDateTime agora = LocalDateTime.now();
+        boolean emCimaDaHora = Reputacao.emCimaDaHora(agora, turno.getDataInicio());
+
+        ins.cancelar(motoboyId, agora);
+        inscricaoRepo.save(ins);
 
         // A regra da reputação mora em Reputacao — valor inicial e penalidade
         // num lugar só, o mesmo que a análise de score usa.
-        if (cancelamentoTardio && turno.getMotoboyId() != null) {
-            usuarioRepo.findById(turno.getMotoboyId()).ifPresent(motoboy -> {
+        if (emCimaDaHora) {
+            usuarioRepo.findById(motoboyId).ifPresent(motoboy -> {
                 motoboy.setScore(Reputacao.penalizar(motoboy.getScore()));
                 usuarioRepo.save(motoboy);
             });
         }
 
-        // Cancela também as inscrições ativas (libera as vagas ocupadas).
-        for (TurnoInscricao ins : inscricaoRepo.findByTurnoIdAndStatus(turnoId, StatusInscricao.ACEITO)) {
-            ins.setStatus(StatusInscricao.CANCELADO);
-            inscricaoRepo.save(ins);
+        if (motoboyId.equals(turno.getMotoboyId())) {
+            turno.setMotoboyId(inscricaoRepo
+                    .findByTurnoIdAndStatusOrderByIdAsc(turnoId, StatusInscricao.ACEITO).stream()
+                    .map(TurnoInscricao::getMotoboyId)
+                    .findFirst().orElse(null));
         }
-
-        // O dinheiro reservado volta inteiro ao disponivel do lojista. Sem
-        // multa: a penalidade do cancelamento tardio e de score, logo acima, e
-        // continua sendo a unica.
-        pagamentos.liberarReserva(turno, MotivoLiberacao.CANCELAMENTO);
-
-        turno.setStatus(StatusTurno.CANCELADO);
-        // Quem cancelou (V19): o selo "30 dias sem cancelar" conta só o que o
-        // entregador cancelou, não o que a loja cancelou com ele no turno.
-        turno.setCanceladoPorId(usuarioId);
-        turno.setCanceladoEm(LocalDateTime.now());
+        // Turno lotado que perdeu um inscrito volta a aceitar gente — enquanto
+        // não começou. Depois do início as vagas já estavam fechadas.
+        boolean reabriu = turno.getStatus() == StatusTurno.ACEITO
+                && agora.isBefore(turno.getDataInicio());
+        if (reabriu) {
+            turno.setStatus(StatusTurno.ABERTO);
+        }
         turnoRepo.save(turno);
 
-        // SCRUM-20: todo mundo que estava no turno precisa saber.
-        for (Long destinatario : acesso.participantes(turno)) {
-            notificacoes.criar(destinatario, "turno_cancelado",
-                    "Turno cancelado",
-                    "O turno \"" + turno.getTitulo() + "\" foi cancelado.",
-                    "turno", turno.getId());
-        }
+        String nome = usuarioRepo.findById(motoboyId).map(Usuario::getNome).orElse("Um entregador");
+        notificacoes.criar(turno.getLojistId(), "entregador_desistiu",
+                "Entregador desistiu da vaga",
+                nome + " desistiu da vaga no turno \"" + turno.getTitulo() + "\"."
+                        + (turno.getStatus() == StatusTurno.ABERTO
+                                ? " A vaga voltou a ficar aberta." : ""),
+                "turno", turno.getId());
 
         return mapper.toResponse(turno);
     }

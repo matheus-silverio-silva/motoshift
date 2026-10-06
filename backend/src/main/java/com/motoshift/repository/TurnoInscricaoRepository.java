@@ -36,6 +36,28 @@ public interface TurnoInscricaoRepository extends JpaRepository<TurnoInscricao, 
 
     Optional<TurnoInscricao> findByTurnoIdAndMotoboyId(Long turnoId, Long motoboyId);
 
+    // ── Desistência (V22) ───────────────────────────────────────────────────
+
+    /** As inscrições do turno neste status, da mais antiga para a mais nova — quem herda o posto de "principal". */
+    List<TurnoInscricao> findByTurnoIdAndStatusOrderByIdAsc(Long turnoId, StatusInscricao status);
+
+    /**
+     * Cancelou alguma inscrição depois de {@code desde}? Com o id do
+     * entregador, é o selo "30 dias sem cancelar": só a desistência DELE conta
+     * — o turno que a loja cancelou fica com o id da loja.
+     */
+    boolean existsByCanceladoPorIdAndCanceladoEmAfter(Long canceladoPorId,
+                                                     java.time.LocalDateTime desde);
+
+    /** Já desistiu de alguma vaga — também é histórico para a reputação. */
+    boolean existsByMotoboyIdAndCanceladoPorId(Long motoboyId, Long canceladoPorId);
+
+    /** As vagas de que o entregador desistiu, com a hora marcada de cada turno. */
+    @Query("select new com.motoshift.repository.Desistencia(t.id, t.titulo, t.dataInicio, i.canceladoEm) "
+         + "from TurnoInscricao i, Turno t "
+         + "where t.id = i.turnoId and i.motoboyId = :motoboyId and i.canceladoPorId = :motoboyId")
+    List<Desistencia> desistenciasDe(@Param("motoboyId") Long motoboyId);
+
     /** Alguém já chegou? Turno com check-in já começou, mesmo que o status diga outra coisa. */
     boolean existsByTurnoIdAndCheckinEmIsNotNull(Long turnoId);
 

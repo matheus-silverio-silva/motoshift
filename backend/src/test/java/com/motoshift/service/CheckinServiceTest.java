@@ -256,7 +256,7 @@ class CheckinServiceTest {
     class EmAndamento {
 
         @Test
-        @DisplayName("não é cancelado como se não tivesse começado — nem pelo lojista, nem pelo entregador")
+        @DisplayName("não é cancelado como se não tivesse começado — nem a loja cancela, nem o entregador desiste")
         void naoCancela() {
             Turno t = turnoAceito(ricardo, LocalDateTime.now().plusMinutes(3));
             checkins.checkin(t.getId(), ricardo.getId(), LAT, LNG);
@@ -264,8 +264,12 @@ class CheckinServiceTest {
             assertThatThrownBy(() -> turnos.cancelar(t.getId(), loja.getId()))
                     .isInstanceOf(ResponseStatusException.class)
                     .hasMessageContaining("já começou");
-            assertThatThrownBy(() -> turnos.cancelar(t.getId(), ricardo.getId()))
-                    .hasMessageContaining("já começou");
+            // Quem fez check-in não desiste: o turno começou para ele.
+            assertThatThrownBy(() -> turnos.desistir(t.getId(), ricardo.getId()))
+                    .isInstanceOf(ResponseStatusException.class)
+                    .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode().value())
+                            .isEqualTo(409))
+                    .hasMessageContaining("já fez check-in");
         }
 
         @Test

@@ -94,7 +94,7 @@ Android) ou `localhost:8080`.
 | RF04 | Publicar turno, antecedência mínima de 2h | `TurnoService.criar()` | ✅ |
 | RF05 | Reservar turno, sem conflito de horário | `TurnoService.aceitar()` | ✅ |
 | RF06 | Finalizar transfere o valor reservado para o entregador **que fez check-in**, na mesma transação; só depois do início do turno | `TurnoService.finalizar()` + `PagamentoTurnoService.fecharInscricoes()` / `liquidar()` | ✅ |
-| RF07 | Cancelar < 1h penaliza o score do entregador (−0.5) | `TurnoService.cancelar()` + `Reputacao` | ✅ |
+| RF07 | Cancelar é do lojista e não penaliza ninguém; desistir da vaga é do entregador e, a < 1h do início, tira 0.5 do score dele | `TurnoService.cancelar()` / `desistir()` + `Reputacao` | ✅ |
 
 **Regras de negócio mais "perguntáveis":**
 - *Antecedência de 2h:* `LocalDateTime.now().plusHours(2)` — turno antes disso é rejeitado (HTTP 400).
@@ -109,7 +109,11 @@ Android) ou `localhost:8080`.
   disso). Só a inscrição com check-in recebe; a aceita sem check-in vira `faltou` (V21), sem pagamento e
   sem penalidade de score, e a parte dela volta ao lojista como sobra. Antes, aceitar um turno de amanhã
   e tocar "Finalizar" pagava na hora.
-- *Penalidade de score:* cancelamento com menos de 1h subtrai 0.5 (mínimo 0.0).
+- *Cancelar × desistir:* eram um botão só. A loja cancelava em cima da hora e o entregador perdia score; um
+  entregador saía de um turno de três vagas e o turno caía para os outros dois. Agora `cancelar` é só do
+  lojista dono (turno inteiro, reserva de volta, ninguém penalizado) e `desistir` é só do entregador inscrito
+  (a vaga dele reabre, o turno segue, a loja é avisada). Quem desistiu não aceita o mesmo turno de novo.
+- *Penalidade de score:* desistir da vaga com menos de 1h subtrai 0.5 de quem desistiu (mínimo 0.0).
   A regra (valor inicial e penalidade) mora em `Reputacao`, num lugar só.
 
 ---
@@ -214,10 +218,12 @@ navega por objeto — integridade é do banco, navegação seria custo sem uso.
 
 **P: O que é o score?**
 R: Reputação do **entregador** (0 a 5) — o lojista não tem score. Começa em
-5.0 e cada cancelamento tardio (<1h) tira 0.5; nenhum outro evento o muda, e
-ninguém o grava à mão (nem a massa de demonstração, que cancela pelo próprio
-`TurnoService`). Enquanto o entregador não tem histórico — nenhum turno
-concluído nem cancelado —, a API devolve o score **nulo** e o app diz "Novo na
+5.0 e cada **desistência em cima da hora** (o entregador sai da vaga a menos de
+1h do início) tira 0.5; nenhum outro evento o muda — nem o turno que a loja
+cancela, nem a falta sem check-in —, e ninguém o grava à mão (nem a massa de
+demonstração, que desiste pelo próprio `TurnoService`). Enquanto o entregador
+não tem histórico — nenhum turno concluído, cancelado ou de que tenha desistido
+—, a API devolve o score **nulo** e o app diz "Novo na
 plataforma": 5.0 ali seria o ponto de partida da conta apresentado como
 reputação conquistada. A **avaliação** é outra coisa: a média das notas que a
 pessoa recebeu, recalculada por `AvaliacaoService` a cada avaliação e nula
@@ -228,10 +234,10 @@ exigiria uma tabela de eventos de score.
 
 **P: Os números da demonstração foram escritos à mão?**
 R: Não. A massa passa pelos serviços de verdade: a recarga pelo
-`CobrancaService`, o aceite, a finalização e o cancelamento pelo
+`CobrancaService`, o aceite, a finalização, a desistência e o cancelamento pelo
 `TurnoService`, a avaliação pelo `AvaliacaoService` e a nota pelo
 `NotaFiscalService`, a pedido do lojista. Por isso o score do Thiago é 4,5 —
-ele cancelou um turno a menos de 1h do início, e a regra tirou 0,5 —, as
+ele desistiu de uma vaga a menos de 1h do início, e a regra tirou 0,5 —, as
 médias são as das notas que cada um recebeu, as notificações são as que o
 código gera hoje, e a massa passa na mesma conferência de consistência do
 ledger que o banco de produção. A única coisa que vai direto ao repositório é
@@ -334,8 +340,9 @@ disso, a tela diz que o aparelho não respondeu e oferece tentar de novo.
   qualquer um não muda nada nem avisa de novo.
 - **Status.** O primeiro check-in leva o turno de ACEITO a EM_ANDAMENTO — o
   estado que o enum esperava. Em andamento, o turno **não vence** (o job só
-  olha turno aberto) e **não se cancela**: cancelar devolveria a reserva
-  inteira com alguém trabalhando; a saída é finalizar. O job de vencimento,
+  olha turno aberto) e **não se cancela** — nem o entregador que fez check-in
+  desiste da vaga: cancelar devolveria a reserva inteira com alguém
+  trabalhando; a saída é finalizar. O job de vencimento,
   ao fechar um turno multi-vaga no início, o leva direto a EM_ANDAMENTO se
   alguém já chegou.
 - **Pontualidade.** % de check-ins até 10 min após o início, nos últimos 90
@@ -404,21 +411,25 @@ preenche; quem publica é o lojista, pelo caminho de sempre.
 - **Regra.** Calculados na hora a partir do histórico — sem tabela, porque um
   selo guardado envelhece. Entregador: 20 turnos concluídos (o pedido era 25;
   ajustado à massa, em que o entregador mais antigo tem 23); 30 dias sem
-  cancelar (histórico mais velho que 30 dias e nenhum cancelamento DELE no
+  cancelar (histórico mais velho que 30 dias e nenhuma desistência DELE no
   período); nota acima de 4,8 com 10 avaliações ou mais; pontual (90% ou mais
   com 10 check-ins ou mais). Loja: paga gorjeta (3 ou mais em turnos dos
   últimos 90 dias); nota acima de 4,8; contrata toda semana (turno concluído
   em cada uma das últimas 4 semanas).
-- **Quem cancelou.** Cancelar é dos dois lados, e sem saber quem cancelou um
-  cancelamento da loja tiraria o selo do entregador. Por isso a V19 grava
-  `cancelado_por_id` e `cancelado_em` no turno.
+- **Quem cancelou.** O turno só é cancelado pela loja (`cancelado_por_id` e
+  `cancelado_em` no turno, V19), e isso não tira selo de ninguém. O entregador
+  **desiste da vaga**, e a desistência mora na inscrição dele — a V22 pôs
+  `cancelado_por_id` e `cancelado_em` em `turno_inscricoes`, porque desistir não
+  cancela o turno: a vaga reabre e ele segue. É dali que o selo e a análise de
+  score leem. O cancelamento que um entregador fez pela regra antiga foi levado
+  para a inscrição pelo backfill da V22, e continua contando — só contra ele.
 - **Onde.** `Selos` (os limites são constantes no topo), no perfil público
   (`AuthService.buscarPerfilPublico`) e nos painéis; no app,
   `SelosDeReputacao`, com o critério num diálogo ao tocar.
 
 **P: Por que o selo não é guardado?**
-R: Porque ele é uma pergunta sobre o histórico ("cancelou nos últimos 30
-dias?"). Guardado, ficaria verdadeiro depois de deixar de ser.
+R: Porque ele é uma pergunta sobre o histórico ("desistiu de alguma vaga nos
+últimos 30 dias?"). Guardado, ficaria verdadeiro depois de deixar de ser.
 
 ### Favoritos: a loja guarda quem trabalhou bem
 

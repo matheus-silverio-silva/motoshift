@@ -3,6 +3,8 @@ package com.motoshift.service;
 import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.Usuario;
+import com.motoshift.repository.Desistencia;
+import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -37,6 +39,8 @@ class ScoreServiceTest {
     private static final Long MOTOBOY = 42L;
 
     @Mock private TurnoRepository turnoRepo;
+    // A desistencia do entregador mora na inscricao (V22), nao no turno.
+    @Mock private TurnoInscricaoRepository inscricaoRepo;
     @Mock private UsuarioRepository usuarioRepo;
     @Mock private AnthropicService anthropic;
     @Mock private Reputacao reputacao;
@@ -49,8 +53,9 @@ class ScoreServiceTest {
         when(usuarioRepo.findById(MOTOBOY)).thenReturn(Optional.of(motoboy(4.0)));
         when(reputacao.scoreVisivel(any())).thenReturn(4.0);
         when(turnoRepo.findByMotoboyId(MOTOBOY)).thenReturn(List.of(
-                turno(StatusTurno.FINALIZADO, LocalDateTime.now().minusDays(3)),
-                canceladoTardio(LocalDateTime.now().minusDays(2))));
+                turno(StatusTurno.FINALIZADO, LocalDateTime.now().minusDays(3))));
+        when(inscricaoRepo.desistenciasDe(MOTOBOY)).thenReturn(List.of(
+                desistenciaTardia(LocalDateTime.now().minusDays(2))));
         when(anthropic.chamarClaude(any(), any()))
                 .thenThrow(new IllegalStateException("Erro na API Anthropic: HTTP 529"));
 
@@ -68,17 +73,43 @@ class ScoreServiceTest {
     void scoreAnterior_saiComoEstimado() {
         when(usuarioRepo.findById(MOTOBOY)).thenReturn(Optional.of(motoboy(4.0)));
         when(reputacao.scoreVisivel(any())).thenReturn(4.0);
-        when(turnoRepo.findByMotoboyId(MOTOBOY)).thenReturn(List.of(
-                canceladoTardio(LocalDateTime.now().minusDays(1))));
+        when(turnoRepo.findByMotoboyId(MOTOBOY)).thenReturn(List.of());
+        when(inscricaoRepo.desistenciasDe(MOTOBOY)).thenReturn(List.of(
+                desistenciaTardia(LocalDateTime.now().minusDays(1))));
         when(anthropic.chamarClaude(any(), any())).thenReturn("texto da analise");
 
         Map<String, Object> resposta = service.analisar(MOTOBOY);
 
-        // 4.0 agora + 0.5 revertido do cancelamento tardio da janela.
+        // 4.0 agora + 0.5 revertido da desistencia em cima da hora da janela.
         assertThat(resposta.get("scoreAnterior")).isEqualTo(4.5);
         assertThat(resposta.get("scoreAnteriorEstimado")).isEqualTo(true);
         assertThat(resposta.get("analise")).isEqualTo("texto da analise");
         assertThat(resposta.get("analiseDisponivel")).isEqualTo(true);
+    }
+
+    @Test
+    @DisplayName("eventos: a desistencia com folga nao custa nada, a em cima da hora custa 0,5, e o turno que a loja cancelou nao e evento do entregador")
+    @SuppressWarnings("unchecked")
+    void eventos_saoAsDesistenciasDele() {
+        when(usuarioRepo.findById(MOTOBOY)).thenReturn(Optional.of(motoboy(4.5)));
+        when(reputacao.scoreVisivel(any())).thenReturn(4.5);
+        // Ele era o entregador de um turno que a LOJA cancelou: nao conta.
+        when(turnoRepo.findByMotoboyId(MOTOBOY)).thenReturn(List.of(
+                turno(StatusTurno.CANCELADO, LocalDateTime.now().minusDays(4))));
+        when(inscricaoRepo.desistenciasDe(MOTOBOY)).thenReturn(List.of(
+                desistenciaComFolga(LocalDateTime.now().minusDays(5)),
+                desistenciaTardia(LocalDateTime.now().minusDays(2))));
+        when(anthropic.chamarClaude(any(), any())).thenReturn("texto da analise");
+
+        Map<String, Object> resposta = service.analisar(MOTOBOY);
+
+        List<Map<String, Object>> eventos = (List<Map<String, Object>>) resposta.get("eventos");
+        assertThat(eventos).hasSize(2);
+        // Do mais recente para o mais antigo.
+        assertThat(eventos.get(0)).containsEntry("tipo", "cancelado_tardio").containsEntry("impacto", -0.5);
+        assertThat(eventos.get(1)).containsEntry("tipo", "cancelado").containsEntry("impacto", 0.0);
+        // So a desistencia em cima da hora entra na estimativa: 4,5 + 0,5.
+        assertThat(resposta.get("scoreAnterior")).isEqualTo(5.0);
     }
 
     @Test
@@ -119,10 +150,13 @@ class ScoreServiceTest {
         return t;
     }
 
-    /** Cancelado em cima da hora: atualizado depois de (inicio - 1h). */
-    private Turno canceladoTardio(LocalDateTime inicio) {
-        Turno t = turno(StatusTurno.CANCELADO, inicio);
-        ReflectionTestUtils.setField(t, "atualizadoEm", inicio.minusMinutes(30));
-        return t;
+    /** Desistiu em cima da hora: 30 minutos antes do inicio. */
+    private Desistencia desistenciaTardia(LocalDateTime inicio) {
+        return new Desistencia(2L, "Turno de que desistiu", inicio, inicio.minusMinutes(30));
+    }
+
+    /** Desistiu com folga: na vespera. */
+    private Desistencia desistenciaComFolga(LocalDateTime inicio) {
+        return new Desistencia(3L, "Turno de que desistiu cedo", inicio, inicio.minusDays(1));
     }
 }

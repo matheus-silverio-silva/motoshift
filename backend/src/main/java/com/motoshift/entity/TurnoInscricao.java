@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * a inscrição é a identidade de "esta pessoa neste turno", e é por ela que a
  * liquidação é chaveada ({@code liquidacao:inscricao:{id}:debito|credito}).
  *
- * status: aceito | finalizado | cancelado (ver StatusInscricao)
+ * status: aceito | finalizado | faltou | cancelado (ver StatusInscricao)
  */
 @Entity
 @Table(
@@ -29,7 +29,9 @@ import java.time.LocalDateTime;
         // não serve para buscar por motoboy (V11).
         @Index(name = "ix_inscricao_motoboy", columnList = "motoboyId, status"),
         // Pontualidade dos últimos 90 dias (V16).
-        @Index(name = "ix_inscricao_checkin", columnList = "motoboyId, checkinEm")
+        @Index(name = "ix_inscricao_checkin", columnList = "motoboyId, checkinEm"),
+        // "Cancelou algo nos últimos 30 dias?" — o selo e a análise de score (V22).
+        @Index(name = "ix_inscricao_cancelado_por", columnList = "canceladoPorId, canceladoEm")
     }
 )
 public class TurnoInscricao {
@@ -80,6 +82,15 @@ public class TurnoInscricao {
     /** Quando tocou "Encerrar turno". Só existe depois do check-in. */
     private LocalDateTime checkoutEm;
 
+    // ── Quem cancelou esta inscrição (V22) ────────────────────────────────
+    // O próprio entregador, quando desiste da vaga; o lojista, quando cancela
+    // o turno. Mora na inscrição porque desistir não cancela o turno — a vaga
+    // reabre e o turno segue —, então turnos.cancelado_por_id não registra a
+    // desistência. É daqui que o selo "30 dias sem cancelar" e a análise de
+    // score leem. Nulos na inscrição que não foi cancelada.
+    private Long canceladoPorId;
+    private LocalDateTime canceladoEm;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime criadoEm;
 
@@ -87,6 +98,19 @@ public class TurnoInscricao {
     private void prePersist() {
         criadoEm = LocalDateTime.now();
         if (status == null) status = StatusInscricao.ACEITO;
+    }
+
+    /** Cancela a inscrição, registrando quem a cancelou e quando. */
+    public void cancelar(Long quem, LocalDateTime quando) {
+        this.status = StatusInscricao.CANCELADO;
+        this.canceladoPorId = quem;
+        this.canceladoEm = quando;
+    }
+
+    /** O entregador saiu por conta própria — e não o lojista que cancelou o turno. */
+    public boolean foiDesistencia() {
+        return status == StatusInscricao.CANCELADO && motoboyId != null
+                && motoboyId.equals(canceladoPorId);
     }
 
     public Long getId() { return id; }
@@ -114,6 +138,12 @@ public class TurnoInscricao {
 
     public LocalDateTime getCheckoutEm() { return checkoutEm; }
     public void setCheckoutEm(LocalDateTime checkoutEm) { this.checkoutEm = checkoutEm; }
+
+    public Long getCanceladoPorId() { return canceladoPorId; }
+    public void setCanceladoPorId(Long canceladoPorId) { this.canceladoPorId = canceladoPorId; }
+
+    public LocalDateTime getCanceladoEm() { return canceladoEm; }
+    public void setCanceladoEm(LocalDateTime canceladoEm) { this.canceladoEm = canceladoEm; }
 
     public LocalDateTime getCriadoEm() { return criadoEm; }
 }

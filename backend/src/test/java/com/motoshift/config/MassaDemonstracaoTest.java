@@ -196,8 +196,10 @@ class MassaDemonstracaoTest {
         List<Usuario> contas = contasDaMassa();
         List<Turno> turnos = turnosDaMassa();
 
+        // Seis publicados à espera de entregador e um sétimo que reabriu: o
+        // Ricardo tinha aceitado e desistiu com folga.
         assertThat(turnos).filteredOn(t -> t.getStatus() == StatusTurno.ABERTO)
-                .hasSize(6)
+                .hasSize(7)
                 .allSatisfy(t -> assertThat(t.getDataInicio()).isAfter(agora));
 
         // Três aceitos por começar: dois para amanhã e um em menos de 1 hora
@@ -231,19 +233,31 @@ class MassaDemonstracaoTest {
                     assertThat(t.getExpiradoEm()).isBefore(agora);
                 });
 
-        // Dois cancelados: um com folga, pelo Ricardo, e um tardio pela regra
-        // do ScoreService (atualizado a menos de 1h do início) — do Thiago.
+        // Duas desistências, cada uma na inscrição de quem desistiu (V22): a
+        // do Ricardo com folga — o turno reabriu, sem entregador —, e a do
+        // Thiago em cima da hora, a menos de 1h do início.
         Long thiago = id("thiago@teste.com");
         Long ricardo = id("ricardo@teste.com");
+        Long claudia = id("claudia@teste.com");
+        assertThat(inscricaoRepo.desistenciasDe(ricardo)).singleElement().satisfies(d -> {
+            assertThat(d.canceladoEm()).isBefore(d.inicioDoTurno().minusHours(1));
+            Turno reaberto = turnoRepo.findById(d.turnoId()).orElseThrow();
+            assertThat(reaberto.getStatus()).isEqualTo(StatusTurno.ABERTO);
+            assertThat(reaberto.getMotoboyId()).isNull();
+        });
+        assertThat(inscricaoRepo.desistenciasDe(thiago)).singleElement().satisfies(d ->
+                assertThat(d.canceladoEm()).isAfter(d.inicioDoTurno().minusHours(1)));
+
+        // Um turno cancelado — pela loja: sem entregador a meia hora do
+        // início, a Cláudia cancelou o turno de que o Thiago tinha desistido.
         assertThat(turnos).filteredOn(t -> t.getStatus() == StatusTurno.CANCELADO)
-                .hasSize(2)
-                .anySatisfy(t -> {
-                    assertThat(t.getMotoboyId()).isEqualTo(thiago);
-                    assertThat(t.getAtualizadoEm()).isAfter(t.getDataInicio().minusHours(1));
-                })
-                .anySatisfy(t -> {
-                    assertThat(t.getMotoboyId()).isEqualTo(ricardo);
-                    assertThat(t.getAtualizadoEm()).isBefore(t.getDataInicio().minusHours(1));
+                .singleElement()
+                .satisfies(t -> {
+                    assertThat(t.getCanceladoPorId()).isEqualTo(claudia);
+                    assertThat(t.getMotoboyId()).isNull();
+                    assertThat(inscricaoRepo.desistenciasDe(thiago))
+                            .extracting(com.motoshift.repository.Desistencia::turnoId)
+                            .containsExactly(t.getId());
                 });
 
         assertThat(contas).filteredOn(u -> "motoboy".equals(u.getTipo()))
@@ -330,7 +344,7 @@ class MassaDemonstracaoTest {
     }
 
     @Test
-    @DisplayName("score e média saem da regra: Thiago 4,5 pelo cancelamento tardio, lojista sem score")
+    @DisplayName("score e média saem da regra: Thiago 4,5 pela desistência em cima da hora, lojista sem score")
     void reputacaoDerivada() {
         massa.resetar();
 
@@ -400,7 +414,7 @@ class MassaDemonstracaoTest {
                 .contains("turno_aceito", "avaliacao_pendente", "turno_cancelado", "turno_expirado",
                           "nota_fiscal_emitida", "nota_fiscal_cancelada",
                           "entregador_chegou", "entregador_saiu", "gorjeta_recebida",
-                          "turno_de_favorito", "turno_lembrete");
+                          "turno_de_favorito", "turno_lembrete", "entregador_desistiu");
     }
 
     /**
@@ -463,7 +477,7 @@ class MassaDemonstracaoTest {
         assertThat(codigosDosSelos(carlos)).containsExactly(
                 "turnos_concluidos", "sem_cancelar", "nota_alta", "pontual");
         assertThat(codigosDosSelos(lucas)).containsExactly("turnos_concluidos", "sem_cancelar");
-        assertThat(codigosDosSelos(ricardo)).as("cancelou o turno de folga").containsExactly("pontual");
+        assertThat(codigosDosSelos(ricardo)).as("desistiu de uma vaga, com folga").containsExactly("pontual");
         assertThat(codigosDosSelos(thiago)).isEmpty();
         assertThat(codigosDosSelos(claudia)).containsExactly("paga_gorjeta", "toda_semana");
         assertThat(codigosDosSelos(maria)).containsExactly("nota_alta", "toda_semana");
@@ -649,7 +663,7 @@ class MassaDemonstracaoTest {
             "turno_pendente_finalizacao", "avaliacao_pendente", "pagamento_confirmado",
             "nota_fiscal_emitida", "nota_fiscal_cancelada",
             "entregador_chegou", "entregador_saiu", "gorjeta_recebida", "turno_de_favorito",
-            "turno_lembrete");
+            "turno_lembrete", "entregador_desistiu", "turno_falta");
 
     /** As tags do app (lib/models/tags_de_avaliacao.dart), por papel de quem é avaliado. */
     private static final Set<String> TAGS_DO_ENTREGADOR = Set.of(

@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moto_shift/models/turno.dart';
 import 'package:moto_shift/models/usuario.dart';
+import 'package:moto_shift/presentation/providers/turno_provider.dart';
+import 'package:moto_shift/services/api/turno_api.dart';
 import 'package:moto_shift/views/meus_turnos/turnos_cards.dart';
 import 'package:moto_shift/widgets/acoes_do_turno.dart';
+import 'package:provider/provider.dart';
 
 import '../test_helpers.dart';
 
@@ -132,6 +135,124 @@ void main() {
     });
   });
 
+  // Sair do turno: uma ação para cada lado (SCRUM-26). Era "Cancelar turno"
+  // para os dois, e a penalidade caía no entregador mesmo quando quem
+  // cancelava era a loja.
+  group('cancelar (a loja) e desistir (o entregador)', () {
+    final emDoisDias = DateTime.now().add(const Duration(days: 2));
+    final em20Min = DateTime.now().add(const Duration(minutes: 20));
+
+    /// O entregador com o turno entre os dele — é o que faz o widget tratá-lo
+    /// como inscrito, e não como alguém olhando uma vaga.
+    Future<_ApiDeDesistencia> comoEntregadorInscrito(
+        WidgetTester tester, Turno t) async {
+      final api = _ApiDeDesistencia(t);
+      await pumpGolden(tester,
+          child: Scaffold(body: AcoesDoTurno(turno: t)), apiFake: api);
+      final contexto = tester.element(find.byType(AcoesDoTurno));
+      await contexto.read<TurnoProvider>().carregarMeusTurnos(1);
+      await tester.pump();
+      return api;
+    }
+
+    testWidgets('o lojista vê "Cancelar turno" — e o aviso de que ninguém é penalizado',
+        (tester) async {
+      await pumpGolden(tester,
+          child: Scaffold(body: AcoesDoTurno(turno: turno(inicio: em20Min))),
+          tipoUsuario: TipoUsuario.lojista);
+
+      expect(find.byKey(const Key('acao-cancelar')), findsOneWidget);
+      expect(find.byKey(const Key('acao-desistir')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('acao-cancelar')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Nenhum entregador é penalizado'), findsOneWidget);
+      // O texto antigo punha a penalidade do entregador na conta da loja.
+      expect(find.textContaining('desconta 0,5'), findsNothing);
+    });
+
+    testWidgets('o entregador inscrito vê "Desistir da vaga", nunca "Cancelar turno"',
+        (tester) async {
+      await comoEntregadorInscrito(tester, turno(inicio: emDoisDias));
+
+      expect(find.byKey(const Key('acao-desistir')), findsOneWidget);
+      expect(find.byKey(const Key('acao-cancelar')), findsNothing);
+    });
+
+    testWidgets('com folga, o diálogo diz que desistir não muda o score',
+        (tester) async {
+      await comoEntregadorInscrito(tester, turno(inicio: emDoisDias));
+
+      await tester.tap(find.byKey(const Key('acao-desistir')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('desistir-sem-penalidade')), findsOneWidget);
+      expect(find.textContaining('não muda o seu score'), findsOneWidget);
+    });
+
+    testWidgets('a menos de 1 hora, o diálogo avisa do 0,5 antes de confirmar',
+        (tester) async {
+      await comoEntregadorInscrito(tester, turno(inicio: em20Min));
+
+      await tester.tap(find.byKey(const Key('acao-desistir')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('desistir-com-penalidade')), findsOneWidget);
+      expect(find.textContaining('desconta 0,5 do seu score'), findsOneWidget);
+    });
+
+    testWidgets('confirmar chama /desistir e o turno sai dos turnos do entregador',
+        (tester) async {
+      var mudou = false;
+      final t = turno(inicio: emDoisDias);
+      final api = _ApiDeDesistencia(t);
+      await pumpGolden(tester,
+          child: Scaffold(
+              body: AcoesDoTurno(turno: t, onMudou: () => mudou = true)),
+          apiFake: api);
+      final provider =
+          tester.element(find.byType(AcoesDoTurno)).read<TurnoProvider>();
+      await provider.carregarMeusTurnos(1);
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('acao-desistir')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('confirmar-desistir')));
+      await tester.pumpAndSettle();
+
+      expect(api.turnosFalsos.desistencias, [601]);
+      expect(api.turnosFalsos.cancelamentos, isEmpty);
+      expect(provider.meusTurnos.any((x) => x.id == 601), isFalse);
+      // A vaga reabriu: o turno volta para os disponíveis.
+      expect(provider.turnosDisponiveis.any((x) => x.id == 601), isTrue);
+      expect(find.text('Você desistiu da vaga.'), findsOneWidget);
+      expect(mudou, isTrue);
+    });
+
+    testWidgets('"Voltar" no diálogo não desiste de nada', (tester) async {
+      final api =
+          await comoEntregadorInscrito(tester, turno(inicio: emDoisDias));
+
+      await tester.tap(find.byKey(const Key('acao-desistir')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Voltar'));
+      await tester.pumpAndSettle();
+
+      expect(api.turnosFalsos.desistencias, isEmpty);
+    });
+
+    testWidgets('em andamento, nem a loja cancela nem o entregador desiste',
+        (tester) async {
+      final t = turno(
+          inicio: DateTime.now().subtract(const Duration(minutes: 10)),
+          algumCheckin: true,
+          status: StatusTurno.emAndamento);
+      await comoEntregadorInscrito(tester, t);
+      expect(find.byKey(const Key('acao-desistir')), findsNothing);
+      expect(find.byKey(const Key('acao-cancelar')), findsNothing);
+    });
+  });
+
   group('card do turno em andamento (entregador)', () {
     Widget card(Turno t) => MaterialApp(
           home: Scaffold(
@@ -163,4 +284,49 @@ void main() {
       expect(find.textContaining('depois das 15:20'), findsOneWidget);
     });
   });
+}
+
+/// O turno do teste entre os turnos do entregador, e o registro do que foi
+/// pedido ao backend.
+class _TurnosDeDesistencia extends FakeTurnoApi {
+  _TurnosDeDesistencia(this.meu);
+
+  final Turno meu;
+  final List<int> desistencias = [];
+  final List<int> cancelamentos = [];
+
+  @override
+  Future<List<Turno>> listarMeusTurnos(int motoboyId) async => [meu];
+
+  /// Como o backend responde: a vaga reabriu, o turno ficou sem entregador.
+  @override
+  Future<Turno> desistirDaVaga(int turnoId) async {
+    desistencias.add(turnoId);
+    return Turno(
+      id: meu.id,
+      lojistId: meu.lojistId,
+      titulo: meu.titulo,
+      regiao: meu.regiao,
+      dataInicio: meu.dataInicio,
+      dataFim: meu.dataFim,
+      valorEstimado: meu.valorEstimado,
+      raioEntregaKm: meu.raioEntregaKm,
+      status: StatusTurno.aberto,
+    );
+  }
+
+  @override
+  Future<Turno> cancelarTurno(int turnoId) async {
+    cancelamentos.add(turnoId);
+    return meu;
+  }
+}
+
+class _ApiDeDesistencia extends FakeApiService {
+  _ApiDeDesistencia(Turno meu) : turnosFalsos = _TurnosDeDesistencia(meu);
+
+  final _TurnosDeDesistencia turnosFalsos;
+
+  @override
+  TurnoApi get turnos => turnosFalsos;
 }

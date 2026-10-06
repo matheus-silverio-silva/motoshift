@@ -51,12 +51,13 @@ import java.util.Map;
  * foi cancelada), e os pagamentos da última semana ainda estão sem nota — "a
  * emitir" para o lojista, "aguardando emissão" para o entregador. Há um turno
  * com três entregadores (três notas), turnos com vaga sobrando, um expirado,
- * um cancelado com folga e um cancelado em cima da hora, que é o que explica o
- * score do Thiago. E há o presente: turnos abertos, um em andamento e dois
- * confirmados para amanhã.
+ * uma vaga de que o Ricardo desistiu com folga (e que reabriu) e outra de que
+ * o Thiago desistiu em cima da hora — é o que explica o score dele —, com a
+ * Cláudia cancelando esse turno em seguida, sem penalidade para ninguém. E há
+ * o presente: turnos abertos, um em andamento e dois confirmados para amanhã.
  *
  * <p><b>Nada é gravado à mão.</b> Recarga e saque passam pelo
- * {@link CobrancaService}; aceite, finalização e cancelamento pelo
+ * {@link CobrancaService}; aceite, finalização, desistência e cancelamento pelo
  * {@link TurnoService}; avaliação pelo {@link AvaliacaoService} (que recalcula
  * a média); nota pelo {@link NotaFiscalService}, sempre a pedido do lojista;
  * o vencimento pelo próprio job ({@link TurnoExpiracaoService}). Por isso o
@@ -238,7 +239,11 @@ public class MassaDemonstracao {
         n.put("favoritos",        executar("delete from Favorito f" + ONDE_FAVORITO, e));
         // Turno de conta real cancelado por uma conta da massa (V19): o turno
         // fica, e quem cancelou vira desconhecido — a FK impediria apagar a conta.
+        // O mesmo para a inscrição de conta real, em turno real, que uma conta
+        // da massa cancelou pela regra antiga (o backfill da V22).
         executar("update Turno t set t.canceladoPorId = null where t.canceladoPorId in :demo", e);
+        executar("update TurnoInscricao i set i.canceladoPorId = null "
+                + "where i.canceladoPorId in :demo", e);
         n.put("usuarios",         executar("delete from Usuario u where u.id in :demo", e));
         return n;
     }
@@ -681,8 +686,11 @@ public class MassaDemonstracao {
 
         /**
          * O que a demonstração mostra ao vivo: turnos abertos, um em
-         * andamento, dois confirmados para amanhã e dois cancelamentos — um
-         * com folga e um em cima da hora, que custa 0,5 no score do Thiago.
+         * andamento, dois confirmados para amanhã e duas desistências — a do
+         * Ricardo, com folga, reabre a vaga sem custar nada; a do Thiago, em
+         * cima da hora, custa 0,5 no score dele. Sem entregador a meia hora do
+         * início, a Cláudia cancela esse turno: a reserva volta e ninguém é
+         * penalizado por isso.
          */
         private void presente() {
             LocalDateTime ontem = agora.minusDays(1);
@@ -696,14 +704,17 @@ public class MassaDemonstracao {
             LocalDateTime amanha = agora.plusDays(1).truncatedTo(ChronoUnit.DAYS);
             LocalDateTime depoisDeAmanha = agora.plusDays(2).truncatedTo(ChronoUnit.DAYS);
 
-            // Cancelado com folga, pelo entregador: sem penalidade.
+            // O Ricardo aceitou e desistiu com folga: sem penalidade, e a vaga
+            // reabre — o turno volta a aparecer entre os disponíveis.
             LocalDateTime em3Dias = redondo(agora.plusDays(3));
-            Turno folga = publicar(fernando, "Turno Noite — Pizzaria do Fernando", "Turno cancelado com folga",
+            Turno folga = publicar(fernando, "Turno Noite — Pizzaria do Fernando",
+                    "Entregas zona Batel e adjacências",
                     "Batel, Curitiba", em3Dias, em3Dias.plusHours(4), "100.00", 1, ontem);
             em(agora.minusHours(18), () -> turnos.aceitar(folga.getId(), ricardo.getId()));
-            LocalDateTime cancelouComFolga = agora.minusHours(5);
-            em(cancelouComFolga, () -> turnos.cancelar(folga.getId(), ricardo.getId()));
-            carimbarTurno(folga, ontem, cancelouComFolga);
+            LocalDateTime desistiuComFolga = agora.minusHours(5);
+            em(desistiuComFolga, () -> turnos.desistir(folga.getId(), ricardo.getId()));
+            carimbarDesistencia(folga, ricardo, desistiuComFolga);
+            carimbarTurno(folga, ontem, desistiuComFolga);
 
             // Confirmados para amanhã.
             Turno anaLucas = publicar(ana, "Turno Confirmado — Farmácia Ana", "Entregas de medicamentos à tarde",
@@ -730,7 +741,7 @@ public class MassaDemonstracao {
             carimbarTurno(andamento, comecou.minusHours(3), comecou.minusMinutes(4));
 
             // Em cima da hora: publicado com 2h30 de antecedência, aceito pelo
-            // Thiago — que cancela no fim desta história.
+            // Thiago — que desiste no fim desta história.
             LocalDateTime logo = agora.plusMinutes(30).truncatedTo(ChronoUnit.MINUTES);
             Turno tardio = publicar(claudia, "Turno Relâmpago — Hamburgueria da Cláudia", "Reforço para o pico do jantar",
                     "Água Verde, Curitiba", logo, logo.plusHours(4), "120.00", 1, logo.minusHours(2).minusMinutes(30));
@@ -776,9 +787,13 @@ public class MassaDemonstracao {
             carimbarTurno(emBreve, ontem.plusHours(3), agora.minusHours(3));
             carimbarTurno(tardio, logo.minusHours(2).minusMinutes(30), agora.minusMinutes(90));
 
-            // Por último, e com a hora de agora: o cancelamento tardio. É o
-            // TurnoService que tira 0,5 do score — ninguém grava 4,5 à mão.
-            turnos.cancelar(tardio.getId(), thiago.getId());
+            // Por último, e com a hora de agora: a desistência em cima da hora.
+            // É o TurnoService que tira 0,5 do score — ninguém grava 4,5 à mão.
+            turnos.desistir(tardio.getId(), thiago.getId());
+            // A meia hora do início e sem entregador, a Cláudia cancela o
+            // turno: a reserva volta inteira e ninguém é penalizado — a
+            // penalidade foi de quem desistiu, não de quem cancelou.
+            turnos.cancelar(tardio.getId(), claudia.getId());
 
             // E o lembrete de 1 hora, pelo próprio job — depois do
             // cancelamento, para não lembrar de um turno que não vai haver.
@@ -875,6 +890,21 @@ public class MassaDemonstracao {
                     .setParameter("p", publicado)
                     .setParameter("a", atualizado)
                     .setParameter("id", t.getId())
+                    .executeUpdate();
+        }
+
+        /**
+         * A hora da desistência, na inscrição. O carimbo geral ({@link #em})
+         * só alcança o que o passo CRIOU, e a inscrição de quem desiste já
+         * existia — como a nota cancelada do Fernando.
+         */
+        private void carimbarDesistencia(Turno t, Usuario quem, LocalDateTime quando) {
+            em.flush();
+            em.createNativeQuery("update turno_inscricoes set cancelado_em = :q "
+                            + "where turno_id = :t and motoboy_id = :m")
+                    .setParameter("q", quando)
+                    .setParameter("t", t.getId())
+                    .setParameter("m", quem.getId())
                     .executeUpdate();
         }
 

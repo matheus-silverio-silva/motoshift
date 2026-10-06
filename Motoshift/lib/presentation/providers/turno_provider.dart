@@ -148,4 +148,28 @@ class TurnoProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  /// O entregador desiste da vaga. O turno deixa de ser dele — sai de "meus
+  /// turnos" — e, com a vaga livre de novo, volta para a lista de disponíveis
+  /// do jeito que o backend o devolveu.
+  Future<bool> desistirDaVaga(int turnoId) async {
+    try {
+      final atualizado = await _api.turnos.desistirDaVaga(turnoId);
+      _meusTurnos.removeWhere((t) => t.id == turnoId);
+      _turnosDisponiveis.removeWhere((t) => t.id == turnoId);
+      if (atualizado.status == StatusTurno.aberto) {
+        _turnosDisponiveis.add(atualizado);
+      }
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _erro = e.message;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _erro = 'Erro ao desistir da vaga.';
+      notifyListeners();
+      return false;
+    }
+  }
 }

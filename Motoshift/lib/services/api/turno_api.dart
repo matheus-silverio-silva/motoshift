@@ -88,8 +88,18 @@ class TurnoApi {
     return Turno.fromJson(data as Map<String, dynamic>);
   }
 
+  /// Cancela o turno inteiro — só o lojista que o publicou. A reserva volta e
+  /// nenhum entregador é penalizado; o entregador que chamar isto leva 403.
   Future<Turno> cancelarTurno(int turnoId) async {
     final data = await _client.put('/turnos/$turnoId/cancelar', {});
+    return Turno.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// O entregador desiste da vaga dele — e só dela: o turno segue, a vaga
+  /// reabre e a loja é avisada. A menos de 1 h do início, custa 0,5 de score
+  /// a quem desistiu. Recusado (409) depois do check-in.
+  Future<Turno> desistirDaVaga(int turnoId) async {
+    final data = await _client.put('/turnos/$turnoId/desistir', {});
     return Turno.fromJson(data as Map<String, dynamic>);
   }
 

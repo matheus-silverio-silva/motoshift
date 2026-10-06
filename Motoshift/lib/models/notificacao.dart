@@ -103,6 +103,12 @@ class Notificacao {
             fundo: AppColors.amberSoft,
             frente: AppColors.onTertiaryContainer,
           ),
+        // Um entregador desistiu da vaga — para o lojista do turno.
+        'entregador_desistiu' => const NotificacaoEstilo(
+            icone: Icons.person_remove_outlined,
+            fundo: AppColors.amberSoft,
+            frente: AppColors.onTertiaryContainer,
+          ),
         // O turno foi finalizado e este entregador não fez check-in.
         'turno_falta' => const NotificacaoEstilo(
             icone: Icons.person_off_outlined,

@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -12,7 +13,7 @@ import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import 'app_buttons.dart';
 
-/// As ações possíveis num turno — as mesmas para os dois lados.
+/// As ações possíveis num turno, para os dois lados.
 ///
 /// <h3>Por que uma só, e por que aqui</h3>
 /// Finalizar e cancelar eram privilégio de quem estivesse na tela certa. O
@@ -26,10 +27,16 @@ import 'app_buttons.dart';
 /// As regras aqui são as de `TurnoService`, não uma aproximação:
 ///
 /// * finalizar vale para o turno que já começou e em que alguém fez check-in
-///   ([Turno.podeSerFinalizado]) — só quem fez check-in é pago;
-/// * cancelar vale para o turno que ainda não começou: com check-in feito,
-///   a saída é finalizar;
-/// * qualquer participante pode fazer as duas coisas;
+///   ([Turno.podeSerFinalizado]) — só quem fez check-in é pago, e qualquer
+///   um dos dois participantes pode finalizar;
+/// * sair do turno é uma ação para cada lado. O **lojista** vê "Cancelar
+///   turno": o turno inteiro cai, a reserva volta e nenhum entregador é
+///   penalizado. O **entregador** vê "Desistir da vaga": só a vaga dele é
+///   liberada, o turno segue, e a menos de 1 hora do início a desistência
+///   custa 0,5 do score dele. Era um botão só, e a penalidade caía no
+///   entregador mesmo quando quem cancelava era a loja;
+/// * nenhuma das duas vale com check-in feito: o turno começou, e a saída é
+///   finalizar;
 /// * o turno finalizado não tem mais nada a fazer além de avaliar — e é o
 ///   [OQueFalta] logo acima que lista a nota fiscal;
 /// * o lojista publica de novo o turno que acabou (finalizado, cancelado ou
@@ -51,7 +58,7 @@ class AcoesDoTurno extends StatefulWidget {
   final VoidCallback? onAceitar;
   final bool aceitando;
 
-  /// Chamado depois de finalizar ou cancelar — quem hospeda decide se dá
+  /// Chamado depois de finalizar, cancelar ou desistir — quem hospeda decide se dá
   /// `pop` (mobile) ou recarrega a lista (desktop).
   final VoidCallback? onMudou;
 
@@ -163,15 +170,24 @@ class _AcoesDoTurnoState extends State<AcoesDoTurno> {
               loading: _ocupado,
               onPressed: _ocupado ? null : _finalizar,
             ),
-          // Turno em andamento não se cancela: alguém fez check-in e está
-          // trabalhando — o backend recusa, e a saída é finalizar.
+          // Turno em andamento não se cancela nem se larga: alguém fez
+          // check-in e está trabalhando — o backend recusa, e a saída é
+          // finalizar. Fora disso, cada lado tem a sua ação: a loja cancela o
+          // turno; o entregador desiste da vaga dele.
           if (_turno.status != StatusTurno.emAndamento)
-            GhostButton(
-              key: const Key('acao-cancelar'),
-              label: 'Cancelar turno',
-              danger: true,
-              onPressed: _ocupado ? null : _cancelar,
-            ),
+            _ehLojista
+                ? GhostButton(
+                    key: const Key('acao-cancelar'),
+                    label: 'Cancelar turno',
+                    danger: true,
+                    onPressed: _ocupado ? null : _cancelar,
+                  )
+                : GhostButton(
+                    key: const Key('acao-desistir'),
+                    label: 'Desistir da vaga',
+                    danger: true,
+                    onPressed: _ocupado ? null : _desistir,
+                  ),
         ];
     }
   }
@@ -233,8 +249,9 @@ class _AcoesDoTurnoState extends State<AcoesDoTurno> {
         title: Text('Cancelar turno',
             style: tsBricolage(17, FontWeight.w800, color: AppColors.ink)),
         content: Text(
-          'Cancelar a menos de uma hora do início desconta 0,5 do score do '
-          'entregador. O valor reservado volta inteiro para o lojista.',
+          'O turno é cancelado para todos os entregadores inscritos e o valor '
+          'reservado volta inteiro para o seu saldo. Nenhum entregador é '
+          'penalizado.',
           style: tsJakarta(13, FontWeight.w400, color: AppColors.muted),
         ),
         actions: [
@@ -261,6 +278,67 @@ class _AcoesDoTurnoState extends State<AcoesDoTurno> {
 
     _aviso(
       ok ? 'Turno cancelado.' : (provider.erro ?? 'Erro ao cancelar turno.'),
+      AppColors.error,
+    );
+    if (ok) widget.onMudou?.call();
+  }
+
+  /// O entregador sai da vaga dele. O diálogo diz, antes do toque, se a
+  /// desistência vai custar score — a regra de 1 hora é a do backend
+  /// (`Reputacao.FOLGA_SEM_PENALIDADE`), e quem decide de fato é ele.
+  Future<void> _desistir() async {
+    final id = _turno.id;
+    if (id == null) return;
+
+    final emCimaDaHora = clock
+        .now()
+        .isAfter(_turno.dataInicio.subtract(const Duration(hours: 1)));
+
+    final confirma = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Desistir da vaga',
+            style: tsBricolage(17, FontWeight.w800, color: AppColors.ink)),
+        content: Text(
+          emCimaDaHora
+              ? 'Falta menos de 1 hora para o início: desistir agora desconta '
+                  '0,5 do seu score. A vaga volta a ficar aberta e a loja é '
+                  'avisada.'
+              : 'Com mais de 1 hora de antecedência, desistir não muda o seu '
+                  'score. A vaga volta a ficar aberta para outro entregador e '
+                  'a loja é avisada.',
+          key: Key(emCimaDaHora
+              ? 'desistir-com-penalidade'
+              : 'desistir-sem-penalidade'),
+          style: tsJakarta(13, FontWeight.w400, color: AppColors.muted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Voltar',
+                style: tsJakarta(13, FontWeight.w600, color: AppColors.muted)),
+          ),
+          TextButton(
+            key: const Key('confirmar-desistir'),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Desistir da vaga',
+                style: tsJakarta(13, FontWeight.w700, color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirma != true || !mounted) return;
+
+    final provider = context.read<TurnoProvider>();
+    setState(() => _ocupado = true);
+    final ok = await provider.desistirDaVaga(id);
+    if (!mounted) return;
+    setState(() => _ocupado = false);
+
+    _aviso(
+      ok
+          ? 'Você desistiu da vaga.'
+          : (provider.erro ?? 'Erro ao desistir da vaga.'),
       AppColors.error,
     );
     if (ok) widget.onMudou?.call();

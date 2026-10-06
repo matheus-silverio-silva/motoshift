@@ -113,9 +113,10 @@ public class MigracoesPostgresTest {
         flyway(url, null).migrate();
 
         try (Connection c = conectar(url); Statement s = c.createStatement()) {
-            // As 18 da V11, as 2 de favoritos (V18) e a de quem cancelou (V19).
+            // As 18 da V11, as 2 de favoritos (V18), a de quem cancelou o turno
+            // (V19) e a de quem cancelou a inscricao (V22).
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f'"))
-                    .isEqualTo(21);
+                    .isEqualTo(22);
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated"))
                     .isZero();
         }
@@ -446,6 +447,64 @@ public class MigracoesPostgresTest {
         }
     }
 
+    @Test
+    @DisplayName("V22: a inscricao guarda quem a cancelou, e o cancelamento antigo do entregador continua contando so contra ele")
+    void v22_desistenciaNaInscricao() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v22");
+        flyway(url, "21").migrate();
+
+        long quemCancelou;
+        long colega;
+        long turno;
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("loja-v22@teste.com", "x"));
+            s.execute(inserirUsuario("cancelou-v22@teste.com", "x"));
+            s.execute(inserirUsuario("colega-v22@teste.com", "x"));
+            long lojista = contar(s, "SELECT id FROM usuarios WHERE email = 'loja-v22@teste.com'");
+            quemCancelou = contar(s, "SELECT id FROM usuarios WHERE email = 'cancelou-v22@teste.com'");
+            colega = contar(s, "SELECT id FROM usuarios WHERE email = 'colega-v22@teste.com'");
+
+            // Como a regra antiga deixava: um entregador cancelou o turno de
+            // duas vagas, o turno caiu inteiro e as duas inscricoes foram junto.
+            s.execute("INSERT INTO turnos (lojist_id, motoboy_id, titulo, data_inicio, data_fim, "
+                    + "valor_estimado, vagas, status, cancelado_por_id, cancelado_em, criado_em) VALUES ("
+                    + lojista + ", " + quemCancelou + ", 'Turno V22', '2026-09-10 18:00', "
+                    + "'2026-09-10 22:00', 120, 2, 'cancelado', " + quemCancelou
+                    + ", '2026-09-10 17:40', now())");
+            turno = contar(s, "SELECT id FROM turnos WHERE titulo = 'Turno V22'");
+            s.execute("INSERT INTO turno_inscricoes (turno_id, motoboy_id, status, criado_em) VALUES "
+                    + "(" + turno + ", " + quemCancelou + ", 'cancelado', now()), "
+                    + "(" + turno + ", " + colega + ", 'cancelado', now())");
+        }
+
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            assertThat(validada(s, "fk_inscricao_cancelado_por")).isTrue();
+            assertThat(contar(s, "SELECT count(*) FROM pg_indexes "
+                    + "WHERE indexname = 'ix_inscricao_cancelado_por'")).isEqualTo(1);
+
+            // Backfill: as duas inscricoes dizem QUEM cancelou — e nenhuma
+            // acusa o colega, que so estava no turno.
+            assertThat(contar(s, "SELECT count(*) FROM turno_inscricoes WHERE turno_id = " + turno
+                    + " AND cancelado_por_id = " + quemCancelou
+                    + " AND cancelado_em = TIMESTAMP '2026-09-10 17:40'")).isEqualTo(2);
+            // A desistencia, como o selo e o score a leem: a propria inscricao,
+            // cancelada pelo proprio entregador.
+            assertThat(contar(s, "SELECT count(*) FROM turno_inscricoes "
+                    + "WHERE motoboy_id = cancelado_por_id AND motoboy_id = " + quemCancelou)).isEqualTo(1);
+            assertThat(contar(s, "SELECT count(*) FROM turno_inscricoes "
+                    + "WHERE motoboy_id = cancelado_por_id AND motoboy_id = " + colega)).isZero();
+
+            // Quem cancelou tem de existir.
+            assertThatThrownBy(() -> s.execute(
+                    "UPDATE turno_inscricoes SET cancelado_por_id = 99999999 WHERE turno_id = " + turno))
+                    .isInstanceOf(SQLException.class)
+                    .extracting(e -> ((SQLException) e).getSQLState())
+                    .isEqualTo("23503");
+        }
+    }
+
     // ── Apoio ──────────────────────────────────────────────────────────────
 
     /** INSERT valido ATE a V11 — antes de a coluna natureza existir. */
@@ -509,7 +568,7 @@ public class MigracoesPostgresTest {
      * um número só.
      */
     public static String ultimaVersao() {
-        return "21";
+        return "22";
     }
 
     static Connection conectar(String url) throws SQLException {

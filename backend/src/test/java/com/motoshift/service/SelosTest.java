@@ -70,7 +70,7 @@ class SelosTest {
         }
 
         @Test
-        @DisplayName("30 dias sem cancelar: conta só o que ELE cancelou, e pede histórico mais velho que a janela")
+        @DisplayName("30 dias sem cancelar: conta só a desistência DELE, e pede histórico mais velho que a janela")
         void semCancelar() {
             concluir(agora.minusDays(10), null);
             assertThat(codigos(ricardo)).as("começou há 10 dias")
@@ -80,10 +80,14 @@ class SelosTest {
             assertThat(codigos(ricardo)).contains("sem_cancelar");
 
             cancelado(loja, agora.minusDays(3));
-            assertThat(codigos(ricardo)).as("a loja cancelou, não ele").contains("sem_cancelar");
+            assertThat(codigos(ricardo)).as("a loja cancelou o turno, não ele").contains("sem_cancelar");
+
+            cancelado(ricardo, agora.minusDays(45));
+            assertThat(codigos(ricardo)).as("desistiu, mas há mais de 30 dias").contains("sem_cancelar");
 
             cancelado(ricardo, agora.minusDays(3));
-            assertThat(codigos(ricardo)).doesNotContain("sem_cancelar");
+            assertThat(codigos(ricardo)).as("desistiu de uma vaga há 3 dias")
+                    .doesNotContain("sem_cancelar");
         }
 
         @Test
@@ -224,11 +228,27 @@ class SelosTest {
         turno(inicio, StatusTurno.FINALIZADO);
     }
 
+    /**
+     * A inscrição do Ricardo cancelada por {@code quem}: a loja (cancelou o
+     * turno) ou ele mesmo (desistiu da vaga — e aí o turno segue aberto).
+     */
     private void cancelado(Usuario quem, LocalDateTime quando) {
-        Turno t = turno(quando.plusDays(1), StatusTurno.CANCELADO);
-        t.setCanceladoPorId(quem.getId());
-        t.setCanceladoEm(quando);
+        boolean desistencia = quem.getId().equals(ricardo.getId());
+        Turno t = turno(quando.plusDays(1),
+                desistencia ? StatusTurno.ABERTO : StatusTurno.CANCELADO);
+        if (desistencia) {
+            t.setMotoboyId(null);
+        } else {
+            t.setCanceladoPorId(quem.getId());
+            t.setCanceladoEm(quando);
+        }
         turnoRepo.save(t);
+
+        TurnoInscricao i = new TurnoInscricao();
+        i.setTurnoId(t.getId());
+        i.setMotoboyId(ricardo.getId());
+        i.cancelar(quem.getId(), quando);
+        inscricaoRepo.save(i);
     }
 
     private void avaliar(Usuario avaliado) {

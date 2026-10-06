@@ -1,6 +1,6 @@
 # DER — Diagrama Entidade-Relacionamento
 
-Mapa das tabelas que compõem o banco de dados do **MotoShift**. O modelo reflete o schema real em produção (PostgreSQL no Railway), versionado por **Flyway** (migrações V1 a V21) e validado contra as entidades JPA do backend Spring Boot (`spring.jpa.hibernate.ddl-auto=validate`).
+Mapa das tabelas que compõem o banco de dados do **MotoShift**. O modelo reflete o schema real em produção (PostgreSQL no Railway), versionado por **Flyway** (migrações V1 a V22) e validado contra as entidades JPA do backend Spring Boot (`spring.jpa.hibernate.ddl-auto=validate`).
 
 > **Escopo:** 9 tabelas — `usuarios`, `turnos`, `turno_inscricoes`, `avaliacoes`, `carteiras`, `transacoes`, `cobrancas`, `notificacoes`, `notas_fiscais`.
 > Fonte da verdade: `backend/src/main/resources/db/migration` + `backend/src/main/java/com/motoshift/entity`.
@@ -65,7 +65,8 @@ erDiagram
 | `usuarios` | `notificacoes` | 1 : N | `referencia_tipo` + `referencia_id` fazem o deep link e a deduplicação |
 | `turnos` | `notas_fiscais` | 1 : N | Uma nota por entregador do turno: três vagas, três notas |
 | `usuarios` | `notas_fiscais.prestador_id / tomador_id` | 1 : N (duplo) | O entregador presta e o lojista toma; `emitida_por_id` registra quem clicou |
-| `usuarios` | `turnos.cancelado_por_id` | 0..1 : N | Quem cancelou o turno (V19) — lojista ou entregador |
+| `usuarios` | `turnos.cancelado_por_id` | 0..1 : N | Quem cancelou o turno (V19) — hoje, sempre o lojista dono |
+| `usuarios` | `turno_inscricoes.cancelado_por_id` | 0..1 : N | Quem cancelou a inscrição (V22) — o próprio entregador (desistiu da vaga) ou o lojista (cancelou o turno) |
 | `usuarios` | `favoritos.lojista_id / motoboy_id` | 1 : N (duplo) | A loja favorita vários entregadores e o entregador é favorito de várias lojas; o par é único. Quem é loja e quem é entregador é regra do `FavoritoService`; o banco só impede a conta de favoritar a si mesma |
 | `transacoes` | `notas_fiscais.transacao_id` | 1 : 0..1 | A nota documenta o `pagamento_recebido` do extrato (V14). É o que impede nota e extrato de discordarem: o valor do serviço é o do lançamento |
 
@@ -111,7 +112,7 @@ erDiagram
 | `status` | VARCHAR(255) | não | `aberto` \| `aceito` \| `em_andamento` \| `finalizado` \| `cancelado` \| `expirado` |
 | `pagamento_status` | VARCHAR(255) | sim | `null` (não finalizado) \| `pendente` \| `pago` |
 | `expirado_em` | TIMESTAMP(6) | sim | Preenchido pelo job de vencimento (SCRUM-19) |
-| `cancelado_por_id` | BIGINT | sim | FK `fk_turno_cancelado_por` → `usuarios.id` (V19): quem cancelou — os dois lados podem, e o selo "30 dias sem cancelar" conta só o que o entregador cancelou. Nulo no turno não cancelado e no cancelado antes da V19 |
+| `cancelado_por_id` | BIGINT | sim | FK `fk_turno_cancelado_por` → `usuarios.id` (V19): quem cancelou o TURNO. Só o lojista dono cancela o turno inteiro; em turno cancelado antes da V22 pode ser um entregador, da época em que os dois lados cancelavam. A saída de um entregador (desistência) não cancela o turno e mora em `turno_inscricoes`. Nulo no turno não cancelado e no cancelado antes da V19 |
 | `cancelado_em` | TIMESTAMP(6) | sim | Quando foi cancelado (V19); índice `ix_turno_cancelado_por (cancelado_por_id, cancelado_em)` |
 | `criado_em`, `atualizado_em` | TIMESTAMP(6) | criação obrigatória | Auditoria |
 
@@ -129,6 +130,8 @@ erDiagram
 | `checkin_em` | TIMESTAMP(6) | sim | Quando o entregador tocou "Cheguei" (V16). Nulo = não chegou, ou inscrição anterior à V16 |
 | `checkin_latitude`, `checkin_longitude` | FLOAT(53) | sim | De onde fez o check-in — a distância até o ponto do turno é conferida na hora |
 | `checkout_em` | TIMESTAMP(6) | sim | Quando tocou "Encerrar turno". CHECK `ck_inscricao_saida_apos_chegada`: só com check-in, e nunca antes dele |
+| `cancelado_por_id` | BIGINT | sim | FK `fk_inscricao_cancelado_por` → `usuarios.id` (V22): quem cancelou esta inscrição. Igual a `motoboy_id` = o entregador **desistiu da vaga**; o id do lojista = a loja cancelou o turno. É daqui que o selo "30 dias sem cancelar" e a análise de score leem. Nulo na inscrição não cancelada |
+| `cancelado_em` | TIMESTAMP(6) | sim | Quando foi cancelada (V22) — contra o início do turno, diz se a desistência foi em cima da hora. Índice `ix_inscricao_cancelado_por (cancelado_por_id, cancelado_em)` |
 
 > `lojista_confirmou_em` e `motoboy_confirmou_em` **foram removidas pela V13**.
 > Guardavam a dupla confirmação — cada parte declarando que o dinheiro tinha
@@ -287,3 +290,4 @@ deixaria de valer.
 | `V19__meta_do_mes_e_quem_cancelou` | Aditiva: `meta_mensal` em `usuarios` (CHECK positiva) e `cancelado_por_id` (FK) e `cancelado_em` em `turnos`, com índice. Os selos de reputação não têm tabela: são calculados do histórico |
 | `V20__chave_de_acesso_da_nfse` | Aditiva: `chave_acesso` em `notas_fiscais`, com índice único parcial `uk_nota_chave_acesso`. É a chave que o DANFSe (leiaute da NT SE/CGNFS-e nº 008/2026) mostra no topo; sem backfill — ver [`docs/financeiro/FISCAL.md`](../financeiro/FISCAL.md) |
 | `V21__inscricao_faltou` | O status da inscrição ganha `faltou` e o domínio vai para o banco (CHECK `ck_inscricao_status`, NOT VALID + VALIDATE como na V10). Finalizar passou a pagar só quem fez check-in; a inscrição aceita sem check-in vira `faltou` e a parte dela volta ao lojista como sobra |
+| `V22__desistencia_na_inscricao` | Aditiva: `cancelado_por_id` (FK) e `cancelado_em` em `turno_inscricoes`, com índice. "Cancelar" virou duas ações — a loja cancela o turno, o entregador desiste da vaga dele —, e a desistência não cancela o turno, então precisa de lugar próprio. Backfill: os turnos cancelados antes levam autor e data para as inscrições canceladas deles |

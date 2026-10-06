@@ -162,28 +162,38 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Q as Lojista ou entregador
+    actor Q as Lojista (dono do turno)
     participant S as TurnoService
     participant P as PagamentoTurnoService
     participant LG as LedgerService
 
     Q->>S: PUT /api/turnos/{id}/cancelar
-    Note over S: abre a transação
-    alt cancelamento com menos de 1h do início
-        S->>S: score do entregador −0,5 (RF07)
-    end
-    S->>S: inscrições ativas → CANCELADO
+    Note over S: abre a transação — só o lojista dono (403 para os demais)
+    S->>S: inscrições ativas → CANCELADO (cancelado_por = a loja)
     S->>P: liberarReserva(turno, CANCELAMENTO)
     P->>LG: aplicar(liberacao_reserva, valor integral)
     Note over LG: bloqueado −v, disponível +v
     S->>S: turno → CANCELADO
-    Note over S: commit
+    Note over S: commit — nenhum score é tocado
     S-->>Q: 200 turno cancelado
 ```
 
-**Sem multa financeira.** A penalidade do cancelamento tardio é de score, e
-continua sendo a única — inventar uma multa seria criar regra de negócio no meio
-de uma refatoração.
+**Cancelar é da loja, e não penaliza ninguém.** Era um botão só para os dois
+lados, e a penalidade do cancelamento tardio caía no primeiro inscrito fosse
+quem fosse que tivesse cancelado: a loja cancelava a 20 minutos do início e o
+entregador perdia 0,5 de score. **Sem multa financeira**, como sempre: a reserva
+volta inteira.
+
+**O entregador não cancela: desiste da vaga** (`PUT /api/turnos/{id}/desistir`).
+A desistência **não move dinheiro nenhum** — a reserva continua bloqueada,
+porque a vaga existe, só ficou sem dono. Ela cancela a inscrição de quem saiu
+(`cancelado_por_id` e `cancelado_em` na própria inscrição, V22), reabre a vaga
+(turno lotado que ainda não começou volta a `aberto`), passa o posto de
+"principal" ao próximo inscrito ativo e avisa a loja. A menos de 1 h do início
+custa 0,5 de score — a quem desistiu, e só a ele. O que acontece com o dinheiro
+dessa vaga se decide depois, pelos caminhos de sempre: outro entregador a
+aceita e é pago na finalização; ninguém aceita e ela volta como sobra; ou o
+turno fica sem ninguém e expira, devolvendo a reserva inteira.
 
 ### 3.4 Expirar (job)
 

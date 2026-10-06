@@ -291,23 +291,23 @@ turno dela parte desse ponto — ver [Testar a localização à mão](#-testar-a
 
 | Email | Nome | Veículo | Score | Por quê | Pontualidade | Meta do mês | Selos |
 |-------|------|---------|-------|---------|--------------|-------------|-------|
-| `ricardo@teste.com` | Ricardo Souza | Honda CG 160 Titan | 5.0 | cancelou um turno com folga — sem penalidade | 100% (chega sempre antes) | R$ 2.000 | Pontual |
-| `lucas@teste.com` | Lucas Mendes | Yamaha Factor 150 | 5.0 | nenhum cancelamento | ~73% (atrasa às vezes) | — (o painel convida) | 20 turnos concluídos · 30 dias sem cancelar |
-| `thiago@teste.com` | Thiago Alves | Honda Biz 125 | 4.5 | cancelou um turno a menos de 1h do início (−0,5) | ~30% (atrasa com frequência) | — | nenhum |
-| `motoboy@teste.com` | Carlos Mendes | Honda PCX 150 | 5.0 | nenhum cancelamento | ~92% | R$ 1.500 | 20 turnos concluídos · 30 dias sem cancelar · Nota acima de 4,8 · Pontual |
+| `ricardo@teste.com` | Ricardo Souza | Honda CG 160 Titan | 5.0 | desistiu de uma vaga com folga — sem penalidade | 100% (chega sempre antes) | R$ 2.000 | Pontual |
+| `lucas@teste.com` | Lucas Mendes | Yamaha Factor 150 | 5.0 | nenhuma desistência | ~73% (atrasa às vezes) | — (o painel convida) | 20 turnos concluídos · 30 dias sem cancelar |
+| `thiago@teste.com` | Thiago Alves | Honda Biz 125 | 4.5 | desistiu de uma vaga a menos de 1h do início (−0,5) | ~30% (atrasa com frequência) | — | nenhum |
+| `motoboy@teste.com` | Carlos Mendes | Honda PCX 150 | 5.0 | nenhuma desistência | ~92% | R$ 1.500 | 20 turnos concluídos · 30 dias sem cancelar · Nota acima de 4,8 · Pontual |
 
 Pontualidade, selos e o "Loja que já te chamou" saem do histórico da massa,
 calculados como no app — os valores acima são os de uma massa recém-criada e
 se movem um pouco com a data (a janela é de 90 dias).
 
 Nenhum desses números é gravado à mão: o score é o que a regra da RF07 produz
-(5,0 inicial, −0,5 por cancelamento tardio) a partir do que aconteceu na massa,
+(5,0 inicial, −0,5 por desistência em cima da hora) a partir do que aconteceu na massa,
 e a média de avaliação é recalculada pelo `AvaliacaoService` a cada avaliação.
 
 ### 📖 O que a massa conta
 
 Cerca de cinco meses de história, gravados pelos mesmos serviços que o app usa
-(recarga e saque pelo `CobrancaService`, aceite/finalização/cancelamento pelo
+(recarga e saque pelo `CobrancaService`, aceite/finalização/desistência/cancelamento pelo
 `TurnoService`, avaliação pelo `AvaliacaoService`, nota pelo
 `NotaFiscalService`):
 
@@ -336,11 +336,16 @@ Cerca de cinco meses de história, gravados pelos mesmos serviços que o app usa
   favoritos ("A Hamburgueria da Cláudia publicou um turno para amanhã, 18h").
 - **Maria e Carlos**, a dupla de toda semana, dão nota 5 um ao outro — de onde
   saem os dois selos "Nota acima de 4,8".
-- **O presente:** seis turnos abertos, um **em andamento com check-in** (o
-  Ricardo chegou 4 min antes; a Cláudia recebeu "Ricardo chegou às…"), três
-  aceitos por começar — dois amanhã e um da Pizzaria do Fernando com o Lucas
-  daqui a menos de 1 hora, que já gerou o **lembrete** para os dois — e os dois
-  cancelamentos que explicam os scores.
+- **O presente:** sete turnos abertos — seis à espera de entregador e um que
+  **reabriu** —, um **em andamento com check-in** (o Ricardo chegou 4 min
+  antes; a Cláudia recebeu "Ricardo chegou às…"), três aceitos por começar —
+  dois amanhã e um da Pizzaria do Fernando com o Lucas daqui a menos de 1 hora,
+  que já gerou o **lembrete** para os dois — e as duas **desistências** que
+  explicam os scores. O Ricardo desistiu de uma vaga do Fernando com três dias
+  de folga: não custou nada, e o turno voltou para os disponíveis. O Thiago
+  desistiu de uma vaga da Cláudia a meia hora do início: −0,5 de score para
+  ele. Sem entregador em cima da hora, a Cláudia **cancelou** esse turno — a
+  reserva voltou inteira e ninguém foi penalizado por isso.
 - **Notificações** só dos tipos que o código gera hoje, com os textos de hoje;
   as de mais de três dias já aparecem como lidas.
 
@@ -422,7 +427,8 @@ para "valor errado não faz nada".
 | POST | /api/turnos | Criar novo turno (Lojista) |
 | PUT | /api/turnos/{id}/aceitar | Aceitar turno (Motoboy) |
 | PUT | /api/turnos/{id}/finalizar | Finalizar turno — só depois do início e com pelo menos um check-in (409 fora disso). Paga quem fez check-in; quem aceitou e não chegou fica `faltou` e a parte dele volta ao lojista |
-| PUT | /api/turnos/{id}/cancelar | Cancelar turno (recusado depois do check-in: turno que começou se finaliza) |
+| PUT | /api/turnos/{id}/cancelar | Cancelar turno — **só o lojista que publicou** (o entregador leva 403). O turno inteiro cai, a reserva volta e nenhum entregador é penalizado. Recusado depois do check-in: turno que começou se finaliza |
+| PUT | /api/turnos/{id}/desistir | Desistir da vaga — **só o entregador inscrito**, e só da vaga dele: a inscrição é cancelada, a vaga reabre (turno lotado que não começou volta a `aberto`), a reserva continua bloqueada e a loja é avisada. A menos de 1h do início, −0,5 no score de quem desistiu. Recusado (409) depois do check-in |
 | PUT | /api/turnos/{id}/checkin | "Cheguei" — só o entregador aceito; de 30 min antes do início até o fim; a até 500 m do ponto (com a trava ligada). O primeiro leva o turno a `em_andamento` e avisa o lojista |
 | PUT | /api/turnos/{id}/checkout | "Encerrar turno" — a saída, só depois do check-in. Não finaliza nem paga |
 | POST | /api/turnos/{id}/gorjetas | Gorjeta do lojista a um entregador do turno finalizado (até R$ 50, com saldo disponível, uma por entregador — repetir a mesma não cobra de novo) |
@@ -480,7 +486,7 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | RF04 | Turno deve ser agendado com mínimo 2h de antecedência, e **publicar reserva** `valor × vagas` do saldo do lojista — sem lastro, 422 dizendo quanto falta |
 | RF05 | Motoboy não pode aceitar turno com conflito de horário |
 | RF06 | Finalização do turno **transfere** o valor reservado: sai do bloqueado do lojista, entra no disponível do entregador, na mesma transação. **Só vale com o turno começado e com check-in, e só paga quem fez check-in** — quem aceitou e não chegou fica `faltou`, sem pagamento e sem penalidade de score. A sobra (vagas vazias e faltas) volta |
-| RF07 | Cancelamento com menos de 1h de antecedência penaliza o score. A reserva volta inteira ao lojista, sem multa financeira |
+| RF07 | Sair do turno tem uma regra para cada lado. **Cancelar** é só do lojista dono: derruba o turno, devolve a reserva inteira (sem multa) e não penaliza ninguém. **Desistir da vaga** é só do entregador inscrito: cancela a inscrição dele, reabre a vaga e, a menos de 1h do início, tira 0,5 do score **dele** — o turno e os colegas de vaga seguem |
 | RF12 | O dinheiro entra por recarga (Pix simulado) e sai por saque; a plataforma não cria nem destrói saldo — ver [`docs/financeiro/FLUXO-FINANCEIRO.md`](docs/financeiro/FLUXO-FINANCEIRO.md) |
 | RF08 | Sugestão inteligente de turnos via IA |
 | RF09 | Relatório financeiro/operacional mensal via IA |

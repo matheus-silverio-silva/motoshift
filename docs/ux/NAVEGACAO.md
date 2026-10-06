@@ -175,33 +175,46 @@ Continuam diferentes **de propósito**:
 
 ## 5. O que se faz com um turno
 
-As ações são as mesmas nas duas telas de detalhe e nos dois papéis — vêm de
+As ações vêm de um lugar só nas duas telas de detalhe —
 [`AcoesDoTurno`](../../Motoshift/lib/widgets/acoes_do_turno.dart), que aplica as
 regras de `TurnoService` no backend.
 
 | Status | Entregador | Lojista |
 |---|---|---|
-| Aberto, com vaga | **Aceitar turno** | **Cancelar turno** (e **Finalizar turno**, se já há entregador) |
-| Aberto (já aceito por mim, multi-vaga), aceito | **Cheguei** (presença) · **Finalizar turno** · **Cancelar turno** | **Finalizar turno** · **Cancelar turno** |
-| Em andamento (alguém fez check-in) | **Encerrar turno** (presença) · **Finalizar turno** | **Finalizar turno** |
+| Aberto, com vaga | **Aceitar turno** | **Cancelar turno** |
+| Aberto (já aceito por mim, multi-vaga), aceito | **Cheguei** (presença) · **Desistir da vaga** | **Cancelar turno** |
+| Em andamento (alguém fez check-in) | **Encerrar turno** (presença) · **Finalizar turno**, depois do início | **Finalizar turno**, depois do início |
 | Finalizado, com avaliação pendente | **Avaliar a loja** | **Avaliar o entregador** / **Avaliar entregadores** · **Publicar de novo** |
 | Finalizado sem pendência, cancelado, expirado | Só o status por extenso — "Turno finalizado", "Turno cancelado" | O status por extenso · **Publicar de novo** |
 
-- **Os dois participantes finalizam.** O backend aceita desde que o dinheiro
-  passou a ser reservado na publicação: finalizar não cria compromisso, só
-  transfere o que já estava reservado.
+- **Os dois participantes finalizam — mas só quando vale.** "Finalizar turno"
+  aparece quando o backend aceitaria: o horário de início já passou **e** alguém
+  fez check-in (`Turno.podeSerFinalizado`, com o `algumCheckin` que o backend
+  manda). Antes disso o botão não existe: era por ele que o entregador
+  finalizava um turno de amanhã e recebia na hora. Só quem fez check-in é pago;
+  quem aceitou e não chegou aparece para a loja como "Faltou — sem check-in".
+- **Sair do turno é uma ação para cada lado.** O lojista vê **Cancelar turno**:
+  o turno inteiro cai, a reserva volta e nenhum entregador é penalizado. O
+  entregador vê **Desistir da vaga**: só a vaga dele é liberada (o turno segue,
+  e se estava lotado volta a aparecer entre os disponíveis) e a loja é avisada.
+  Era um botão só para os dois, e a penalidade caía no entregador mesmo quando
+  quem cancelava era a loja.
 - **Presença.** No detalhe do turno do entregador, o bloco **PRESENÇA** tem
   "Cheguei" (check-in, de 30 min antes do início até o fim, a até 500 m do
   ponto) e depois "Encerrar turno" (check-out). A posição vem do
   `LocalizacaoService`; a recusa do backend aparece como veio ("Você está a 1,2
   km do local"). O lojista vê "Chegou às 14:03 (3 min antes) · saiu às 18:02"
   no card de cada entregador, e recebe a notificação de chegada e de saída.
-- **Turno em andamento não se cancela.** Depois do check-in alguém está
-  trabalhando: cancelar devolveria a reserva inteira. A saída é finalizar.
+- **Turno em andamento não se cancela nem se larga.** Depois do check-in
+  alguém está trabalhando: cancelar devolveria a reserva inteira. A saída é
+  finalizar.
 - **Finalizar leva direto à avaliação**, para os dois papéis — o backend
   notifica os dois na mesma transação.
-- **Cancelar avisa a consequência** antes de confirmar: menos de 1 h do início
-  desconta 0,5 do score do entregador; o valor reservado volta inteiro.
+- **Os dois diálogos avisam a consequência** antes de confirmar. O de cancelar
+  (lojista): o valor reservado volta inteiro e nenhum entregador é penalizado.
+  O de desistir (entregador) muda com a hora: a menos de 1 h do início,
+  "desistir agora desconta 0,5 do seu score"; com mais folga, "desistir não
+  muda o seu score".
 - O lojista vê **todos os inscritos** do turno, cada um com "Ver perfil" e,
   quando a nota dele falta, "Avaliar".
 - **Publicar de novo** (lojista, turno finalizado, cancelado ou expirado —

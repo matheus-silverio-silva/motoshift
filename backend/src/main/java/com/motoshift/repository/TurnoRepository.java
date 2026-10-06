@@ -76,8 +76,9 @@ public interface TurnoRepository extends JpaRepository<Turno, Long> {
     /** Se o entregador já tem turno encerrado — a base de "tem histórico". */
     boolean existsByMotoboyIdAndStatusIn(Long motoboyId, List<StatusTurno> statuses);
 
-    /** Cancelou algum turno depois de {@code desde}? (V19) — o selo "30 dias sem cancelar". */
-    boolean existsByCanceladoPorIdAndCanceladoEmAfter(Long canceladoPorId, LocalDateTime desde);
+    // existsByCanceladoPorIdAndCanceladoEmAfter saiu daqui: o selo "30 dias sem
+    // cancelar" lê a desistência na inscrição (V22). turnos.cancelado_por_id
+    // passou a dizer só quem cancelou o TURNO, e esse é sempre o lojista.
 
     /** Inícios dos turnos da loja num status, desde uma data — o selo "Contrata toda semana". */
     @Query("select t.dataInicio from Turno t where t.lojistId = :lojistaId "
