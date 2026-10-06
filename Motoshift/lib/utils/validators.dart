@@ -39,6 +39,15 @@ class Validators {
     return null;
   }
 
+  /// O e-mail como vai para o backend: sem espaço nas pontas e em minúsculas.
+  ///
+  /// E-mail não diferencia maiúsculas, e o teclado do celular gosta de pôr a
+  /// primeira letra em maiúscula — "Claudia@teste.com" não entrava na conta de
+  /// "claudia@teste.com". O backend normaliza do mesmo jeito
+  /// (`Usuario.normalizarEmail`); aqui é para o app e ele concordarem sobre o
+  /// que foi digitado.
+  static String normalizarEmail(String v) => v.trim().toLowerCase();
+
   // ── Telefone (BR: 10 ou 11 dígitos com DDD) ────────────────────────────
 
   static String? telefone(String? v) {

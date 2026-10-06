@@ -218,6 +218,18 @@ redeploy, vale igual em todas as instâncias e só existe para conta que existe.
 O custo conhecido é que quem sabe seu e-mail pode te deixar 15 minutos fora;
 mitigar isso pede captcha ou segundo fator, que estão fora do escopo.
 
+**P: "Claudia@Teste.com" e "claudia@teste.com" são a mesma conta?**
+R: São. E-mail não diferencia maiúsculas, mas a comparação do banco é exata:
+dava para criar as duas contas, e quem se cadastrou em minúsculas não entrava
+quando o teclado do celular punha a primeira letra em maiúscula. O e-mail agora
+é normalizado (sem espaço nas pontas, em minúsculas) em três lugares, do mais
+externo ao mais interno: na entrada da requisição (`LoginRequest` /
+`RegistroRequest`, antes da validação — um espaço na ponta derrubava o `@Email`
+com 400), na entidade (`Usuario.setEmail`, que vale para qualquer caminho que
+grave um usuário) e no banco (índice único em `lower(email)`, V23). A migração
+confere antes se já existem contas que só diferem pela caixa e, se existirem,
+**falha dizendo quais** — escolher qual conta fica não é decisão de migração.
+
 **P: Por que as tabelas não tinham chave estrangeira?**
 R: Não têm mais essa lacuna: a V11 criou as 16 FKs com `ON DELETE RESTRICT`.
 As entidades continuam com `Long` em vez de `@ManyToOne` porque o app nunca

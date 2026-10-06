@@ -57,7 +57,10 @@ public class AuthService {
      */
     @Transactional
     public AuthResponse registrar(RegistroRequest req) {
-        if (repo.existsByEmail(req.getEmail())) {
+        // Sem diferenciar maiúsculas: "MARIA@x.com" é a conta de "maria@x.com".
+        // A busca usa a mesma forma em que o e-mail é gravado (Usuario.setEmail).
+        String email = Usuario.normalizarEmail(req.getEmail());
+        if (repo.existsByEmail(email)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "E-mail já cadastrado");
         }
 
@@ -91,7 +94,7 @@ public class AuthService {
 
         Usuario u = new Usuario();
         u.setNome(req.getNome());
-        u.setEmail(req.getEmail());
+        u.setEmail(email);
         u.setTelefone(req.getTelefone());
         u.setTipo(req.getTipo().toLowerCase());
         u.setDocumentoFederal(req.getDocumentoFederal());
@@ -127,7 +130,9 @@ public class AuthService {
      * responde "E-mail ja cadastrado" para quem quiser descobrir.
      */
     public AuthResponse login(LoginRequest req) {
-        String email = req.getEmail() != null ? req.getEmail().trim() : "";
+        // "Claudia@Teste.com" entra na conta de claudia@teste.com: o teclado do
+        // celular gosta de pôr a primeira letra em maiúscula.
+        String email = req.getEmail() != null ? Usuario.normalizarEmail(req.getEmail()) : "";
         Usuario u = repo.findByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED,
                         "Credenciais inválidas."));

@@ -505,6 +505,62 @@ public class MigracoesPostgresTest {
         }
     }
 
+    @Test
+    @DisplayName("V23: os e-mails ficam em minusculas e o banco recusa a mesma caixa de correio em outra caixa")
+    void v23_emailSemMaiusculas() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v23");
+        flyway(url, "22").migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("Claudia@Teste.com", "x"));
+            s.execute(inserirUsuario("  fernando@teste.COM ", "x"));
+            s.execute(inserirUsuario("ana@teste.com", "x"));
+        }
+
+        MigrateResult resultado = flyway(url, null).migrate();
+        assertThat(resultado.success).isTrue();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            assertThat(contar(s, "SELECT count(*) FROM usuarios WHERE email IN "
+                    + "('claudia@teste.com', 'fernando@teste.com', 'ana@teste.com')")).isEqualTo(3);
+            assertThat(contar(s, "SELECT count(*) FROM usuarios WHERE email <> lower(trim(email))"))
+                    .isZero();
+            assertThat(contar(s, "SELECT count(*) FROM pg_indexes WHERE indexname = "
+                    + "'uk_usuario_email_lower' AND indexdef LIKE 'CREATE UNIQUE INDEX%'")).isEqualTo(1);
+
+            // Mesmo por fora do backend, a segunda conta nao entra.
+            assertThatThrownBy(() -> s.execute(inserirUsuario("CLAUDIA@teste.com", "x")))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("uk_usuario_email_lower");
+        }
+    }
+
+    @Test
+    @DisplayName("V23: duas contas que so diferem pela caixa derrubam a migracao com os e-mails na mensagem — e nada e alterado")
+    void v23_colisaoFalhaEmVezDeEscolher() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v23_colisao");
+        flyway(url, "22").migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("maria@x.com", "x"));
+            s.execute(inserirUsuario("MARIA@x.com", "x"));
+            s.execute(inserirUsuario("Sozinho@x.com", "x"));
+        }
+
+        assertThatThrownBy(() -> flyway(url, null).migrate())
+                .hasMessageContaining("maria@x.com (2 contas)")
+                .hasMessageContaining("nao escolhe qual conta fica");
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            // A migracao e uma transacao: o UPDATE nao chegou a rodar, e a
+            // versao aplicada continua sendo a anterior.
+            assertThat(contar(s, "SELECT count(*) FROM usuarios WHERE email = 'Sozinho@x.com'"))
+                    .isEqualTo(1);
+            assertThat(contar(s, "SELECT max(version::int) FROM flyway_schema_history WHERE success"))
+                    .isEqualTo(22);
+        }
+    }
+
     // ── Apoio ──────────────────────────────────────────────────────────────
 
     /** INSERT valido ATE a V11 — antes de a coluna natureza existir. */
@@ -568,7 +624,7 @@ public class MigracoesPostgresTest {
      * um número só.
      */
     public static String ultimaVersao() {
-        return "22";
+        return "23";
     }
 
     static Connection conectar(String url) throws SQLException {

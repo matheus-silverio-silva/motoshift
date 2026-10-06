@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
@@ -30,11 +31,20 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _entrar() async {
-    if (!_formKey.currentState!.validate()) return;
     final auth = context.read<AuthService>();
-    final ok = await auth.login(_emailCtrl.text.trim(), _senhaCtrl.text, _tipo);
+    // O Enter chega aqui também (onFieldSubmitted), e não passa pelo botão —
+    // que é quem se desligava durante o envio.
+    if (auth.carregando) return;
+    if (!_formKey.currentState!.validate()) return;
+    // O backend já ignora maiúsculas e espaços no e-mail; mandar normalizado
+    // deixa a sessão guardada no aparelho na mesma forma.
+    final ok = await auth.login(
+        Validators.normalizarEmail(_emailCtrl.text), _senhaCtrl.text, _tipo);
     if (!mounted) return;
     if (ok) {
+      // Diz ao sistema que o formulário foi enviado: é o que faz o gerenciador
+      // de senhas do aparelho ou do navegador oferecer "salvar senha".
+      TextInput.finishAutofillContext();
       final route = auth.usuario?.tipo == TipoUsuario.motoboy
           ? AppRoutes.dashboardMotoboy
           : AppRoutes.dashboardLojista;
@@ -148,27 +158,44 @@ class _LoginScreenState extends State<LoginScreen> {
             onChanged: (t) => setState(() => _tipo = t),
           ),
           const SizedBox(height: 4),
-          Form(
+          // AutofillGroup: e-mail e senha são um formulário só para o
+          // gerenciador de senhas — ele preenche os dois de uma vez e, no
+          // sucesso (finishAutofillContext), oferece salvar.
+          AutofillGroup(
+            child: Form(
             key: _formKey,
             child: Column(
               children: [
                 // E-mail
                 _InputRow(
+                  key: const Key('login-email'),
                   icon: Icons.mail_outline_rounded,
                   hint: 'E-mail',
                   value: _emailCtrl.text,
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
+                  // "Próximo" leva o foco para a senha.
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [
+                    AutofillHints.email,
+                    AutofillHints.username,
+                  ],
                   validator: Validators.email,
                 ),
                 const SizedBox(height: 9),
                 // Senha
                 _InputRow(
+                  key: const Key('login-senha'),
                   icon: Icons.lock_outline_rounded,
                   hint: '••••••••',
                   value: _senhaCtrl.text,
                   controller: _senhaCtrl,
                   obscure: !_senhaVisivel,
+                  // Último campo: Enter (web, teclado físico) e "Concluir"
+                  // (celular) entram, sem precisar alcançar o botão.
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _entrar(),
+                  autofillHints: const [AutofillHints.password],
                   suffixIcon: GestureDetector(
                     onTap: () =>
                         setState(() => _senhaVisivel = !_senhaVisivel),
@@ -184,6 +211,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       v == null || v.isEmpty ? 'Informe a senha' : null,
                 ),
               ],
+            ),
             ),
           ),
           const SizedBox(height: 2),
@@ -355,6 +383,10 @@ class _InputRow extends StatelessWidget {
     this.obscure = false,
     this.suffixIcon,
     this.validator,
+    this.textInputAction,
+    this.onSubmitted,
+    this.autofillHints,
+    super.key,
   });
 
   final IconData icon;
@@ -365,6 +397,9 @@ class _InputRow extends StatelessWidget {
   final bool obscure;
   final Widget? suffixIcon;
   final String? Function(String?)? validator;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+  final Iterable<String>? autofillHints;
 
   @override
   Widget build(BuildContext context) {
@@ -385,6 +420,9 @@ class _InputRow extends StatelessWidget {
               keyboardType: keyboardType,
               obscureText: obscure,
               validator: validator,
+              textInputAction: textInputAction,
+              onFieldSubmitted: onSubmitted,
+              autofillHints: autofillHints,
               style: tsJakarta(12.5, FontWeight.w500, color: AppColors.text),
               decoration: InputDecoration(
                 hintText: hint,

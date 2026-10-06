@@ -1,5 +1,6 @@
 package com.motoshift.dto;
 
+import com.motoshift.entity.Usuario;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -32,7 +33,8 @@ public class RegistroRequest {
     public void setNome(String nome) { this.nome = nome; }
 
     public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
+    /** Normalizado na entrada, antes da validacao — ver LoginRequest.setEmail. */
+    public void setEmail(String email) { this.email = Usuario.normalizarEmail(email); }
 
     public String getTelefone() { return telefone; }
     public void setTelefone(String telefone) { this.telefone = telefone; }

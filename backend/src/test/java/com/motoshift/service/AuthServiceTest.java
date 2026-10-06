@@ -117,6 +117,76 @@ class AuthServiceTest {
         assertThat(resp.getUsuario().getEmail()).isEqualTo("motoboy@teste.com");
     }
 
+    // ── E-mail sem diferenciar maiúsculas (SCRUM-28) ────────────────────────
+
+    @Test
+    @DisplayName("Login com 'Claudia@Teste.com' entra na conta de claudia@teste.com")
+    void login_emailComMaiusculas_entra() {
+        usuarioValido.setEmail("claudia@teste.com");
+        // O repositório só conhece a forma em que o e-mail está gravado.
+        when(repo.findByEmail("claudia@teste.com")).thenReturn(Optional.of(usuarioValido));
+
+        AuthResponse resp = authService.login(buildLoginRequest("Claudia@Teste.com", "senha123"));
+
+        assertThat(resp.getToken()).isNotBlank();
+        assertThat(resp.getUsuario().getEmail()).isEqualTo("claudia@teste.com");
+    }
+
+    @Test
+    @DisplayName("Login ignora espaço nas pontas do e-mail — o autocompletar costuma deixar um")
+    void login_emailComEspacos_entra() {
+        when(repo.findByEmail("motoboy@teste.com")).thenReturn(Optional.of(usuarioValido));
+
+        AuthResponse resp = authService.login(buildLoginRequest("  MOTOBOY@teste.com ", "senha123"));
+
+        assertThat(resp.getToken()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("Cadastrar 'MARIA@x.com' com maria@x.com já existente responde 409")
+    void registrar_emailQueSoMudaAsMaiusculas_409() {
+        when(repo.existsByEmail("maria@x.com")).thenReturn(true);
+
+        RegistroRequest req = new RegistroRequest();
+        req.setNome("Maria Andrade");
+        req.setEmail("MARIA@x.com");
+        req.setTelefone("41999999999");
+        req.setTipo("lojista");
+        req.setDocumentoFederal("12345678000199");
+        req.setSenha("senha123");
+
+        assertThatExceptionOfType(ResponseStatusException.class)
+                .isThrownBy(() -> authService.registrar(req))
+                .satisfies(e -> {
+                    assertThat(e.getStatusCode().value()).isEqualTo(409);
+                    assertThat(e.getReason()).contains("E-mail já cadastrado");
+                });
+        verify(repo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("O cadastro grava o e-mail em minúsculas e sem espaço nas pontas")
+    void registrar_gravaEmailNormalizado() {
+        RegistroRequest req = new RegistroRequest();
+        req.setNome("João Silva");
+        req.setEmail("  Joao.Silva@Exemplo.COM ");
+        req.setTelefone("41988887777");
+        req.setTipo("motoboy");
+        req.setDocumentoFederal("12345678900");
+        req.setSenha("senha123");
+
+        when(repo.existsByEmail("joao.silva@exemplo.com")).thenReturn(false);
+        when(repo.save(any(Usuario.class))).thenAnswer(inv -> {
+            Usuario u = inv.getArgument(0);
+            ReflectionTestUtils.setField(u, "id", 8L);
+            return u;
+        });
+
+        AuthResponse resp = authService.registrar(req);
+
+        assertThat(resp.getUsuario().getEmail()).isEqualTo("joao.silva@exemplo.com");
+    }
+
     @Test
     @DisplayName("Login com senha incorreta lança 401 com tentativas restantes")
     void login_senhaIncorreta_lanca401() {

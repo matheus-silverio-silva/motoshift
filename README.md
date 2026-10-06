@@ -421,8 +421,8 @@ para "valor errado não faz nada".
 
 | Método | Endpoint | Descrição |
 |--------|----------|-----------|
-| POST | /api/auth/registro | Cadastro de usuário |
-| POST | /api/auth/login | Autenticação |
+| POST | /api/auth/registro | Cadastro de usuário. O e-mail é gravado sem espaço nas pontas e em minúsculas; `MARIA@x.com` com `maria@x.com` já cadastrado responde 409 |
+| POST | /api/auth/login | Autenticação. O e-mail não diferencia maiúsculas: `Claudia@Teste.com` entra na conta de `claudia@teste.com` |
 | GET | /api/turnos/disponiveis | Listar turnos disponíveis (para o entregador, `lojaQueJaTeChamou` marca os turnos das lojas que o favoritaram) |
 | POST | /api/turnos | Criar novo turno (Lojista) |
 | PUT | /api/turnos/{id}/aceitar | Aceitar turno (Motoboy) |
@@ -480,7 +480,7 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 
 | RF | Regra |
 |----|-------|
-| RF01 | Conta bloqueada por 15 min após 5 tentativas de login falhas |
+| RF01 | Conta bloqueada por 15 min após 5 tentativas de login falhas. O e-mail é o identificador da conta e **não diferencia maiúsculas** (normalizado ao gravar e ao procurar; índice único em `lower(email)`, V23). No app, Enter envia o login e o cadastro, e os campos têm as dicas de autofill |
 | RF02 | Dashboard com métricas em tempo real |
 | RF03 | Lojista exige CNPJ; Motoboy exige CNH no cadastro |
 | RF04 | Turno deve ser agendado com mínimo 2h de antecedência, e **publicar reserva** `valor × vagas` do saldo do lojista — sem lastro, 422 dizendo quanto falta |

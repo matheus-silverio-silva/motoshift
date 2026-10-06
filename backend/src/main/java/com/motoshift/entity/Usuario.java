@@ -112,7 +112,23 @@ public class Usuario {
     public void setNome(String nome) { this.nome = nome; }
 
     public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
+
+    /**
+     * O e-mail entra sempre normalizado: sem espaço nas pontas e em minúsculas.
+     *
+     * <p>"Claudia@Teste.com" e "claudia@teste.com" são a mesma caixa de
+     * correio, e eram duas contas possíveis — ou um login que não entrava
+     * porque o teclado do celular pôs a primeira letra em maiúscula. A regra
+     * mora aqui para valer para qualquer caminho que grave um usuário
+     * (cadastro, massa de demonstração, testes); o banco a repete no índice
+     * único {@code uk_usuario_email_lower} (V23).
+     */
+    public void setEmail(String email) { this.email = normalizarEmail(email); }
+
+    /** A forma canônica de um e-mail — a mesma para gravar e para procurar. */
+    public static String normalizarEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase(java.util.Locale.ROOT);
+    }
 
     public String getTelefone() { return telefone; }
     public void setTelefone(String telefone) { this.telefone = telefone; }
