@@ -169,9 +169,9 @@ public class MassaDemonstracao {
         Map<String, Long> criados = contarEscopo();
 
         StringBuilder resumo = new StringBuilder("[massa] reset concluido")
-                .append(String.format("%n  %-17s %9s %8s", "tabela", "apagados", "criados"));
+                .append(String.format("%n  %-25s %9s %8s", "tabela", "apagados", "criados"));
         for (String tabela : apagados.keySet()) {
-            resumo.append(String.format("%n  %-17s %9d %8d",
+            resumo.append(String.format("%n  %-25s %9d %8d",
                     tabela, apagados.get(tabela), criados.get(tabela)));
         }
         log.info(resumo.toString());
@@ -194,6 +194,8 @@ public class MassaDemonstracao {
         n.put("turnos",           contar("select count(t) from Turno t where t.id in :turnos", e));
         n.put("carteiras",        contar("select count(c) from Carteira c" + ONDE_CARTEIRA, e));
         n.put("favoritos",        contar("select count(f) from Favorito f" + ONDE_FAVORITO, e));
+        n.put("codigos_recuperacao_senha",
+                contar("select count(c) from CodigoRecuperacaoSenha c where c.usuarioId in :demo", e));
         n.put("usuarios",         contar("select count(u) from Usuario u where u.id in :demo", e));
         return n;
     }
@@ -244,6 +246,11 @@ public class MassaDemonstracao {
         executar("update Turno t set t.canceladoPorId = null where t.canceladoPorId in :demo", e);
         executar("update TurnoInscricao i set i.canceladoPorId = null "
                 + "where i.canceladoPorId in :demo", e);
+        // Código de recuperação de senha pedido por uma conta da massa (V24).
+        // No PostgreSQL a FK já apaga em cascata; no H2 do dev não há FK, e a
+        // linha ficaria órfã.
+        n.put("codigos_recuperacao_senha",
+                executar("delete from CodigoRecuperacaoSenha c where c.usuarioId in :demo", e));
         n.put("usuarios",         executar("delete from Usuario u where u.id in :demo", e));
         return n;
     }
@@ -318,6 +325,7 @@ public class MassaDemonstracao {
         m.put("turnos",           "Turno");
         m.put("carteiras",        "Carteira");
         m.put("favoritos",        "Favorito");
+        m.put("codigos_recuperacao_senha", "CodigoRecuperacaoSenha");
         m.put("usuarios",         "Usuario");
         return m;
     }
@@ -345,11 +353,11 @@ public class MassaDemonstracao {
 
         Map<String, long[]> resumo = new LinkedHashMap<>();
         StringBuilder texto = new StringBuilder("[massa] reset TOTAL concluido — todos os dados de negocio")
-                .append(String.format("%n  %-17s %8s %9s %8s", "tabela", "antes", "apagados", "depois"));
+                .append(String.format("%n  %-25s %8s %9s %8s", "tabela", "antes", "apagados", "depois"));
         for (String tabela : TABELAS_DE_NEGOCIO.keySet()) {
             long[] linha = {antes.get(tabela), apagados.get(tabela), depois.get(tabela)};
             resumo.put(tabela, linha);
-            texto.append(String.format("%n  %-17s %8d %9d %8d", tabela, linha[0], linha[1], linha[2]));
+            texto.append(String.format("%n  %-25s %8d %9d %8d", tabela, linha[0], linha[1], linha[2]));
         }
         log.warn(texto.toString());
         return resumo;

@@ -48,6 +48,7 @@ void main() {
     // para a seção que as contém (ver NavConfig.secaoDe).
     AppRoutes.dadosPessoais,
     AppRoutes.cnhVeiculo,
+    AppRoutes.alterarSenha,
     AppRoutes.extrato,
     AppRoutes.recarga,
   };
@@ -147,6 +148,7 @@ void main() {
       AppRoutes.extrato: TipoUsuario.motoboy,
       AppRoutes.dadosPessoais: TipoUsuario.motoboy,
       AppRoutes.cnhVeiculo: TipoUsuario.motoboy,
+      AppRoutes.alterarSenha: TipoUsuario.motoboy,
     };
 
     subPaginas.forEach((rota, papel) {

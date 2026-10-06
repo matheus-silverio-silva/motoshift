@@ -57,4 +57,5 @@ class AppRoutes {
   static const String minhasAvaliacoes  = '/minhas-avaliacoes';
   static const String historicoTurnos   = '/historico-turnos';
   static const String esqueceuSenha     = '/esqueceu-senha';
+  static const String alterarSenha      = '/alterar-senha';
 }

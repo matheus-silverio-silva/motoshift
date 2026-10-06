@@ -281,6 +281,14 @@ class _PerfilScreenState extends State<PerfilScreen> {
               onTap: () =>
                   Navigator.pushNamed(context, AppRoutes.cnhVeiculo),
             ),
+            MenuRow(
+              key: const Key('perfil-alterar-senha'),
+              icon: Icons.lock_outline_rounded,
+              label: 'Alterar senha',
+              subtitle: 'Senha de acesso ao aplicativo',
+              onTap: () =>
+                  Navigator.pushNamed(context, AppRoutes.alterarSenha),
+            ),
           ]),
           const SizedBox(height: 14),
           // ATIVIDADE

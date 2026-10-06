@@ -473,6 +473,9 @@ para "valor errado não faz nada".
 |--------|----------|-----------|
 | POST | /api/auth/registro | Cadastro de usuário. O e-mail é gravado sem espaço nas pontas e em minúsculas; `MARIA@x.com` com `maria@x.com` já cadastrado responde 409 |
 | POST | /api/auth/login | Autenticação. O e-mail não diferencia maiúsculas: `Claudia@Teste.com` entra na conta de `claudia@teste.com` |
+| POST | /api/auth/trocar-senha | **Com token.** Troca a senha de quem está logado: `{senhaAtual, senhaNova}`, senha nova com 6 caracteres ou mais. Senha atual errada responde 400 (não 401) e **não conta como tentativa de login** |
+| POST | /api/auth/esqueci-senha | `{email}`. Gera um código de 6 dígitos válido por 15 minutos e o envia ao e-mail da conta (**envio simulado** — ver abaixo). Responde **202 sempre**, exista ou não a conta |
+| POST | /api/auth/redefinir-senha | `{email, codigo, senhaNova}`. Troca a senha e destrava o login bloqueado. Cada código aceita **5 tentativas**; código errado, vencido ou esgotado respondem o mesmo 400 |
 | GET | /api/turnos/disponiveis | Listar turnos disponíveis (para o entregador, `lojaQueJaTeChamou` marca os turnos das lojas que o favoritaram) |
 | POST | /api/turnos | Criar novo turno (Lojista) |
 | PUT | /api/turnos/{id}/aceitar | Aceitar turno (Motoboy) |
@@ -538,6 +541,7 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | RF06 | Finalização do turno **transfere** o valor reservado: sai do bloqueado do lojista, entra no disponível do entregador, na mesma transação. **Só vale com o turno começado e com check-in, e só paga quem fez check-in** — quem aceitou e não chegou fica `faltou`, sem pagamento e sem penalidade de score. A sobra (vagas vazias e faltas) volta |
 | RF07 | Sair do turno tem uma regra para cada lado. **Cancelar** é só do lojista dono: derruba o turno, devolve a reserva inteira (sem multa) e não penaliza ninguém. **Desistir da vaga** é só do entregador inscrito: cancela a inscrição dele, reabre a vaga e, a menos de 1h do início, tira 0,5 do score **dele** — o turno e os colegas de vaga seguem |
 | RF12 | O dinheiro entra por recarga (Pix simulado) e sai por saque; a plataforma não cria nem destrói saldo — ver [`docs/financeiro/FLUXO-FINANCEIRO.md`](docs/financeiro/FLUXO-FINANCEIRO.md) |
+| Senha | Quem está logado troca a senha no Perfil informando a atual. Quem esqueceu recebe um código de 6 dígitos (15 min, 5 tentativas, guardado só como hash BCrypt) e cria uma senha nova em três passos — e-mail, código, senha. A resposta nunca diz se o e-mail tem conta |
 | RF08 | Sugestão inteligente de turnos via IA |
 | RF09 | Relatório financeiro/operacional mensal via IA |
 | RF10 | Turno publicado guarda o ponto de partida (lat/lng), que alimenta o filtro por distância e o mapa das duas pontas |
@@ -553,6 +557,59 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | Favoritos | O lojista marca entregadores com o coração (perfil público, avaliação, turno finalizado) e os vê no próprio perfil. Ao publicar, os favoritos recebem "A Hamburgueria da Cláudia publicou um turno para amanhã, 18h"; na lista de disponíveis do entregador, os turnos dessas lojas levam o selo "Loja que já te chamou". O entregador não vê quem o favoritou (V18) |
 | Gorjeta | Na avaliação do entregador, o lojista pode dar R$ 5, 10, 20 ou outro valor (até R$ 50) do saldo disponível. Transferência no ledger (`bonus_enviado` → `bonus`), com comprovante, não NFS-e |
 | RF11 | Turno finalizado gera NFS-e — entregador é o prestador, lojista é o tomador, e **só o lojista emite e cancela**; o entregador vê, baixa e imprime. Todo lançamento do extrato gera o documento correspondente (nota, recibo ou comprovante), sempre simulado — ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |
+
+---
+
+## 🔐 Senha: trocar e recuperar
+
+**Trocar** (Perfil → Alterar senha) é de quem está logado e lembra a senha:
+`POST /api/auth/trocar-senha` exige o token e a senha atual. A senha atual
+errada volta como 400, no próprio campo, e não entra no contador de tentativas
+de login — errar um campo do formulário não tranca a conta de quem já está
+dentro.
+
+**Recuperar** ("Esqueci minha senha", no login) é de quem não lembra:
+
+1. o app pede o código (`POST /api/auth/esqueci-senha`). O backend responde
+   202 exista ou não a conta, e gasta o mesmo tempo nos dois casos;
+2. a pessoa digita os 6 dígitos que recebeu;
+3. escolhe a senha nova, e o app manda e-mail + código + senha
+   (`POST /api/auth/redefinir-senha`).
+
+O código vale por **15 minutos** e por **5 tentativas**; um código novo para a
+mesma conta só sai depois de **1 minuto**, e aposenta o anterior. O banco
+guarda apenas o **hash BCrypt** do código (tabela `codigos_recuperacao_senha`,
+migração V24): quem lê o banco não consegue redefinir a senha de ninguém.
+Redefinir também destrava a conta bloqueada por tentativas de login.
+
+### ✉️ O e-mail é simulado
+
+Não há servidor de e-mail neste projeto. O envio passa pela interface
+`EnvioDeEmail`, e a implementação que existe — `EnvioDeEmailSimulado` —
+**escreve a mensagem no log do servidor**, no mesmo espírito do
+`GatewayPagamentoSimulado`: o que se demonstra é que o código sai por um canal
+que não é a resposta da API, não a integração com um provedor.
+
+Para testar, peça o código no app e procure no log (o console do backend em
+dev; os logs do serviço no Railway) a linha:
+
+```
+[email-simulado] para: claudia@teste.com | assunto: MotoShift — código para redefinir a senha
+Olá, Cláudia.
+
+Seu código para redefinir a senha do MotoShift é: 483920
+```
+
+A consequência é honesta e fica registrada: **quem lê o log do servidor
+consegue redefinir a senha de uma conta com pedido aberto** — do mesmo jeito
+que conseguiria quem lesse a caixa de e-mail dela. Um provedor de verdade
+(SMTP, SES, Resend) entra implementando `EnvioDeEmail`, e nada mais muda. A
+tela do passo 2 avisa que o envio é simulado, para ninguém ficar esperando um
+e-mail que não vem.
+
+Dois limites conhecidos: trocar a senha **não derruba as sessões abertas** (o
+JWT não tem revogação e vale até vencer), e a massa de demonstração é recriada
+com `senha123` a cada reset.
 
 ---
 

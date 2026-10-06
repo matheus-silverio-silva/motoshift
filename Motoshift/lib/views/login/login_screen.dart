@@ -213,8 +213,8 @@ class _LoginScreenState extends State<LoginScreen> {
           Align(
             alignment: Alignment.centerRight,
             child: GestureDetector(
-              // Leva junto o e-mail digitado: e o identificador da conta no
-              // backend, e e o que a tela de recuperacao pede para copiar.
+              // Leva junto o e-mail digitado: e para ele que o codigo de
+              // recuperacao vai, e a tela ja abre com o campo preenchido.
               onTap: () => Navigator.pushNamed(
                 context,
                 AppRoutes.esqueceuSenha,

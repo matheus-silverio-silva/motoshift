@@ -97,6 +97,7 @@ class NavConfig {
     AppRoutes.documentoFiscal: AppRoutes.carteira,
     AppRoutes.dadosPessoais: AppRoutes.perfil,
     AppRoutes.cnhVeiculo: AppRoutes.perfil,
+    AppRoutes.alterarSenha: AppRoutes.perfil,
     // Perfil de outra conta também pertence à seção Perfil: é a mesma ideia
     // (quem é alguém), só que de outra pessoa.
     AppRoutes.perfilPublico: AppRoutes.perfil,

@@ -319,10 +319,12 @@ não uma por turno. O app ainda pede a lista completa — a API é que já não
 depende disso.
 
 **P: O que está fora do escopo (trabalhos futuros)?**
-R: Rastreamento em tempo real, redefinição de senha por e-mail, rascunho de
-turno, tabela de eventos de score e lock distribuído para os jobs agendados
-(hoje a saída é ligar os jobs em uma instância só). O check-in, que estava
-aqui, entrou nesta revisão (seção 11).
+R: Rastreamento em tempo real, envio de e-mail por um provedor de verdade
+(a recuperação de senha existe, mas o e-mail é simulado: o código sai no log
+do servidor), revogação de sessão ao trocar a senha, rascunho de turno,
+tabela de eventos de score e lock distribuído para os jobs agendados (hoje a
+saída é ligar os jobs em uma instância só). O check-in, que estava aqui,
+entrou nesta revisão (seção 11).
 
 ---
 

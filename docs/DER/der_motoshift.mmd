@@ -19,6 +19,7 @@ erDiagram
     USUARIOS ||--o{ TURNOS : "cancela (cancelado_por_id)"
     USUARIOS ||--o{ TURNO_INSCRICOES : "desiste ou cancela (cancelado_por_id)"
     USUARIOS ||--o{ FAVORITOS : "e favorito (motoboy_id)"
+    USUARIOS ||--o{ CODIGOS_RECUPERACAO_SENHA : "pede (usuario_id)"
 
     USUARIOS {
         BIGINT id PK "IDENTITY"
@@ -161,6 +162,15 @@ erDiagram
         BIGINT lojista_id PK,FK "NOT NULL - usuarios.id - V18"
         BIGINT motoboy_id PK,FK "NOT NULL - usuarios.id"
         TIMESTAMP criado_em "NOT NULL - default now()"
+    }
+
+    CODIGOS_RECUPERACAO_SENHA {
+        BIGINT id PK "IDENTITY - V24"
+        BIGINT usuario_id FK "NOT NULL - usuarios.id - ON DELETE CASCADE"
+        VARCHAR codigo_hash "NOT NULL - BCrypt do codigo de 6 digitos"
+        TIMESTAMP criado_em "NOT NULL"
+        TIMESTAMP expira_em "NOT NULL - criado_em + 15 min"
+        INTEGER tentativas "NOT NULL - default 0, maximo 5"
     }
 
     NOTAS_FISCAIS {

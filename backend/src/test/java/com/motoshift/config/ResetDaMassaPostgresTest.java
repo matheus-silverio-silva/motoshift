@@ -94,7 +94,7 @@ class ResetDaMassaPostgresTest {
     }
 
     @Test
-    @DisplayName("confirmo: favorito e cancelamento cruzados com a massa não travam o reset nas FKs (V18, V19)")
+    @DisplayName("confirmo: favorito, cancelamento e código de senha cruzados com a massa não travam o reset nas FKs (V18, V19, V24)")
     void confirmoComReferenciasCruzadas() {
         massa.resetar();
         Usuario loja = contaReal("Loja que favorita", "favorita@lojareal.com.br", "lojista");
@@ -108,9 +108,18 @@ class ResetDaMassaPostgresTest {
         Turno proprio = turnoReal(loja);
         jdbc.update("UPDATE turnos SET status = 'cancelado', cancelado_por_id = ?, cancelado_em = now() "
                 + "WHERE id = ?", ricardo, proprio.getId());
+        // O Ricardo e a loja real pediram código de recuperação de senha (V24).
+        codigoDeSenha(ricardo);
+        codigoDeSenha(loja.getId());
 
         new ResetDaMassaNoBoot(massa, "confirmo").run(null);
 
+        // O código da conta da massa saiu com ela; o da conta real ficou.
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM codigos_recuperacao_senha", Integer.class))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM codigos_recuperacao_senha WHERE usuario_id = ?",
+                Integer.class, loja.getId())).isEqualTo(1);
         assertThat(usuarioRepo.findById(loja.getId())).isPresent();
         assertThat(usuarioRepo.findById(entregador.getId())).isPresent();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM favoritos WHERE lojista_id = ? OR motoboy_id = ?",
@@ -171,14 +180,16 @@ class ResetDaMassaPostgresTest {
     @Test
     @DisplayName("o reset total devolve antes, apagados e depois — o que vai para o log")
     void resetTotalContaAntesEDepois() {
-        contaReal("Mais uma", "mais@uma.com.br", "motoboy");
+        Usuario maisUma = contaReal("Mais uma", "mais@uma.com.br", "motoboy");
+        codigoDeSenha(maisUma.getId());
         Map<String, Long> antes = massa.contarTudo();
 
         Map<String, long[]> resumo = massa.apagarTudoERecriar();
 
         assertThat(resumo.keySet()).containsExactly("notas_fiscais", "avaliacoes", "transacoes",
                 "cobrancas", "turno_inscricoes", "notificacoes", "turnos", "carteiras", "favoritos",
-                "usuarios");
+                "codigos_recuperacao_senha", "usuarios");
+        assertThat(antes.get("codigos_recuperacao_senha")).isPositive();
         resumo.forEach((tabela, linha) -> {
             assertThat(linha[0]).as("antes de %s", tabela).isEqualTo(antes.get(tabela));
             assertThat(linha[1]).as("apagados de %s", tabela).isEqualTo(antes.get(tabela));
@@ -188,6 +199,12 @@ class ResetDaMassaPostgresTest {
     }
 
     // ── Apoio ────────────────────────────────────────────────────────────────
+
+    /** Um pedido de recuperação de senha em aberto para a conta (V24). */
+    private void codigoDeSenha(Long usuarioId) {
+        jdbc.update("INSERT INTO codigos_recuperacao_senha (usuario_id, codigo_hash, criado_em, expira_em) "
+                + "VALUES (?, 'hash-de-teste', now(), now() + interval '15 minutes')", usuarioId);
+    }
 
     /** O que o Flyway lê no boot: quantas migrações, a última, e se todas deram certo. */
     private record Flyway(int linhas, String versao, int falhas) {}

@@ -26,6 +26,7 @@ import 'views/detalhe_turno/detalhe_turno_screen.dart';
 import 'views/turno_lojista/turno_lojista_screen.dart';
 import 'views/turnos_lojista_lista/turnos_lojista_lista_screen.dart';
 import 'views/dados_pessoais/dados_pessoais_screen.dart';
+import 'views/alterar_senha/alterar_senha_screen.dart';
 import 'views/cnh_veiculo/cnh_veiculo_screen.dart';
 import 'views/minhas_avaliacoes/minhas_avaliacoes_screen.dart';
 import 'views/historico_turnos/historico_turnos_screen.dart';
@@ -225,6 +226,7 @@ Map<String, WidgetBuilder> rotasDoApp() => {
         AppRoutes.perfilPublico:    (_) => const AuthGuard(child: PerfilPublicoScreen()),
         AppRoutes.dadosPessoais:    (_) => const AuthGuard(child: DadosPessoaisScreen()),
         AppRoutes.cnhVeiculo:       (_) => const AuthGuard(child: CnhVeiculoScreen()),
+        AppRoutes.alterarSenha:     (_) => const AuthGuard(child: AlterarSenhaScreen()),
         AppRoutes.minhasAvaliacoes: (_) => const AuthGuard(child: MinhasAvaliacoesScreen()),
         AppRoutes.historicoTurnos:  (_) => const AuthGuard(child: HistoricoTurnosScreen()),
 

@@ -774,6 +774,24 @@ Map<String, dynamic> fakeAgendaSemanal() => {
 class FakeAuthApi extends AuthApi {
   FakeAuthApi() : super(ApiClient());
 
+  // Senha (SCRUM-32): por padrão tudo dá certo, sem rede. O teste que quer
+  // ver o erro sobrescreve.
+  @override
+  Future<void> trocarSenha({
+    required String senhaAtual,
+    required String senhaNova,
+  }) async {}
+
+  @override
+  Future<void> esqueciSenha(String email) async {}
+
+  @override
+  Future<void> redefinirSenha({
+    required String email,
+    required String codigo,
+    required String senhaNova,
+  }) async {}
+
   @override
   Future<Usuario> buscarUsuario(int id) async => fakeMotoboy();
 

@@ -37,9 +37,20 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    /** Rotas abertas: login/cadastro, documentação, health e o console H2 do dev. */
+    /**
+     * Rotas abertas: cadastro, login e recuperação de senha, documentação,
+     * health e o console H2 do dev.
+     *
+     * <p>As de {@code /api/auth} são listadas uma a uma, e não mais como
+     * {@code /api/auth/**}: {@code /api/auth/trocar-senha} mora no mesmo
+     * prefixo e exige token. Com o curinga ela nasceria pública — e a próxima
+     * rota criada ali também, sem ninguém decidir isso.
+     */
     private static final String[] PUBLICAS = {
-            "/api/auth/**",
+            "/api/auth/registro",
+            "/api/auth/login",
+            "/api/auth/esqueci-senha",
+            "/api/auth/redefinir-senha",
             "/actuator/health",
             "/actuator/health/**",
             "/v3/api-docs/**",

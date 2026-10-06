@@ -114,9 +114,10 @@ public class MigracoesPostgresTest {
 
         try (Connection c = conectar(url); Statement s = c.createStatement()) {
             // As 18 da V11, as 2 de favoritos (V18), a de quem cancelou o turno
-            // (V19) e a de quem cancelou a inscricao (V22).
+            // (V19), a de quem cancelou a inscricao (V22) e a do codigo de
+            // recuperacao de senha (V24).
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f'"))
-                    .isEqualTo(22);
+                    .isEqualTo(23);
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated"))
                     .isZero();
         }
@@ -561,7 +562,52 @@ public class MigracoesPostgresTest {
         }
     }
 
+    @Test
+    @DisplayName("V24: o codigo de recuperacao de senha some junto com a conta, e o contador nao fica negativo")
+    void v24_codigosDeRecuperacaoDeSenha() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v24");
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("esqueceu-v24@teste.com", "x"));
+            s.execute(inserirUsuario("lembra-v24@teste.com", "x"));
+            long esqueceu = contar(s, "SELECT id FROM usuarios WHERE email = 'esqueceu-v24@teste.com'");
+            long lembra = contar(s, "SELECT id FROM usuarios WHERE email = 'lembra-v24@teste.com'");
+
+            s.execute(inserirCodigo(esqueceu, 0));
+            s.execute(inserirCodigo(lembra, 0));
+
+            // O contador so anda para a frente.
+            assertThatThrownBy(() -> s.execute(inserirCodigo(esqueceu, -1)))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_codigo_recuperacao_tentativas");
+
+            // Codigo de conta que nao existe nao entra.
+            assertThatThrownBy(() -> s.execute(inserirCodigo(999_999, 0)))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("fk_codigo_recuperacao_usuario");
+            assertThat(validada(s, "fk_codigo_recuperacao_usuario")).isTrue();
+
+            // A unica FK do schema que apaga em cascata: a credencial de 15
+            // minutos nao impede apagar a conta — e nao sobra orfa.
+            s.execute("DELETE FROM usuarios WHERE id = " + esqueceu);
+            assertThat(contar(s, "SELECT count(*) FROM codigos_recuperacao_senha WHERE usuario_id = "
+                    + esqueceu)).isZero();
+            assertThat(contar(s, "SELECT count(*) FROM codigos_recuperacao_senha WHERE usuario_id = "
+                    + lembra)).isEqualTo(1);
+            assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f' "
+                    + "AND confdeltype = 'c'")).isEqualTo(1);
+        }
+    }
+
     // ── Apoio ──────────────────────────────────────────────────────────────
+
+    static String inserirCodigo(long usuario, int tentativas) {
+        return "INSERT INTO codigos_recuperacao_senha "
+                + "(usuario_id, codigo_hash, criado_em, expira_em, tentativas) VALUES ("
+                + usuario + ", '$2a$10$hashdeteste', now(), now() + interval '15 minutes', "
+                + tentativas + ")";
+    }
 
     /** INSERT valido ATE a V11 — antes de a coluna natureza existir. */
     static String inserirTransacao(long usuario, Integer turno, String tipo, String status, String chave) {
@@ -624,7 +670,7 @@ public class MigracoesPostgresTest {
      * um número só.
      */
     public static String ultimaVersao() {
-        return "23";
+        return "24";
     }
 
     static Connection conectar(String url) throws SQLException {

@@ -1,7 +1,8 @@
-// Goldens das telas públicas (sem login): login, cadastro e recuperação de
-// senha.
+// Goldens das telas públicas (sem login) — login, cadastro e recuperação de
+// senha — e da troca de senha de quem está logado.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:moto_shift/views/alterar_senha/alterar_senha_screen.dart';
 import 'package:moto_shift/views/cadastro/cadastro_screen.dart';
 import 'package:moto_shift/views/login/login_screen.dart';
 import 'package:moto_shift/views/recuperar_senha/recuperar_senha_screen.dart';
@@ -36,15 +37,24 @@ void main() {
   // enquanto a Carteira ja sacava de verdade, e o botao do inicio agora abre
   // a Carteira direto no dialogo de saque.
 
-  // O stub "Em breve" virou tela de verdade: diz que a redefinição não é
-  // automática, mostra o e-mail da conta e avisa do bloqueio por tentativas.
-  // O golden é o da tela sem argumento de rota — o caso de quem chega por
-  // link direto, sem e-mail digitado.
+  // A tela deixou de ser orientação e virou o fluxo e-mail → código → senha
+  // nova (SCRUM-32). O golden é o do passo 1, sem argumento de rota — o caso
+  // de quem chega por link direto, sem e-mail digitado.
   testWidgets('RecuperarSenhaScreen', (tester) async {
     await pumpGolden(tester, child: const RecuperarSenhaScreen());
     await expectLater(
       find.byType(RecuperarSenhaScreen),
       matchesGoldenFile('goldens/recuperar_senha_screen.png'),
+    );
+  });
+
+  // "Alterar senha" não é tela pública (abre do Perfil, com sessão), mas mora
+  // aqui com as outras telas de senha.
+  testWidgets('AlterarSenhaScreen', (tester) async {
+    await pumpGolden(tester, child: const AlterarSenhaScreen());
+    await expectLater(
+      find.byType(AlterarSenhaScreen),
+      matchesGoldenFile('goldens/alterar_senha_screen.png'),
     );
   });
 }
