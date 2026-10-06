@@ -172,6 +172,12 @@ Android) ou `localhost:8080`.
 
 - **Railway** para os dois serviços.
 - Front-end: **Dockerfile multi-stage** (`flutter build web` → servido por **nginx**, com fallback de SPA).
+  A imagem é a do Flutter **3.41.5** — a mesma versão do CI e dos goldens — e as
+  dependências saem do `pubspec.lock` versionado (`pub get --enforce-lockfile`):
+  o mesmo commit gera o mesmo app, qualquer que seja o dia do build.
+- **CI** (GitHub Actions): `mvn test`, `flutter analyze` e `flutter test` em todo
+  pull request e em todo push na `main`; um commit novo cancela a execução
+  anterior da mesma branch.
 - Back-end: perfil `prod` + PostgreSQL; porta via `$PORT`; healthcheck em
   `/actuator/health`.
 - **Variáveis obrigatórias:** `JWT_SECRET` e `MOTOSHIFT_CORS_ORIGINS`. Sem

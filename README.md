@@ -1,5 +1,7 @@
 # 🏍️ MotoShift
 
+[![CI](https://github.com/matheus-silverio-silva/motoshift/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/matheus-silverio-silva/motoshift/actions/workflows/ci.yml)
+
 > Plataforma de agendamento de turnos para motoboys autônomos
 > e pequenos lojistas urbanos.
 
@@ -71,7 +73,8 @@ estabilidade financeira para ambos os lados.
 │   ├── ux/                   # Navegação: mapa, regra seção × sub-página, nomes, pós-turno
 │   └── historico/            # Auditorias, revisões e prompts usados, por data
 ├── RODAR.bat                 # Windows: atualiza da main e sobe backend + app web
-└── .github/workflows/        # CI: mvn test, flutter analyze, flutter test
+├── .githooks/                # commit-msg: carimba a chave do Jira da branch no commit
+└── .github/                  # CI (mvn test, flutter analyze, flutter test), modelos de PR e de issue, dependabot
 ```
 
 Duas notas sobre o que **não** está mais aqui, porque a pergunta costuma
@@ -270,6 +273,56 @@ pessoa está, abra o DevTools (F12) → menu ⋮ → *More tools* → **Sensors*
 
 ---
 
+## 🔀 Fluxo de trabalho
+
+Cada mudança nasce de um card do Jira (`SCRUM-NN`) e chega à `main` por pull
+request.
+
+1. **Branch** no formato `tipo/SCRUM-NN-descricao`, a partir da `main`
+   atualizada — por exemplo `feat/SCRUM-32-recuperar-senha` ou
+   `fix/SCRUM-27-aceite-concorrente`. O tipo é o mesmo do commit (`feat`,
+   `fix`, `docs`, `test`, `chore`, `ci`, `perf`, `refactor`).
+2. **Hook de commit**, uma vez por clone:
+
+   ```bash
+   git config core.hooksPath .githooks
+   ```
+
+   O `commit-msg` lê a chave do nome da branch e a carimba na mensagem —
+   `fix(turno): ... (SCRUM-27)` —, que é o que faz o Jira ligar o commit ao
+   card. Ele só carimba a chave **da branch**: um commit que fecha outro card
+   leva a chave dele escrita à mão.
+3. **Commit** em português, sem acento, no padrão do histórico:
+   `tipo(escopo): o que muda`.
+4. **Pull request** com a chave no título — `feat(auth): trocar a senha e
+   recuperar por codigo (SCRUM-32)` — e o modelo de
+   [`.github/pull_request_template.md`](.github/pull_request_template.md)
+   preenchido: card, o que mudou, como testar e o checklist de testes, goldens
+   e documentação.
+5. **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): roda em
+   todo pull request e em todo push na `main` — `mvn test` no Ubuntu,
+   `flutter analyze` e `flutter test` no Windows. Um commit novo cancela a
+   execução do anterior na mesma branch. Branch sem PR não roda: abrir o PR,
+   mesmo como rascunho, é o que liga o CI.
+
+**Builds reprodutíveis.** O Flutter é **3.41.5** em todo lugar: no CI, no
+`Motoshift/Dockerfile` (`ghcr.io/cirruslabs/flutter:3.41.5`) e na gravação dos
+goldens. O `Motoshift/pubspec.lock` é versionado, e tanto o CI quanto o Docker
+instalam com `flutter pub get --enforce-lockfile` — as versões do lock, ou o
+build falha. Mudou uma dependência no `pubspec.yaml`? Rode `flutter pub get`
+com o Flutter 3.41.5 e commite o lock junto. Subir o Flutter é mudar os três
+lugares de uma vez e regravar os goldens.
+
+**Dependências.** O [`dependabot`](.github/dependabot.yml) abre PRs uma vez por
+mês para `maven` (`/backend`), `pub` (`/Motoshift`) e `github-actions`. São os
+únicos PRs sem chave do Jira no título.
+
+**Issues.** Há dois modelos em `.github/ISSUE_TEMPLATE/`: **bug** (o que
+acontece, como reproduzir, onde) e **melhoria** (o problema, a proposta, os
+critérios de aceite e o que fica de fora).
+
+---
+
 ## 🚀 Deploy (Railway)
 
 Ambos os serviços são publicados no **Railway**.
@@ -280,7 +333,8 @@ A pasta [`Motoshift/`](Motoshift/) contém um **Dockerfile** multi-stage que o
 Railway detecta automaticamente:
 
 1. **Build** — `flutter build web --release`, com a URL da API injetada em
-   tempo de build via `--dart-define=API_URL`.
+   tempo de build via `--dart-define=API_URL`. A imagem é a do Flutter
+   **3.41.5** (a mesma versão do CI) e as dependências saem do `pubspec.lock`.
 2. **Serve** — os arquivos estáticos são servidos por **nginx** com fallback de
    SPA (todas as rotas caem em `index.html`).
 

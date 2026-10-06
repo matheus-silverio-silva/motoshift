@@ -8,7 +8,9 @@
 **/.packages
 **/.pub-cache/
 **/.pub/
-**/pubspec.lock
+# pubspec.lock NAO entra aqui. O Motoshift e um aplicativo, nao uma biblioteca:
+# sem o lock versionado, cada `pub get` (o do CI, o do Docker, o de cada
+# maquina) resolve as versoes do dia, e o build de hoje nao e o de ontem.
 **/android/.gradle/
 **/android/local.properties
 **/android/app/google-services.json

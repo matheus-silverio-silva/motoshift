@@ -3,10 +3,25 @@ name: CI
 # Nada rodava no push ate aqui: nem `mvn test`, nem `flutter analyze`, nem
 # `flutter test`. Quebrar o build so aparecia quando alguem lembrava de rodar
 # a suite na propria maquina.
+#
+# Quando roda:
+#   - push na main: o que foi integrado;
+#   - pull_request: todo o resto.
+# Antes era push em qualquer branch MAIS pull_request: toda branch com PR
+# aberto rodava a suite duas vezes por commit (uma pelo push, outra pelo PR),
+# e o job do Windows, o mais lento, era o que mais pagava. Branch sem PR nao
+# roda — abrir o PR (pode ser rascunho) e o que liga o CI.
 on:
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
+
+# Um commit novo na mesma branch cancela a execucao do anterior: o resultado
+# que interessa e o do ultimo. O grupo e por ref, entao a main e cada PR tem a
+# propria fila e um nao cancela o outro.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend:
@@ -68,7 +83,10 @@ jobs:
 
       - name: Dependencias
         working-directory: Motoshift
-        run: flutter pub get
+        # --enforce-lockfile: instala exatamente o que o pubspec.lock diz e
+        # falha se ele nao bater com o pubspec.yaml — o CI testa as mesmas
+        # versoes que o Docker publica.
+        run: flutter pub get --enforce-lockfile
 
       - name: Analise estatica
         working-directory: Motoshift

@@ -1,0 +1,38 @@
+# Atualizacao de dependencias, uma vez por mes.
+#
+# Mensal, e nao semanal: o projeto tem um mantenedor so, e um PR de dependencia
+# que ninguem revisa e pior do que nenhum. Tres ecossistemas, os tres que o
+# repositorio usa.
+#
+# Dois avisos para quem for aceitar um PR daqui:
+#
+#   - pub: uma versao nova de pacote que desenha (fl_chart, flutter_map,
+#     google_fonts) pode mexer nos goldens. Se o CI cair so em test/goldens,
+#     regrave no Windows com o Flutter 3.41.5 e liste no commit.
+#   - maven: subir o Spring Boot de versao menor (3.3 -> 3.5) e trabalho
+#     proprio, com card proprio (SCRUM-43) — nao e para sair de carona aqui.
+#
+# O PR do dependabot nao leva chave do Jira no titulo: nao nasce de um card.
+version: 2
+
+updates:
+  - package-ecosystem: maven
+    directory: /backend
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: pub
+    directory: /Motoshift
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "ci(deps)"
