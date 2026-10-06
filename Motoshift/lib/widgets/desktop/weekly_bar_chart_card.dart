@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../utils/resumo_acessivel.dart';
 import '../../utils/serie_diaria.dart';
 import 'panel_card.dart';
 
@@ -64,6 +65,21 @@ class WeeklyBarChartCard extends StatelessWidget {
 
     final destaque = pontos.indexWhere((p) => p.valor == maxValor);
 
+    // O fl_chart pinta tudo num canvas: o leitor de tela encontrava só os
+    // dias da semana, sem valor nenhum. O resumo diz as duas coisas juntas.
+    return Semantics(
+      container: true,
+      label: resumoDeBarras(
+        titulo: title,
+        rotulos: [for (final p in pontos) p.label],
+        valores: [for (final p in pontos) p.valor],
+      ),
+      excludeSemantics: true,
+      child: _buildBarras(maxValor, destaque),
+    );
+  }
+
+  Widget _buildBarras(double maxValor, int destaque) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final larguraBarra =

@@ -14,6 +14,7 @@ import 'filtros_turnos_sheet.dart';
 import 'turnos_cards.dart';
 import 'turnos_conteudo_desktop.dart';
 import '../../services/localizacao_service.dart';
+import '../../utils/resumo_acessivel.dart';
 import '../../widgets/mapa_raio.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/breakpoints.dart';
@@ -427,6 +428,13 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
                 ? 'R\$ ${t.valorEstimado.toStringAsFixed(0)}'
                 : 'R\$ ${t.valorEstimado.toStringAsFixed(0)} · ${t.distanciaCurta}',
             icone: Icons.storefront_rounded,
+            // O rótulo do pino é só o valor; quem ouve precisa saber DE QUAL
+            // turno é o botão.
+            descricao: [
+              'Turno ${t.titulo}',
+              reaisFalados(t.valorEstimado),
+              if (t.distanciaCurta != null) 'a ${t.distanciaCurta}',
+            ].join(', '),
             onTap: () => _abrirDetalhe(t),
           ),
     ];

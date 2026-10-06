@@ -7,6 +7,7 @@ import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/validators.dart';
 import '../../widgets/app_buttons.dart';
+import '../../widgets/olho_da_senha.dart';
 
 class CadastroScreen extends StatefulWidget {
   const CadastroScreen({super.key});
@@ -173,7 +174,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
           const SizedBox(height: 3),
           Text('Preencha os dados para começar.',
               style:
-                  tsJakarta(11, FontWeight.w400, color: AppColors.muted)),
+                  tsJakarta(11, FontWeight.w600, color: AppColors.mutedTexto)),
           const SizedBox(height: 15),
           _SegmentControl(
             value: _tipo,
@@ -229,16 +230,10 @@ class _CadastroScreenState extends State<CadastroScreen> {
                   // newPassword: o gerenciador sugere uma senha forte, em vez
                   // de tentar preencher uma que já existe.
                   autofillHints: const [AutofillHints.newPassword],
-                  suffixIcon: GestureDetector(
+                  suffixIcon: OlhoDaSenha(
+                    visivel: _senhaVisivel,
                     onTap: () =>
                         setState(() => _senhaVisivel = !_senhaVisivel),
-                    child: Icon(
-                      _senhaVisivel
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      size: 16,
-                      color: AppColors.muted,
-                    ),
                   ),
                   validator: Validators.senha,
                 ),
@@ -250,16 +245,10 @@ class _CadastroScreenState extends State<CadastroScreen> {
                   controller: _confirmarSenhaCtrl,
                   obscure: !_confirmarSenhaVisivel,
                   autofillHints: const [AutofillHints.newPassword],
-                  suffixIcon: GestureDetector(
+                  suffixIcon: OlhoDaSenha(
+                    visivel: _confirmarSenhaVisivel,
                     onTap: () => setState(() =>
                         _confirmarSenhaVisivel = !_confirmarSenhaVisivel),
-                    child: Icon(
-                      _confirmarSenhaVisivel
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      size: 16,
-                      color: AppColors.muted,
-                    ),
                   ),
                   validator: (v) =>
                       Validators.confirmarSenha(v, _senhaCtrl.text),
@@ -364,7 +353,7 @@ class _Seg extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: active ? AppColors.teal : Colors.transparent,
+            color: active ? AppColors.tealTexto : Colors.transparent,
             borderRadius: BorderRadius.circular(9),
             boxShadow: active
                 ? const [
@@ -381,7 +370,7 @@ class _Seg extends StatelessWidget {
               label,
               style: tsJakarta(11, FontWeight.w700,
                   color:
-                      active ? const Color(0xFFFFFFFF) : AppColors.muted),
+                      active ? const Color(0xFFFFFFFF) : AppColors.tealDeep),
             ),
           ),
         ),

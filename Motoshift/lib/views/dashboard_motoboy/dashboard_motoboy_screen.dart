@@ -142,6 +142,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
               builder: (context, provider, _) {
                 final serie = serieUltimos7Dias(provider.meusTurnos, hoje: widget.agora);
                 return MiniBarChart(
+                  titulo: 'Ganhos dos últimos 7 dias',
                   values: [for (final p in serie) p.valor],
                   labels: [for (final p in serie) p.label],
                 );

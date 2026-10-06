@@ -90,7 +90,11 @@ class _PrimaryButtonState extends State<PrimaryButton>
                       ],
                       Text(
                         widget.label,
-                        style: tsJakarta(13.5, FontWeight.w700,
+                        // 14 px em negrito, e nao 13,5: e a partir dai que a
+                        // diretriz de contraste trata o rotulo como texto
+                        // grande (3:1). Branco sobre o gradiente da marca
+                        // nao chega aos 4,5:1 do texto comum.
+                        style: tsJakarta(14, FontWeight.w700,
                             color: const Color(0xFFFFFFFF)),
                       ),
                     ],
@@ -227,7 +231,7 @@ class GhostButton extends StatelessWidget {
             children: [
               if (icon != null) ...[icon!, const SizedBox(width: 8)],
               Text(label,
-                  style: tsJakarta(13.5, FontWeight.w700, color: fg)),
+                  style: tsJakarta(14, FontWeight.w700, color: fg)),
             ],
           ),
         ),

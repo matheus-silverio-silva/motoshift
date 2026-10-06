@@ -195,6 +195,26 @@ flutter build apk --release --dart-define=API_URL=https://seu-backend.up.railway
   cara sem internet. Estão lá os pesos que o app usa (400 a 800); usar um peso
   novo exige pôr o arquivo dele na pasta e no `pubspec.yaml`.
 
+**Acessibilidade.** Três coisas são verificadas por teste, em `test/a11y/`:
+
+- **Tamanho do alvo de toque** (`alvo_de_toque_test.dart`): 44 px no mínimo em
+  tudo o que é clicável.
+- **Rótulo e contraste** (`diretrizes_test.dart`): as diretrizes do próprio
+  Flutter — `labeledTapTargetGuideline` e `textContrastGuideline` (WCAG 2.1 AA:
+  4,5:1 no texto comum, 3:1 no texto grande) — no login, nos dois painéis e no
+  detalhe do turno, do lado do entregador e do lojista.
+- **O que o leitor de tela diz** (`resumos_test.dart`): gráfico, mapa e
+  estrelas são desenho, então cada um leva um `Semantics` com a frase que o
+  substitui — "Ganhos dos últimos 7 dias: seg R$ 120, ter R$ 0, ...", "Mapa do
+  turno: ponto de partida em ... Raio de entrega de 8 km.", "Nota 4 de 5". As
+  frases saem de `lib/utils/resumo_acessivel.dart`.
+
+Para o texto branco dos botões caber na regra, o rótulo passou de 13,5 para
+14 px em negrito — o tamanho a partir do qual a diretriz o trata como texto
+grande. O verde-água da marca (`AppColors.teal`) dá 4,1:1 contra o branco; onde
+ele era cor de texto pequeno entrou `AppColors.tealTexto`, um tom mais fechado
+(5,3:1). A diretriz mede só o que está na primeira dobra de cada tela.
+
 ### 📍 Testar a localização à mão (Chrome)
 
 O navegador só libera a localização em **HTTPS ou `localhost`**: rode o app

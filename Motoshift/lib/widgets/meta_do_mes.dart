@@ -119,7 +119,12 @@ class MetaDoMes extends StatelessWidget {
             key: const Key('meta-definir'),
             onPressed: onEditar,
             // 44 px de altura, o alvo mínimo de toque do app.
-            style: TextButton.styleFrom(minimumSize: const Size(64, 44)),
+            // tealDeep: o verde-agua padrao do botao de texto dava 3,5:1
+            // sobre o fundo verde-claro do convite.
+            style: TextButton.styleFrom(
+              minimumSize: const Size(64, 44),
+              foregroundColor: AppColors.tealDeep,
+            ),
             child: const Text('Definir meta'),
           ),
         ],

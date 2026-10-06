@@ -7,6 +7,7 @@ import '../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/validators.dart';
+import '../../widgets/olho_da_senha.dart';
 import '../recuperar_senha/recuperar_senha_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -150,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
               style: tsBricolage(16, FontWeight.w800, color: AppColors.ink)),
           const SizedBox(height: 3),
           Text('Entre para acessar seus turnos',
-              style: tsJakarta(11, FontWeight.w400, color: AppColors.muted)),
+              style: tsJakarta(11, FontWeight.w600, color: AppColors.mutedTexto)),
           const SizedBox(height: 15),
           // Segmented control
           _SegmentControl(
@@ -196,16 +197,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _entrar(),
                   autofillHints: const [AutofillHints.password],
-                  suffixIcon: GestureDetector(
+                  suffixIcon: OlhoDaSenha(
+                    visivel: _senhaVisivel,
                     onTap: () =>
                         setState(() => _senhaVisivel = !_senhaVisivel),
-                    child: Icon(
-                      _senhaVisivel
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      size: 16,
-                      color: AppColors.muted,
-                    ),
                   ),
                   validator: (v) =>
                       v == null || v.isEmpty ? 'Informe a senha' : null,
@@ -227,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               child: Text('Esqueci minha senha',
                   style: tsJakarta(10.5, FontWeight.w700,
-                      color: AppColors.teal)),
+                      color: AppColors.tealTexto)),
             ),
           ),
           const SizedBox(height: 14),
@@ -263,7 +258,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text('Entrar',
-                              style: tsJakarta(13.5, FontWeight.w700,
+                              style: tsJakarta(14, FontWeight.w700,
                                   color: const Color(0xFFFFFFFF))),
                           const SizedBox(width: 6),
                           const Icon(Icons.arrow_forward_rounded,
@@ -347,7 +342,7 @@ class _Seg extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: active ? AppColors.teal : Colors.transparent,
+            color: active ? AppColors.tealTexto : Colors.transparent,
             borderRadius: BorderRadius.circular(9),
             boxShadow: active
                 ? const [
@@ -363,7 +358,7 @@ class _Seg extends StatelessWidget {
             child: Text(
               label,
               style: tsJakarta(11, FontWeight.w700,
-                  color: active ? const Color(0xFFFFFFFF) : AppColors.muted),
+                  color: active ? const Color(0xFFFFFFFF) : AppColors.tealDeep),
             ),
           ),
         ),

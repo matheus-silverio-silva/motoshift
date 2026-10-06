@@ -187,7 +187,8 @@ Android) ou `localhost:8080`.
   no próprio teste (sem Docker) e roda Flyway + `ddl-auto=validate` — inclusive
   os casos difíceis, como migrar um banco que já tem linha órfã. Antes disso, a
   primeira execução real das migrações era o deploy.
-- **Front-end:** 91 testes — unidade, widget, acessibilidade (alvo de toque) e
+- **Front-end:** 91 testes — unidade, widget, acessibilidade (alvo de toque,
+  rótulo de tudo o que é clicável e contraste de texto pelo WCAG AA) e
   *golden tests* (comparação visual das telas).
 - *Observação:* os goldens são desenhados com as **fontes do próprio app**
   (os arquivos de `assets/fonts`), e não mais com a fonte do sistema de quem
