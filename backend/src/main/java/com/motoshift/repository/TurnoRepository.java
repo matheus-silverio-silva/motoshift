@@ -5,15 +5,38 @@ import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface TurnoRepository extends JpaRepository<Turno, Long> {
+
+    /**
+     * O turno, com a linha travada ate o fim da transacao (SELECT ... FOR
+     * UPDATE). So para quem mexe na ocupacao das vagas: aceitar e desistir.
+     *
+     * <p>O aceite conta as inscricoes e grava em seguida. Sem trava, dois
+     * entregadores que tocassem "Aceitar" na ultima vaga ao mesmo tempo liam
+     * os dois "0 de 1 ocupada" e entravam os dois — a unicidade da inscricao
+     * e por (turno, entregador), entao nao barrava. Com a linha do turno
+     * travada, o segundo espera o primeiro commitar e ja le o turno lotado.
+     *
+     * <p>Pessimista, e nao {@code @Version}: a disputa pela ultima vaga e o
+     * caso esperado, nao a excecao, e a resposta certa para quem perdeu e um
+     * 409 "vagas preenchidas" — nao um erro de concorrencia para repetir. E a
+     * finalizacao e o cancelamento, que tambem gravam o turno, nao passam a
+     * falhar por causa de um aceite simultaneo.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t from Turno t where t.id = :id")
+    Optional<Turno> buscarTravandoAsVagas(@Param("id") Long id);
 
     List<Turno> findByLojistId(Long lojistId);
 

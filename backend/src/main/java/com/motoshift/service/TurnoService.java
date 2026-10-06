@@ -159,9 +159,13 @@ public class TurnoService {
 
     // RF05 — Aceitar turno (com vagas): cada motoboy que aceita vira uma inscrição.
     // O turno permanece ABERTO enquanto houver vagas; fecha (ACEITO) ao lotar.
+    //
+    // A linha do turno fica travada do começo ao fim (carregarTravandoAsVagas):
+    // contar as vagas e gravar a inscrição não é atômico, e sem a trava dois
+    // entregadores entravam juntos na última vaga.
     @Transactional
     public TurnoResponse aceitar(Long turnoId, Long motoboyId) {
-        Turno turno = acesso.carregar(turnoId);
+        Turno turno = acesso.carregarTravandoAsVagas(turnoId);
 
         if (turno.getStatus() != StatusTurno.ABERTO) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Turno não está disponível para aceite.");
@@ -424,7 +428,7 @@ public class TurnoService {
      */
     @Transactional
     public TurnoResponse desistir(Long turnoId, Long motoboyId) {
-        Turno turno = acesso.carregar(turnoId);
+        Turno turno = acesso.carregarTravandoAsVagas(turnoId);
         TurnoInscricao ins = inscricaoRepo.findByTurnoIdAndMotoboyId(turnoId, motoboyId)
                 .filter(i -> i.getStatus() == StatusInscricao.ACEITO || i.getStatus() == StatusInscricao.FINALIZADO)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN,

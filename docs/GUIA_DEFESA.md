@@ -92,7 +92,7 @@ Android) ou `localhost:8080`.
 | RF02 | Dashboard lojista/motoboy | `DashboardController` + `views/dashboard_*` | — |
 | RF03 | Cadastro: CNPJ (14 díg.) / CNH (11 díg.) | `AuthService.registrar()` | parcial |
 | RF04 | Publicar turno, antecedência mínima de 2h | `TurnoService.criar()` | ✅ |
-| RF05 | Reservar turno, sem conflito de horário | `TurnoService.aceitar()` | ✅ |
+| RF05 | Reservar turno, sem conflito de horário e sem dois na mesma vaga | `TurnoService.aceitar()` + `TurnoRepository.buscarTravandoAsVagas()` | ✅ |
 | RF06 | Finalizar transfere o valor reservado para o entregador **que fez check-in**, na mesma transação; só depois do início do turno | `TurnoService.finalizar()` + `PagamentoTurnoService.fecharInscricoes()` / `liquidar()` | ✅ |
 | RF07 | Cancelar é do lojista e não penaliza ninguém; desistir da vaga é do entregador e, a < 1h do início, tira 0.5 do score dele | `TurnoService.cancelar()` / `desistir()` + `Reputacao` | ✅ |
 
@@ -101,6 +101,13 @@ Android) ou `localhost:8080`.
 - *Conflito de horário:* `TurnoRepository.existeConflitoDeAgenda()` — olha as
   inscrições ativas do entregador (inclusive em turno multi-vaga que segue
   "aberto"); se houver sobreposição, retorna HTTP 409.
+- *A última vaga não é de dois:* o aceite conta as inscrições e grava em seguida — e contar e gravar não é
+  atômico. Dois entregadores tocando "Aceitar" na última vaga liam os dois "0 de 1" e entravam os dois (a
+  unicidade da inscrição é por turno + entregador, não barrava). Agora `aceitar` e `desistir` carregam o
+  turno com `@Lock(PESSIMISTIC_WRITE)`: o segundo espera o primeiro commitar e já lê o turno lotado → 409.
+  Trava pessimista, e não `@Version`, porque disputar a última vaga é o caso esperado e a resposta certa é
+  "vagas preenchidas", não um erro para repetir. `AceiteConcorrentePostgresTest`: 8 threads, 1 vaga,
+  exatamente 1 inscrição e 7 respostas 409 — em PostgreSQL, e o teste falha (2 entram) sem a trava.
 - *Crédito na carteira:* acontece na **finalização do turno**, na mesma transação que o encerra —
   o valor sai do saldo **bloqueado** do lojista (reservado quando ele publicou) e entra no
   **disponível** do entregador. Não há confirmação a dar: o compromisso foi assumido na publicação.

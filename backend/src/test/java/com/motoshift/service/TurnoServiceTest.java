@@ -170,7 +170,7 @@ class TurnoServiceTest {
                 LocalDateTime.now().plusHours(7),
                 StatusTurno.ABERTO);
 
-        when(turnoRepo.findById(1L)).thenReturn(Optional.of(turno));
+        when(turnoRepo.buscarTravandoAsVagas(1L)).thenReturn(Optional.of(turno));
         when(turnoRepo.save(any(Turno.class))).thenReturn(turno);
 
         TurnoResponse resp = turnoService.aceitar(1L, 2L);
@@ -194,7 +194,7 @@ class TurnoServiceTest {
         // por turnoRepo.findConflitos: com várias vagas o turno de origem pode
         // continuar "aberto" e escapava da query antiga. A verificação virou uma
         // pergunta só ao banco, em vez de um findById por inscrição.
-        when(turnoRepo.findById(1L)).thenReturn(Optional.of(turno));
+        when(turnoRepo.buscarTravandoAsVagas(1L)).thenReturn(Optional.of(turno));
         when(turnoRepo.existeConflitoDeAgenda(eq(2L), eq(1L), any(), any())).thenReturn(true);
 
         assertThatExceptionOfType(ResponseStatusException.class)
@@ -208,7 +208,7 @@ class TurnoServiceTest {
     @Test
     @DisplayName("RF05 — aceitar turno inexistente lança 404")
     void aceitar_turnoNaoEncontrado_lanca404() {
-        when(turnoRepo.findById(99L)).thenReturn(Optional.empty());
+        when(turnoRepo.buscarTravandoAsVagas(99L)).thenReturn(Optional.empty());
 
         assertThatExceptionOfType(ResponseStatusException.class)
                 .isThrownBy(() -> turnoService.aceitar(99L, 2L))
@@ -223,7 +223,7 @@ class TurnoServiceTest {
                 LocalDateTime.now().plusHours(7),
                 StatusTurno.ACEITO);
 
-        when(turnoRepo.findById(1L)).thenReturn(Optional.of(turno));
+        when(turnoRepo.buscarTravandoAsVagas(1L)).thenReturn(Optional.of(turno));
 
         assertThatExceptionOfType(ResponseStatusException.class)
                 .isThrownBy(() -> turnoService.aceitar(1L, 2L))
@@ -241,7 +241,7 @@ class TurnoServiceTest {
                 StatusTurno.ABERTO);
         turno.setVagas(2);
 
-        when(turnoRepo.findById(1L)).thenReturn(Optional.of(turno));
+        when(turnoRepo.buscarTravandoAsVagas(1L)).thenReturn(Optional.of(turno));
         when(inscricaoRepo.countByTurnoIdAndStatus(1L, StatusInscricao.ACEITO)).thenReturn(2L);
 
         assertThatExceptionOfType(ResponseStatusException.class)
@@ -259,7 +259,7 @@ class TurnoServiceTest {
                 LocalDateTime.now().plusHours(7),
                 StatusTurno.ABERTO);
 
-        when(turnoRepo.findById(1L)).thenReturn(Optional.of(turno));
+        when(turnoRepo.buscarTravandoAsVagas(1L)).thenReturn(Optional.of(turno));
         when(inscricaoRepo.existsByTurnoIdAndMotoboyIdAndStatus(1L, 2L, StatusInscricao.ACEITO))
                 .thenReturn(true);
 

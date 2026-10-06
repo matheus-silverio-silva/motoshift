@@ -484,7 +484,7 @@ Documentação completa: `http://localhost:8080/swagger-ui.html`
 | RF02 | Dashboard com métricas em tempo real |
 | RF03 | Lojista exige CNPJ; Motoboy exige CNH no cadastro |
 | RF04 | Turno deve ser agendado com mínimo 2h de antecedência, e **publicar reserva** `valor × vagas` do saldo do lojista — sem lastro, 422 dizendo quanto falta |
-| RF05 | Motoboy não pode aceitar turno com conflito de horário |
+| RF05 | Motoboy não pode aceitar turno com conflito de horário, e **a última vaga não é de dois**: o aceite trava a linha do turno (`SELECT ... FOR UPDATE`), então quem chega junto na mesma vaga recebe 409 em vez de entrar também |
 | RF06 | Finalização do turno **transfere** o valor reservado: sai do bloqueado do lojista, entra no disponível do entregador, na mesma transação. **Só vale com o turno começado e com check-in, e só paga quem fez check-in** — quem aceitou e não chegou fica `faltou`, sem pagamento e sem penalidade de score. A sobra (vagas vazias e faltas) volta |
 | RF07 | Sair do turno tem uma regra para cada lado. **Cancelar** é só do lojista dono: derruba o turno, devolve a reserva inteira (sem multa) e não penaliza ninguém. **Desistir da vaga** é só do entregador inscrito: cancela a inscrição dele, reabre a vaga e, a menos de 1h do início, tira 0,5 do score **dele** — o turno e os colegas de vaga seguem |
 | RF12 | O dinheiro entra por recarga (Pix simulado) e sai por saque; a plataforma não cria nem destrói saldo — ver [`docs/financeiro/FLUXO-FINANCEIRO.md`](docs/financeiro/FLUXO-FINANCEIRO.md) |
