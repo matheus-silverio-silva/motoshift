@@ -4,13 +4,24 @@
 # que ninguem revisa e pior do que nenhum. Tres ecossistemas, os tres que o
 # repositorio usa.
 #
+# Como os PRs chegam:
+#
+#   - um PR por ecossistema, agrupado: todas as atualizacoes menores e de
+#     correcao do mes num PR so (grupo "menores"), em vez de um PR por pacote.
+#     A primeira rodada, sem grupo, abriu 13 PRs de uma vez;
+#   - versao principal (major) nao vem: muda API e costuma quebrar o build
+#     (springdoc 3, jjwt 0.13, fl_chart 1.x, actions v6). Subir uma delas e
+#     trabalho proprio, com card proprio;
+#   - no maximo 2 PRs abertos por ecossistema.
+#
 # Dois avisos para quem for aceitar um PR daqui:
 #
 #   - pub: uma versao nova de pacote que desenha (fl_chart, flutter_map,
 #     google_fonts) pode mexer nos goldens. Se o CI cair so em test/goldens,
 #     regrave no Windows com o Flutter 3.41.5 e liste no commit.
 #   - maven: subir o Spring Boot de versao menor (3.3 -> 3.5) e trabalho
-#     proprio, com card proprio (SCRUM-43) — nao e para sair de carona aqui.
+#     proprio, com card proprio (SCRUM-43) — por isso ele esta fora daqui,
+#     junto com as versoes principais.
 #
 # O PR do dependabot nao leva chave do Jira no titulo: nao nasce de um card.
 version: 2
@@ -20,19 +31,43 @@ updates:
     directory: /backend
     schedule:
       interval: monthly
+    open-pull-requests-limit: 2
     commit-message:
       prefix: "chore(deps)"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # SCRUM-43: o Spring Boot sobe de linha num card proprio.
+      - dependency-name: "org.springframework.boot:*"
+        update-types: ["version-update:semver-minor"]
+    groups:
+      menores:
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: pub
     directory: /Motoshift
     schedule:
       interval: monthly
+    open-pull-requests-limit: 2
     commit-message:
       prefix: "chore(deps)"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      menores:
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    open-pull-requests-limit: 2
     commit-message:
       prefix: "ci(deps)"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      menores:
+        update-types: ["minor", "patch"]
