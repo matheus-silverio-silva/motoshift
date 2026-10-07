@@ -48,7 +48,7 @@ jobs:
 
       - name: Publicar relatorio do surefire
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: surefire-reports
           path: backend/target/surefire-reports/
@@ -98,7 +98,7 @@ jobs:
 
       - name: Publicar diffs dos goldens que falharam
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: golden-failures
           path: Motoshift/test/goldens/failures/
