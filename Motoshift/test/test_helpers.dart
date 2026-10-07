@@ -69,6 +69,8 @@ import 'package:moto_shift/utils/baixar_arquivo.dart';
 /// - Registra as fontes do tema (Bricolage Grotesque + Plus Jakarta Sans) a
 ///   partir dos arquivos embarcados em assets/fonts — os goldens mostram a
 ///   fonte que o usuário vê, e não a do sistema de quem rodou o teste.
+/// - Registra a fonte dos ícones (MaterialIcons): sem ela todo ícone é um
+///   quadrado no golden, e trocar um ícone por outro não muda a foto.
 Future<void> setupGoldenTests() async {
   TestWidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_BR');
@@ -77,6 +79,7 @@ Future<void> setupGoldenTests() async {
   // sem embarcar o arquivo aparece aqui como erro, em vez de ser baixado.
   GoogleFonts.config.allowRuntimeFetching = false;
   await _registrarFontesDoTema();
+  await _registrarFontesDeIcones();
 
   // Mock dos canais nativos usados em testes:
   // - path_provider: google_fonts salva fontes no diretório de suporte
@@ -2018,6 +2021,41 @@ Future<void> _registrarFontesDoTema() async {
   }
   // ignore: avoid_print
   print('[golden-fonts] fontes do tema (assets/fonts): $total variações');
+}
+
+/// Registra as fontes de ícones do app: a MaterialIcons e o que mais o
+/// FontManifest do build declarar.
+///
+/// O flutter_test não carrega fonte nenhuma, e as de ícone não são exceção:
+/// todo ícone saía como um quadrado do tamanho dele. O golden conferia que
+/// "há um ícone ali", e não qual — trocar a seta pela lixeira passava sem
+/// ninguém ver (SCRUM-49).
+///
+/// Lê o FontManifest.json em vez de apontar o arquivo: é a mesma lista que o
+/// app carrega ao abrir, então uma fonte de ícones nova (um pacote, a
+/// CupertinoIcons) entra aqui sozinha. Se a MaterialIcons não estiver nele, a
+/// suíte para — melhor do que voltar aos quadrados em silêncio.
+Future<void> _registrarFontesDeIcones() async {
+  final manifesto =
+      json.decode(await rootBundle.loadString('FontManifest.json')) as List<dynamic>;
+
+  final familias = <String>[];
+  for (final entrada in manifesto.cast<Map<String, dynamic>>()) {
+    final familia = entrada['family'] as String;
+    final carregador = FontLoader(familia);
+    for (final fonte in (entrada['fonts'] as List<dynamic>).cast<Map<String, dynamic>>()) {
+      carregador.addFont(rootBundle.load(fonte['asset'] as String));
+    }
+    await carregador.load();
+    familias.add(familia);
+  }
+  if (!familias.contains('MaterialIcons')) {
+    throw StateError(
+        'A fonte MaterialIcons não está no FontManifest.json (famílias: $familias). '
+        'O pubspec.yaml precisa de "uses-material-design: true".');
+  }
+  // ignore: avoid_print
+  print('[golden-fonts] fontes de ícones (FontManifest): ${familias.join(', ')}');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
