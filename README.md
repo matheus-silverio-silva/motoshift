@@ -69,7 +69,7 @@ estabilidade financeira para ambos os lados.
 │
 ├── docs/                     # Auditoria, guia de defesa, planos e requisitos
 │   ├── DER/                  # Modelo de dados e rastreabilidade das migrações
-│   ├── financeiro/           # Ciclo do dinheiro (FLUXO-FINANCEIRO) e os documentos fiscais simulados (FISCAL)
+│   ├── financeiro/           # Ciclo do dinheiro (FLUXO-FINANCEIRO), documentos fiscais simulados (FISCAL) e lucro/prejuízo (RESULTADO)
 │   ├── ux/                   # Navegação: mapa, regra seção × sub-página, nomes, pós-turno
 │   └── historico/            # Auditorias, revisões e prompts usados, por data
 ├── RODAR.bat                 # Windows: atualiza da main e sobe backend + app web
@@ -458,6 +458,35 @@ Cerca de cinco meses de história, gravados pelos mesmos serviços que o app usa
   reserva voltou inteira e ninguém foi penalizado por isso.
 - **Notificações** só dos tipos que o código gera hoje, com os textos de hoje;
   as de mais de três dias já aparecem como lidas.
+- **Resultado (lucro e prejuízo):** o Carlos e a Cláudia informam o que a
+  plataforma não vê, pelo `LancamentoGerencialService`. Ele: o combustível de
+  cada turno (R$ 7,50, 42 km), o DAS do MEI de cada mês e três contas
+  recorrentes — celular, seguro e parcela da moto. Ela: a taxa de entrega que
+  cobrou dos clientes em cada noite. Nada disso passa pelo ledger.
+
+#### 💰 Lucro e prejuízo: onde ver cada caso
+
+A massa é datada a partir do dia em que é criada, então os meses são relativos
+a hoje. Em **Resultado** (menu Financeiro):
+
+| Conta | Mês **passado** | Mês **retrasado** |
+|---|---|---|
+| `motoboy@teste.com` (Carlos, entregador) | **Lucro** — um turno por semana paga o DAS, o combustível e as contas fixas | **Prejuízo** — a troca da relação e do pneu (R$ 420) custou mais do que o mês rendeu, embora ele tenha trabalhado o mesmo |
+| `claudia@teste.com` (Cláudia, lojista) | **Lucro** — as taxas cobradas (R$ 208 por entregador-noite) cobrem os entregadores | **Prejuízo** — promoção de frete grátis: só R$ 48 de taxa por noite, com os entregadores custando o mesmo |
+
+Como chegar a cada um: o **mês passado** é o atalho **"Mês anterior"**; o
+**mês retrasado** não tem atalho — toque na barra dele no gráfico **"Mês a
+mês"**. A tela abre no mês atual, que é parcial (mostra só o que já aconteceu
+até hoje).
+
+Numa massa criada em outubro de 2026, por exemplo: o Carlos fecha setembro com
+lucro de R$ 106,95 e agosto com prejuízo de R$ 220,55; a Cláudia, setembro com
+lucro de R$ 431,00 e agosto com prejuízo de R$ 338,00. Os centavos mudam com o
+dia em que a massa é criada (um mês pode ter quatro ou cinco turnos); o sinal,
+não — o `MassaDemonstracaoTest` confere os quatro casos. As outras contas não
+informam nada: a DRE delas mostra só o extrato, com o aviso de que o resultado
+ignora custos não informados. As contas e a tabela completa estão em
+[`docs/financeiro/RESULTADO.md`](docs/financeiro/RESULTADO.md), seção 9.
 
 > 💡 Para explorar o fluxo completo, recomendamos **`claudia@teste.com`**
 > (lojista com o turno de três vagas, pendências, gorjetas, favoritos e um turno
@@ -465,7 +494,9 @@ Cerca de cinco meses de história, gravados pelos mesmos serviços que o app usa
 > histórico, saques, notas, meta do mês e um turno em andamento). Para o
 > lembrete de 1 hora, **`lucas@teste.com`** ou **`fernando@teste.com`**. Para
 > o fluxo de nota fiscal dos dois lados, use
-> **`lojista@teste.com`** e **`motoboy@teste.com`**.
+> **`lojista@teste.com`** e **`motoboy@teste.com`**. Para **lucro e
+> prejuízo**, **`motoboy@teste.com`** (Carlos) e **`claudia@teste.com`** —
+> ver a tabela acima.
 
 ### 🔄 Resetar a massa de demonstração
 
@@ -562,9 +593,16 @@ para "valor errado não faz nada".
 | POST | /api/carteira/saques | Saque via Pix — estorna sozinho se o gateway recusar |
 | GET | /api/carteira/cobrancas | Recargas e saques do usuário |
 | GET | /api/sugestoes/turnos/{id} | Sugestões por IA — no máximo 10 por hora por usuário (429 com `Retry-After` acima disso) |
-| GET | /api/relatorio/motoboy/{id} | Relatório financeiro por IA |
-| GET | /api/relatorio/lojista/{id} | Relatório operacional por IA |
+| GET | /api/relatorio/motoboy/{id} | Relatório financeiro por IA — os números incluem o resultado do período, a situação, a margem líquida e o ponto de equilíbrio, lidos da DRE |
+| GET | /api/relatorio/lojista/{id} | Relatório operacional por IA — com o resultado da operação de entrega e o custo sobre a receita, lidos da DRE |
 | GET | /api/score/{id}/analise | Análise de score por IA |
+| GET | /api/financeiro/dre | **DRE do período** (RF13): linhas, resultado, situação (`lucro`, `prejuizo` ou `equilibrio`), indicadores e a comparação com o período anterior de mesmo tamanho. `?dataInicio&dataFim`; sem datas, o mês corrente. O papel vem do token |
+| GET | /api/financeiro/dre/mensal | Doze meses do ano (`?ano`): receita, custos e resultado de cada um — o gráfico da tela de resultado |
+| GET | /api/financeiro/categorias | As categorias de lançamento do papel do token, com rótulo e grupo da DRE |
+| GET | /api/financeiro/lancamentos | Custos e receitas informados que contam no período (`?dataInicio&dataFim`, paginação opcional com `X-Total-Count`) |
+| POST | /api/financeiro/lancamentos | Informar um custo ou uma receita. **Não é transação**: não move saldo, não entra no extrato. Categoria de outro papel e turno de que o usuário não participou são recusados (400) |
+| PUT | /api/financeiro/lancamentos/{id} | Editar um lançamento — o de outro usuário responde 404 |
+| DELETE | /api/financeiro/lancamentos/{id} | Excluir um lançamento — o de outro usuário responde 404 |
 | POST | /api/carteira/transacoes/{id}/documento | Gera o documento do lançamento — NFS-e, recibo ou comprovante (idempotente) |
 | GET | /api/carteira/transacoes/{id}/documento | O documento já gerado desse lançamento |
 | GET | /api/notas-fiscais | Notas fiscais do usuário, com filtros (papel, situação, competência, contraparte) e paginação |
@@ -639,6 +677,7 @@ primeira não cria um limite novo). Em desenvolvimento o cabeçalho é
 | RF06 | Finalização do turno **transfere** o valor reservado: sai do bloqueado do lojista, entra no disponível do entregador, na mesma transação. **Só vale com o turno começado e com check-in, e só paga quem fez check-in** — quem aceitou e não chegou fica `faltou`, sem pagamento e sem penalidade de score. A sobra (vagas vazias e faltas) volta |
 | RF07 | Sair do turno tem uma regra para cada lado. **Cancelar** é só do lojista dono: derruba o turno, devolve a reserva inteira (sem multa) e não penaliza ninguém. **Desistir da vaga** é só do entregador inscrito: cancela a inscrição dele, reabre a vaga e, a menos de 1h do início, tira 0,5 do score **dele** — o turno e os colegas de vaga seguem |
 | RF12 | O dinheiro entra por recarga (Pix simulado) e sai por saque; a plataforma não cria nem destrói saldo — ver [`docs/financeiro/FLUXO-FINANCEIRO.md`](docs/financeiro/FLUXO-FINANCEIRO.md) |
+| RF13 | O usuário acompanha o **resultado financeiro (lucro ou prejuízo)** do período numa DRE simplificada, em regime de caixa, combinando o extrato com custos e receitas que ele informa. O entregador lança combustível, manutenção, DAS do MEI e contas fixas; o lojista, a taxa de entrega que cobrou. O que é informado à mão **não é transação**: não move saldo nem entra no extrato. Indicadores: margem líquida, lucro por hora e por turno, custo por km e ponto de equilíbrio em turnos (entregador); custo sobre a receita e resultado por turno (lojista) — ver [`docs/financeiro/RESULTADO.md`](docs/financeiro/RESULTADO.md) |
 | Senha | Quem está logado troca a senha no Perfil informando a atual. Quem esqueceu recebe um código de 6 dígitos (15 min, 5 tentativas, guardado só como hash BCrypt) e cria uma senha nova em três passos — e-mail, código, senha. A resposta nunca diz se o e-mail tem conta |
 | RF08 | Sugestão inteligente de turnos via IA |
 | RF09 | Relatório financeiro/operacional mensal via IA |

@@ -1,6 +1,6 @@
 # DER — Diagrama Entidade-Relacionamento
 
-Mapa das tabelas que compõem o banco de dados do **MotoShift**. O modelo reflete o schema real em produção (PostgreSQL no Railway), versionado por **Flyway** (migrações V1 a V24) e validado contra as entidades JPA do backend Spring Boot (`spring.jpa.hibernate.ddl-auto=validate`).
+Mapa das tabelas que compõem o banco de dados do **MotoShift**. O modelo reflete o schema real em produção (PostgreSQL no Railway), versionado por **Flyway** (migrações V1 a V25) e validado contra as entidades JPA do backend Spring Boot (`spring.jpa.hibernate.ddl-auto=validate`).
 
 > **Escopo:** 9 tabelas — `usuarios`, `turnos`, `turno_inscricoes`, `avaliacoes`, `carteiras`, `transacoes`, `cobrancas`, `notificacoes`, `notas_fiscais`.
 > Fonte da verdade: `backend/src/main/resources/db/migration` + `backend/src/main/java/com/motoshift/entity`.
@@ -33,6 +33,8 @@ erDiagram
     USUARIOS ||--o{ TURNOS : "cancela (cancelado_por_id)"
     USUARIOS ||--o{ FAVORITOS : "e favorito (motoboy_id)"
     USUARIOS ||--o{ CODIGOS_RECUPERACAO_SENHA : "pede (usuario_id)"
+    USUARIOS ||--o{ LANCAMENTOS_GERENCIAIS : "informa (usuario_id)"
+    TURNOS   ||--o{ LANCAMENTOS_GERENCIAIS : "e citado por (turno_id)"
 ```
 
 ## Visão geral das entidades
@@ -50,6 +52,7 @@ erDiagram
 | `notas_fiscais` | NFS-e do serviço prestado num turno — uma por par (turno, entregador) e uma por pagamento | `id` | `uk_nota_turno_prestador (turno_id, prestador_id)`, `uk_nota_transacao (transacao_id)` |
 | `favoritos` | Entregador que a loja marcou com o coração (V18) | `(lojista_id, motoboy_id)` | a própria PK — um favorito por par |
 | `codigos_recuperacao_senha` | Pedido de recuperação de senha: o hash do código de 6 dígitos, a validade e as tentativas gastas (V24) | `id` | — (vale o mais recente da conta) |
+| `lancamentos_gerenciais` | Custo ou receita que o usuário informa para a DRE (V25) — **não é extrato**: não move saldo | `id` | — |
 
 ## Relacionamentos e cardinalidades
 
@@ -71,6 +74,8 @@ erDiagram
 | `usuarios` | `turno_inscricoes.cancelado_por_id` | 0..1 : N | Quem cancelou a inscrição (V22) — o próprio entregador (desistiu da vaga) ou o lojista (cancelou o turno) |
 | `usuarios` | `favoritos.lojista_id / motoboy_id` | 1 : N (duplo) | A loja favorita vários entregadores e o entregador é favorito de várias lojas; o par é único. Quem é loja e quem é entregador é regra do `FavoritoService`; o banco só impede a conta de favoritar a si mesma |
 | `usuarios` | `codigos_recuperacao_senha` | 1 : N | Os pedidos de recuperação de senha da conta (V24). Na prática 0 ou 1 linha: o backend apaga os anteriores ao gerar um código novo e ao concluir a troca. É a única FK `ON DELETE CASCADE` do schema |
+| `usuarios` | `lancamentos_gerenciais.usuario_id` | 1 : N | O que a conta informou para a DRE (V25). Só o dono vê e mexe |
+| `turnos` | `lancamentos_gerenciais.turno_id` | 0..1 : N | O turno a que o lançamento se refere, quando se refere a um — o combustível daquele turno, a taxa cobrada naquela noite. Tem de ser um turno de que o usuário participou (regra do `LancamentoGerencialService`) |
 | `transacoes` | `notas_fiscais.transacao_id` | 1 : 0..1 | A nota documenta o `pagamento_recebido` do extrato (V14). É o que impede nota e extrato de discordarem: o valor do serviço é o do lançamento |
 
 ## Dicionário de dados
@@ -241,6 +246,24 @@ deixaria de valer.
 | `expira_em` | TIMESTAMP(6) | não | `criado_em` + 15 minutos, gravado (e não calculado na leitura) para o prazo de um pedido não mudar com o código |
 | `tentativas` | INTEGER | não | Default 0; CHECK `ck_codigo_recuperacao_tentativas` (`>= 0`). Sobe por `UPDATE ... WHERE tentativas < 5`: no quinto erro o código deixa de valer, mesmo com palpites simultâneos |
 
+### lancamentos_gerenciais
+
+Custos e receitas **fora da plataforma**, informados pelo usuário (RF13). Não é extrato: nada aqui move saldo, gera documento fiscal ou participa das invariantes do ledger — ver [`docs/financeiro/RESULTADO.md`](../financeiro/RESULTADO.md).
+
+| Coluna | Tipo | Nulo | Observação |
+|---|---|---|---|
+| `id` | BIGSERIAL | não | PK |
+| `usuario_id` | BIGINT | não | FK `fk_lancamento_gerencial_usuario` → `usuarios.id`; índice `ix_lancamento_gerencial_usuario_data (usuario_id, data)` |
+| `categoria` | VARCHAR(40) | não | CHECK `ck_lancamento_gerencial_categoria` com a lista do enum `CategoriaLancamento`. A categoria decide o papel (entregador ou lojista) e o grupo da DRE — por isso não há coluna "tipo" |
+| `valor` | NUMERIC(12,2) | não | CHECK `ck_lancamento_gerencial_valor` (`> 0`). Sempre positivo: o sinal é do grupo da categoria |
+| `data` | DATE | não | O dia do pagamento (regime de caixa). No recorrente, dita o dia do mês |
+| `recorrente` | BOOLEAN | não | Default `false`. `true` = vale uma vez por mês, no dia do mês de `data` (ou no último dia, se o mês for mais curto). É uma regra, não uma linha por mês |
+| `recorrente_ate` | DATE | sim | Última data em que a recorrência vale; nulo = sem fim. CHECK `ck_lancamento_gerencial_recorrencia`: só com `recorrente`, e nunca antes de `data` |
+| `turno_id` | BIGINT | sim | FK `fk_lancamento_gerencial_turno` → `turnos.id` |
+| `km` | NUMERIC(8,1) | sim | Quilômetros rodados — a base do "custo por km". CHECK `ck_lancamento_gerencial_km` (`> 0`) |
+| `descricao` | VARCHAR(200) | sim | — |
+| `criado_em` / `atualizado_em` | TIMESTAMP(6) | não | Quando foi digitado e quando foi editado — não é a data do pagamento |
+
 ### notas_fiscais
 
 | Coluna | Tipo | Nulo | Observação |
@@ -277,6 +300,7 @@ deixaria de valer.
 - **Colunas legadas preservadas.** `carteiras.motoboy_id`, `carteiras.ganhos_mensais` e `transacoes.motoboy_id` permanecem no banco com o histórico intacto, apenas sem `NOT NULL`.
 - **FKs das V18 e V19, com a mesma regra.** `favoritos.lojista_id`, `favoritos.motoboy_id` e `turnos.cancelado_por_id` são `ON DELETE RESTRICT` como as da V11. O reset "só da massa" apaga os favoritos que tocam uma conta da massa e esvazia `cancelado_por_id` de turno real cancelado por ela — sem isso, a FK travaria o reset (`ResetDaMassaPostgresTest`).
 - **A única FK em cascata (V24).** `codigos_recuperacao_senha.usuario_id` é `ON DELETE CASCADE`, ao contrário de todas as outras: o código não é histórico de ninguém — é uma credencial de 15 minutos que não significa nada sem a conta, e não deve impedir apagá-la. O reset da massa apaga os códigos explicitamente mesmo assim, porque no H2 do dev (criado pelo Hibernate) essa FK não existe.
+- **Dinheiro informado não é dinheiro movimentado (V25).** `lancamentos_gerenciais` fica fora do ledger de propósito: `transacoes` só tem o que a plataforma movimentou, e é isso que sustenta "carteira = extrato". A DRE junta as duas tabelas na leitura. As duas FKs são `ON DELETE RESTRICT`, como as da V11; o reset da massa apaga os lançamentos das contas da massa e esvazia o `turno_id` do lançamento de conta real que apontava para um turno dela.
 - **O que não virou tabela.** Pontualidade (V16) e selos de reputação (Fase 7) são calculados na hora a partir de `turno_inscricoes`, `avaliacoes`, `transacoes` e `turnos`: um valor guardado envelheceria. O lembrete de 1 hora também não tem coluna de controle — a notificação que já existe (`ix_notificacao_dedup`) é o controle.
 - **Índices de desempenho.** `ix_turno_status_inicio`, `ix_turno_status_fim` e `ix_turno_geo` sustentam a listagem de turnos disponíveis, o job de expiração e o pré-filtro por bounding box do filtro de raio; `ix_notificacao_dedup` evita notificação repetida a cada execução do job; `ix_inscricao_motoboy` e `ix_avaliacao_avaliador` (V11) cobrem as consultas por pessoa e a verificação das FKs.
 
@@ -308,3 +332,4 @@ deixaria de valer.
 | `V22__desistencia_na_inscricao` | Aditiva: `cancelado_por_id` (FK) e `cancelado_em` em `turno_inscricoes`, com índice. "Cancelar" virou duas ações — a loja cancela o turno, o entregador desiste da vaga dele —, e a desistência não cancela o turno, então precisa de lugar próprio. Backfill: os turnos cancelados antes levam autor e data para as inscrições canceladas deles |
 | `V23__email_sem_maiusculas` | O e-mail deixa de diferenciar maiúsculas: confere antes se há contas que só diferem pela caixa ou por espaços (se houver, **falha** dizendo quais, em vez de escolher uma), normaliza as linhas (`lower(trim(email))`) e cria o índice único `uk_usuario_email_lower` em `lower(email)` |
 | `V24__codigos_de_recuperacao_de_senha` | Tabela nova `codigos_recuperacao_senha (id, usuario_id, codigo_hash, criado_em, expira_em, tentativas)`, com FK em cascata para `usuarios`, CHECK no contador e índice por conta. Aditiva: nada existente muda. Guarda o hash BCrypt do código, nunca o código (SCRUM-32) |
+| `V25__lancamentos_gerenciais` | Tabela nova `lancamentos_gerenciais` — custos e receitas que o usuário informa para a DRE —, com FKs para `usuarios` e `turnos`, CHECK no domínio da categoria, no valor, no km e na recorrência, e índice por usuário e data. Aditiva: nada existente muda, e nada dela toca o ledger (SCRUM-47) |

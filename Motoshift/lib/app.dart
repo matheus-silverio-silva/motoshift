@@ -39,6 +39,7 @@ import 'views/extrato/extrato_screen.dart';
 import 'views/extrato/lancamento_detalhe_screen.dart';
 import 'views/recarga/recarga_screen.dart';
 import 'views/relatorios_financeiros/relatorios_financeiros_screen.dart';
+import 'views/resultado/resultado_screen.dart';
 import 'views/recuperar_senha/recuperar_senha_screen.dart';
 import 'widgets/auth_guard.dart';
 import 'models/usuario.dart';
@@ -221,6 +222,9 @@ Map<String, WidgetBuilder> rotasDoApp() => {
             (_) => const AuthGuard(child: DocumentoFiscalScreen()),
         AppRoutes.relatorioFinanceiro:
             (_) => const AuthGuard(child: RelatoriosFinanceirosScreen()),
+        // Resultado (RF13): uma tela para os dois papéis — o backend monta a
+        // DRE de quem está logado.
+        AppRoutes.resultado: (_) => const AuthGuard(child: ResultadoScreen()),
 
         // ── Perfil — sub-páginas (qualquer autenticado) ───────────────────
         AppRoutes.perfilPublico:    (_) => const AuthGuard(child: PerfilPublicoScreen()),

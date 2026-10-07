@@ -73,6 +73,7 @@ class MassaDemonstracaoTest {
     @Autowired private com.motoshift.service.Selos selos;
     @Autowired private com.motoshift.service.FavoritoService favoritos;
     @Autowired private com.motoshift.service.TurnoConsultaService consultas;
+    @Autowired private com.motoshift.service.DreService dre;
 
     @Test
     @DisplayName("sem MOTOSHIFT_SEED_RESET o boot nao apaga nem cria nada")
@@ -557,6 +558,81 @@ class MassaDemonstracaoTest {
             assertThat(c.getSaldoBloqueado().signum())
                     .as("bloqueado de %s", u.getEmail()).isNotNegative();
         }
+    }
+
+    /**
+     * A DRE (RF13) tem os dois casos para mostrar, nas duas contas que a
+     * documentação aponta: o Carlos (entregador) e a Cláudia (lojista) fecham
+     * o MÊS PASSADO com lucro e o MÊS RETRASADO com prejuízo.
+     *
+     * <p>A massa é datada a partir de hoje, então o teste pergunta pelos meses
+     * do calendário relativos a hoje — e os valores foram escolhidos para a
+     * resposta não depender de quantas semanas o mês teve: a manutenção de R$
+     * 420 do Carlos é maior do que o melhor mês dele, e a taxa da promoção da
+     * Cláudia é menor do que o turno mais barato dela.
+     */
+    @Test
+    @DisplayName("resultado: Carlos e Cláudia têm o mês passado com lucro e o retrasado com prejuízo")
+    void mesesDeLucroEDePrejuizo() {
+        massa.resetar();
+        java.time.YearMonth passado = java.time.YearMonth.now().minusMonths(1);
+        java.time.YearMonth retrasado = java.time.YearMonth.now().minusMonths(2);
+        Long carlos = id("motoboy@teste.com");
+        Long claudia = id("claudia@teste.com");
+
+        // ── Carlos, mês passado: um turno por semana paga as contas. ──────
+        com.motoshift.dto.DreResponse lucroDoCarlos = dre.dre(carlos, "motoboy",
+                passado.atDay(1), passado.atEndOfMonth());
+        assertThat(lucroDoCarlos.situacao()).isEqualTo("lucro");
+        assertThat(lucroDoCarlos.resultado()).isPositive();
+        int turnosDoCarlos = (Integer) lucroDoCarlos.indicadores().get("turnosPagos");
+        assertThat(turnosDoCarlos).isGreaterThanOrEqualTo(3);
+        assertThat(linhaDaDre(lucroDoCarlos, "das_mei")).isEqualByComparingTo("86.05");
+        assertThat(linhaDaDre(lucroDoCarlos, "celular_internet")).isEqualByComparingTo("35.00");
+        assertThat(linhaDaDre(lucroDoCarlos, "seguro")).isEqualByComparingTo("32.00");
+        assertThat(linhaDaDre(lucroDoCarlos, "parcela_ou_aluguel_veiculo")).isEqualByComparingTo("95.00");
+        // Combustível por turno, com os km — é de onde sai o custo por km.
+        assertThat(linhaDaDre(lucroDoCarlos, "combustivel"))
+                .isEqualByComparingTo(new BigDecimal("7.50").multiply(BigDecimal.valueOf(turnosDoCarlos)));
+        assertThat(linhaDaDre(lucroDoCarlos, "manutencao")).isEqualByComparingTo("0.00");
+        assertThat((BigDecimal) lucroDoCarlos.indicadores().get("custoPorKm")).isEqualByComparingTo("0.18");
+        assertThat(lucroDoCarlos.indicadores().get("pontoDeEquilibrioTurnos")).isNotNull();
+
+        // ── Carlos, mês retrasado: a manutenção custou mais do que o mês rendeu. ──
+        com.motoshift.dto.DreResponse prejuizoDoCarlos = dre.dre(carlos, "motoboy",
+                retrasado.atDay(1), retrasado.atEndOfMonth());
+        assertThat(prejuizoDoCarlos.situacao()).isEqualTo("prejuizo");
+        assertThat(prejuizoDoCarlos.resultado()).isNegative();
+        assertThat(linhaDaDre(prejuizoDoCarlos, "manutencao")).isEqualByComparingTo("420.00");
+        assertThat(linhaDaDre(prejuizoDoCarlos, "receita_bruta")).isPositive();
+
+        // ── Cláudia, mês passado: as taxas cobradas cobrem os entregadores. ──
+        com.motoshift.dto.DreResponse lucroDaClaudia = dre.dre(claudia, "lojista",
+                passado.atDay(1), passado.atEndOfMonth());
+        assertThat(lucroDaClaudia.situacao()).isEqualTo("lucro");
+        assertThat(linhaDaDre(lucroDaClaudia, "receita_de_entregas"))
+                .isGreaterThan(linhaDaDre(lucroDaClaudia, "custo_dos_entregadores"));
+        assertThat(linhaDaDre(lucroDaClaudia, "entrega_fora_do_app")).isEqualByComparingTo("45.00");
+        assertThat(linhaDaDre(lucroDaClaudia, "outra_despesa_entrega")).isEqualByComparingTo("60.00");
+
+        // ── Cláudia, mês retrasado: a promoção de frete grátis. ───────────
+        com.motoshift.dto.DreResponse prejuizoDaClaudia = dre.dre(claudia, "lojista",
+                retrasado.atDay(1), retrasado.atEndOfMonth());
+        assertThat(prejuizoDaClaudia.situacao()).isEqualTo("prejuizo");
+        assertThat(linhaDaDre(prejuizoDaClaudia, "receita_de_entregas")).isPositive()
+                .isLessThan(linhaDaDre(prejuizoDaClaudia, "custo_dos_entregadores"));
+
+        // Quem não informou nada continua com a DRE só do extrato.
+        assertThat(dre.dre(id("ricardo@teste.com"), "motoboy", passado.atDay(1), passado.atEndOfMonth())
+                .lancamentosManuais()).isZero();
+
+        // E nada disso passou pelo ledger: as invariantes seguem fechando.
+        consistencia.verificarConsistencia(idsDaMassa()).exigirConsistente();
+    }
+
+    private static BigDecimal linhaDaDre(com.motoshift.dto.DreResponse r, String chave) {
+        return r.linhas().stream().filter(l -> l.chave().equals(chave)).findFirst()
+                .orElseThrow(() -> new AssertionError("sem a linha " + chave)).valor();
     }
 
     /**

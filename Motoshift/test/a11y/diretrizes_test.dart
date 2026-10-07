@@ -20,6 +20,7 @@ import 'package:moto_shift/views/dashboard_lojista/dashboard_lojista_screen.dart
 import 'package:moto_shift/views/dashboard_motoboy/dashboard_motoboy_screen.dart';
 import 'package:moto_shift/views/detalhe_turno/detalhe_turno_screen.dart';
 import 'package:moto_shift/views/login/login_screen.dart';
+import 'package:moto_shift/views/resultado/resultado_screen.dart';
 import 'package:moto_shift/views/turno_lojista/turno_lojista_screen.dart';
 
 import '../test_helpers.dart';
@@ -62,6 +63,21 @@ void main() {
       papel: TipoUsuario.lojista,
       tela: () => const TurnoLojistScreen(),
       argumentos: () => fakeTurnosLojista().first,
+    ),
+    // A tela de resultado (SCRUM-47) nasceu depois desta lista, e entra nela:
+    // a faixa de lucro e a de prejuízo têm fundo colorido, que é onde o
+    // contraste costuma falhar.
+    (
+      nome: 'resultado (entregador)',
+      papel: TipoUsuario.motoboy,
+      tela: () => ResultadoScreen(agora: dataAncoraGolden),
+      argumentos: () => null,
+    ),
+    (
+      nome: 'resultado (lojista)',
+      papel: TipoUsuario.lojista,
+      tela: () => ResultadoScreen(agora: dataAncoraGolden),
+      argumentos: () => null,
     ),
   ];
 

@@ -12,6 +12,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:moto_shift/models/dre.dart';
 import 'package:moto_shift/models/extrato_filtro.dart';
 import 'package:moto_shift/models/transacao.dart';
 import 'package:moto_shift/models/usuario.dart';
@@ -118,6 +119,102 @@ void main() {
       expect(texto, isNot(contains('A receber')));
       expect(texto, isNot(contains('Recebido por serviços')));
       expect(texto, contains('Nenhum lançamento neste recorte'));
+    });
+  });
+
+  group('PDF do relatório com a DRE', () {
+    test('entregador: a seção "Demonstração do resultado" traz a situação e as linhas', () async {
+      final dre = fakeDreEntregador(comPrejuizo: true);
+      final bytes = await RelatorioPdf.relatorio(
+        titular: _entregador,
+        de: DateTime(2026, 8, 1),
+        ate: DateTime(2026, 8, 19),
+        resumo: fakeResumoFinanceiro(),
+        fluxo: fakeFluxo(),
+        lancamentos: fakeExtrato(),
+        dre: dre,
+        geradoEm: geradoEm,
+        comprimir: false,
+      );
+      final texto = textoDoPdf(bytes);
+
+      expect(texto, contains('DEMONSTRAÇÃO DO RESULTADO'));
+      // A situação por extenso — a mesma frase da tela.
+      expect(texto, contains('Prejuízo de'));
+      expect(texto, contains('308,05'));
+      expect(texto, contains('no período'));
+      // As linhas, com o sinal e a origem.
+      expect(texto, contains('Pagamentos de turnos'));
+      expect(texto, contains('Combustível'));
+      expect(texto, contains('Informado por você'));
+      expect(texto, contains('Extrato'));
+      expect(texto, contains('Margem de contribuição'));
+      expect(texto, contains('Resultado do período'));
+      expect(texto, contains('420,00'));
+      expect(texto, contains('Caixa'));
+    });
+
+    test('lojista: a DRE da operação de entrega', () async {
+      final bytes = await RelatorioPdf.relatorio(
+        titular: _lojista,
+        de: DateTime(2026, 8, 1),
+        ate: DateTime(2026, 8, 19),
+        resumo: fakeResumoLojista(),
+        fluxo: const [],
+        lancamentos: const [],
+        dre: fakeDreLojista(),
+        geradoEm: geradoEm,
+        comprimir: false,
+      );
+      final texto = textoDoPdf(bytes);
+
+      expect(texto, contains('DEMONSTRAÇÃO DO RESULTADO'));
+      expect(texto, contains('Lucro de'));
+      expect(texto, contains('197,00'));
+      expect(texto, contains('Receita de entregas'));
+      expect(texto, contains('Pagamentos e gorjetas a entregadores'));
+      expect(texto, contains('Resultado da operação de entrega'));
+      expect(texto, isNot(contains('Combustível')));
+    });
+
+    test('sem lançamento informado, o PDF avisa que o resultado ignora o que não passou pela plataforma',
+        () async {
+      final base = fakeDreEntregador();
+      final bytes = await RelatorioPdf.relatorio(
+        titular: _entregador,
+        de: DateTime(2026, 8, 1),
+        ate: DateTime(2026, 8, 19),
+        resumo: fakeResumoFinanceiro(),
+        fluxo: const [],
+        lancamentos: const [],
+        dre: Dre(
+          papel: base.papel,
+          dataInicio: base.dataInicio,
+          dataFim: base.dataFim,
+          linhas: base.linhas,
+          resultado: base.resultado,
+          situacao: base.situacao,
+        ),
+        geradoEm: geradoEm,
+        comprimir: false,
+      );
+
+      expect(textoDoPdf(bytes), contains('Nenhum custo ou receita foi informado'));
+    });
+
+    test('sem DRE, o relatório sai como antes — sem a seção', () async {
+      final bytes = await RelatorioPdf.relatorio(
+        titular: _entregador,
+        de: DateTime(2026, 8, 30),
+        ate: DateTime(2026, 9, 28),
+        resumo: fakeResumoFinanceiro(),
+        fluxo: fakeFluxo(),
+        lancamentos: fakeExtrato(),
+        geradoEm: geradoEm,
+        comprimir: false,
+      );
+
+      expect(textoDoPdf(bytes), isNot(contains('DEMONSTRAÇÃO DO RESULTADO')));
     });
   });
 

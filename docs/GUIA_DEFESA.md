@@ -344,6 +344,41 @@ entrou nesta revisão (seção 11).
 
 ---
 
+**P: Por que a DRE é em regime de caixa, e não de competência?**
+R: Por três motivos. Coerência: o informe anual já conta o rendimento pelo dia
+em que foi creditado, e duas telas não podem dizer que o mesmo mês rendeu
+valores diferentes. Público: MEI e pessoa física pensam em "quando paguei", não
+em "a que mês pertence". E simplicidade: competência exige provisão — contas a
+pagar e a receber, estorno de provisão —, que é um sistema contábil, não uma
+demonstração simplificada. Vale o `criadoEm` do lançamento concluído e a `data`
+do custo informado, e nada entra antes de acontecer.
+
+**P: Por que o custo que o usuário informa não passa pelo ledger?**
+R: Porque o ledger registra só dinheiro que a plataforma movimentou, e as três
+invariantes dependem disso: "carteira = extrato" vale porque cada linha do
+extrato tem um movimento de saldo do outro lado. A gasolina que o entregador
+pagou no posto, a plataforma não viu passar — ouviu falar. Se esse número
+digitado entrasse no extrato, as invariantes dependeriam da memória de alguém.
+Por isso é outra tabela (`lancamentos_gerenciais`), outro serviço, sem o
+`LedgerService`, e a DRE junta os dois só na leitura. Há um teste que confere:
+criar, editar e excluir um lançamento desses não muda saldo nenhum.
+
+**P: Como o app sabe o custo do entregador?**
+R: Não sabe — ele informa. Combustível, manutenção, DAS e contas fixas são
+lançados na tela de resultado; conta fixa é lançada uma vez, como recorrente, e
+vale todo mês. Para o combustível há uma calculadora (km ÷ consumo × preço do
+litro). E a tela é honesta sobre o limite: sem nada informado, ela avisa que o
+resultado só conhece o que passou pela plataforma — e a IA do relatório recebe
+a mesma instrução.
+
+**P: O que é ponto de equilíbrio aqui?**
+R: Quantos turnos o entregador precisa fazer no período para pagar as despesas
+fixas: despesas fixas ÷ margem de contribuição média por turno, arredondado
+para cima. A margem de contribuição é o que sobra de cada turno depois das
+deduções e dos custos variáveis (combustível e manutenção). Se essa margem for
+zero ou negativa, não há ponto de equilíbrio — cada turno a mais aumenta o
+prejuízo —, e o número vem nulo, com o motivo, em vez de um número absurdo.
+
 ### Glossário rápido
 - **Turno:** bloco de tempo que o lojista publica e o motoboy reserva.
 - **Wallet/Carteira:** saldo de cada conta. O lojista recarrega e reserva o
@@ -563,6 +598,42 @@ R: São duas chamadas: a nota fica, e a tela diz "Avaliação enviada, mas a
 gorjeta não" com o motivo do backend. Nada de dinheiro se move pela metade —
 a gorjeta é uma transação só no `LedgerService`.
 
+### Resultado financeiro: lucro e prejuízo
+
+- **O problema.** O app dizia quanto entrou, não quanto sobrou. "Ganhos", para o
+  entregador, era faturamento bruto — sem combustível, manutenção, DAS e contas
+  fixas. O lojista via o gasto com entregas, não o que elas renderam. Foi o
+  pedido da correção: uma parte contábil mais forte, com lucro e prejuízo.
+- **A regra.** Uma DRE simplificada para cada papel, em regime de caixa
+  (RF13). Entregador: receita bruta (pagamentos + gorjetas) − deduções
+  (retenções + DAS) = receita líquida − custos variáveis (combustível,
+  manutenção) = margem de contribuição − despesas fixas = resultado. Lojista:
+  taxas de entrega cobradas − custo dos entregadores − entregas fora do app =
+  margem da operação − outras despesas = resultado. Reserva e liberação não
+  entram: são o dinheiro do lojista mudando de bolso.
+- **O que o usuário informa não é transação.** Fica em `lancamentos_gerenciais`
+  (V25), não move saldo, não entra no extrato e não gera documento fiscal. A
+  categoria diz o papel e o grupo da DRE — não há coluna "tipo". Conta fixa é
+  recorrente: uma regra mensal (dia 31 vira 28 em fevereiro), e não uma linha
+  gravada por mês.
+- **Onde.** `DreService` (as duas demonstrações e os indicadores),
+  `LancamentoGerencialService`, `Recorrencia` (função pura), `DreController` e
+  `LancamentoGerencialController` em `/api/financeiro`. No app,
+  `views/resultado/`: a faixa diz a situação por extenso ("Prejuízo de R$
+  220,55 no período"), a tabela mostra a origem de cada linha (extrato ou
+  informado por você) e o PDF do relatório ganhou a seção "Demonstração do
+  resultado".
+- **Como é testado.** `DreServiceTest` (lucro, prejuízo, equilíbrio, período
+  vazio, reserva fora, gorjeta nos dois lados, ponto de equilíbrio nulo),
+  `RecorrenciaTest`, `LancamentoGerencialHttpTest` (404 para o de outro
+  usuário, categoria do papel errado, 401 sem token) e
+  `LancamentosGerenciaisForaDoLedgerTest` — criar, editar e excluir não mexem
+  em saldo nem nas invariantes.
+- **Na demonstração.** `motoboy@teste.com` (Carlos) e `claudia@teste.com`: o
+  mês passado fecha com lucro e o retrasado com prejuízo — o Carlos por uma
+  manutenção de R$ 420, a Cláudia por uma promoção de frete grátis. O detalhe
+  está em `docs/financeiro/RESULTADO.md`.
+
 ### A massa conta tudo isso
 
 - **Pelos serviços de verdade.** Chegada e saída pelo `CheckinService`
@@ -575,7 +646,9 @@ a gorjeta é uma transação só no `LedgerService`.
   Lucas ~73%, Thiago ~30%); um turno em andamento com check-in; gorjetas da
   Cláudia e duas do Fernando; favoritos de três lojas; meta do Ricardo e do
   Carlos (Lucas e Thiago veem o convite); selos em uns perfis e em outros não;
-  lembrete de 1 hora e avisos de chegada e de favorito ainda não lidos.
+  lembrete de 1 hora e avisos de chegada e de favorito ainda não lidos. E o
+  resultado: o Carlos e a Cláudia com um mês de lucro e um de prejuízo, pelos
+  custos e receitas que informaram (`LancamentoGerencialService`).
 - **Continua fechando.** `MassaDemonstracaoTest.massaFechaNasInvariantes`
   passa a massa pela `verificarConsistencia()`, agora com gorjetas no meio;
   `novidadesNaMassa` confere cada item acima; `ResetDaMassaPostgresTest`

@@ -72,6 +72,7 @@ flowchart LR
     mAgenda[Agenda]
     mCarteira[Carteira]
     mRelatorios[Relatórios]
+    mResultado[Resultado]
     mNotas[Notas fiscais]
     mAval[Avaliações]
     mNotif[Notificações]
@@ -86,6 +87,7 @@ flowchart LR
     lPublicar[Publicar turno]
     lSaldo[Saldo]
     lRelatorios[Relatórios]
+    lResultado[Resultado]
     lNotas[Notas fiscais]
     lAval[Avaliações]
     lNotif[Notificações]
@@ -102,6 +104,7 @@ flowchart LR
     recarga[Adicionar saldo]
     dados[Dados pessoais]
     cnh[CNH e veículo / Endereço]
+    senha[Alterar senha]
   end
 
   login -->|entregador| mInicio
@@ -120,6 +123,9 @@ flowchart LR
   lPublicar -->|sem saldo| recarga
   mPerfil & lPerfil --> dados
   mPerfil & lPerfil --> cnh
+  mPerfil & lPerfil --> senha
+  mRelatorios -->|"Ver resultado"| mResultado
+  lRelatorios -->|"Ver resultado"| lResultado
 ```
 
 ### Menu por papel
@@ -127,7 +133,7 @@ flowchart LR
 | Seção | Entregador | Lojista |
 |---|---|---|
 | **OPERAÇÃO** | Início · Turnos · Agenda | Início · Agenda · Turnos · Publicar turno |
-| **FINANCEIRO** | Carteira · Relatórios · Notas fiscais | Saldo · Relatórios · Notas fiscais |
+| **FINANCEIRO** | Carteira · Relatórios · Resultado · Notas fiscais | Saldo · Relatórios · Resultado · Notas fiscais |
 | **AVALIAÇÕES** | Avaliações (selo com as pendentes) | Avaliações (selo com as pendentes) |
 | **CONTA** | Notificações · Histórico · Perfil | Notificações · Histórico · Perfil |
 | Barra inferior (celular) | Início · Turnos · Carteira · Perfil | Início · Agenda · Turnos · Perfil |
@@ -146,6 +152,23 @@ legível. O menu é completo; a barra é o atalho do dia a dia.
 
 ---
 
+### Resultado: seção própria, ao lado dos Relatórios
+
+**Resultado** (`/resultado`, RF13) é item de menu dos dois papéis, e não uma
+aba dos Relatórios: lá está o que passou pela carteira; aqui, o que sobrou —
+lucro ou prejuízo —, com os custos que a pessoa informa. Uma tela só para os
+dois papéis: o backend monta a DRE de quem está logado.
+
+- **Dos Relatórios para o Resultado** há um cartão, "Ver resultado
+  (lucro/prejuízo)". É troca de seção (`NavConfig.irParaSecao`), como um item
+  de menu: Relatórios e Resultado são irmãos, não pai e filho.
+- **O formulário de lançamento não é rota.** "Informar" abre uma folha
+  inferior no celular e um diálogo no desktop, sobre a própria tela — fechar
+  devolve a pessoa à DRE, já recalculada.
+- **O período** usa os mesmos atalhos dos Relatórios (o widget
+  `SeletorDePeriodo` é compartilhado) e mais um caminho: tocar num mês do
+  gráfico "Mês a mês" apura aquele mês.
+
 ## 4. Um conceito, um nome
 
 O item de menu, o título da tela e o botão que leva até ela dizem a mesma
@@ -155,6 +178,7 @@ coisa. Quando dois nomes conviviam, o que ficou está na coluna da esquerda.
 |---|---|---|
 | Turnos (entregador) | Turnos disponíveis | Título do desktop |
 | Relatórios | Relatórios financeiros | Título do desktop |
+| Resultado | DRE · Lucro e prejuízo | — (nasceu com este nome; "DRE" fica para a documentação) |
 | Histórico | Histórico de turnos | Título das duas larguras |
 | Publicar turno | Publicar novo turno · Publicar Turno | Rodapé da lista, card do início, header |
 | Detalhes do turno | Detalhes do Turno · Turno | Header do entregador · header do lojista |

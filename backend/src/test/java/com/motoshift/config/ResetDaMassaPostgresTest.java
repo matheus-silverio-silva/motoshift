@@ -94,7 +94,7 @@ class ResetDaMassaPostgresTest {
     }
 
     @Test
-    @DisplayName("confirmo: favorito, cancelamento e código de senha cruzados com a massa não travam o reset nas FKs (V18, V19, V24)")
+    @DisplayName("confirmo: favorito, cancelamento, código de senha e lançamento gerencial cruzados com a massa não travam o reset nas FKs (V18, V19, V24, V25)")
     void confirmoComReferenciasCruzadas() {
         massa.resetar();
         Usuario loja = contaReal("Loja que favorita", "favorita@lojareal.com.br", "lojista");
@@ -111,8 +111,29 @@ class ResetDaMassaPostgresTest {
         // O Ricardo e a loja real pediram código de recuperação de senha (V24).
         codigoDeSenha(ricardo);
         codigoDeSenha(loja.getId());
+        // O entregador real informou o combustível de um turno da Cláudia (V25).
+        Long turnoDaMassa = jdbc.queryForObject(
+                "SELECT min(id) FROM turnos WHERE lojist_id = ?", Long.class, claudia);
+        jdbc.update("INSERT INTO lancamentos_gerenciais (usuario_id, categoria, valor, data, turno_id, "
+                + "criado_em, atualizado_em) VALUES (?, 'combustivel', 12.00, current_date, ?, now(), now())",
+                entregador.getId(), turnoDaMassa);
+        long daMassaAntes = jdbc.queryForObject(
+                "SELECT count(*) FROM lancamentos_gerenciais WHERE usuario_id <> ?",
+                Long.class, entregador.getId());
+        assertThat(daMassaAntes).isPositive();
 
         new ResetDaMassaNoBoot(massa, "confirmo").run(null);
+
+        // O custo é da conta real, e fica; o turno da massa deixou de existir,
+        // então o lançamento só deixa de apontar para ele.
+        assertThat(jdbc.queryForMap(
+                "SELECT count(*) AS n, count(turno_id) AS com_turno FROM lancamentos_gerenciais "
+                        + "WHERE usuario_id = ?", entregador.getId()))
+                .containsEntry("n", 1L).containsEntry("com_turno", 0L);
+        // Os da massa foram refeitos: a mesma quantidade, todos de contas da massa.
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM lancamentos_gerenciais l JOIN usuarios u ON u.id = l.usuario_id "
+                        + "WHERE u.email LIKE '%@teste.com'", Long.class)).isEqualTo(daMassaAntes);
 
         // O código da conta da massa saiu com ela; o da conta real ficou.
         assertThat(jdbc.queryForObject("SELECT count(*) FROM codigos_recuperacao_senha", Integer.class))
@@ -187,9 +208,10 @@ class ResetDaMassaPostgresTest {
         Map<String, long[]> resumo = massa.apagarTudoERecriar();
 
         assertThat(resumo.keySet()).containsExactly("notas_fiscais", "avaliacoes", "transacoes",
-                "cobrancas", "turno_inscricoes", "notificacoes", "turnos", "carteiras", "favoritos",
-                "codigos_recuperacao_senha", "usuarios");
+                "cobrancas", "turno_inscricoes", "notificacoes", "lancamentos_gerenciais", "turnos",
+                "carteiras", "favoritos", "codigos_recuperacao_senha", "usuarios");
         assertThat(antes.get("codigos_recuperacao_senha")).isPositive();
+        assertThat(antes.get("lancamentos_gerenciais")).isPositive();
         resumo.forEach((tabela, linha) -> {
             assertThat(linha[0]).as("antes de %s", tabela).isEqualTo(antes.get(tabela));
             assertThat(linha[1]).as("apagados de %s", tabela).isEqualTo(antes.get(tabela));

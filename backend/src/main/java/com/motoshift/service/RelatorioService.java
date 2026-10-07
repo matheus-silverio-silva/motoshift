@@ -1,18 +1,19 @@
 package com.motoshift.service;
 
+import com.motoshift.dto.DreResponse;
 import com.motoshift.dto.RelatorioFinanceiroResponse;
 import com.motoshift.dto.RelatorioFinanceiroResponse.ItemDeQuebra;
 import com.motoshift.entity.StatusCobranca;
 import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.TipoCobranca;
 import com.motoshift.entity.TipoTransacao;
-import com.motoshift.entity.Transacao;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.Usuario;
 import com.motoshift.repository.CobrancaRepository;
 import com.motoshift.repository.TransacaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
+import com.motoshift.service.LancamentosDoExtrato.Lancamento;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -23,7 +24,6 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -48,16 +48,18 @@ import java.util.TreeMap;
  * ao Claude devolvia 503 e o usuário ficava sem relatório nenhum — embora todos
  * os números já estivessem calculados. Agora eles são a resposta, e a análise
  * vem {@code null} quando a IA não responde.
+ *
+ * <p><b>O resultado vem da DRE, sem recalcular (RF13).</b> Faturamento não é
+ * lucro. {@code resultadoDoPeriodo}, {@code situacao} e os indicadores que os
+ * acompanham são lidos do {@link DreService} para o mesmo período — a tela de
+ * resultado e o relatório não podem dar duas respostas para "tive lucro?". E
+ * a IA passa a comentar o resultado, avisando quando ele só conhece o que
+ * passou pela plataforma.
  */
 @Service
 public class RelatorioService {
 
     private static final Logger log = LoggerFactory.getLogger(RelatorioService.class);
-
-    private static final String[] MESES = {
-        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-    };
 
     private final TurnoRepository turnoRepo;
     private final UsuarioRepository usuarioRepo;
@@ -65,19 +67,25 @@ public class RelatorioService {
     private final CobrancaRepository cobrancaRepo;
     private final AnthropicService anthropicService;
     private final Reputacao reputacao;
+    private final LancamentosDoExtrato extrato;
+    private final DreService dre;
 
     public RelatorioService(TurnoRepository turnoRepo,
                             UsuarioRepository usuarioRepo,
                             TransacaoRepository transacaoRepo,
                             CobrancaRepository cobrancaRepo,
                             AnthropicService anthropicService,
-                            Reputacao reputacao) {
+                            Reputacao reputacao,
+                            LancamentosDoExtrato extrato,
+                            DreService dre) {
         this.turnoRepo = turnoRepo;
         this.usuarioRepo = usuarioRepo;
         this.transacaoRepo = transacaoRepo;
         this.cobrancaRepo = cobrancaRepo;
         this.anthropicService = anthropicService;
         this.reputacao = reputacao;
+        this.extrato = extrato;
+        this.dre = dre;
     }
 
     // -- Entregador ----------------------------------------------------------
@@ -87,21 +95,15 @@ public class RelatorioService {
         Usuario motoboy = exigirPerfil(motoboyId, "motoboy");
         Periodo p = Periodo.de(inicio, fim);
 
-        List<Lancamento> ganhos = lancamentos(motoboyId, TipoTransacao.PAGAMENTO_RECEBIDO, p);
-        BigDecimal total = soma(ganhos);
+        List<Lancamento> ganhos = extrato.doPeriodo(motoboyId, TipoTransacao.PAGAMENTO_RECEBIDO, p);
+        BigDecimal total = LancamentosDoExtrato.soma(ganhos);
 
         BigDecimal saques = cobrancaRepo.somar(motoboyId, TipoCobranca.SAQUE,
                 StatusCobranca.CONCLUIDO, p.inicio(), p.fim());
 
-        // Horas efetivamente trabalhadas: a duração dos turnos que geraram
-        // pagamento. Turno sem data (lançamento órfão) fica de fora da conta em
-        // vez de entrar como zero hora, o que inflaria o valor por hora.
-        double horas = ganhos.stream()
-                .filter(l -> l.turno() != null
-                        && l.turno().getDataInicio() != null && l.turno().getDataFim() != null)
-                .mapToDouble(l -> Duration.between(
-                        l.turno().getDataInicio(), l.turno().getDataFim()).toMinutes() / 60.0)
-                .sum();
+        // A regra das horas mora num lugar só: é o mesmo divisor do "lucro por
+        // hora" da DRE.
+        double horas = LancamentosDoExtrato.horasTrabalhadas(ganhos);
 
         Map<String, Object> numeros = new LinkedHashMap<>();
         numeros.put("turnosPagos", ganhos.size());
@@ -122,6 +124,14 @@ public class RelatorioService {
         numeros.put("score", score);
         numeros.put("mediaAvaliacao", motoboy.getMediaAvaliacao());
 
+        // O resultado (RF13): lido da DRE do mesmo período, não refeito aqui.
+        DreResponse resultado = dre.dre(motoboyId, "motoboy", p.dataInicio(), p.dataFim());
+        numeros.put("resultadoDoPeriodo", resultado.resultado());
+        numeros.put("situacao", resultado.situacao());
+        numeros.put("margemLiquida", resultado.indicadores().get("margemLiquida"));
+        numeros.put("pontoDeEquilibrioTurnos",
+                resultado.indicadores().get("pontoDeEquilibrioTurnos"));
+
         Map<String, List<ItemDeQuebra>> series = new LinkedHashMap<>();
         series.put("porLojista", porContraparte(ganhos));
         series.put("porDiaDaSemana", porDiaDaSemana(ganhos));
@@ -129,7 +139,7 @@ public class RelatorioService {
 
         String analise = analisar(
                 AnthropicService.SYSTEM_PROMPT_RELATORIO_MOTOBOY,
-                contextoDoMotoboy(motoboy, p, numeros, series));
+                contextoDoMotoboy(motoboy, p, numeros, series, resultado));
 
         return RelatorioFinanceiroResponse.de("motoboy", p.rotulo(), p.dataInicio(), p.dataFim(),
                 numeros, series, analise);
@@ -142,8 +152,8 @@ public class RelatorioService {
         Usuario lojista = exigirPerfil(lojistaId, "lojista");
         Periodo p = Periodo.de(inicio, fim);
 
-        List<Lancamento> gastos = lancamentos(lojistaId, TipoTransacao.PAGAMENTO_ENVIADO, p);
-        BigDecimal total = soma(gastos);
+        List<Lancamento> gastos = extrato.doPeriodo(lojistaId, TipoTransacao.PAGAMENTO_ENVIADO, p);
+        BigDecimal total = LancamentosDoExtrato.soma(gastos);
 
         BigDecimal recargas = cobrancaRepo.somar(lojistaId, TipoCobranca.RECARGA,
                 StatusCobranca.CONCLUIDO, p.inicio(), p.fim());
@@ -168,12 +178,7 @@ public class RelatorioService {
         long expirados = doPeriodo.stream()
                 .filter(t -> t.getStatus() == StatusTurno.EXPIRADO).count();
 
-        double horas = gastos.stream()
-                .filter(l -> l.turno() != null
-                        && l.turno().getDataInicio() != null && l.turno().getDataFim() != null)
-                .mapToDouble(l -> Duration.between(
-                        l.turno().getDataInicio(), l.turno().getDataFim()).toMinutes() / 60.0)
-                .sum();
+        double horas = LancamentosDoExtrato.horasTrabalhadas(gastos);
 
         Map<String, Object> numeros = new LinkedHashMap<>();
         numeros.put("turnosPublicados", doPeriodo.size());
@@ -192,6 +197,12 @@ public class RelatorioService {
                 lojistaId, TipoTransacao.BONUS_ENVIADO, p.inicio(), p.fim())));
         numeros.put("mediaAvaliacao", lojista.getMediaAvaliacao());
 
+        // O resultado da operação de entrega (RF13), lido da DRE do período.
+        DreResponse resultado = dre.dre(lojistaId, "lojista", p.dataInicio(), p.dataFim());
+        numeros.put("resultadoDoPeriodo", resultado.resultado());
+        numeros.put("situacao", resultado.situacao());
+        numeros.put("custoSobreReceita", resultado.indicadores().get("custoSobreReceita"));
+
         Map<String, List<ItemDeQuebra>> series = new LinkedHashMap<>();
         series.put("porEntregador", porContraparte(gastos));
         series.put("porDiaDaSemana", porDiaDaSemana(gastos));
@@ -199,32 +210,13 @@ public class RelatorioService {
 
         String analise = analisar(
                 AnthropicService.SYSTEM_PROMPT_RELATORIO_LOJISTA,
-                contextoDoLojista(lojista, p, numeros, series));
+                contextoDoLojista(lojista, p, numeros, series, resultado));
 
         return RelatorioFinanceiroResponse.de("lojista", p.rotulo(), p.dataInicio(), p.dataFim(),
                 numeros, series, analise);
     }
 
     // -- Apuração ------------------------------------------------------------
-
-    /** Um lançamento e o turno de onde ele veio — o turno pode faltar. */
-    private record Lancamento(Transacao transacao, Turno turno) {}
-
-    private List<Lancamento> lancamentos(Long usuarioId, TipoTransacao tipo, Periodo p) {
-        List<Lancamento> lista = new ArrayList<>();
-        for (Object[] linha : transacaoRepo.lancamentosComTurno(
-                usuarioId, tipo, p.inicio(), p.fim())) {
-            lista.add(new Lancamento((Transacao) linha[0], (Turno) linha[1]));
-        }
-        return lista;
-    }
-
-    private static BigDecimal soma(List<Lancamento> lancamentos) {
-        return lancamentos.stream()
-                .map(l -> l.transacao().getValor())
-                .filter(java.util.Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
 
     /**
      * Quebra por quem estava do outro lado — lojista ou entregador.
@@ -356,7 +348,10 @@ public class RelatorioService {
 
     private String contextoDoMotoboy(Usuario motoboy, Periodo p,
                                      Map<String, Object> numeros,
-                                     Map<String, List<ItemDeQuebra>> series) {
+                                     Map<String, List<ItemDeQuebra>> series,
+                                     DreResponse resultado) {
+        Object margem = numeros.get("margemLiquida");
+        Object equilibrio = numeros.get("pontoDeEquilibrioTurnos");
         return String.format(
                 "Dados financeiros do entregador no período %s:%n"
                 + "- Nome: %s%n"
@@ -369,9 +364,15 @@ public class RelatorioService {
                 + "- Score na plataforma: %s%n"
                 + "- Ganhos por lojista: %s%n"
                 + "- Ganhos por dia da semana: %s%n"
-                + "- Ganhos por faixa de horário: %s%n%n"
+                + "- Ganhos por faixa de horário: %s%n"
+                + "- Resultado do período (receita menos deduções, custos e despesas): "
+                + "R$ %s — %s%n"
+                + "- Margem líquida: %s%n"
+                + "- Ponto de equilíbrio: %s%n"
+                + "- %s%n%n"
                 + "Gere um relatório financeiro personalizado em linguagem simples e "
-                + "motivadora para este entregador. Inclua:%n"
+                + "motivadora para este entregador. Comente o RESULTADO do período "
+                + "(lucro ou prejuízo), e não só o faturamento. Inclua:%n"
                 + "1. Um resumo do período em 2-3 frases%n"
                 + "2. Seu ponto mais forte%n"
                 + "3. Uma oportunidade clara de ganhar mais%n"
@@ -385,12 +386,19 @@ public class RelatorioService {
                         : numeros.get("score") + "/5",
                 resumir(series.get("porLojista")),
                 resumir(series.get("porDiaDaSemana")),
-                resumir(series.get("porFaixaDeHorario")));
+                resumir(series.get("porFaixaDeHorario")),
+                resultado.resultado(), situacaoPorExtenso(resultado.situacao()),
+                margem == null ? "sem receita no período" : margem + "% da receita bruta",
+                equilibrio == null ? "não calculável neste período"
+                        : equilibrio + " turno(s) para cobrir as despesas fixas",
+                avisoSobreCustos(resultado));
     }
 
     private String contextoDoLojista(Usuario lojista, Periodo p,
                                      Map<String, Object> numeros,
-                                     Map<String, List<ItemDeQuebra>> series) {
+                                     Map<String, List<ItemDeQuebra>> series,
+                                     DreResponse resultado) {
+        Object custoSobreReceita = numeros.get("custoSobreReceita");
         return String.format(
                 "Dados operacionais do lojista no período %s:%n"
                 + "- Estabelecimento: %s%n"
@@ -405,8 +413,14 @@ public class RelatorioService {
                 + "- Valor devolvido por cancelamento ou vencimento: R$ %s%n"
                 + "- Gasto por entregador: %s%n"
                 + "- Gasto por dia da semana: %s%n"
-                + "- Gasto por faixa de horário: %s%n%n"
-                + "Gere um relatório operacional personalizado para este lojista. Inclua:%n"
+                + "- Gasto por faixa de horário: %s%n"
+                + "- Resultado da operação de entrega (taxas cobradas menos o custo das "
+                + "entregas): R$ %s — %s%n"
+                + "- Custo de entrega sobre a receita de entrega: %s%n"
+                + "- %s%n%n"
+                + "Gere um relatório operacional personalizado para este lojista. Comente o "
+                + "RESULTADO da operação de entrega (lucro ou prejuízo), e não só o gasto. "
+                + "Inclua:%n"
                 + "1. Resumo do período em 2-3 frases%n"
                 + "2. O que funcionou bem na operação de delivery%n"
                 + "3. Principal problema operacional identificado nos dados%n"
@@ -420,7 +434,35 @@ public class RelatorioService {
                 numeros.get("turnosExpirados"), numeros.get("valorDevolvido"),
                 resumir(series.get("porEntregador")),
                 resumir(series.get("porDiaDaSemana")),
-                resumir(series.get("porFaixaDeHorario")));
+                resumir(series.get("porFaixaDeHorario")),
+                resultado.resultado(), situacaoPorExtenso(resultado.situacao()),
+                custoSobreReceita == null ? "sem receita de entrega informada"
+                        : custoSobreReceita + "%",
+                avisoSobreCustos(resultado));
+    }
+
+    private static String situacaoPorExtenso(String situacao) {
+        return switch (situacao) {
+            case DreResponse.LUCRO -> "lucro";
+            case DreResponse.PREJUIZO -> "prejuízo";
+            default -> "equilíbrio";
+        };
+    }
+
+    /**
+     * O que a IA precisa saber antes de chamar um número de "lucro": se o
+     * usuário não informou nada à mão, o resultado só conhece o extrato — para
+     * o entregador, é receita sem custo nenhum; para o lojista, custo sem
+     * receita nenhuma. Sem este aviso ela comemoraria um lucro que ninguém
+     * mediu, ou lamentaria um prejuízo que talvez não exista.
+     */
+    private static String avisoSobreCustos(DreResponse resultado) {
+        return resultado.lancamentosManuais() == 0
+                ? "ATENÇÃO: nenhum custo ou receita foi informado pelo usuário neste período. "
+                        + "Diga com clareza que o resultado ignora custos não informados e "
+                        + "sugira informá-los na tela de resultado."
+                : "Custos e receitas informados pelo usuário no período: "
+                        + resultado.lancamentosManuais() + " lançamento(s).";
     }
 
     /** As cinco primeiras linhas de uma quebra, em texto — o resto é ruído no prompt. */
@@ -433,43 +475,7 @@ public class RelatorioService {
         return sb.toString();
     }
 
-    // -- Período e formatação ------------------------------------------------
-
-    /**
-     * O intervalo apurado.
-     *
-     * <p>Sem datas, é o mês corrente — que era o único recorte possível antes e
-     * continua sendo o padrão, para o app atual não mudar de comportamento.
-     */
-    private record Periodo(LocalDate dataInicio, LocalDate dataFim, String rotulo) {
-
-        static Periodo de(LocalDate inicio, LocalDate fim) {
-            if (inicio == null && fim == null) {
-                LocalDate hoje = LocalDate.now();
-                LocalDate primeiro = hoje.withDayOfMonth(1);
-                return new Periodo(primeiro, hoje,
-                        MESES[hoje.getMonthValue() - 1] + " " + hoje.getYear());
-            }
-            LocalDate de = inicio != null ? inicio : LocalDate.now().withDayOfMonth(1);
-            LocalDate ate = fim != null ? fim : LocalDate.now();
-            if (ate.isBefore(de)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "A data final não pode ser anterior à inicial.");
-            }
-            return new Periodo(de, ate, String.format("%02d/%02d a %02d/%02d/%d",
-                    de.getDayOfMonth(), de.getMonthValue(),
-                    ate.getDayOfMonth(), ate.getMonthValue(), ate.getYear()));
-        }
-
-        LocalDateTime inicio() {
-            return dataInicio.atStartOfDay();
-        }
-
-        /** Exclusivo: o dia final entra inteiro. */
-        LocalDateTime fim() {
-            return dataFim.plusDays(1).atStartOfDay();
-        }
-    }
+    // -- Formatação ----------------------------------------------------------
 
     private Usuario exigirPerfil(Long id, String tipo) {
         Usuario u = usuarioRepo.findById(id)

@@ -1,6 +1,7 @@
 package com.motoshift.config;
 
 import com.motoshift.dto.AvaliacaoRequest;
+import com.motoshift.dto.LancamentoGerencialRequest;
 import com.motoshift.dto.NotaFiscalResponse;
 import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
@@ -13,6 +14,7 @@ import com.motoshift.service.AvaliacaoService;
 import com.motoshift.service.CheckinService;
 import com.motoshift.service.FavoritoService;
 import com.motoshift.service.GorjetaService;
+import com.motoshift.service.LancamentoGerencialService;
 import com.motoshift.service.TurnoLembreteService;
 import com.motoshift.service.CarteiraService;
 import com.motoshift.service.CobrancaService;
@@ -33,6 +35,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -55,6 +58,13 @@ import java.util.Map;
  * o Thiago desistiu em cima da hora — é o que explica o score dele —, com a
  * Cláudia cancelando esse turno em seguida, sem penalidade para ninguém. E há
  * o presente: turnos abertos, um em andamento e dois confirmados para amanhã.
+ *
+ * <p><b>E o resultado (RF13).</b> O Carlos e a Cláudia informam o que a
+ * plataforma não vê — ele, o combustível de cada turno, o DAS, as contas fixas
+ * e uma manutenção; ela, a taxa de entrega que cobrou dos clientes —, pelo
+ * {@link LancamentoGerencialService}. É o que faz a DRE dos dois ter um mês de
+ * lucro (o passado) e um de prejuízo (o retrasado): ver {@link Enredo#custosDoCarlos}
+ * e {@link Enredo#taxaDaNoite}.
  *
  * <p><b>Nada é gravado à mão.</b> Recarga e saque passam pelo
  * {@link CobrancaService}; aceite, finalização, desistência e cancelamento pelo
@@ -115,6 +125,7 @@ public class MassaDemonstracao {
     private final GorjetaService gorjetas;
     private final FavoritoService favoritos;
     private final AuthService auth;
+    private final LancamentoGerencialService gerenciais;
     // O job de lembrete só existe com os jobs ligados; a massa o usa se houver.
     private final ObjectProvider<TurnoLembreteService> lembretes;
 
@@ -134,6 +145,7 @@ public class MassaDemonstracao {
                              GorjetaService gorjetas,
                              FavoritoService favoritos,
                              AuthService auth,
+                             LancamentoGerencialService gerenciais,
                              ObjectProvider<TurnoLembreteService> lembretes) {
         this.em = em;
         this.usuarioRepo = usuarioRepo;
@@ -151,6 +163,7 @@ public class MassaDemonstracao {
         this.gorjetas = gorjetas;
         this.favoritos = favoritos;
         this.auth = auth;
+        this.gerenciais = gerenciais;
         this.lembretes = lembretes;
     }
 
@@ -191,6 +204,8 @@ public class MassaDemonstracao {
         n.put("cobrancas",        contar("select count(c) from Cobranca c" + ONDE_COBRANCA, e));
         n.put("turno_inscricoes", contar("select count(i) from TurnoInscricao i" + ONDE_INSCRICAO, e));
         n.put("notificacoes",     contar("select count(n) from Notificacao n" + ONDE_NOTIFICACAO, e));
+        n.put("lancamentos_gerenciais",
+                contar("select count(l) from LancamentoGerencial l where l.usuarioId in :demo", e));
         n.put("turnos",           contar("select count(t) from Turno t where t.id in :turnos", e));
         n.put("carteiras",        contar("select count(c) from Carteira c" + ONDE_CARTEIRA, e));
         n.put("favoritos",        contar("select count(f) from Favorito f" + ONDE_FAVORITO, e));
@@ -236,6 +251,13 @@ public class MassaDemonstracao {
         n.put("cobrancas",        executar("delete from Cobranca c" + ONDE_COBRANCA, e));
         n.put("turno_inscricoes", executar("delete from TurnoInscricao i" + ONDE_INSCRICAO, e));
         n.put("notificacoes",     executar("delete from Notificacao n" + ONDE_NOTIFICACAO, e));
+        // Lançamentos gerenciais (V25): os das contas da massa saem com elas.
+        // O de uma conta real que aponta para um turno da massa fica — é um
+        // custo que a pessoa informou — e só solta o turno, que vai deixar de
+        // existir: a FK impediria apagá-lo.
+        n.put("lancamentos_gerenciais",
+                executar("delete from LancamentoGerencial l where l.usuarioId in :demo", e));
+        executar("update LancamentoGerencial l set l.turnoId = null where l.turnoId in :turnos", e);
         n.put("turnos",           executar("delete from Turno t where t.id in :turnos", e));
         n.put("carteiras",        executar("delete from Carteira c" + ONDE_CARTEIRA, e));
         n.put("favoritos",        executar("delete from Favorito f" + ONDE_FAVORITO, e));
@@ -322,6 +344,7 @@ public class MassaDemonstracao {
         m.put("cobrancas",        "Cobranca");
         m.put("turno_inscricoes", "TurnoInscricao");
         m.put("notificacoes",     "Notificacao");
+        m.put("lancamentos_gerenciais", "LancamentoGerencial");
         m.put("turnos",           "Turno");
         m.put("carteiras",        "Carteira");
         m.put("favoritos",        "Favorito");
@@ -407,6 +430,8 @@ public class MassaDemonstracao {
             passado();
             ultimosDias();
             presente();
+            custosDoCarlos();
+            despesasDaClaudia();
         }
 
         // ── Pessoas ──────────────────────────────────────────────────────
@@ -616,6 +641,7 @@ public class MassaDemonstracao {
                 carimbar("update notas_fiscais set cancelada_em = :q where id = :id", cancelada, nota);
             }
             carimbarTurno(t, p.publicacao(), p.fim());
+            informarOResultadoDoTurno(t, p);
         }
 
         // ── Últimos dias: o que ainda está pendente ──────────────────────
@@ -652,6 +678,7 @@ public class MassaDemonstracao {
             em(mariaCarlos.fim(), () -> turnos.finalizar(t2.getId(), maria.getId()));
             avaliarOsDois(t2, maria, carlos, mariaCarlos.fim().plusHours(1), 0);
             carimbarTurno(t2, mariaCarlos.publicacao(), mariaCarlos.fim());
+            informarOResultadoDoTurno(t2, mariaCarlos);
 
             // Só o Ricardo avaliou; a Ana ainda deve a avaliação e a nota.
             Plano anaRicardo = new Plano(ana, "Turno Manhã — Farmácia Ana", "Entregas de medicamentos",
@@ -677,6 +704,7 @@ public class MassaDemonstracao {
                     claudiaLucas.fim().minusMinutes(5));
             em(claudiaLucas.fim(), () -> turnos.finalizar(t4.getId(), claudia.getId()));
             carimbarTurno(t4, claudiaLucas.publicacao(), claudiaLucas.fim());
+            informarOResultadoDoTurno(t4, claudiaLucas);
 
             // Publicado, ninguém aceitou, o início passou: quem vence o turno
             // e devolve a reserva é o próprio job de expiração.
@@ -807,6 +835,107 @@ public class MassaDemonstracao {
             // cancelamento, para não lembrar de um turno que não vai haver.
             TurnoLembreteService job = lembretes.getIfAvailable();
             if (job != null) job.lembrar(agora);
+        }
+
+        // ── Resultado: o que a plataforma não vê (RF13) ──────────────────
+
+        /**
+         * O que o Carlos e a Cláudia informam de cada turno já pago: ele, o
+         * combustível (com os km, para o "custo por km"); ela, a taxa de
+         * entrega que cobrou dos clientes naquela noite.
+         *
+         * <p>Pelo {@link LancamentoGerencialService}, com o turno informado —
+         * o serviço confere que o Carlos fez check-in nele e que a Cláudia é a
+         * dona. Não há carimbo de data a fazer: a data do lançamento gerencial
+         * é um campo que a própria pessoa preenche, e nada disto passa pelo
+         * ledger.
+         */
+        private void informarOResultadoDoTurno(Turno t, Plano p) {
+            LocalDate dia = p.fim().toLocalDate();
+            if (p.entregadores().contains(carlos)) {
+                // 42 km ÷ 35 km/l × R$ 6,25 o litro — a conta da calculadora do app.
+                lancar(carlos, "combustivel", "7.50", dia, false, t.getId(), "42.0",
+                        "Gasolina do turno");
+            }
+            if (p.lojista() == claudia) {
+                lancar(claudia, "taxa_de_entrega_cobrada", taxaDaNoite(dia, p.entregadores().size()),
+                        dia, false, t.getId(), null,
+                        mesRetrasado(dia) ? "Promoção de frete grátis: só 6 entregas pagaram taxa"
+                                : "Taxas de entrega cobradas na noite");
+            }
+        }
+
+        /**
+         * Quanto a Cláudia cobrou de taxa numa noite: R$ 8 por entrega, 26
+         * entregas por entregador — R$ 208, mais do que o turno custa. No mês
+         * retrasado ela fez promoção de frete grátis, e só 6 entregas por
+         * entregador pagaram taxa: R$ 48, menos do que o turno custa. É o mês
+         * de prejuízo da operação dela; os outros dão lucro.
+         */
+        private String taxaDaNoite(LocalDate dia, int entregadores) {
+            BigDecimal porEntregador = new BigDecimal(mesRetrasado(dia) ? "48.00" : "208.00");
+            return porEntregador.multiply(BigDecimal.valueOf(entregadores)).toPlainString();
+        }
+
+        private boolean mesRetrasado(LocalDate dia) {
+            return YearMonth.from(dia).equals(YearMonth.from(hoje).minusMonths(2));
+        }
+
+        /**
+         * As contas do Carlos fora dos turnos: três recorrentes (celular,
+         * seguro e parcela da moto), o DAS de cada mês e duas manutenções.
+         *
+         * <p>Com um turno por semana, o mês dele fecha com lucro — pequeno, e é
+         * esse o retrato de quem roda pouco. No mês retrasado a troca da
+         * relação e do pneu custou mais do que o mês rendeu: prejuízo. São os
+         * dois casos que a tela de resultado mostra, e o
+         * {@code MassaDemonstracaoTest} confere os dois.
+         */
+        private void custosDoCarlos() {
+            YearMonth primeiro = YearMonth.from(hoje.minusWeeks(SEMANAS_DE_HISTORIA));
+            lancar(carlos, "celular_internet", "35.00", primeiro.atDay(10), true, null, null,
+                    "Plano de celular com internet");
+            lancar(carlos, "seguro", "32.00", primeiro.atDay(15), true, null, null,
+                    "Seguro contra roubo (rateio da associação)");
+            lancar(carlos, "parcela_ou_aluguel_veiculo", "95.00", primeiro.atDay(5), true, null, null,
+                    "Parcela do consórcio da moto");
+
+            // O DAS vence todo dia 20 — e só existe o que já venceu: é caixa.
+            for (YearMonth mes = primeiro; !mes.isAfter(YearMonth.from(hoje)); mes = mes.plusMonths(1)) {
+                LocalDate vencimento = mes.atDay(20);
+                if (!vencimento.isAfter(hoje)) {
+                    lancar(carlos, "das_mei", "86.05", vencimento, false, null, null,
+                            "DAS do MEI de " + String.format("%02d/%d", mes.getMonthValue(), mes.getYear()));
+                }
+            }
+
+            YearMonth retrasado = YearMonth.from(hoje).minusMonths(2);
+            lancar(carlos, "manutencao", "420.00", retrasado.atDay(12), false, null, null,
+                    "Troca da relação, do pneu traseiro e das pastilhas");
+            lancar(carlos, "manutencao", "45.00", retrasado.minusMonths(1).atDay(18), false, null, null,
+                    "Troca de óleo");
+        }
+
+        /** O que a Cláudia gastou com entrega fora dos turnos, no mês passado. */
+        private void despesasDaClaudia() {
+            YearMonth passado = YearMonth.from(hoje).minusMonths(1);
+            lancar(claudia, "outra_despesa_entrega", "60.00", passado.atDay(3), false, null, null,
+                    "Embalagens térmicas e mochila reserva");
+            lancar(claudia, "entrega_fora_do_app", "45.00", passado.atDay(14), false, null, null,
+                    "Motoboy avulso numa noite de chuva");
+        }
+
+        private void lancar(Usuario quem, String categoria, String valor, LocalDate data,
+                            boolean recorrente, Long turnoId, String km, String descricao) {
+            LancamentoGerencialRequest req = new LancamentoGerencialRequest();
+            req.setCategoria(categoria);
+            req.setValor(new BigDecimal(valor));
+            req.setData(data);
+            req.setRecorrente(recorrente);
+            req.setTurnoId(turnoId);
+            req.setKm(km == null ? null : new BigDecimal(km));
+            req.setDescricao(descricao);
+            gerenciais.criar(quem.getId(), quem.getTipo(), req);
         }
 
         // ── Presença, favoritos ──────────────────────────────────────────

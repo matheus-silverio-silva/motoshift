@@ -22,6 +22,8 @@ import 'package:provider/provider.dart';
 import 'package:moto_shift/models/carteira.dart';
 import 'package:moto_shift/models/cobranca.dart';
 import 'package:moto_shift/models/danfse.dart';
+import 'package:moto_shift/models/dre.dart';
+import 'package:moto_shift/models/lancamento_gerencial.dart';
 import 'package:moto_shift/models/documento_fiscal.dart';
 import 'package:moto_shift/models/extrato_filtro.dart';
 import 'package:moto_shift/models/informe_anual.dart';
@@ -46,6 +48,7 @@ import 'package:moto_shift/services/api/nota_fiscal_api.dart';
 import 'package:moto_shift/services/api/avaliacao_api.dart';
 import 'package:moto_shift/services/api/carteira_api.dart';
 import 'package:moto_shift/services/api/dashboard_api.dart';
+import 'package:moto_shift/services/api/financeiro_api.dart';
 import 'package:moto_shift/services/api/notificacao_api.dart';
 import 'package:moto_shift/services/api/turno_api.dart';
 import 'package:moto_shift/services/api/usuario_api.dart';
@@ -1292,8 +1295,16 @@ class FakeUsuarioApi extends UsuarioApi {
 class FakeApiService extends ApiService {
   /// [tipoUsuario] é o papel da conta logada — o fake da carteira devolve o
   /// resumo daquele papel, como o backend faz.
-  FakeApiService({TipoUsuario tipoUsuario = TipoUsuario.motoboy})
-      : _carteira = FakeCarteiraApi(papel: tipoUsuario);
+  FakeApiService({
+    TipoUsuario tipoUsuario = TipoUsuario.motoboy,
+    bool resultadoComPrejuizo = false,
+  })  : _carteira = FakeCarteiraApi(papel: tipoUsuario),
+        _financeiro = FakeFinanceiroApi(
+            papel: tipoUsuario, comPrejuizo: resultadoComPrejuizo);
+
+  @override
+  FinanceiroApi get financeiro => _financeiro;
+  final FinanceiroApi _financeiro;
 
   @override
   AuthApi get auth => _auth;
@@ -1334,6 +1345,371 @@ class FakeApiService extends ApiService {
   @override
   FavoritoApi get favoritos => _favoritos;
   final FavoritoApi _favoritos = FakeFavoritoApi();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Resultado (RF13): a DRE e os lançamentos gerenciais, ancorados em
+// [dataAncoraGolden] (agosto de 2026). Os números são os do Carlos e da
+// Cláudia da massa de demonstração, arredondados.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A DRE do entregador em agosto: com [comPrejuizo], entra a manutenção de
+/// R$ 420 — o mês em que a moto custou mais do que rendeu.
+Dre fakeDreEntregador({bool comPrejuizo = false}) {
+  final manutencao = comPrejuizo ? 420.0 : 0.0;
+  final resultado = 111.95 - manutencao;
+  LinhaDre manual(String chave, String rotulo, double valor) => LinhaDre(
+      chave: chave, rotulo: rotulo, valor: valor, origem: OrigemDaLinha.manual, subtrai: true);
+  LinhaDre subtotal(String chave, String rotulo, double valor) =>
+      LinhaDre(chave: chave, rotulo: rotulo, valor: valor, tipo: TipoDeLinhaDre.subtotal);
+
+  return Dre(
+    papel: TipoUsuario.motoboy,
+    dataInicio: DateTime(2026, 8, 1),
+    dataFim: DateTime(2026, 8, 19),
+    linhas: [
+      const LinhaDre(
+          chave: 'pagamentos_recebidos',
+          rotulo: 'Pagamentos de turnos',
+          valor: 380,
+          origem: OrigemDaLinha.extrato),
+      const LinhaDre(
+          chave: 'gorjetas_recebidas',
+          rotulo: 'Gorjetas',
+          valor: 10,
+          origem: OrigemDaLinha.extrato),
+      subtotal('receita_bruta', 'Receita bruta', 390),
+      const LinhaDre(
+          chave: 'retencoes_na_fonte',
+          rotulo: 'Retenções na fonte (ISS e IRRF)',
+          valor: 0,
+          origem: OrigemDaLinha.extrato,
+          subtrai: true),
+      manual('das_mei', 'DAS do MEI', 86.05),
+      subtotal('receita_liquida', 'Receita líquida', 303.95),
+      manual('combustivel', 'Combustível', 30),
+      manual('manutencao', 'Manutenção', manutencao),
+      subtotal('margem_de_contribuicao', 'Margem de contribuição', 273.95 - manutencao),
+      manual('celular_internet', 'Celular e internet', 35),
+      manual('seguro', 'Seguro', 32),
+      manual('parcela_ou_aluguel_veiculo', 'Parcela ou aluguel do veículo', 95),
+      manual('outra_despesa_entregador', 'Outra despesa', 0),
+      LinhaDre(
+          chave: 'resultado',
+          rotulo: 'Resultado do período',
+          valor: resultado,
+          tipo: TipoDeLinhaDre.resultado),
+    ],
+    resultado: resultado,
+    situacao: comPrejuizo ? SituacaoDre.prejuizo : SituacaoDre.lucro,
+    indicadores: {
+      'margemLiquida': comPrejuizo ? -78.99 : 28.71,
+      'turnosPagos': 4,
+      'horasTrabalhadas': 16.0,
+      'lucroPorHora': comPrejuizo ? -19.25 : 7.0,
+      'lucroPorTurno': comPrejuizo ? -77.01 : 27.99,
+      'kmInformados': 168.0,
+      'custoPorKm': comPrejuizo ? 2.68 : 0.18,
+      'margemDeContribuicaoPorTurno': comPrejuizo ? -36.51 : 68.49,
+      'pontoDeEquilibrioTurnos': comPrejuizo ? null : 3,
+      'pontoDeEquilibrioMotivo':
+          comPrejuizo ? 'a margem por turno não cobre os custos variáveis' : null,
+    },
+    anterior: DreAnterior(
+      dataInicio: DateTime(2026, 7, 13),
+      dataFim: DateTime(2026, 7, 31),
+      resultado: comPrejuizo ? 97.0 : -205.55,
+      situacao: comPrejuizo ? SituacaoDre.lucro : SituacaoDre.prejuizo,
+    ),
+    variacaoResultado: comPrejuizo ? resultado - 97.0 : resultado + 205.55,
+    lancamentosManuais: comPrejuizo ? 9 : 8,
+  );
+}
+
+/// A DRE da operação de entrega da loja em agosto: as taxas cobradas cobrem
+/// os entregadores.
+Dre fakeDreLojista() {
+  return Dre(
+    papel: TipoUsuario.lojista,
+    dataInicio: DateTime(2026, 8, 1),
+    dataFim: DateTime(2026, 8, 19),
+    linhas: const [
+      LinhaDre(
+          chave: 'receita_de_entregas',
+          rotulo: 'Receita de entregas (taxas cobradas)',
+          valor: 832,
+          origem: OrigemDaLinha.manual),
+      LinhaDre(
+          chave: 'custo_dos_entregadores',
+          rotulo: 'Pagamentos e gorjetas a entregadores',
+          valor: 530,
+          origem: OrigemDaLinha.extrato,
+          subtrai: true),
+      LinhaDre(
+          chave: 'entrega_fora_do_app',
+          rotulo: 'Entrega fora do app',
+          valor: 45,
+          origem: OrigemDaLinha.manual,
+          subtrai: true),
+      LinhaDre(
+          chave: 'margem_da_operacao',
+          rotulo: 'Margem da operação',
+          valor: 257,
+          tipo: TipoDeLinhaDre.subtotal),
+      LinhaDre(
+          chave: 'outra_despesa_entrega',
+          rotulo: 'Outra despesa de entrega',
+          valor: 60,
+          origem: OrigemDaLinha.manual,
+          subtrai: true),
+      LinhaDre(
+          chave: 'resultado',
+          rotulo: 'Resultado da operação de entrega',
+          valor: 197,
+          tipo: TipoDeLinhaDre.resultado),
+    ],
+    resultado: 197,
+    situacao: SituacaoDre.lucro,
+    indicadores: const {
+      'custoSobreReceita': 69.11,
+      'turnosFinalizados': 4,
+      'custoMedioPorTurno': 132.5,
+      'resultadoPorTurno': 49.25,
+      'gorjetasDadas': 10.0,
+    },
+    anterior: DreAnterior(
+      dataInicio: DateTime(2026, 7, 13),
+      dataFim: DateTime(2026, 7, 31),
+      resultado: -290,
+      situacao: SituacaoDre.prejuizo,
+    ),
+    variacaoResultado: 487,
+    lancamentosManuais: 6,
+  );
+}
+
+/// Os doze meses de 2026: movimento de abril a agosto, um mês de prejuízo.
+List<MesDre> fakeMesesDaDre({bool lojista = false, bool agostoComPrejuizo = false}) {
+  const rotulos = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  // (receita, custos) de abril a agosto.
+  final movimento = lojista
+      ? const {4: (832.0, 590.0), 5: (1040.0, 700.0), 6: (832.0, 560.0), 7: (240.0, 530.0), 8: (832.0, 635.0)}
+      : {
+          4: (380.0, 278.05),
+          5: (475.0, 285.55),
+          6: (385.0, 323.05),
+          7: (380.0, 698.05),
+          8: (390.0, agostoComPrejuizo ? 698.05 : 278.05),
+        };
+  return [
+    for (var m = 1; m <= 12; m++)
+      MesDre(
+        mes: m,
+        rotulo: rotulos[m - 1],
+        receita: movimento[m]?.$1 ?? 0,
+        custos: movimento[m]?.$2 ?? 0,
+        resultado: (movimento[m]?.$1 ?? 0) - (movimento[m]?.$2 ?? 0),
+      ),
+  ];
+}
+
+List<CategoriaDeLancamento> fakeCategoriasDeLancamento(TipoUsuario papel) {
+  CategoriaDeLancamento c(String valor, String rotulo, String grupo, String rotuloDoGrupo,
+          {bool soma = false}) =>
+      CategoriaDeLancamento(
+          valor: valor, rotulo: rotulo, grupo: grupo, rotuloDoGrupo: rotuloDoGrupo, soma: soma);
+  return papel == TipoUsuario.lojista
+      ? [
+          c('taxa_de_entrega_cobrada', 'Taxa de entrega cobrada', 'receita', 'Receita', soma: true),
+          c('entrega_fora_do_app', 'Entrega fora do app', 'custo_entrega', 'Custo de entrega'),
+          c('outra_despesa_entrega', 'Outra despesa de entrega', 'despesa_operacional',
+              'Outras despesas'),
+        ]
+      : [
+          c('combustivel', 'Combustível', 'custo_variavel', 'Custos variáveis'),
+          c('manutencao', 'Manutenção', 'custo_variavel', 'Custos variáveis'),
+          c('das_mei', 'DAS do MEI', 'deducao', 'Deduções'),
+          c('celular_internet', 'Celular e internet', 'despesa_fixa', 'Despesas fixas'),
+          c('seguro', 'Seguro', 'despesa_fixa', 'Despesas fixas'),
+          c('parcela_ou_aluguel_veiculo', 'Parcela ou aluguel do veículo', 'despesa_fixa',
+              'Despesas fixas'),
+          c('outra_despesa_entregador', 'Outra despesa', 'despesa_fixa', 'Despesas fixas'),
+        ];
+}
+
+List<LancamentoGerencial> fakeLancamentosGerenciais(TipoUsuario papel, {bool comPrejuizo = false}) {
+  if (papel == TipoUsuario.lojista) {
+    return [
+      LancamentoGerencial(
+          id: 31,
+          categoria: 'taxa_de_entrega_cobrada',
+          rotuloDaCategoria: 'Taxa de entrega cobrada',
+          soma: true,
+          valor: 208,
+          data: DateTime(2026, 8, 15),
+          turnoId: 7,
+          descricao: 'Taxas de entrega cobradas na noite',
+          ocorrenciasNoPeriodo: 1,
+          valorNoPeriodo: 208),
+      LancamentoGerencial(
+          id: 32,
+          categoria: 'entrega_fora_do_app',
+          rotuloDaCategoria: 'Entrega fora do app',
+          valor: 45,
+          data: DateTime(2026, 8, 14),
+          descricao: 'Motoboy avulso numa noite de chuva',
+          ocorrenciasNoPeriodo: 1,
+          valorNoPeriodo: 45),
+      LancamentoGerencial(
+          id: 33,
+          categoria: 'outra_despesa_entrega',
+          rotuloDaCategoria: 'Outra despesa de entrega',
+          valor: 60,
+          data: DateTime(2026, 8, 3),
+          descricao: 'Embalagens térmicas e mochila reserva',
+          ocorrenciasNoPeriodo: 1,
+          valorNoPeriodo: 60),
+    ];
+  }
+  return [
+    if (comPrejuizo)
+      LancamentoGerencial(
+          id: 25,
+          categoria: 'manutencao',
+          rotuloDaCategoria: 'Manutenção',
+          valor: 420,
+          data: DateTime(2026, 8, 12),
+          descricao: 'Troca da relação, do pneu traseiro e das pastilhas',
+          ocorrenciasNoPeriodo: 1,
+          valorNoPeriodo: 420),
+    LancamentoGerencial(
+        id: 21,
+        categoria: 'combustivel',
+        rotuloDaCategoria: 'Combustível',
+        valor: 7.5,
+        data: DateTime(2026, 8, 12),
+        turnoId: 4,
+        km: 42,
+        descricao: 'Gasolina do turno',
+        ocorrenciasNoPeriodo: 1,
+        valorNoPeriodo: 7.5),
+    LancamentoGerencial(
+        id: 22,
+        categoria: 'das_mei',
+        rotuloDaCategoria: 'DAS do MEI',
+        valor: 86.05,
+        data: DateTime(2026, 8, 10),
+        descricao: 'DAS do MEI de 07/2026',
+        ocorrenciasNoPeriodo: 1,
+        valorNoPeriodo: 86.05),
+    LancamentoGerencial(
+        id: 23,
+        categoria: 'parcela_ou_aluguel_veiculo',
+        rotuloDaCategoria: 'Parcela ou aluguel do veículo',
+        valor: 95,
+        data: DateTime(2026, 4, 5),
+        recorrente: true,
+        descricao: 'Parcela do consórcio da moto',
+        ocorrenciasNoPeriodo: 1,
+        valorNoPeriodo: 95),
+    LancamentoGerencial(
+        id: 24,
+        categoria: 'seguro',
+        rotuloDaCategoria: 'Seguro',
+        valor: 32,
+        data: DateTime(2026, 4, 15),
+        recorrente: true,
+        descricao: 'Seguro contra roubo (rateio da associação)',
+        ocorrenciasNoPeriodo: 1,
+        valorNoPeriodo: 32),
+  ];
+}
+
+/// O backend do resultado, sem rede: devolve as fixtures acima e anota o que
+/// a tela pediu e mandou.
+class FakeFinanceiroApi extends FinanceiroApi {
+  FakeFinanceiroApi({
+    this.papel = TipoUsuario.motoboy,
+    this.comPrejuizo = false,
+    this.semLancamentos = false,
+    this.erroAoSalvar,
+  }) : super(ApiClient());
+
+  final TipoUsuario papel;
+  final bool comPrejuizo;
+
+  /// A conta de quem ainda não informou nada: DRE só com o extrato.
+  final bool semLancamentos;
+  final ApiException? erroAoSalvar;
+
+  /// Os períodos pedidos, na ordem.
+  final List<(DateTime?, DateTime?)> periodosPedidos = [];
+  final List<int?> anosPedidos = [];
+  final List<LancamentoGerencial> criados = [];
+  final List<(int, LancamentoGerencial)> atualizados = [];
+  final List<int> excluidos = [];
+
+  @override
+  Future<Dre> buscarDre({DateTime? dataInicio, DateTime? dataFim}) async {
+    periodosPedidos.add((dataInicio, dataFim));
+    final base = papel == TipoUsuario.lojista
+        ? fakeDreLojista()
+        : fakeDreEntregador(comPrejuizo: comPrejuizo);
+    return Dre(
+      papel: base.papel,
+      // A tela mostra o período que pediu.
+      dataInicio: dataInicio ?? base.dataInicio,
+      dataFim: dataFim ?? base.dataFim,
+      linhas: base.linhas,
+      resultado: base.resultado,
+      situacao: base.situacao,
+      indicadores: base.indicadores,
+      anterior: base.anterior,
+      variacaoResultado: base.variacaoResultado,
+      lancamentosManuais: semLancamentos ? 0 : base.lancamentosManuais,
+    );
+  }
+
+  @override
+  Future<List<MesDre>> buscarDreMensal({int? ano}) async {
+    anosPedidos.add(ano);
+    if (ano != null && ano != 2026) return fakeMesesDaDre().map(_zerado).toList();
+    return fakeMesesDaDre(
+        lojista: papel == TipoUsuario.lojista, agostoComPrejuizo: comPrejuizo);
+  }
+
+  static MesDre _zerado(MesDre m) =>
+      MesDre(mes: m.mes, rotulo: m.rotulo, receita: 0, custos: 0, resultado: 0);
+
+  @override
+  Future<List<CategoriaDeLancamento>> buscarCategorias() async =>
+      fakeCategoriasDeLancamento(papel);
+
+  @override
+  Future<List<LancamentoGerencial>> listarLancamentos({
+    DateTime? dataInicio,
+    DateTime? dataFim,
+  }) async =>
+      semLancamentos ? const [] : fakeLancamentosGerenciais(papel, comPrejuizo: comPrejuizo);
+
+  @override
+  Future<LancamentoGerencial> criarLancamento(LancamentoGerencial l) async {
+    if (erroAoSalvar != null) throw erroAoSalvar!;
+    criados.add(l);
+    return l;
+  }
+
+  @override
+  Future<LancamentoGerencial> atualizarLancamento(int id, LancamentoGerencial l) async {
+    if (erroAoSalvar != null) throw erroAoSalvar!;
+    atualizados.add((id, l));
+    return l;
+  }
+
+  @override
+  Future<void> excluirLancamento(int id) async {
+    excluidos.add(id);
+  }
 }
 
 /// Turnos encerrados com data ABSOLUTA, para as telas de histórico.

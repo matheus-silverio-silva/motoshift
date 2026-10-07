@@ -20,6 +20,8 @@ erDiagram
     USUARIOS ||--o{ TURNO_INSCRICOES : "desiste ou cancela (cancelado_por_id)"
     USUARIOS ||--o{ FAVORITOS : "e favorito (motoboy_id)"
     USUARIOS ||--o{ CODIGOS_RECUPERACAO_SENHA : "pede (usuario_id)"
+    USUARIOS ||--o{ LANCAMENTOS_GERENCIAIS : "informa (usuario_id)"
+    TURNOS   ||--o{ LANCAMENTOS_GERENCIAIS : "e citado por (turno_id)"
 
     USUARIOS {
         BIGINT id PK "IDENTITY"
@@ -171,6 +173,21 @@ erDiagram
         TIMESTAMP criado_em "NOT NULL"
         TIMESTAMP expira_em "NOT NULL - criado_em + 15 min"
         INTEGER tentativas "NOT NULL - default 0, maximo 5"
+    }
+
+    LANCAMENTOS_GERENCIAIS {
+        BIGINT id PK "IDENTITY - V25"
+        BIGINT usuario_id FK "NOT NULL - usuarios.id"
+        VARCHAR categoria "NOT NULL - CHECK no dominio; decide papel e grupo da DRE"
+        NUMERIC valor "NOT NULL - sempre positivo"
+        DATE data "NOT NULL - dia do pagamento (caixa)"
+        BOOLEAN recorrente "NOT NULL - default false"
+        DATE recorrente_ate "so com recorrente"
+        BIGINT turno_id FK "turnos.id"
+        NUMERIC km "maior que zero"
+        VARCHAR descricao ""
+        TIMESTAMP criado_em "NOT NULL"
+        TIMESTAMP atualizado_em "NOT NULL"
     }
 
     NOTAS_FISCAIS {

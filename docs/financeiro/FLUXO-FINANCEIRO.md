@@ -449,6 +449,23 @@ dos deltas dos lançamentos **concluídos** dele.
 > `bonus_enviado` se anulam no conjunto. Um `bonus` sem par — bônus da
 > plataforma, que nenhum fluxo emite — continuaria contando como entrada.
 
+### O que não faz parte deste ciclo: lançamentos gerenciais
+
+Para calcular lucro e prejuízo (RF13), o usuário informa custos e receitas que
+aconteceram **fora** da plataforma — combustível, manutenção, DAS, a taxa de
+entrega que a loja cobrou do cliente. Eles ficam na tabela
+`lancamentos_gerenciais` (V25) e **não fazem parte do ciclo do dinheiro**: não
+são lançamentos do extrato, não movem saldo, não geram documento fiscal e não
+entram em nenhuma das três invariantes acima. O `LancamentoGerencialService`
+não tem o `LedgerService` entre as dependências, e o
+`LancamentosGerenciaisForaDoLedgerTest` confere que criar, editar e excluir um
+deles deixa saldos, extrato e conferência exatamente como estavam.
+
+O motivo é o que sustenta as invariantes: o ledger registra só dinheiro que a
+plataforma movimentou. Um número que alguém digitou não tem movimento de saldo
+do outro lado. Quem junta os dois — só na leitura — é a DRE; ver
+[`RESULTADO.md`](RESULTADO.md).
+
 ---
 
 ## 7. Como a corretude é sustentada
@@ -548,6 +565,7 @@ debita é o ledger.
 | Extrato, resumo, fluxo, CSV | `service/ExtratoService.java` |
 | Que documento cada lançamento gera | `service/fiscal/TipoDocumento.java` — ver [`FISCAL.md`](FISCAL.md) |
 | Retenção na fonte e alíquotas | `service/fiscal/CalculoTributario.java` |
+| Lucro e prejuízo (DRE) e os custos informados à mão | `service/DreService.java`, `service/LancamentoGerencialService.java` — ver [`RESULTADO.md`](RESULTADO.md) |
 | Schema | `db/migration/V12__ledger_financeiro.sql`, `V13__remove_dupla_confirmacao.sql`, `V14__fiscal_por_lancamento.sql` |
 
 ### Testes que sustentam este documento
@@ -562,3 +580,4 @@ debita é o ledger.
 | Cada filtro do extrato, isolado e combinado | `ExtratoServiceTest` |
 | Retenção: bruto no extrato, líquido na nota | `service/fiscal/RetencaoNaFonteTest` |
 | A massa de demonstração fecha nas invariantes | `MassaDemonstracaoTest` |
+| Lançamento gerencial não mexe em saldo nem nas invariantes | `LancamentosGerenciaisForaDoLedgerTest` |

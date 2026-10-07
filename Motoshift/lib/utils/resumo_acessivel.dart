@@ -63,3 +63,34 @@ String resumoDoMapa({String? local, double? raioKm, int pontos = 0}) {
 /// "Nota 4 de 5", ou "Sem nota" enquanto nenhuma estrela foi marcada.
 String resumoDaNota(int nota, {int maximo = 5}) =>
     nota <= 0 ? 'Sem nota' : 'Nota $nota de $maximo';
+
+/// "Resultado mês a mês em 2026: ago receita R$ 380, custos R$ 705,55,
+/// prejuízo de R$ 325,55; set receita R$ 475, custos R$ 285,55, lucro de
+/// R$ 189,45."
+///
+/// É o que o leitor de tela diz no lugar das barras do gráfico mensal da DRE.
+/// Só os meses com movimento: recitar "janeiro sem movimento" dez vezes não
+/// informa nada. Cada mês é um registro com `rotulo`, `receita`, `custos` e
+/// `resultado` — a função não depende do modelo, para ser testada sozinha.
+String resumoDoResultadoMensal(
+  int ano,
+  Iterable<({String rotulo, double receita, double custos, double resultado})>
+      meses,
+) {
+  final partes = <String>[
+    for (final m in meses)
+      if (m.receita != 0 || m.custos != 0)
+        '${m.rotulo.toLowerCase()} receita ${reaisFalados(m.receita)}, '
+            'custos ${reaisFalados(m.custos)}, ${resultadoFalado(m.resultado)}',
+  ];
+  if (partes.isEmpty) return 'Resultado mês a mês em $ano: sem movimento.';
+  return 'Resultado mês a mês em $ano: ${partes.join('; ')}.';
+}
+
+/// "lucro de R$ 120", "prejuízo de R$ 80" ou "sem lucro nem prejuízo" — a
+/// situação dita em palavras, e não pelo sinal do número.
+String resultadoFalado(double resultado) {
+  if (resultado > 0) return 'lucro de ${reaisFalados(resultado)}';
+  if (resultado < 0) return 'prejuízo de ${reaisFalados(resultado.abs())}';
+  return 'sem lucro nem prejuízo';
+}

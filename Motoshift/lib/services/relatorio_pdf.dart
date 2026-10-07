@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../models/dre.dart';
 import '../models/extrato_filtro.dart';
 import '../models/informe_anual.dart';
 import '../models/resumo_financeiro.dart';
@@ -106,6 +107,7 @@ class RelatorioPdf {
     required List<PontoDeFluxo> fluxo,
     required List<Transacao> lancamentos,
     required DateTime geradoEm,
+    Dre? dre,
     pw.Font? regular,
     pw.Font? negrito,
     bool comprimir = true,
@@ -163,11 +165,43 @@ class RelatorioPdf {
             ],
           ),
         ],
+        if (dre != null) ..._demonstracaoDoResultado(dre),
         ..._tabelaDeLancamentos(lancamentos, titular),
       ],
       rodape: 'Relatório gerado pela plataforma MotoShift a partir do extrato '
           'da carteira.',
     );
+  }
+
+  /// A DRE do período (RF13): a situação por extenso e as linhas, cada uma
+  /// com a origem. As mesmas linhas da tela de resultado, na mesma ordem — o
+  /// PDF não refaz conta nenhuma.
+  static List<pw.Widget> _demonstracaoDoResultado(Dre dre) {
+    return [
+      IdentidadePdf.secao('Demonstração do resultado'),
+      IdentidadePdf.bloco('Situação', [
+        IdentidadePdf.linha(dre.situacao.rotulo, dre.frase, forte: true),
+        IdentidadePdf.linha(
+            'Regime',
+            'Caixa — o extrato da plataforma mais os custos e as receitas '
+                'informados pelo usuário'),
+        if (dre.lancamentosManuais == 0)
+          IdentidadePdf.linha('Atenção',
+              'Nenhum custo ou receita foi informado: o resultado ignora o que não passou pela plataforma'),
+      ]),
+      IdentidadePdf.tabela(
+        colunas: const ['Linha', 'Origem', 'Valor'],
+        alinharADireita: const {2},
+        linhas: [
+          for (final l in dre.linhas)
+            [
+              l.tipo == TipoDeLinhaDre.linha ? l.rotuloComSinal : '= ${l.rotulo}',
+              l.origem.rotulo,
+              FormatoFiscal.moeda(l.valor),
+            ],
+        ],
+      ),
+    ];
   }
 
   // ── Informe anual ──────────────────────────────────────────────────────

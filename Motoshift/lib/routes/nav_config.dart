@@ -172,6 +172,13 @@ class NavConfig {
         label: 'Relatórios',
         route: AppRoutes.relatorioFinanceiro,
       ),
+      // Lucro ou prejuízo (RF13). Seção própria, e não aba dos Relatórios:
+      // lá está o que passou pela carteira; aqui, o que sobrou.
+      const NavItem(
+        icon: Icons.trending_up_rounded,
+        label: 'Resultado',
+        route: AppRoutes.resultado,
+      ),
       const NavItem(
         icon: Icons.receipt_long_outlined,
         label: 'Notas fiscais',
@@ -238,6 +245,13 @@ class NavConfig {
         icon: Icons.insights_outlined,
         label: 'Relatórios',
         route: AppRoutes.relatorioFinanceiro,
+      ),
+      // Lucro ou prejuízo (RF13). Seção própria, e não aba dos Relatórios:
+      // lá está o que passou pela carteira; aqui, o que sobrou.
+      const NavItem(
+        icon: Icons.trending_up_rounded,
+        label: 'Resultado',
+        route: AppRoutes.resultado,
       ),
       const NavItem(
         icon: Icons.receipt_long_outlined,
