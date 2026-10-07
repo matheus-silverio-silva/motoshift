@@ -48,7 +48,7 @@ Pacote raiz: `com.motoshift`. Arquitetura em camadas clássica:
 | **Controller** | `controller/` | Expõe endpoints REST, recebe/retorna DTOs |
 | **Service** | `service/` | Regras de negócio (validações, transações) |
 | **Repository** | `repository/` | Acesso a dados (Spring Data JPA) |
-| **Entity** | `entity/` | Tabelas do banco (`Usuario`, `Turno`, `Carteira`, `Transacao`, `Avaliacao`) |
+| **Entity** | `entity/` | Tabelas do banco (`Usuario`, `Turno`, `TurnoInscricao`, `Carteira`, `Transacao`, `Avaliacao`, `NotaFiscal`, `LancamentoGerencial`, entre outras) |
 | **DTO** | `dto/` | Objetos de transferência (separa API do modelo interno) |
 | **Config** | `config/` | `MassaDemonstracao` (massa de teste: `popular()`, `resetar()` e `apagarTudoERecriar()`), `DataInitializer` (gatilho em dev) e `ResetDaMassaNoBoot` (os dois resets, com trava, em qualquer ambiente) |
 
@@ -56,7 +56,8 @@ Pacote raiz: `com.motoshift`. Arquitetura em camadas clássica:
 `PUT /api/turnos/{id}/aceitar` → `TurnoController` → `TurnoService.aceitar()`
 (valida conflito de horário) → `TurnoRepository.save()` → retorna `TurnoResponse`.
 
-Serviços principais: `AuthService`, `TurnoService`, `CarteiraService`,
+Serviços principais: `AuthService`, `TurnoService`, `PagamentoTurnoService`,
+`LedgerService` (o único que altera saldo), `DreService` (lucro e prejuízo) e
 `AnthropicService` (IA).
 
 ---
@@ -100,6 +101,17 @@ Android) ou `localhost:8080`.
 | RF05 | Reservar turno, sem conflito de horário e sem dois na mesma vaga | `TurnoService.aceitar()` + `TurnoRepository.buscarTravandoAsVagas()` | ✅ |
 | RF06 | Finalizar transfere o valor reservado para o entregador **que fez check-in**, na mesma transação; só depois do início do turno | `TurnoService.finalizar()` + `PagamentoTurnoService.fecharInscricoes()` / `liquidar()` | ✅ |
 | RF07 | Cancelar é do lojista e não penaliza ninguém; desistir da vaga é do entregador e, a < 1h do início, tira 0.5 do score dele | `TurnoService.cancelar()` / `desistir()` + `Reputacao` | ✅ |
+| RF09 | Notificações dentro do app, com o sino que se atualiza | `NotificacaoService` + `NotificacaoProvider` (app) | ✅ |
+| RF12 | Carteira e ledger: recarga, reserva, liquidação, saque e as três invariantes | `LedgerService` + `ConsistenciaService` | ✅ |
+| RF13 | Resultado do período (lucro ou prejuízo) numa DRE em regime de caixa | `DreService` + `LancamentoGerencialService` | ✅ |
+| RF15 | Check-in e check-out, com janela de horário e proximidade | `CheckinService` | ✅ |
+| RF16 | Turno que se resolve sozinho: vencimento, lembrete e finalização automática | `TurnoExpiracaoService` + `TurnoLembreteService` | ✅ |
+| RF19 | Trocar a senha e recuperá-la por código | `SenhaService` | ✅ |
+
+A lista completa — RF01 a RF21 e RNF01 a RNF08, com os cards do Jira, as
+classes e os testes de cada um — está em `docs/REQUIREMENTS.md`. A numeração
+segue o que o código cita: o **RF09 são as notificações**; o relatório por IA é
+o **RF14** e a sugestão de turnos por IA, o **RF08**.
 
 **Regras de negócio mais "perguntáveis":**
 - *Antecedência de 2h:* `LocalDateTime.now().plusHours(2)` — turno antes disso é rejeitado (HTTP 400).
@@ -132,6 +144,7 @@ Android) ou `localhost:8080`.
 
 ## 6. Inteligência Artificial (Claude / Anthropic)
 
+- **RF08** (sugestão de turnos) e **RF14** (relatórios com análise).
 - `AnthropicService` chama a API da Anthropic (modelo `claude-sonnet-4`, trocável
   pela variável `ANTHROPIC_MODEL`, sem recompilar).
 - Usado em: **sugestão de turnos**, **relatórios** (financeiro/operacional) e
@@ -152,10 +165,11 @@ Android) ou `localhost:8080`.
 - **Prod:** PostgreSQL no Railway (perfil `prod`, `application-prod.properties`).
 - **O schema é das migrações, não do Hibernate.** `ddl-auto=validate` em
   produção: o Hibernate só confere se as entidades batem com o que o Flyway
-  criou. São 11 migrações versionadas em `db/migration`, cada uma com o motivo
-  escrito no cabeçalho.
-- **Integridade no banco.** Desde a V11 são 16 `FOREIGN KEY` com
-  `ON DELETE RESTRICT`. As entidades continuam referenciando por `Long`, sem
+  criou. São 25 migrações versionadas em `db/migration` (V1 a V25), cada uma
+  com o motivo escrito no cabeçalho.
+- **Integridade no banco.** São 25 `FOREIGN KEY` — 18 delas desde a V11 —,
+  todas `ON DELETE RESTRICT`, menos a do código de recuperação de senha (V24),
+  que apaga em cascata. As entidades continuam referenciando por `Long`, sem
   `@ManyToOne` — decisões separadas, explicadas no DER.
 - **Massa de demonstração:** `MassaDemonstracao` — cerca de cinco meses de
   história (recargas, turnos pagos toda semana, saques, avaliações, notas
@@ -195,15 +209,16 @@ Android) ou `localhost:8080`.
 
 ## 9. Testes
 
-- **Back-end:** 146 testes (JUnit 5, Mockito, `@SpringBootTest`, `@DataJpaTest`),
-  cobrindo RF01 e RF04–RF07, autorização de ponta a ponta (sem token → 401,
+- **Back-end:** 554 testes (JUnit 5, Mockito, `@SpringBootTest`, `@DataJpaTest`),
+  cobrindo as regras dos turnos (RF04–RF07), o ledger e as invariantes, a DRE,
+  a senha, os limites de requisição, autorização de ponta a ponta (sem token → 401,
   token de outra pessoa → 403, dono → 200), liquidação do pagamento e
   idempotência.
 - **Migrações e schema em PostgreSQL de verdade:** um servidor embarcado sobe
   no próprio teste (sem Docker) e roda Flyway + `ddl-auto=validate` — inclusive
   os casos difíceis, como migrar um banco que já tem linha órfã. Antes disso, a
   primeira execução real das migrações era o deploy.
-- **Front-end:** 91 testes — unidade, widget, acessibilidade (alvo de toque,
+- **Front-end:** 501 testes — unidade, widget, acessibilidade (alvo de toque,
   rótulo de tudo o que é clicável e contraste de texto pelo WCAG AA) e
   *golden tests* (comparação visual das telas).
 - *Observação:* os goldens são desenhados com as **fontes do próprio app**
@@ -230,7 +245,9 @@ motoboy e indisponibilidade ao lojista em picos. O turno agendado dá previsibil
 R: O turno tem um número de vagas. Ao aceitar, o serviço confere se o turno
 está "aberto", se ainda há vaga, se aquele entregador já não está inscrito e se
 o horário não conflita com outro turno dele; qualquer uma delas retorna HTTP
-409. O turno fecha (ACEITO) quando a última vaga é preenchida.
+409. O turno fecha (ACEITO) quando a última vaga é preenchida. E dois toques
+simultâneos na última vaga não entram os dois: o aceite trava a linha do turno
+(`SELECT ... FOR UPDATE`), o segundo espera o primeiro e já lê o turno lotado.
 
 **P: A senha é segura?**
 R: BCrypt, sempre — no cadastro, na massa de demonstração e no login, que não
@@ -319,9 +336,10 @@ está em todos — o documento tem a estrutura de um real sem poder passar por
 um. As fontes estão na seção 7 do `FISCAL.md`.
 
 **P: E se a API da IA cair?**
-R: A análise de score continua respondendo os números, só sem o texto
-(`analiseDisponivel: false`). Relatório e sugestão respondem 503, porque ali a
-resposta É o texto. Toda chamada tem timeout de 20s e cache de 15 minutos por
+R: Nada que tem número para mostrar deixa de mostrar. A análise de score
+continua respondendo os números, só sem o texto (`analiseDisponivel: false`), e
+o relatório também: os números vêm apurados do extrato e da DRE, e `analise`
+vem nulo. Só a sugestão de turnos responde 503, porque ali a resposta É o texto. Toda chamada tem timeout de 20s e cache de 15 minutos por
 pergunta — sem isso, cada F5 na tela era uma chamada paga.
 
 **P: Como a API sabe qual banco usar?**

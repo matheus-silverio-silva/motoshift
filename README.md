@@ -67,7 +67,7 @@ estabilidade financeira para ambos os lados.
 │   ├── prototipos/           # Protótipos navegáveis (identidade atual)
 │   └── stitch/               # Exports do Stitch da 1ª iteração — referência
 │
-├── docs/                     # Auditoria, guia de defesa, planos e requisitos
+├── docs/                     # Requisitos (REQUIREMENTS.md, com a rastreabilidade), guia de defesa e os documentos abaixo
 │   ├── DER/                  # Modelo de dados e rastreabilidade das migrações
 │   ├── financeiro/           # Ciclo do dinheiro (FLUXO-FINANCEIRO), documentos fiscais simulados (FISCAL) e lucro/prejuízo (RESULTADO)
 │   ├── ux/                   # Navegação: mapa, regra seção × sub-página, nomes, pós-turno
@@ -667,6 +667,12 @@ primeira não cria um limite novo). Em desenvolvimento o cabeçalho é
 
 ## 📐 Regras de Negócio Implementadas
 
+Os requisitos completos — funcionais, não funcionais e a rastreabilidade até os
+cards do Jira, as classes e os testes — estão em
+[`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md). A numeração é a que o código
+cita: **RF09 são as notificações**, e o relatório por IA, que esta tabela
+chamava de RF09, é o **RF14**.
+
 | RF | Regra |
 |----|-------|
 | RF01 | Conta bloqueada por 15 min após 5 tentativas de login falhas. O e-mail é o identificador da conta e **não diferencia maiúsculas** (normalizado ao gravar e ao procurar; índice único em `lower(email)`, V23). No app, Enter envia o login e o cadastro, e os campos têm as dicas de autofill |
@@ -678,21 +684,23 @@ primeira não cria um limite novo). Em desenvolvimento o cabeçalho é
 | RF07 | Sair do turno tem uma regra para cada lado. **Cancelar** é só do lojista dono: derruba o turno, devolve a reserva inteira (sem multa) e não penaliza ninguém. **Desistir da vaga** é só do entregador inscrito: cancela a inscrição dele, reabre a vaga e, a menos de 1h do início, tira 0,5 do score **dele** — o turno e os colegas de vaga seguem |
 | RF12 | O dinheiro entra por recarga (Pix simulado) e sai por saque; a plataforma não cria nem destrói saldo — ver [`docs/financeiro/FLUXO-FINANCEIRO.md`](docs/financeiro/FLUXO-FINANCEIRO.md) |
 | RF13 | O usuário acompanha o **resultado financeiro (lucro ou prejuízo)** do período numa DRE simplificada, em regime de caixa, combinando o extrato com custos e receitas que ele informa. O entregador lança combustível, manutenção, DAS do MEI e contas fixas; o lojista, a taxa de entrega que cobrou. O que é informado à mão **não é transação**: não move saldo nem entra no extrato. Indicadores: margem líquida, lucro por hora e por turno, custo por km e ponto de equilíbrio em turnos (entregador); custo sobre a receita e resultado por turno (lojista) — ver [`docs/financeiro/RESULTADO.md`](docs/financeiro/RESULTADO.md) |
-| Senha | Quem está logado troca a senha no Perfil informando a atual. Quem esqueceu recebe um código de 6 dígitos (15 min, 5 tentativas, guardado só como hash BCrypt) e cria uma senha nova em três passos — e-mail, código, senha. A resposta nunca diz se o e-mail tem conta |
+| RF19 | **Senha.** Quem está logado troca a senha no Perfil informando a atual. Quem esqueceu recebe um código de 6 dígitos (15 min, 5 tentativas, guardado só como hash BCrypt) e cria uma senha nova em três passos — e-mail, código, senha. A resposta nunca diz se o e-mail tem conta |
 | RF08 | Sugestão inteligente de turnos via IA |
-| RF09 | Relatório financeiro/operacional mensal via IA |
+| RF09 | **Notificações** dentro do app para o que muda no que é do usuário (aceite, chegada, pagamento, falta, desistência, cancelamento, vencimento, lembrete, nota, gorjeta), com o sino mostrando as não lidas e levando à tela do que aconteceu |
+| RF14 | **Relatórios.** Resumo do período, fluxo de caixa e quebra por tipo, com exportação em planilha e PDF; e o relatório financeiro/operacional apurado pelo extrato com análise por IA — se a IA não responde, os números vêm sem a análise |
 | RF10 | Turno publicado guarda o ponto de partida (lat/lng), que alimenta o filtro por distância e o mapa das duas pontas |
-| Check-in | O entregador registra chegada e saída (V16). A pontualidade — % de chegadas até 10 min após o início, nos últimos 90 dias — aparece no perfil e no perfil público; sem check-in, "Sem histórico" |
-| Publicar de novo | Turno finalizado, cancelado ou expirado do lojista abre o formulário de publicar já preenchido (mesmo lugar, raio, valor, vagas e duração), com a data no mesmo dia da semana da semana seguinte. Só no app: publica pelo mesmo `POST /api/turnos`, com a mesma confirmação de custo, antecedência e saldo |
-| Abrir rota | No detalhe do turno, o entregador abre a rota até o ponto no Google Maps (no celular, também no Waze, se instalado) |
-| Adicionar ao calendário | Baixa um `.ics` (RFC 5545, fuso America/Sao_Paulo, alarme 1 h antes) — o entregador nos turnos em que está, a loja nos que publicou |
-| Finalização automática | Turno aceito ou em andamento que terminou e ninguém finalizou é primeiro **cobrado** por notificação; passadas 12 h do fim (`motoshift.finalizacao.automatica-horas`), um job o finaliza pelo mesmo caminho do botão: paga quem fez check-in, marca `faltou` quem não chegou e devolve a sobra. Sem nenhum check-in, a reserva volta inteira e o turno vai para `expirado`. As duas partes são avisadas uma vez só. Antes o dinheiro podia ficar reservado para sempre |
-| Telas que se atualizam | O sino busca a contagem de não lidas a cada 45 s enquanto há sessão (para em segundo plano, retoma ao voltar, cancela no logout). Os dois painéis, Turnos do entregador, Turnos do lojista, Agenda e o detalhe do turno têm **puxar para atualizar** no celular e o botão **Atualizar** na topbar do desktop — ver [`docs/ux/NAVEGACAO.md`](docs/ux/NAVEGACAO.md), seção 6.1 |
-| Lembrete | Um job de 5 em 5 min lembra entregador e loja do turno aceito que começa em até 1 h (`turno_lembrete`), uma vez só por pessoa e turno |
-| Meta do mês | O entregador define no perfil quanto quer ganhar no mês; o painel mostra "R$ 1.340 de R$ 2.000 (67%)", somando pagamentos recebidos e gorjetas. Sem meta, um convite — nunca uma barra zerada (V19) |
-| Selos de reputação | Calculados do histórico, sem tabela, no perfil público e no próprio, com o critério ao tocar. Entregador: 20 turnos concluídos (limite ajustado à massa), 30 dias sem cancelar, nota acima de 4,8 (10+ avaliações), pontual (90%+, 10+ check-ins). Loja: paga gorjeta (3+ em 90 dias), nota acima de 4,8, contrata toda semana (4 semanas seguidas) |
-| Favoritos | O lojista marca entregadores com o coração (perfil público, avaliação, turno finalizado) e os vê no próprio perfil. Ao publicar, os favoritos recebem "A Hamburgueria da Cláudia publicou um turno para amanhã, 18h"; na lista de disponíveis do entregador, os turnos dessas lojas levam o selo "Loja que já te chamou". O entregador não vê quem o favoritou (V18) |
-| Gorjeta | Na avaliação do entregador, o lojista pode dar R$ 5, 10, 20 ou outro valor (até R$ 50) do saldo disponível. Transferência no ledger (`bonus_enviado` → `bonus`), com comprovante, não NFS-e |
+| RF17 | **Avaliação mútua.** Depois do turno finalizado, lojista e entregador se avaliam com nota de 1 a 5 e comentário; em turno de várias vagas, o lojista avalia cada entregador. Quem faltou ou saiu do turno não avalia nem é avaliado |
+| RF15 | **Check-in.** O entregador registra chegada e saída (V16). A pontualidade — % de chegadas até 10 min após o início, nos últimos 90 dias — aparece no perfil e no perfil público; sem check-in, "Sem histórico" |
+| RF04 · publicar de novo | Turno finalizado, cancelado ou expirado do lojista abre o formulário de publicar já preenchido (mesmo lugar, raio, valor, vagas e duração), com a data no mesmo dia da semana da semana seguinte. Só no app: publica pelo mesmo `POST /api/turnos`, com a mesma confirmação de custo, antecedência e saldo |
+| RF10 · abrir rota | No detalhe do turno, o entregador abre a rota até o ponto no Google Maps (no celular, também no Waze, se instalado) |
+| RF21 · calendário | Baixa um `.ics` (RFC 5545, fuso America/Sao_Paulo, alarme 1 h antes) — o entregador nos turnos em que está, a loja nos que publicou |
+| RF16 · finalização automática | Turno aceito ou em andamento que terminou e ninguém finalizou é primeiro **cobrado** por notificação; passadas 12 h do fim (`motoshift.finalizacao.automatica-horas`), um job o finaliza pelo mesmo caminho do botão: paga quem fez check-in, marca `faltou` quem não chegou e devolve a sobra. Sem nenhum check-in, a reserva volta inteira e o turno vai para `expirado`. As duas partes são avisadas uma vez só. Antes o dinheiro podia ficar reservado para sempre |
+| RF02 e RF09 · telas que se atualizam | O sino busca a contagem de não lidas a cada 45 s enquanto há sessão (para em segundo plano, retoma ao voltar, cancela no logout). Os dois painéis, Turnos do entregador, Turnos do lojista, Agenda e o detalhe do turno têm **puxar para atualizar** no celular e o botão **Atualizar** na topbar do desktop — ver [`docs/ux/NAVEGACAO.md`](docs/ux/NAVEGACAO.md), seção 6.1 |
+| RF16 · lembrete | Um job de 5 em 5 min lembra entregador e loja do turno aceito que começa em até 1 h (`turno_lembrete`), uma vez só por pessoa e turno |
+| RF20 · meta do mês | O entregador define no perfil quanto quer ganhar no mês; o painel mostra "R$ 1.340 de R$ 2.000 (67%)", somando pagamentos recebidos e gorjetas. Sem meta, um convite — nunca uma barra zerada (V19) |
+| RF20 · selos de reputação | Calculados do histórico, sem tabela, no perfil público e no próprio, com o critério ao tocar. Entregador: 20 turnos concluídos (limite ajustado à massa), 30 dias sem cancelar, nota acima de 4,8 (10+ avaliações), pontual (90%+, 10+ check-ins). Loja: paga gorjeta (3+ em 90 dias), nota acima de 4,8, contrata toda semana (4 semanas seguidas) |
+| RF18 · favoritos | O lojista marca entregadores com o coração (perfil público, avaliação, turno finalizado) e os vê no próprio perfil. Ao publicar, os favoritos recebem "A Hamburgueria da Cláudia publicou um turno para amanhã, 18h"; na lista de disponíveis do entregador, os turnos dessas lojas levam o selo "Loja que já te chamou". O entregador não vê quem o favoritou (V18) |
+| RF18 · gorjeta | Na avaliação do entregador, o lojista pode dar R$ 5, 10, 20 ou outro valor (até R$ 50) do saldo disponível. Transferência no ledger (`bonus_enviado` → `bonus`), com comprovante, não NFS-e |
 | RF11 | Turno finalizado gera NFS-e — entregador é o prestador, lojista é o tomador, e **só o lojista emite e cancela**; o entregador vê, baixa e imprime. Todo lançamento do extrato gera o documento correspondente (nota, recibo ou comprovante), sempre simulado — ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |
 
 ---
