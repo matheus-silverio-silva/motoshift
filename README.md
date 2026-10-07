@@ -352,7 +352,8 @@ Roda com o perfil `prod` (PostgreSQL). Variáveis principais:
 |----------|-------------|-----------|
 | `SPRING_PROFILES_ACTIVE` | sim | Defina como `prod` |
 | `JWT_SECRET` | **sim** | Segredo de assinatura dos tokens, mínimo 32 caracteres. Sem ele o boot falha de propósito — melhor não subir do que assinar token com a chave de exemplo do repositório. Trocar o valor invalida os tokens emitidos, ou seja, desloga todo mundo |
-| `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | sim | Conexão com o PostgreSQL (o plugin do Railway já as injeta) |
+| `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | sim | Conexão com o PostgreSQL (Neon). URL em formato JDBC, com usuário e senha fora dela: `jdbc:postgresql://<host>/<db>?sslmode=require`. Para rodar o perfil `prod` na máquina, copie [`backend/.env.example`](backend/.env.example) para `backend/.env` (fora do git) |
+| `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | não | Alternativa antiga, usada só quando as `SPRING_DATASOURCE_*` não estão definidas (o plugin Postgres do Railway as injeta) |
 | `ANTHROPIC_API_KEY` | sim | Chave da API Anthropic para as funcionalidades de IA |
 | `MOTOSHIFT_CORS_ORIGINS` | **sim** | Origens liberadas no CORS, separadas por vírgula (ex.: `https://motoshift.up.railway.app`). Sem default: o antigo `*` liberava qualquer origem quando a variável era esquecida. Agora o boot falha, o healthcheck do Railway recusa o deploy e a versão anterior continua no ar |
 | `MOTOSHIFT_FISCAL_CHAVE` | **sim** | Chave do HMAC que autentica os comprovantes (recarga, Pix, movimentação). Sem ela o boot falha: o código de autenticação viraria um hash que qualquer um refaz. Trocar a chave muda o código de todos os comprovantes já emitidos |
