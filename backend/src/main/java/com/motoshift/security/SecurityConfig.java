@@ -39,20 +39,25 @@ import java.util.List;
 public class SecurityConfig {
 
     /**
-     * Rotas abertas: cadastro, login e recuperação de senha, health e o console
-     * H2 do dev. A documentação (Swagger) entra à parte — ver
+     * Rotas abertas: cadastro, login e recuperação de senha, o status, o health
+     * e o console H2 do dev. A documentação (Swagger) entra à parte — ver
      * {@link #rotasPublicas()}.
      *
      * <p>As de {@code /api/auth} são listadas uma a uma, e não mais como
      * {@code /api/auth/**}: {@code /api/auth/trocar-senha} mora no mesmo
      * prefixo e exige token. Com o curinga ela nasceria pública — e a próxima
      * rota criada ali também, sem ninguém decidir isso.
+     *
+     * <p>{@code /api/status} é o "o servidor acordou?" que o app chama antes
+     * de haver sessão, e que o monitor chama para o servidor não dormir
+     * (SCRUM-48). Só essa rota, sem curinga.
      */
     private static final String[] PUBLICAS = {
             "/api/auth/registro",
             "/api/auth/login",
             "/api/auth/esqueci-senha",
             "/api/auth/redefinir-senha",
+            "/api/status",
             "/actuator/health",
             "/actuator/health/**",
             "/h2-console/**",

@@ -9,6 +9,7 @@ import 'api/financeiro_api.dart';
 import 'api/ia_api.dart';
 import 'api/nota_fiscal_api.dart';
 import 'api/notificacao_api.dart';
+import 'api/status_api.dart';
 import 'api/turno_api.dart';
 import 'api/usuario_api.dart';
 
@@ -46,6 +47,7 @@ class ApiService {
   late final UsuarioApi usuarios = UsuarioApi(client);
   late final FavoritoApi favoritos = FavoritoApi(client);
   late final FinanceiroApi financeiro = FinanceiroApi(client);
+  late final StatusApi status = StatusApi(client);
 
   ApiService({ApiClient? client}) : client = client ?? ApiClient();
 

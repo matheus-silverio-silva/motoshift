@@ -217,7 +217,7 @@ interativa da API fica desligada e o CORS só aceita as origens configuradas.
 **RNF04 — Limites de requisição.** As rotas que custam dinheiro ou convidam
 abuso têm limite, com resposta 429 e `Retry-After`: 10 por hora por usuário na
 sugestão por IA; 20 a cada 10 minutos por IP no cadastro e no pedido de código
-de senha.
+de senha. O IP é o de quem chamou, e não o do proxy da hospedagem.
 
 **RNF05 — Integridade do dinheiro.** O saldo só muda dentro de uma transação e
 junto com o lançamento que o explica. Operações repetidas não duplicam
@@ -236,10 +236,15 @@ rótulo; o texto atende ao contraste do WCAG 2.1 AA nas telas principais;
 gráficos, mapas e estrelas têm um resumo em texto; nenhuma informação é dada
 só por cor.
 
-**RNF08 — Operação.** Os dois serviços são publicados no Railway, com
-verificação de saúde. Os jobs agendados podem ser desligados por instância.
-Dependências externas opcionais — a IA — não derrubam a funcionalidade que as
-usa.
+**RNF08 — Operação.** O banco fica no Neon, o backend no Render e o app web no
+Firebase Hosting, com verificação de saúde. O sistema tem um fuso só, o de
+Curitiba, e o servidor roda nele qualquer que seja o fuso da hospedagem. Uma
+rota pública de status diz se o servidor está no ar, a hora e a versão
+publicada; como o plano gratuito desliga o servidor parado, o app avisa e
+espera enquanto ele acorda, em vez de falhar. Um deploy do app web chega ao
+navegador sem esperar o cache vencer. Os jobs agendados podem ser desligados
+por instância. Dependências externas opcionais — a IA — não derrubam a
+funcionalidade que as usa.
 
 ---
 
@@ -283,11 +288,11 @@ são classes do backend.
 | RNF01 Plataformas | SCRUM-29, SCRUM-37, SCRUM-41 | `Motoshift/` (um código), `android/`, `ios/`, `web/`, `assets/fonts`, `AdaptiveScaffold` | `goldens/*`, `navegacao/master_detail_test.dart`, `navegacao/desktop_voltar_test.dart` |
 | RNF02 Backend e persistência | — | `db/migration/V1` a `V25`, `application-prod.properties` | `MigracoesPostgresTest`, `SchemaPostgresTest`, `ContextoESchemaTest`, `BackfillV5Test` |
 | RNF03 Segurança | SCRUM-30, SCRUM-36 | `SecurityConfig`, `JwtAuthFilter`, `UsuarioAutenticado`, `ApiExceptionHandler` | `SegurancaDaApiTest`, `PerfilDeProducaoTest`, `ConsistenciaSemPerfilTest`, `PropriedadesDeConfiguracaoTest` |
-| RNF04 Limites de requisição | SCRUM-36 | `LimiteDeRequisicoesFilter`, `JanelaDeslizante` | `JanelaDeslizanteTest`, `LimiteDeRequisicoesFilterTest`, `LimiteDeRequisicoesTest` |
+| RNF04 Limites de requisição | SCRUM-36, SCRUM-48 | `LimiteDeRequisicoesFilter`, `JanelaDeslizante` | `JanelaDeslizanteTest`, `LimiteDeRequisicoesFilterTest`, `LimiteDeRequisicoesTest` |
 | RNF05 Integridade do dinheiro | SCRUM-27 | `LedgerService`, `RetentativaOtimista`, `ConsistenciaService`, `TurnoRepository.buscarTravandoAsVagas` | `InvarianteTest`, `ConcorrenciaDoLedgerTest`, `AceiteConcorrentePostgresTest`, `LancamentosGerenciaisForaDoLedgerTest`, `MassaDemonstracaoTest` |
 | RNF06 Qualidade verificada | SCRUM-42, SCRUM-45, SCRUM-46 | `.github/workflows/ci.yml`, `Motoshift/pubspec.lock`, `Motoshift/Dockerfile`, `.github/` | As duas suítes, rodadas pelo CI |
 | RNF07 Acessibilidade | SCRUM-40 | `utils/resumo_acessivel.dart`, `AppColors.tealTexto`, `widgets/olho_da_senha.dart` | `a11y/alvo_de_toque_test.dart`, `a11y/diretrizes_test.dart`, `a11y/resumos_test.dart` |
-| RNF08 Operação | SCRUM-31, SCRUM-36 | `TurnoExpiracaoJobs`, `application-prod.properties`, `RelatorioService.analisar` | `JobsDesligadosTest`, `PerfilDeProducaoTest`, `RelatorioServiceTest` |
+| RNF08 Operação | SCRUM-31, SCRUM-36, SCRUM-48 | `TurnoExpiracaoJobs`, `application-prod.properties`, `RelatorioService.analisar`, `MotoshiftApplication.aplicarFuso`, `StatusController`, `backend/Dockerfile`, `services/servidor_service.dart`, `widgets/faixa_do_servidor.dart`, `Motoshift/firebase.json` | `JobsDesligadosTest`, `PerfilDeProducaoTest`, `RelatorioServiceTest`, `FusoHorarioTest`, `StatusHttpTest`, `servidor/servidor_acordando_test.dart` |
 
 "—" na coluna de cards quer dizer que o requisito foi entregue antes de o
 projeto usar as chaves do Jira nos commits, ou fora de um card: a

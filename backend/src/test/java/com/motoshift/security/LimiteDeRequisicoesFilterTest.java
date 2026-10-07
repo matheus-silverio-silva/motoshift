@@ -22,7 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>O {@code LimiteDeRequisicoesTest} mostra o 429 saindo pelo HTTP de
  * verdade. Aqui ficam os casos que pedem controle fino — o relógio andando
- * dez minutos, o cabeçalho forjado, o perfil de dev sem proxy.
+ * dez minutos, o cabeçalho forjado, o perfil de dev sem proxy, e qual entrada
+ * do {@code X-Forwarded-For} é o cliente em cada hospedagem (SCRUM-48).
  */
 class LimiteDeRequisicoesFilterTest {
 
@@ -36,10 +37,23 @@ class LimiteDeRequisicoesFilterTest {
         SecurityContextHolder.clearContext();
     }
 
+    /** Sem proxy confiável: a última entrada da lista já é o cliente. */
     private LimiteDeRequisicoesFilter filtro(boolean habilitado, String cabecalho) {
-        LimiteDeRequisicoesFilter f = new LimiteDeRequisicoesFilter(erros, habilitado, cabecalho);
+        return filtro(habilitado, cabecalho, 0);
+    }
+
+    private LimiteDeRequisicoesFilter filtro(boolean habilitado, String cabecalho, int proxiesConfiaveis) {
+        LimiteDeRequisicoesFilter f =
+                new LimiteDeRequisicoesFilter(erros, habilitado, cabecalho, proxiesConfiaveis);
         f.usarRelogio(agora::get);
         return f;
+    }
+
+    /** Uma requisição que chegou com este {@code X-Forwarded-For}. */
+    private static MockHttpServletRequest comXff(String valor) {
+        MockHttpServletRequest req = pedido("POST", "/api/auth/registro", "10.0.0.7");
+        if (valor != null) req.addHeader("X-Forwarded-For", valor);
+        return req;
     }
 
     private static MockHttpServletRequest pedido(String metodo, String rota, String ip) {
@@ -71,7 +85,7 @@ class LimiteDeRequisicoesFilterTest {
     }
 
     @Test
-    @DisplayName("com o cabeçalho configurado, vale a ÚLTIMA entrada — a que o proxy escreveu")
+    @DisplayName("0 proxies confiáveis: vale a ÚLTIMA entrada — a que o proxy escreveu")
     void comProxy_ultimaEntrada() {
         LimiteDeRequisicoesFilter f = filtro(true, "X-Forwarded-For");
         MockHttpServletRequest req = pedido("POST", "/api/auth/registro", "10.0.0.7");
@@ -94,6 +108,108 @@ class LimiteDeRequisicoesFilterTest {
         MockHttpServletRequest vazio = pedido("POST", "/api/auth/registro", "10.0.0.7");
         vazio.addHeader("X-Forwarded-For", " , ");
         assertThat(f.ipDoCliente(vazio)).isEqualTo("10.0.0.7");
+    }
+
+    @Test
+    @DisplayName("1 proxy confiável (Render): o proxy põe o próprio IP no fim, então o cliente é a penúltima entrada")
+    void umProxy_penultimaEntrada() {
+        LimiteDeRequisicoesFilter f = filtro(true, "X-Forwarded-For", 1);
+
+        assertThat(f.ipDoCliente(comXff("198.51.100.23, 10.210.0.5"))).isEqualTo("198.51.100.23");
+        // O que o cliente pôs antes continua não valendo nada.
+        assertThat(f.ipDoCliente(comXff("1.1.1.1, 198.51.100.23, 10.210.0.5"))).isEqualTo("198.51.100.23");
+    }
+
+    @Test
+    @DisplayName("2 proxies confiáveis: o cliente é a terceira entrada contando da direita")
+    void doisProxies_antepenultimaEntrada() {
+        LimiteDeRequisicoesFilter f = filtro(true, "X-Forwarded-For", 2);
+
+        assertThat(f.ipDoCliente(comXff("1.1.1.1, 198.51.100.23, 10.210.0.5, 10.210.0.9")))
+                .isEqualTo("198.51.100.23");
+    }
+
+    @Test
+    @DisplayName("lista menor do que o pedido: vale a primeira entrada, e não a do proxy")
+    void listaCurta_primeiraEntrada() {
+        assertThat(filtro(true, "X-Forwarded-For", 1).ipDoCliente(comXff("198.51.100.23")))
+                .isEqualTo("198.51.100.23");
+        assertThat(filtro(true, "X-Forwarded-For", 2).ipDoCliente(comXff("198.51.100.23, 10.210.0.5")))
+                .isEqualTo("198.51.100.23");
+        assertThat(filtro(true, "X-Forwarded-For", 5).ipDoCliente(comXff("198.51.100.23, 10.210.0.5")))
+                .isEqualTo("198.51.100.23");
+    }
+
+    @Test
+    @DisplayName("espaços e entradas vazias entre as vírgulas não mudam a conta")
+    void espacosEntreAsEntradas() {
+        LimiteDeRequisicoesFilter f = filtro(true, "X-Forwarded-For", 1);
+
+        assertThat(f.ipDoCliente(comXff("  1.1.1.1 ,198.51.100.23  ,   10.210.0.5  ")))
+                .isEqualTo("198.51.100.23");
+        assertThat(f.ipDoCliente(comXff("198.51.100.23,10.210.0.5"))).isEqualTo("198.51.100.23");
+        // A entrada vazia não é um salto: não empurra a escolha para o proxy.
+        assertThat(f.ipDoCliente(comXff("198.51.100.23, , 10.210.0.5,"))).isEqualTo("198.51.100.23");
+    }
+
+    @Test
+    @DisplayName("cabeçalho ausente: com proxy configurado e sem nenhum cabeçalho, sobra o endereço da conexão")
+    void cabecalhoAusente() {
+        LimiteDeRequisicoesFilter f = filtro(true, "X-Forwarded-For", 1);
+
+        assertThat(f.ipDoCliente(comXff(null))).isEqualTo("10.0.0.7");
+        assertThat(f.ipDoCliente(comXff(""))).isEqualTo("10.0.0.7");
+    }
+
+    @Test
+    @DisplayName("outro cabeçalho configurado (True-Client-IP) não é lista: vale o valor inteiro, e o X-Forwarded-For é ignorado")
+    void outroCabecalho_valorInteiro() {
+        LimiteDeRequisicoesFilter f = filtro(true, "True-Client-IP", 1);
+        MockHttpServletRequest req = comXff("1.1.1.1, 2.2.2.2, 10.210.0.5");
+        req.addHeader("True-Client-IP", " 198.51.100.23 ");
+
+        assertThat(f.ipDoCliente(req)).isEqualTo("198.51.100.23");
+    }
+
+    @Test
+    @DisplayName("a escolha é uma função pura da lista e do número de proxies")
+    void entradaDoCliente() {
+        assertThat(LimiteDeRequisicoesFilter.entradaDoCliente("a, b, c", 0)).isEqualTo("c");
+        assertThat(LimiteDeRequisicoesFilter.entradaDoCliente("a, b, c", 1)).isEqualTo("b");
+        assertThat(LimiteDeRequisicoesFilter.entradaDoCliente("a, b, c", 2)).isEqualTo("a");
+        assertThat(LimiteDeRequisicoesFilter.entradaDoCliente("a, b, c", 3)).isEqualTo("a");
+        // Negativo vale zero; sem entrada nenhuma, não há o que escolher.
+        assertThat(LimiteDeRequisicoesFilter.entradaDoCliente("a, b, c", -1)).isEqualTo("c");
+        assertThat(LimiteDeRequisicoesFilter.entradaDoCliente(" , ", 1)).isNull();
+        assertThat(LimiteDeRequisicoesFilter.entradaDoCliente(null, 1)).isNull();
+    }
+
+    @Test
+    @DisplayName("no Render, trocar o que vem antes do IP real não cria um limite novo — e dois clientes atrás do mesmo proxy têm contas separadas")
+    void render_limitePorCliente() throws Exception {
+        LimiteDeRequisicoesFilter f = filtro(true, "X-Forwarded-For", 1);
+        AtomicInteger seguiram = new AtomicInteger();
+
+        for (int i = 0; i < LimiteDeRequisicoesFilter.PUBLICAS_POR_JANELA; i++) {
+            assertThat(passar(f, comXff("8.8." + i + ".1, 198.51.100.23, 10.210.0.5"), seguiram).getStatus())
+                    .isEqualTo(200);
+        }
+        assertThat(passar(f, comXff("8.8.99.1, 198.51.100.23, 10.210.0.5"), seguiram).getStatus())
+                .isEqualTo(429);
+
+        // O defeito que isto corrige: lendo a última entrada (o proxy), este
+        // segundo cliente já chegaria com o limite gasto pelo primeiro.
+        assertThat(passar(f, comXff("198.51.100.99, 10.210.0.5"), seguiram).getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("o logger tem o nome que a variável de ambiente do DEBUG alcança (o Spring a passa para minúsculas)")
+    void nomeDoLog() {
+        String variavel = "LOGGING_LEVEL_COM_MOTOSHIFT_SECURITY_LIMITEDEREQUISICOESFILTER";
+
+        assertThat(LimiteDeRequisicoesFilter.NOME_DO_LOG)
+                .isEqualTo(variavel.substring("LOGGING_LEVEL_".length()).toLowerCase().replace('_', '.'))
+                .isEqualToIgnoringCase(LimiteDeRequisicoesFilter.class.getName());
     }
 
     @Test

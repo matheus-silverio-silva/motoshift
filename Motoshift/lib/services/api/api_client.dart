@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+    show defaultTargetPlatform, kIsWeb, TargetPlatform, visibleForTesting;
 import 'package:http/http.dart' as http;
 
 /// Erro vindo da API, já traduzido para algo que a tela pode mostrar.
@@ -32,12 +32,31 @@ class ApiClient {
   static const Duration _timeout = Duration(seconds: 20);
 
   static String get baseUrl {
-    if (_apiUrl.isNotEmpty) return '$_apiUrl/api';
+    if (_apiUrl.isNotEmpty) return baseDe(_apiUrl);
     // 10.0.2.2 é como o emulador Android enxerga o localhost da máquina.
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:8080/api';
     }
     return 'http://localhost:8080/api';
+  }
+
+  /// A base das chamadas a partir do `API_URL` do build: a URL do backend
+  /// mais `/api`.
+  ///
+  /// Tolera a barra no fim e o `/api` escrito junto. O `API_URL` é "sem /api",
+  /// mas `https://motoshift.onrender.com/api` é o que se copia do navegador —
+  /// e virava `/api/api`, com todas as chamadas em 404 num build que só se
+  /// descobre quebrado depois de publicado.
+  @visibleForTesting
+  static String baseDe(String apiUrl) {
+    var url = apiUrl.trim();
+    while (url.endsWith('/')) {
+      url = url.substring(0, url.length - 1);
+    }
+    if (url.toLowerCase().endsWith('/api')) {
+      url = url.substring(0, url.length - '/api'.length);
+    }
+    return '$url/api';
   }
 
   String? _authToken;
@@ -111,6 +130,33 @@ class ApiClient {
   Future<dynamic> delete(String path) async {
     return _enviar(() => http.delete(_uri(path), headers: _headers));
   }
+
+  /// O servidor está respondendo? Pergunta ao `/api/status` (SCRUM-48).
+  ///
+  /// Fora do [_enviar] de propósito: não manda o token (a rota é pública),
+  /// não lança, e uma resposta 401 aqui nunca derruba a sessão.
+  Future<bool> servidorResponde() async {
+    try {
+      final resposta = await http
+          .get(_uri('/status'), headers: const {'Accept': 'application/json'})
+          .timeout(_timeout);
+      return respostaDoBackend(
+          resposta.statusCode, resposta.headers['content-type']);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Foi o backend quem respondeu, e não o proxy da hospedagem?
+  ///
+  /// Enquanto o servidor acorda, quem atende é o proxy: 502/503 ou uma página
+  /// HTML de espera. O backend sempre responde JSON — inclusive nos erros.
+  /// Por isso um 401 ou 404 em JSON também conta como "no ar": é um backend
+  /// acordado, só que de uma versão sem esta rota.
+  @visibleForTesting
+  static bool respostaDoBackend(int statusCode, String? contentType) =>
+      statusCode < 500 &&
+      (contentType ?? '').toLowerCase().contains('application/json');
 
   Uri _uri(String path) => Uri.parse('$baseUrl$path');
 

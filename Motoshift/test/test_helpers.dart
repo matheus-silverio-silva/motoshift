@@ -50,6 +50,7 @@ import 'package:moto_shift/services/api/carteira_api.dart';
 import 'package:moto_shift/services/api/dashboard_api.dart';
 import 'package:moto_shift/services/api/financeiro_api.dart';
 import 'package:moto_shift/services/api/notificacao_api.dart';
+import 'package:moto_shift/services/api/status_api.dart';
 import 'package:moto_shift/services/api/turno_api.dart';
 import 'package:moto_shift/services/api/usuario_api.dart';
 import 'package:moto_shift/services/api_service.dart';
@@ -1345,6 +1346,49 @@ class FakeApiService extends ApiService {
   @override
   FavoritoApi get favoritos => _favoritos;
   final FavoritoApi _favoritos = FakeFavoritoApi();
+
+  @override
+  StatusApi get status => statusFalso;
+
+  /// O `/api/status` desta API. Por padrão o servidor está no ar; o teste da
+  /// espera o põe para dormir com `statusFalso.dormindo = true`.
+  final FakeStatusApi statusFalso = FakeStatusApi();
+}
+
+/// O `/api/status` dos testes (SCRUM-48).
+///
+/// Responde na hora, sem rede: para todas as telas o servidor está no ar, e
+/// a faixa "Acordando o servidor…" nunca aparece. Com [dormindo], nenhuma
+/// pergunta é respondida até [acordar] — o servidor do plano gratuito depois
+/// de 15 minutos parado.
+class FakeStatusApi extends StatusApi {
+  FakeStatusApi({this.dormindo = false}) : super(ApiClient());
+
+  bool dormindo;
+
+  /// Quantas vezes o app perguntou.
+  int perguntas = 0;
+
+  final List<Completer<bool>> _semResposta = [];
+
+  @override
+  Future<bool> noAr() {
+    perguntas++;
+    if (!dormindo) return Future.value(true);
+    final pergunta = Completer<bool>();
+    _semResposta.add(pergunta);
+    return pergunta.future;
+  }
+
+  /// O servidor acordou: as perguntas que estavam no ar são respondidas, e as
+  /// próximas também.
+  void acordar() {
+    dormindo = false;
+    for (final pergunta in _semResposta) {
+      pergunta.complete(true);
+    }
+    _semResposta.clear();
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

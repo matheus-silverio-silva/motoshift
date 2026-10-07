@@ -30,7 +30,7 @@ estabilidade financeira para ambos os lados.
 | Banco de dados | H2 (desenvolvimento) / PostgreSQL + Flyway (produção) |
 | IA | Claude Sonnet 4 (Anthropic API) |
 | Documentação | Springdoc OpenAPI / Swagger UI |
-| Deploy | Railway (back-end + front-end web via Docker/nginx) |
+| Deploy | Render (back-end, Docker) + Firebase Hosting (front-end web) + Neon (PostgreSQL) |
 | Versionamento | Git + GitHub |
 
 ---
@@ -170,8 +170,18 @@ backend local em `http://10.0.2.2:8080` — o release precisa de
 `--dart-define=API_URL=https://...`:
 
 ```bash
-flutter build apk --release --dart-define=API_URL=https://seu-backend.up.railway.app
+flutter build apk --release --dart-define=API_URL=https://motoshift.onrender.com
 ```
+
+**Servidor acordando.** Ao abrir, o app pergunta `GET /api/status`. Se a
+resposta não vem em 3 segundos, a tela de login mostra a faixa "Acordando o
+servidor… no plano gratuito isso leva até 3 minutos", o botão vira "Aguardando
+o servidor" (desligado) e o app pergunta de novo a cada 5 segundos, por até 4
+minutos; quando o servidor responde, a faixa some e o botão volta. Passado o
+limite, aparece o erro com "Tentar novamente". Quem tem sessão salva espera na
+tela de abertura, em vez de ser mandado de volta ao login. As demais chamadas
+continuam desistindo em 20 segundos. Ver
+[Manter o servidor acordado](#-manter-o-servidor-acordado).
 
 **Nome, ícone e fontes.** O app se chama **MotoShift** em todas as plataformas
 (`android:label`, `CFBundleDisplayName`/`CFBundleName`, `<title>` e
@@ -323,30 +333,47 @@ critérios de aceite e o que fica de fora).
 
 ---
 
-## 🚀 Deploy (Railway)
+## 🚀 Deploy (Render + Firebase + Neon)
 
-Ambos os serviços são publicados no **Railway**.
+| Peça | Onde | Como |
+|------|------|------|
+| Banco | **Neon** (PostgreSQL) | As migrações Flyway rodam no boot do back-end |
+| Back-end | **Render** (plano gratuito) | [`backend/Dockerfile`](backend/Dockerfile), perfil `prod` |
+| Front-end web | **Firebase Hosting** | `flutter build web` + `firebase deploy`, com [`Motoshift/firebase.json`](Motoshift/firebase.json) |
+
+O passo a passo de um deploy, com o que conferir depois, está em
+[`docs/historico/2026-10-05-revisao/DEPLOY.md`](docs/historico/2026-10-05-revisao/DEPLOY.md).
 
 ### Front-end (Flutter Web)
 
-A pasta [`Motoshift/`](Motoshift/) contém um **Dockerfile** multi-stage que o
-Railway detecta automaticamente:
+Os arquivos estáticos saem de `flutter build web` e vão para o Firebase
+Hosting, que devolve o `index.html` em qualquer rota (fallback de SPA):
 
-1. **Build** — `flutter build web --release`, com a URL da API injetada em
-   tempo de build via `--dart-define=API_URL`. A imagem é a do Flutter
-   **3.41.5** (a mesma versão do CI) e as dependências saem do `pubspec.lock`.
-2. **Serve** — os arquivos estáticos são servidos por **nginx** com fallback de
-   SPA (todas as rotas caem em `index.html`).
+```bash
+cd Motoshift
+flutter build web --release --dart-define=API_URL=https://motoshift.onrender.com
+firebase deploy --only hosting
+```
 
-Variável de ambiente necessária no serviço front-end:
+| Variável de build | Exemplo | Observação |
+|-------------------|---------|------------|
+| `API_URL` | `https://motoshift.onrender.com` | URL base do back-end. O app anexa o `/api`; se a URL já vier com `/api` (ou com barra) no fim, ele não duplica |
 
-| Variável | Exemplo | Observação |
-|----------|---------|------------|
-| `API_URL` | `https://motoshift-backend.up.railway.app` | URL base do back-end, **sem** `/api` no final (o app já anexa) |
+**Cache.** Sem cabeçalho, o navegador podia servir a versão antiga do app por
+até 1 hora depois de um deploy. O `firebase.json` manda
+`Cache-Control: no-cache` para os arquivos que dizem ao navegador qual é a
+versão atual — `/` e `index.html`, `flutter_bootstrap.js`,
+`flutter_service_worker.js`, `version.json` e `manifest.json`. Eles são
+revalidados a cada visita; o resto continua com o cache padrão.
+
+O [`Motoshift/Dockerfile`](Motoshift/Dockerfile) (build com a imagem do Flutter
+**3.41.5** + **nginx**) continua no repositório para quem preferir servir o
+front por container, como era no Railway.
 
 ### Back-end (Spring Boot)
 
-Roda com o perfil `prod` (PostgreSQL). Variáveis principais:
+O Render constrói a imagem de [`backend/Dockerfile`](backend/Dockerfile) e a
+sobe com o perfil `prod` (PostgreSQL). Variáveis principais:
 
 | Variável | Obrigatória | Descrição |
 |----------|-------------|-----------|
@@ -355,19 +382,87 @@ Roda com o perfil `prod` (PostgreSQL). Variáveis principais:
 | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | sim | Conexão com o PostgreSQL (Neon). URL em formato JDBC, com usuário e senha fora dela: `jdbc:postgresql://<host>/<db>?sslmode=require`. Para rodar o perfil `prod` na máquina, copie [`backend/.env.example`](backend/.env.example) para `backend/.env` (fora do git) |
 | `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | não | Alternativa antiga, usada só quando as `SPRING_DATASOURCE_*` não estão definidas (o plugin Postgres do Railway as injeta) |
 | `ANTHROPIC_API_KEY` | sim | Chave da API Anthropic para as funcionalidades de IA |
-| `MOTOSHIFT_CORS_ORIGINS` | **sim** | Origens liberadas no CORS, separadas por vírgula (ex.: `https://motoshift.up.railway.app`). Sem default: o antigo `*` liberava qualquer origem quando a variável era esquecida. Agora o boot falha, o healthcheck do Railway recusa o deploy e a versão anterior continua no ar |
+| `MOTOSHIFT_CORS_ORIGINS` | **sim** | Origens liberadas no CORS, separadas por vírgula — as do front no Firebase (ex.: `https://<projeto>.web.app,https://<projeto>.firebaseapp.com`). Sem default: o antigo `*` liberava qualquer origem quando a variável era esquecida. Agora o boot falha, a hospedagem recusa o deploy e a versão anterior continua no ar |
+| `MOTOSHIFT_FUSO` | não | O fuso do sistema; padrão `America/Sao_Paulo`. O `main` o aplica antes de o Spring subir. Um nome que não existe derruba o boot. Ver [Fuso horário](#-fuso-horário) |
+| `TZ` | não | Fuso do container. O `backend/Dockerfile` já define `America/Sao_Paulo` (e passa `-Duser.timezone` à JVM); só precisa ser criada à mão em hospedagem que não use esse Dockerfile |
 | `MOTOSHIFT_FISCAL_CHAVE` | **sim** | Chave do HMAC que autentica os comprovantes (recarga, Pix, movimentação). Sem ela o boot falha: o código de autenticação viraria um hash que qualquer um refaz. Trocar a chave muda o código de todos os comprovantes já emitidos |
 | `MOTOSHIFT_FISCAL_RETER_NA_FONTE` | não | `true` faz a liquidação reter ISS e IRRF do entregador, como lançamentos próprios no extrato; padrão `false`, com os tributos apenas informativos na nota. Ver [`docs/financeiro/FISCAL.md`](docs/financeiro/FISCAL.md) |
 | `JWT_EXPIRACAO_HORAS` | não | Validade do token; padrão 168 (7 dias) |
 | `ANTHROPIC_MODEL` | não | Modelo da Anthropic usado pela IA (propriedade `anthropic.model`); padrão `claude-sonnet-4-20250514`. Trocar de modelo deixou de pedir commit e deploy de código |
 | `MOTOSHIFT_LIMITE_HABILITADO` | não | `false` desliga o limite de requisições (10/h por usuário nas sugestões da IA; 20 a cada 10 min por IP no cadastro e no "esqueci minha senha"). Padrão `true`. Útil na **apresentação com a turma inteira atrás do mesmo Wi-Fi**: todos saem pelo mesmo IP, e o 21º cadastro em 10 minutos levaria 429 |
-| `MOTOSHIFT_LIMITE_CABECALHO_IP` | não | De qual cabeçalho o limite lê o IP do cliente. Padrão `X-Forwarded-For` em produção (vazio em dev, onde não há proxy em que confiar); `X-Real-IP` é a alternativa documentada pelo Railway — ver "Limite de requisições" |
+| `MOTOSHIFT_LIMITE_CABECALHO_IP` | não | De qual cabeçalho o limite lê o IP do cliente. Padrão `X-Forwarded-For` em produção (vazio em dev, onde não há proxy em que confiar). Outro cabeçalho (`True-Client-IP`, `X-Real-IP`) é lido inteiro, sem tratar como lista — ver "Limite de requisições" |
+| `MOTOSHIFT_LIMITE_PROXIES_CONFIAVEIS` | não | Quantas entradas do **fim** do `X-Forwarded-For` são dos proxies da hospedagem. Padrão **1** em produção (Render: a última entrada é o proxy, a penúltima é o cliente) e 0 em dev. Use 0 onde a última entrada já é o cliente (era o caso do Railway) |
+| `LOGGING_LEVEL_COM_MOTOSHIFT_SECURITY_LIMITEDEREQUISICOESFILTER` | não | `DEBUG` faz o filtro do limite registrar, a cada cadastro ou "esqueci minha senha", o cabeçalho cru e o IP escolhido — para conferir em produção que o IP é o seu. Tire depois de conferir |
+| `MOTOSHIFT_VERSAO` | não | O que o `/api/status` responde em `versao`. No Render não precisa: o commit publicado vem de `RENDER_GIT_COMMIT`, que a plataforma preenche |
 | `MOTOSHIFT_CHECKIN_EXIGIR_PROXIMIDADE` | não | `false` desliga a trava de distância do check-in (o "Cheguei" passa a valer de qualquer lugar). É para a **apresentação feita de casa**, longe de qualquer loja da massa; a janela de horário e a regra de papel continuam valendo. Padrão `true` |
 | `MOTOSHIFT_CHECKIN_RAIO_METROS` | não | A que distância do ponto do turno o check-in ainda vale; padrão 500 |
 | `MOTOSHIFT_GORJETA_MAXIMO` | não | Teto de uma gorjeta, em reais; padrão 50 |
 | `MOTOSHIFT_FINALIZACAO_AUTOMATICA_HORAS` | não | Propriedade `motoshift.finalizacao.automatica-horas`: quantas horas depois do **fim** do turno o job o finaliza sozinho, se ninguém finalizou. Paga quem fez check-in; sem nenhum check-in, devolve a reserva e o turno vai para `expirado`. Mínimo 1; padrão 12 |
 | `MOTOSHIFT_JOBS_HABILITADOS` | não | `false` desliga os jobs agendados (vencimento, lembrete, cobrança e finalização automática) nesta instância — para as réplicas extras, deixando uma só com os jobs. Padrão `true` |
-| `PORT` | não | Porta do servidor (injetada automaticamente pelo Railway) |
+| `PORT` | não | Porta do servidor (injetada automaticamente pela hospedagem) |
+
+### 🕒 Fuso horário
+
+O MotoShift tem **um fuso só**, o de Curitiba (`America/Sao_Paulo`).
+
+O app manda as datas do turno como hora local, sem fuso
+(`2026-10-07T19:00:00`), as colunas são `timestamp` sem fuso e as entidades
+usam `LocalDateTime`: nada é convertido no caminho. A única coisa que precisa
+estar certa é o "agora" do servidor — e ele era o do container, que no Render
+roda em **UTC**, 3 horas à frente de Brasília. Toda regra que compara uma data
+do turno com o agora saía deslocada: as 2 h de antecedência para publicar
+viravam 5 h, a expiração e a finalização automática agiam 3 h antes, o lembrete
+de 1 h chegava 4 h antes, e na DRE (regime de caixa) o que acontecia depois das
+21h caía no dia seguinte — às vezes no mês seguinte.
+
+A correção é pôr o servidor no fuso de quem usa: o
+`MotoshiftApplication.main` aplica o fuso (`MOTOSHIFT_FUSO`) antes de o Spring
+subir, e o `backend/Dockerfile` já faz a JVM nascer nele (`TZ` e
+`-Duser.timezone`). Não há conversão para UTC, o app não passou a mandar fuso
+e o `hibernate.jdbc.time_zone` **não** é configurado: o que a JVM grava é o que
+volta. A suíte roda no mesmo fuso (`argLine` do surefire no `pom.xml`), para o
+CI — que roda em UTC — testar o que a produção executa. O
+`GET /api/status` devolve `horaServidor` com o deslocamento (`-03:00`): é por
+ali que se confere depois do deploy.
+
+**Por que um fuso só.** Loja e entregador estão na mesma cidade — o check-in
+exige estar a 500 m do ponto —, então todo mundo lê o mesmo relógio de parede,
+e `LocalDateTime` é exatamente isso. O Brasil não tem horário de verão desde
+2019, então não há hora que se repete nem hora que não existe.
+
+**Para atender outro estado** há dois caminhos. Se o sistema inteiro mudasse de
+região, basta `MOTOSHIFT_FUSO=America/Manaus`. Para atender **dois fusos ao
+mesmo tempo**, o modelo muda: as datas passam a ser instantes (`timestamptz` no
+banco, `Instant`/`OffsetDateTime` no código, com uma migração convertendo as
+colunas a partir de `America/Sao_Paulo`), o app passa a mandar o deslocamento,
+cada loja ganha o seu fuso, e os cortes de "dia" e "mês" da DRE, do extrato e
+da agenda passam a ser calculados no fuso de quem consulta.
+
+> Os dados gravados **antes** desta correção foram gravados em UTC. Depois do
+> deploy, o [reset da massa](#-resetar-a-massa-de-demonstração) recria tudo na
+> hora certa.
+
+### ⏰ Manter o servidor acordado
+
+No plano gratuito, o Render **desliga o serviço depois de 15 minutos sem
+requisição**, e a primeira chamada seguinte espera o boot inteiro — medimos
+cerca de 3 minutos. O app avisa e espera (ver "Servidor acordando", acima), mas
+o melhor é o servidor não dormir:
+
+1. Crie um monitor gratuito — [cron-job.org](https://cron-job.org) ou
+   [UptimeRobot](https://uptimerobot.com).
+2. Endereço: **`https://motoshift.onrender.com/api/status`**, método `GET`
+   (o `HEAD` também responde 200), **a cada 10 minutos**.
+3. Resposta esperada: 200 com `"ok": true`.
+
+A rota é pública, não consulta o banco e fica fora do limite de requisições,
+então o monitor não gasta nada além de manter a JVM de pé. As **750 horas por
+mês** do plano gratuito cobrem um serviço ligado o mês inteiro (31 dias são
+744 horas) — desde que seja o único serviço gratuito da conta.
+
+> **Antes de apresentar:** abra o app uns **5 minutos antes**. Se o monitor
+> tiver falhado e o servidor estiver dormindo, é tempo de sobra para ele
+> acordar antes de alguém olhar para a tela.
 
 ---
 
@@ -515,20 +610,21 @@ migrações ou no `flyway_schema_history`.
 Qualquer outro valor — `CONFIRMO`, ` confirmo`, `confirmo-apagar`,
 `apagar-tudo`, a variável vazia ou ausente — não faz nada.
 
-#### Passo a passo no Railway (serviço **Back-End**) — `confirmo-apagar-tudo`
+#### Passo a passo no Render (serviço do back-end) — `confirmo-apagar-tudo`
 
 Use quando o banco de produção tem dados velhos ou de teste que não são da
 massa e a demonstração precisa começar do zero.
 
-1. **Antes de tudo, um backup.** Este modo apaga contas reais. No serviço do
-   PostgreSQL, faça um backup (aba *Backups*) ou um `pg_dump` pela URL pública.
-2. **Faça o deploy da versão que tem este modo.** Em *Settings → Source*,
-   aponte o serviço para a branch com esta versão (ou para a `main`, depois do
-   merge) e espere o deploy terminar. Uma versão anterior não conhece o valor
+1. **Antes de tudo, um backup.** Este modo apaga contas reais. Faça um
+   `pg_dump` pela URL de conexão do Neon (ou crie uma *branch* do banco no
+   painel do Neon, que guarda o estado atual).
+2. **Faça o deploy da versão que tem este modo.** Em *Settings → Build &
+   Deploy*, confira a branch que o serviço publica (a `main`, depois do merge)
+   e espere o deploy terminar. Uma versão anterior não conhece o valor
    `confirmo-apagar-tudo` e simplesmente o ignora.
-3. **Defina a variável.** Em *Variables*, crie `MOTOSHIFT_SEED_RESET` com o
-   valor exato `confirmo-apagar-tudo` e aplique (*Deploy* nas mudanças
-   pendentes). O Railway sobe um deploy novo com ela.
+3. **Defina a variável.** Em *Environment*, crie `MOTOSHIFT_SEED_RESET` com o
+   valor exato `confirmo-apagar-tudo` e salve. O Render sobe um deploy novo
+   com ela.
 4. **Espere o boot** — até o log mostrar `Started MotoshiftApplication`.
 5. **Confira o log do deploy.** Devem aparecer, nesta ordem:
    - `[massa] MOTOSHIFT_SEED_RESET=confirmo-apagar-tudo — apagando TODOS os dados de negocio ...`
@@ -540,7 +636,7 @@ massa e a demonstração precisa começar do zero.
    Se aparecer `[massa] reset falhou e foi desfeito por inteiro; nada foi
    apagado`, o banco está exatamente como antes; a causa vem logo abaixo, no
    stack trace.
-6. **Remova a variável `MOTOSHIFT_SEED_RESET`** em *Variables*. Este passo não
+6. **Remova a variável `MOTOSHIFT_SEED_RESET`** em *Environment*. Este passo não
    é opcional: enquanto ela existir, **todo** deploy e **todo** restart apagam
    tudo de novo — inclusive o que for feito durante uma apresentação.
 7. **Faça o redeploy** sem a variável e confirme que o log do boot não tem
@@ -563,6 +659,7 @@ para "valor errado não faz nada".
 
 | Método | Endpoint | Descrição |
 |--------|----------|-----------|
+| GET | /api/status | **Sem token.** `{ok, horaServidor, fuso, versao}` — o servidor está no ar, que horas são para ele (com o deslocamento do fuso) e qual commit está publicado. Não consulta o banco e fica fora do limite de requisições: é o que o app chama ao abrir e o que o monitor chama para o servidor não dormir |
 | POST | /api/auth/registro | Cadastro de usuário. O e-mail é gravado sem espaço nas pontas e em minúsculas; `MARIA@x.com` com `maria@x.com` já cadastrado responde 409. No máximo 20 a cada 10 minutos por IP |
 | POST | /api/auth/login | Autenticação. O e-mail não diferencia maiúsculas: `Claudia@Teste.com` entra na conta de `claudia@teste.com` |
 | POST | /api/auth/trocar-senha | **Com token.** Troca a senha de quem está logado: `{senhaAtual, senhaNova}`, senha nova com 6 caracteres ou mais. Senha atual errada responde 400 (não 401) e **não conta como tentativa de login** |
@@ -629,29 +726,61 @@ Acima do limite a resposta é **429**, no mesmo formato de erro do resto da API
 **`Retry-After`** dizendo em quantos segundos a próxima requisição cabe. A
 janela é **deslizante** (10 por hora quer dizer 10 em qualquer intervalo de 60
 minutos, não 10 até a virada da hora) e cada rota pública tem a própria conta.
-O login não entra: ele já tem o bloqueio por conta do RF01.
+O login não entra: ele já tem o bloqueio por conta do RF01. O `/api/status`
+também não: o monitor o chama o dia inteiro.
 
 O estado é **em memória** (`LimiteDeRequisicoesFilter` + `JanelaDeslizante`,
 sem dependência nova): some no deploy e é por instância — com duas réplicas, o
 limite efetivo dobra. Basta para o que protege, que é o custo da IA e o abuso
 de cadastro e de e-mail.
 
-**De onde vem o IP.** Atrás do proxy do Railway, o endereço da conexão é o do
-*proxy* — o mesmo para todo mundo. Um limite por ele seria um limite global:
+**De onde vem o IP.** Atrás do proxy da hospedagem, o endereço da conexão é o
+do *proxy* — o mesmo para todo mundo. Um limite por ele seria um limite global:
 vinte cadastros a cada dez minutos para o aplicativo inteiro, e uma pessoa só
 trancaria a porta para todas. Por isso, em produção, o IP sai do cabeçalho
-**`X-Forwarded-For`**, e dele vale a **última** entrada: cada proxy acrescenta
-ao fim o endereço de quem falou com ele, então a última foi escrita pelo proxy
-em que se confia, e as anteriores são o que o cliente quis mandar (forjar a
-primeira não cria um limite novo). Em desenvolvimento o cabeçalho é
+**`X-Forwarded-For`**. Cada proxy acrescenta ao **fim** dessa lista o endereço
+de quem falou com ele; o que vem antes é o que o cliente quis mandar. Vale a
+entrada **N contando da direita**, com `N = 1 + proxies confiáveis`
+(`MOTOSHIFT_LIMITE_PROXIES_CONFIAVEIS`):
+
+| Hospedagem | O cabeçalho chega como | Proxies confiáveis | Entrada escolhida |
+|------------|------------------------|--------------------|-------------------|
+| **Render** (padrão de produção) | `cliente, proxy` | 1 | a penúltima |
+| Onde a última já é o cliente (era o Railway) | `cliente` | 0 | a última |
+
+No Render o proxy acrescenta também o **próprio** IP. Lendo a última entrada —
+como se fazia para o Railway —, a chave do limite era o proxy, e o 21º cadastro
+do **sistema inteiro** em 10 minutos levava 429. Com a lista mais curta do que
+o pedido vale a primeira entrada, nunca a do proxy; forjar o que vem antes do
+IP real não cria um limite novo. Em desenvolvimento o cabeçalho é
 **ignorado**: sem proxy na frente, quem o escreve é o próprio cliente.
 
-> A documentação do Railway cita o `X-Real-IP` como o cabeçalho do IP do
-> cliente, e não descreve o `X-Forwarded-For`. O filtro usa o `X-Real-IP` como
-> reserva quando o cabeçalho configurado não vem, e
-> `MOTOSHIFT_LIMITE_CABECALHO_IP=X-Real-IP` faz dele a fonte única, sem mexer
-> no código. Vale conferir em produção: 21 cadastros seguidos de uma máquina
-> devem dar 429 **só para ela**.
+Se `MOTOSHIFT_LIMITE_CABECALHO_IP` apontar para outro cabeçalho
+(`True-Client-IP`, `X-Real-IP`), ele é lido **inteiro**, sem tratar como lista.
+Quando o cabeçalho configurado não vem, o filtro tenta o `X-Real-IP` antes de
+cair no endereço da conexão.
+
+**Como conferir em produção.** No painel do Render, em *Environment*, crie
+
+```
+LOGGING_LEVEL_COM_MOTOSHIFT_SECURITY_LIMITEDEREQUISICOESFILTER=DEBUG
+```
+
+e, depois do deploy, faça um "Esqueci minha senha" no app. O log traz uma linha
+como
+
+```
+limite: cabecalho X-Forwarded-For=[203.0.113.7, 10.210.0.5], proxies confiaveis=1, conexao=10.210.0.5 -> ip escolhido=203.0.113.7
+```
+
+O `ip escolhido` tem de ser o **seu** IP público (o que um site como
+`https://ifconfig.me` mostra). Se for um endereço interno (`10.x`), há um proxy
+a mais: aumente `MOTOSHIFT_LIMITE_PROXIES_CONFIAVEIS`. Remova a variável do
+log depois de conferir.
+
+> O nome do logger é em minúsculas de propósito: o Spring Boot passa a variável
+> `LOGGING_LEVEL_...` para minúsculas, e com o nome da classe ela nunca
+> alcançaria o filtro.
 
 ---
 
@@ -737,7 +866,7 @@ Não há servidor de e-mail neste projeto. O envio passa pela interface
 que não é a resposta da API, não a integração com um provedor.
 
 Para testar, peça o código no app e procure no log (o console do backend em
-dev; os logs do serviço no Railway) a linha:
+dev; os logs do serviço no Render) a linha:
 
 ```
 [email-simulado] para: claudia@teste.com | assunto: MotoShift — código para redefinir a senha

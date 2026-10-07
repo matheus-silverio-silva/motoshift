@@ -74,6 +74,29 @@ class PropriedadesDeConfiguracaoTest {
     }
 
     @Test
+    @DisplayName("proxies confiáveis: 0 em dev, 1 em produção (Render), e uma variável para outra hospedagem (SCRUM-48)")
+    void proxiesConfiaveisPorPerfil() throws IOException {
+        assertThat(ambiente("application.properties", Map.of())
+                .getProperty("motoshift.limite.proxies-confiaveis")).isEqualTo("0");
+        assertThat(ambiente("application-prod.properties", Map.of())
+                .getProperty("motoshift.limite.proxies-confiaveis")).isEqualTo("1");
+        assertThat(ambiente("application-prod.properties",
+                Map.of("MOTOSHIFT_LIMITE_PROXIES_CONFIAVEIS", "0"))
+                .getProperty("motoshift.limite.proxies-confiaveis")).isEqualTo("0");
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"application.properties", "application-prod.properties"})
+    @DisplayName("a versão do /api/status: o commit do Render, MOTOSHIFT_VERSAO por cima, vazio sem nenhum dos dois")
+    void versaoNoAr(String arquivo) throws IOException {
+        assertThat(ambiente(arquivo, Map.of()).getProperty("motoshift.versao")).isEmpty();
+        assertThat(ambiente(arquivo, Map.of("RENDER_GIT_COMMIT", "ce600ba"))
+                .getProperty("motoshift.versao")).isEqualTo("ce600ba");
+        assertThat(ambiente(arquivo, Map.of("RENDER_GIT_COMMIT", "ce600ba", "MOTOSHIFT_VERSAO", "v2"))
+                .getProperty("motoshift.versao")).isEqualTo("v2");
+    }
+
+    @Test
     @DisplayName("o Swagger só é desligado no arquivo de produção")
     void swaggerSoEmProd() throws IOException {
         StandardEnvironment dev = ambiente("application.properties", Map.of());

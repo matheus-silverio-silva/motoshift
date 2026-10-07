@@ -7,6 +7,7 @@ import '../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/validators.dart';
+import '../../widgets/faixa_do_servidor.dart';
 import '../../widgets/olho_da_senha.dart';
 import '../recuperar_senha/recuperar_senha_screen.dart';
 
@@ -25,6 +26,17 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _senhaVisivel = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Pergunta já se o servidor está acordado (SCRUM-48): no plano gratuito
+    // ele dorme, e é melhor a tela avisar agora do que o primeiro "Entrar"
+    // falhar por tempo esgotado.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<AuthService>().servidor.aguardar();
+    });
+  }
+
+  @override
   void dispose() {
     _emailCtrl.dispose();
     _senhaCtrl.dispose();
@@ -36,6 +48,8 @@ class _LoginScreenState extends State<LoginScreen> {
     // O Enter chega aqui também (onFieldSubmitted), e não passa pelo botão —
     // que é quem se desligava durante o envio.
     if (auth.carregando) return;
+    // Idem para o servidor acordando: o botão está desligado, o Enter não.
+    if (auth.servidor.acordando) return;
     if (!_formKey.currentState!.validate()) return;
     // O backend já ignora maiúsculas e espaços no e-mail; mandar normalizado
     // deixa a sessão guardada no aparelho na mesma forma.
@@ -86,6 +100,12 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+
+  Widget _buildEntrar(AuthService auth) => _BotaoEntrar(
+        enviando: auth.carregando,
+        aguardandoServidor: auth.servidor.acordando,
+        onTap: _entrar,
+      );
 
   Widget _buildTop() {
     return Padding(
@@ -226,47 +246,16 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
           const SizedBox(height: 14),
+          // Servidor acordando (ou sem resposta): a faixa aparece aqui, logo
+          // acima do botão que ela explica.
+          FaixaDoServidor(
+            servidor: auth.servidor,
+            aoTentarDeNovo: auth.servidor.aguardar,
+          ),
           // Botão entrar
-          GestureDetector(
-            onTap: auth.carregando ? null : _entrar,
-            child: Container(
-              width: double.infinity,
-              height: 46,
-              decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0xCC0E8B8C),
-                    blurRadius: 22,
-                    spreadRadius: -10,
-                    offset: Offset(0, 12),
-                  ),
-                ],
-              ),
-              child: Center(
-                child: auth.carregando
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2.5,
-                        ),
-                      )
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('Entrar',
-                              style: tsJakarta(14, FontWeight.w700,
-                                  color: const Color(0xFFFFFFFF))),
-                          const SizedBox(width: 6),
-                          const Icon(Icons.arrow_forward_rounded,
-                              color: Color(0xFFFFFFFF), size: 15),
-                        ],
-                      ),
-              ),
-            ),
+          ListenableBuilder(
+            listenable: auth.servidor,
+            builder: (context, _) => _buildEntrar(auth),
           ),
           const SizedBox(height: 16),
           Center(
@@ -290,6 +279,98 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Botão entrar ──────────────────────────────────────────────────────────────
+
+/// O botão principal do login. Enquanto o servidor acorda ele diz "Aguardando
+/// o servidor" e não aceita toque: entrar agora só gastaria os 20 segundos da
+/// requisição para terminar em "Sem conexão".
+class _BotaoEntrar extends StatelessWidget {
+  const _BotaoEntrar({
+    required this.enviando,
+    required this.aguardandoServidor,
+    required this.onTap,
+  });
+
+  final bool enviando;
+  final bool aguardandoServidor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final botao = GestureDetector(
+      onTap: enviando || aguardandoServidor ? null : onTap,
+      child: Opacity(
+        opacity: aguardandoServidor ? 0.6 : 1,
+        child: Container(
+          width: double.infinity,
+          height: 46,
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0xCC0E8B8C),
+                blurRadius: 22,
+                spreadRadius: -10,
+                offset: Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Center(child: _conteudo()),
+        ),
+      ),
+    );
+    if (!aguardandoServidor) return botao;
+    // O botão desligado, dito por inteiro: o que é, por que não responde e
+    // quando volta.
+    return Semantics(
+      container: true,
+      button: true,
+      enabled: false,
+      label: 'Aguardando o servidor. O botão Entrar volta quando ele responder.',
+      excludeSemantics: true,
+      child: botao,
+    );
+  }
+
+  Widget _conteudo() {
+    if (enviando) {
+      return const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(
+          color: Colors.white,
+          strokeWidth: 2.5,
+        ),
+      );
+    }
+    if (aguardandoServidor) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.hourglass_top_rounded,
+              color: Color(0xFFFFFFFF), size: 15),
+          const SizedBox(width: 6),
+          Text('Aguardando o servidor',
+              style: tsJakarta(14, FontWeight.w700,
+                  color: const Color(0xFFFFFFFF))),
+        ],
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('Entrar',
+            style: tsJakarta(14, FontWeight.w700,
+                color: const Color(0xFFFFFFFF))),
+        const SizedBox(width: 6),
+        const Icon(Icons.arrow_forward_rounded,
+            color: Color(0xFFFFFFFF), size: 15),
+      ],
     );
   }
 }

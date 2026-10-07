@@ -109,5 +109,17 @@ class PerfilDeProducaoTest {
         assertThat(contexto.getEnvironment().getProperty("motoshift.limite.habilitado")).isEqualTo("true");
         assertThat(contexto.getEnvironment().getProperty("motoshift.limite.cabecalho-do-ip"))
                 .isEqualTo("X-Forwarded-For");
+        // Render: a última entrada do cabeçalho é o proxy (SCRUM-48).
+        assertThat(contexto.getEnvironment().getProperty("motoshift.limite.proxies-confiaveis"))
+                .isEqualTo("1");
+    }
+
+    @Test
+    @DisplayName("em produção o /api/status é público e responde o fuso de Curitiba — é o que o app e o monitor chamam")
+    void statusPublicoEmProd() throws Exception {
+        mvc.perform(get("/api/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ok").value(true))
+                .andExpect(jsonPath("$.fuso").value("America/Sao_Paulo"));
     }
 }

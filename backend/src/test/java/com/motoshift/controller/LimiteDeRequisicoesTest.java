@@ -37,9 +37,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <p>O limite fica desligado no perfil de teste (ver application-test), porque
  * o contexto é dividido entre as classes e todas criam contas do mesmo "IP".
- * Esta classe o liga só para ela, com o cabeçalho de proxy configurado como no
- * Railway — e cada teste usa um IP próprio, para um não gastar o limite do
- * outro.
+ * Esta classe o liga só para ela, com o cabeçalho de proxy e um proxy
+ * confiável, como no Render — e cada teste usa um IP próprio, para um não
+ * gastar o limite do outro.
  *
  * <p>A conta e o relógio estão no {@code JanelaDeslizanteTest} e no
  * {@code LimiteDeRequisicoesFilterTest}; aqui a pergunta é se o 429 sai onde
@@ -50,7 +50,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 @TestPropertySource(properties = {
         "motoshift.limite.habilitado=true",
-        "motoshift.limite.cabecalho-do-ip=X-Forwarded-For"
+        "motoshift.limite.cabecalho-do-ip=X-Forwarded-For",
+        "motoshift.limite.proxies-confiaveis=1"
 })
 class LimiteDeRequisicoesTest {
 
@@ -103,14 +104,29 @@ class LimiteDeRequisicoesTest {
     }
 
     @Test
-    @DisplayName("o IP é a última entrada do X-Forwarded-For: trocar as primeiras não escapa do limite")
-    void xForwardedFor_ultimaEntrada() throws Exception {
+    @DisplayName("o IP é a penúltima entrada do X-Forwarded-For (a última é o proxy): trocar as primeiras não escapa do limite")
+    void xForwardedFor_entradaDoCliente() throws Exception {
         String ipReal = "203.0.113.30";
+        String proxy = "10.210.0.5";
 
         for (int i = 0; i < LimiteDeRequisicoesFilter.PUBLICAS_POR_JANELA; i++) {
-            cadastroInvalido("10.9.8." + i + ", " + ipReal).andExpect(status().isBadRequest());
+            cadastroInvalido("10.9.8." + i + ", " + ipReal + ", " + proxy).andExpect(status().isBadRequest());
         }
-        cadastroInvalido("172.16.0.1, " + ipReal).andExpect(status().isTooManyRequests());
+        cadastroInvalido("172.16.0.1, " + ipReal + ", " + proxy).andExpect(status().isTooManyRequests());
+
+        // Outro cliente atrás do MESMO proxy não paga por este (SCRUM-48): era
+        // o que acontecia lendo a última entrada, que é a do proxy.
+        cadastroInvalido("203.0.113.31, " + proxy).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("o /api/status fica fora do limite: o monitor e o app o chamam o dia inteiro, sem token")
+    void status_foraDoLimite() throws Exception {
+        for (int i = 0; i < LimiteDeRequisicoesFilter.PUBLICAS_POR_JANELA * 3; i++) {
+            mvc.perform(get("/api/status").header("X-Forwarded-For", "203.0.113.60, 10.210.0.5"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.ok").value(true));
+        }
     }
 
     @Test

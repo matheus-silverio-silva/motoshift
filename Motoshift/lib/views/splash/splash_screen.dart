@@ -4,10 +4,15 @@ import '../../models/usuario.dart';
 import '../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/faixa_do_servidor.dart';
 
 // ============================================================
 // PRESENTATION — Splash / Session Restore (RF01)
 // Verifica token salvo e redireciona para o dashboard correto.
+//
+// Com sessão salva e o servidor dormindo (plano gratuito), fica aqui com a
+// faixa "Acordando o servidor…" em vez de desistir e mandar para o login
+// (SCRUM-48). Sem sessão salva vai direto ao login, que faz a mesma espera.
 // ============================================================
 
 class SplashScreen extends StatefulWidget {
@@ -28,6 +33,9 @@ class _SplashScreenState extends State<SplashScreen> {
     final auth = context.read<AuthService>();
     await auth.inicializar();
     if (!mounted) return;
+    // O servidor não respondeu a tempo: nada foi decidido. A tela fica com o
+    // erro, e o "Tentar novamente" volta para cá.
+    if (!auth.inicializado) return;
 
     if (auth.usuario != null) {
       final route = auth.usuario!.tipo == TipoUsuario.motoboy
@@ -41,6 +49,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final servidor = context.read<AuthService>().servidor;
     return Scaffold(
       backgroundColor: AppColors.teal,
       body: Center(
@@ -78,12 +87,30 @@ class _SplashScreenState extends State<SplashScreen> {
                   .copyWith(letterSpacing: 3),
             ),
             const SizedBox(height: 56),
-            const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 2,
+            ListenableBuilder(
+              listenable: servidor,
+              // Sem resposta, nada mais está carregando: o indicador some e
+              // fica o erro.
+              builder: (context, _) => servidor.semResposta
+                  ? const SizedBox(height: 24)
+                  : const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 28),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: FaixaDoServidor(
+                  servidor: servidor,
+                  aoTentarDeNovo: _verificarSessao,
+                ),
               ),
             ),
           ],

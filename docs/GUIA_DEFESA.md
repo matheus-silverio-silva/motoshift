@@ -84,9 +84,15 @@ Serviços principais: `AuthService`, `TurnoService`, `PagamentoTurnoService`,
 > `services`, que é o que as telas realmente usam."*
 
 **Configuração da URL da API:** injetada em build via
-`--dart-define=API_URL=...` e lida em `api_service.dart`
+`--dart-define=API_URL=...` e lida em `services/api/api_client.dart`
 (`String.fromEnvironment('API_URL')`). Em dev usa `10.0.2.2:8080` (emulador
 Android) ou `localhost:8080`.
+
+**Servidor acordando:** ao abrir, o app pergunta `GET /api/status`
+(`ServidorService`). Se a resposta não vem em 3 s, a tela avisa "Acordando o
+servidor…", desliga o botão Entrar e pergunta de novo a cada 5 s, por até 4
+min — o plano gratuito da hospedagem desliga o servidor depois de 15 min
+parado. Quem tem sessão salva espera na abertura, sem perder a sessão.
 
 ---
 
@@ -162,7 +168,7 @@ o **RF14** e a sugestão de turnos por IA, o **RF08**.
 
 - **Dev:** H2 em memória (console em `/h2-console`), recriado a cada boot —
   zero configuração. Flyway desligado: as migrações são SQL PostgreSQL.
-- **Prod:** PostgreSQL no Railway (perfil `prod`, `application-prod.properties`).
+- **Prod:** PostgreSQL no Neon (perfil `prod`, `application-prod.properties`).
 - **O schema é das migrações, não do Hibernate.** `ddl-auto=validate` em
   produção: o Hibernate só confere se as entidades batem com o que o Flyway
   criou. São 25 migrações versionadas em `db/migration` (V1 a V25), cada uma
@@ -184,11 +190,25 @@ o **RF14** e a sugestão de turnos por IA, o **RF08**.
 
 ## 8. Deploy
 
-- **Railway** para os dois serviços.
-- Front-end: **Dockerfile multi-stage** (`flutter build web` → servido por **nginx**, com fallback de SPA).
-  A imagem é a do Flutter **3.41.5** — a mesma versão do CI e dos goldens — e as
-  dependências saem do `pubspec.lock` versionado (`pub get --enforce-lockfile`):
-  o mesmo commit gera o mesmo app, qualquer que seja o dia do build.
+- **Três peças:** banco no **Neon** (PostgreSQL), back-end no **Render**
+  (`backend/Dockerfile`, plano gratuito) e front-end web no **Firebase
+  Hosting** (`flutter build web` + `firebase deploy`, com fallback de SPA no
+  `firebase.json`).
+- **Mesmo commit, mesmo app:** Flutter **3.41.5** no build, no CI e nos
+  goldens, com as dependências saindo do `pubspec.lock` versionado. O
+  `Motoshift/Dockerfile` (nginx) continua no repositório como alternativa por
+  container.
+- **Cache do front:** o `firebase.json` manda `Cache-Control: no-cache` para o
+  `index.html` e os arquivos que apontam a versão atual (`flutter_bootstrap.js`,
+  `flutter_service_worker.js`, `version.json`, `manifest.json`). Sem isso o
+  navegador podia servir o app antigo por até 1 h depois de um deploy.
+- **Fuso:** o container roda em UTC; o `main` põe a JVM em
+  `America/Sao_Paulo` antes de o Spring subir (variável `MOTOSHIFT_FUSO`), e o
+  Dockerfile define `TZ` e `-Duser.timezone`. Ver a pergunta do fuso, abaixo.
+- **Servidor que dorme:** o plano gratuito desliga o serviço depois de 15 min
+  sem requisição. `GET /api/status` (público, sem banco, fora do limite) é o
+  que um monitor chama a cada 10 min para ele não dormir, e o que o app chama
+  ao abrir para avisar "Acordando o servidor…" em vez de falhar.
 - **CI** (GitHub Actions): `mvn test`, `flutter analyze` e `flutter test` em todo
   pull request e em todo push na `main`; um commit novo cancela a execução
   anterior da mesma branch.
@@ -201,9 +221,11 @@ o **RF14** e a sugestão de turnos por IA, o **RF08**.
   rotas dele saem das públicas: sem token, 401), a conferência do ledger
   (`@Profile("!prod")`) e a massa de demonstração no boot.
 - **Limite de requisições:** cadastro e "esqueci minha senha" aceitam 20 a
-  cada 10 minutos por IP. Atrás do proxy do Railway o endereço da conexão é o
-  do proxy, igual para todos; o IP de quem chamou vem do `X-Forwarded-For`
-  (a última entrada, que é a que o proxy escreve). Em memória, por instância.
+  cada 10 minutos por IP. Atrás do proxy da hospedagem o endereço da conexão é
+  o do proxy, igual para todos; o IP de quem chamou vem do `X-Forwarded-For`.
+  No Render o proxy acrescenta também o próprio IP no fim da lista, então vale
+  a **penúltima** entrada (`MOTOSHIFT_LIMITE_PROXIES_CONFIAVEIS=1`): lendo a
+  última, o limite contava todos os usuários juntos. Em memória, por instância.
 
 ---
 
@@ -251,9 +273,36 @@ simultâneos na última vaga não entram os dois: o aceite trava a linha do turn
 
 **P: A senha é segura?**
 R: BCrypt, sempre — no cadastro, na massa de demonstração e no login, que não
-aceita outro formato. As contas antigas do Railway, gravadas em texto puro
+aceita outro formato. As contas antigas de produção, gravadas em texto puro
 antes disso, foram convertidas pela migração V9. O token é JWT assinado
 (HS256), com o segredo vindo de variável de ambiente.
+
+**P: E o fuso horário?**
+R: O sistema tem um fuso só, o de Curitiba. O app manda a data do turno como
+hora local, o banco guarda `timestamp` sem fuso e o código usa
+`LocalDateTime` — nada é convertido no caminho, então o que precisa estar certo
+é o "agora" do servidor. O container da hospedagem roda em UTC, 3 horas à
+frente: a regra das 2 h de antecedência virava 5 h, o turno expirava 3 h antes
+e, na DRE, o que acontecia depois das 21h caía no dia seguinte. A correção é o
+servidor nascer no fuso de quem usa (`MotoshiftApplication.main`, variável
+`MOTOSHIFT_FUSO`, padrão `America/Sao_Paulo`), e a suíte de testes roda nesse
+mesmo fuso, inclusive no CI. Um fuso só porque loja e entregador estão na
+mesma cidade — o check-in exige 500 m do ponto — e o Brasil não tem horário de
+verão desde 2019. Para atender outro estado **no lugar** de Curitiba, basta
+trocar a variável; para atender **dois fusos ao mesmo tempo**, as datas
+passariam a ser instantes (`timestamptz`), o app mandaria o deslocamento, cada
+loja teria o seu fuso e os cortes de dia e de mês da DRE seriam calculados no
+fuso de quem consulta.
+
+**P: O servidor demora no primeiro acesso. Por quê?**
+R: É o plano gratuito da hospedagem: sem requisição por 15 minutos, o serviço
+é desligado, e a primeira chamada espera o boot — cerca de 3 minutos. Tratamos
+dos dois lados. Um monitor chama `GET /api/status` a cada 10 minutos, o que
+mantém o servidor de pé. E o app, ao abrir, pergunta o mesmo status: se a
+resposta demora, ele avisa "Acordando o servidor…", desliga o botão Entrar e
+insiste a cada 5 segundos por até 4 minutos, em vez de deixar o primeiro login
+falhar por tempo esgotado. A rota não consulta o banco e não tem limite de
+requisições.
 
 **P: E o bloqueio de login do RF01?**
 R: Cinco erros bloqueiam a conta por 15 minutos, e o contador fica em duas

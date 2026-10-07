@@ -4,6 +4,7 @@ import '../models/usuario.dart';
 import '../routes/app_routes.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
+import 'faixa_do_servidor.dart';
 
 /// Envolve telas que exigem autenticação.
 ///
@@ -52,9 +53,11 @@ class _AuthGuardState extends State<AuthGuard> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
 
-    // Ainda restaurando a sessão → tela de carregamento neutra.
+    // Ainda restaurando a sessão → tela de carregamento. Se o servidor estiver
+    // acordando (SCRUM-48), ela diz isso; se não responder, oferece tentar de
+    // novo — é o caso de quem recarrega a página numa tela interna.
     if (!auth.inicializado) {
-      return const _GuardLoading();
+      return _GuardLoading(auth: auth);
     }
 
     // Não autenticado → login.
@@ -77,19 +80,58 @@ class _AuthGuardState extends State<AuthGuard> {
 }
 
 class _GuardLoading extends StatelessWidget {
-  const _GuardLoading();
+  const _GuardLoading({this.auth});
+
+  /// Presente só enquanto a sessão é restaurada — é quando há servidor a
+  /// esperar. Nos redirecionamentos a tela é o indicador e nada mais.
+  final AuthService? auth;
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    final auth = this.auth;
+    return Scaffold(
       backgroundColor: AppColors.primary,
       body: Center(
-        child: SizedBox(
-          width: 24,
-          height: 24,
-          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (auth == null)
+              const _Indicador()
+            else ...[
+              ListenableBuilder(
+                listenable: auth.servidor,
+                builder: (context, _) => auth.servidor.semResposta
+                    ? const SizedBox(height: 24)
+                    : const _Indicador(),
+              ),
+              const SizedBox(height: 28),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: FaixaDoServidor(
+                    servidor: auth.servidor,
+                    aoTentarDeNovo: auth.inicializar,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
+    );
+  }
+}
+
+class _Indicador extends StatelessWidget {
+  const _Indicador();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 24,
+      height: 24,
+      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
     );
   }
 }
