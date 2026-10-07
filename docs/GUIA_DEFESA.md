@@ -231,7 +231,7 @@ o **RF14** e a sugestão de turnos por IA, o **RF08**.
 
 ## 9. Testes
 
-- **Back-end:** 554 testes (JUnit 5, Mockito, `@SpringBootTest`, `@DataJpaTest`),
+- **Back-end:** 589 testes (JUnit 5, Mockito, `@SpringBootTest`, `@DataJpaTest`),
   cobrindo as regras dos turnos (RF04–RF07), o ledger e as invariantes, a DRE,
   a senha, os limites de requisição, autorização de ponta a ponta (sem token → 401,
   token de outra pessoa → 403, dono → 200), liquidação do pagamento e
@@ -240,7 +240,7 @@ o **RF14** e a sugestão de turnos por IA, o **RF08**.
   no próprio teste (sem Docker) e roda Flyway + `ddl-auto=validate` — inclusive
   os casos difíceis, como migrar um banco que já tem linha órfã. Antes disso, a
   primeira execução real das migrações era o deploy.
-- **Front-end:** 501 testes — unidade, widget, acessibilidade (alvo de toque,
+- **Front-end:** 556 testes — unidade, widget, acessibilidade (alvo de toque,
   rótulo de tudo o que é clicável e contraste de texto pelo WCAG AA) e
   *golden tests* (comparação visual das telas).
 - *Observação:* os goldens são desenhados com as **fontes do próprio app**
@@ -437,6 +437,21 @@ vale todo mês. Para o combustível há uma calculadora (km ÷ consumo × preço
 litro). E a tela é honesta sobre o limite: sem nada informado, ela avisa que o
 resultado só conhece o que passou pela plataforma — e a IA do relatório recebe
 a mesma instrução.
+
+**P: O seguro subiu este mês. Editar o lançamento não muda os meses passados?**
+R: Mudaria, porque conta fixa é uma regra mensal, e não uma linha por mês. Por
+isso o app pergunta ao salvar: "aplicar a partir deste mês" ou "corrigir todos
+os meses". Na primeira, o backend encerra a regra antiga no último dia do mês
+anterior e cria uma nova com o valor novo, na mesma transação — julho continua
+valendo R$ 70 e outubro passa a valer R$ 100. Há um teste com a DRE de um
+período que atravessa a troca.
+
+**P: Por que o login não pergunta mais se sou lojista ou motoboy?**
+R: Porque a pergunta não tinha efeito: o perfil é o da conta, e o backend
+sempre o leu do e-mail. Entrar como "lojista" com o e-mail de um entregador
+abria o painel do entregador. A escolha saiu do login e continua no cadastro,
+que é onde ela vale. O `LoginRequest` ainda aceita o campo `tipo`, sem usar,
+para o app antigo não levar erro.
 
 **P: O que é ponto de equilíbrio aqui?**
 R: Quantos turnos o entregador precisa fazer no período para pagar as despesas
@@ -690,6 +705,14 @@ a gorjeta é uma transação só no `LedgerService`.
   220,55 no período"), a tabela mostra a origem de cada linha (extrato ou
   informado por você) e o PDF do relatório ganhou a seção "Demonstração do
   resultado".
+- **Ajustes da revisão de 07/10 (SCRUM-49).** A data do pagamento vai até hoje
+  — lançamento com data futura era salvo e sumia da lista. Editar um
+  recorrente pergunta se a mudança vale **a partir deste mês** (o passado fica
+  como estava: a regra antiga é encerrada e nasce uma nova) ou em **todos os
+  meses**. "1.500" no campo de valor é mil e quinhentos, e o formulário mostra
+  "= R$ 1.500,00" antes de salvar. A tabela esconde as linhas sem valor, com
+  "Mostrar todas as linhas"; indicador negativo vira "Prejuízo por hora". E os
+  dois painéis ganharam o cartão "Resultado do mês".
 - **Como é testado.** `DreServiceTest` (lucro, prejuízo, equilíbrio, período
   vazio, reserva fora, gorjeta nos dois lados, ponto de equilíbrio nulo),
   `RecorrenciaTest`, `LancamentoGerencialHttpTest` (404 para o de outro

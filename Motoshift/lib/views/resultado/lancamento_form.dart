@@ -4,7 +4,10 @@ import 'package:provider/provider.dart';
 
 import '../../models/lancamento_gerencial.dart';
 import '../../models/turno.dart';
+import '../../models/usuario.dart';
+import '../../presentation/providers/turno_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/breakpoints.dart';
 import '../../utils/formato_fiscal.dart';
@@ -56,14 +59,90 @@ Future<bool> abrirFormularioDeLancamento(
   return salvo ?? false;
 }
 
-/// "7,50", "7.50" e "1.234,56" viram número; texto que não é número, nulo.
-double? numeroDigitado(String texto) {
+/// Turnos já encerrados de quem está logado, para ligar um lançamento a um
+/// deles. Sai do que o app já carregou; quem confere a participação é o
+/// backend.
+List<Turno> turnosParaOLancamento(BuildContext context) {
+  final provider = context.read<TurnoProvider>();
+  final souLojista =
+      context.read<AuthService>().usuario?.tipo == TipoUsuario.lojista;
+  final turnos = (souLojista ? provider.turnosLojista : provider.meusTurnos)
+      .where((t) => t.id != null && t.status == StatusTurno.finalizado)
+      .toList()
+    ..sort((a, b) => b.dataInicio.compareTo(a.dataInicio));
+  return turnos.take(30).toList();
+}
+
+/// Abre o formulário de um lançamento NOVO a partir de qualquer tela — é o
+/// que o cartão "Resultado do mês" dos painéis faz quando nada foi informado.
+/// Busca as categorias do papel de quem está logado; sem elas não há
+/// formulário a montar, e a pessoa é avisada. Devolve `true` se algo foi
+/// salvo.
+Future<bool> informarLancamento(BuildContext context,
+    {required DateTime hoje}) async {
+  final api = context.read<ApiService>().financeiro;
+  final mensageiro = ScaffoldMessenger.of(context);
+  List<CategoriaDeLancamento> categorias;
+  try {
+    categorias = await api.buscarCategorias();
+  } catch (_) {
+    categorias = const [];
+  }
+  if (!context.mounted) return false;
+  if (categorias.isEmpty) {
+    mensageiro.showSnackBar(const SnackBar(
+      content: Text('Não foi possível abrir o formulário. Tente de novo.'),
+      backgroundColor: AppColors.error,
+    ));
+    return false;
+  }
+  final salvou = await abrirFormularioDeLancamento(
+    context,
+    categorias: categorias,
+    hoje: hoje,
+    turnos: turnosParaOLancamento(context),
+  );
+  if (salvou) {
+    mensageiro.showSnackBar(const SnackBar(
+      content: Text('Lançamento salvo.'),
+      backgroundColor: AppColors.tealDeep,
+    ));
+  }
+  return salvou;
+}
+
+/// O número que a pessoa digitou; texto que não é número, nulo.
+///
+/// O ponto é ambíguo em português — "1.500" é mil e quinhentos, "12.5" é
+/// doze e meio —, e a regra antiga lia todo ponto sem vírgula como decimal:
+/// uma parcela de R$ 1.500 era salva como R$ 1,50 (SCRUM-49). Agora:
+///
+///  * **com vírgula**, ela é o decimal e o ponto é milhar: "1.500,00" → 1500,
+///    "7,50" → 7,5;
+///  * **sem vírgula**, pontos que formam grupos de milhar — um a três dígitos
+///    e depois grupos de exatamente três — são milhar: "1.500" → 1500,
+///    "12.500" → 12500, "1.234.567" → 1234567;
+///  * **qualquer outro ponto** é decimal: "12.5" → 12,5; "0.75" → 0,75;
+///    "1.50" → 1,5. "0.750" também: zero à esquerda não abre grupo de milhar.
+///
+/// [pontoPodeSerMilhar] `false` desliga a segunda regra, para o campo em que
+/// três casas depois do ponto são mesmo decimais: o preço do litro ("5.899").
+double? numeroDigitado(String texto, {bool pontoPodeSerMilhar = true}) {
   var t = texto.trim().replaceAll(' ', '');
   if (t.isEmpty) return null;
-  // Com vírgula, o ponto é separador de milhar.
-  if (t.contains(',')) t = t.replaceAll('.', '').replaceAll(',', '.');
+  if (t.contains(',')) {
+    t = t.replaceAll('.', '').replaceAll(',', '.');
+  } else if (pontoPodeSerMilhar && _gruposDeMilhar.hasMatch(t)) {
+    t = t.replaceAll('.', '');
+  }
   return double.tryParse(t);
 }
+
+final _gruposDeMilhar = RegExp(r'^[1-9]\d{0,2}(\.\d{3})+$');
+
+/// O que o formulário pergunta ao salvar a edição de um recorrente que já
+/// aconteceu em meses anteriores.
+enum _AlcanceDaEdicao { desteMes, todosOsMeses }
 
 /// O formulário de um custo ou de uma receita que o usuário informa (RF13).
 ///
@@ -115,6 +194,31 @@ class _FormularioDeLancamentoState extends State<FormularioDeLancamento> {
 
   bool get _editando => widget.existente?.id != null;
 
+  /// O dia de hoje, sem a hora — o limite da data de pagamento.
+  DateTime get _hoje =>
+      DateTime(widget.hoje.year, widget.hoje.month, widget.hoje.day);
+
+  DateTime get _primeiroDiaDoMes => DateTime(_hoje.year, _hoje.month, 1);
+
+  /// O valor como vai ser salvo, ou nulo enquanto o campo não é um número.
+  double? get _valorLido {
+    final n = numeroDigitado(_valorCtrl.text);
+    return n == null || n <= 0 ? null : n;
+  }
+
+  /// Editar este lançamento mexe em meses que já passaram? É um recorrente,
+  /// continua sendo, começou antes deste mês e ainda vale neste. Só então faz
+  /// sentido perguntar se a mudança é daqui para a frente.
+  bool get _alteraMesesPassados {
+    final e = widget.existente;
+    if (!_editando || e == null || !e.recorrente || !_recorrente) return false;
+    final mes = _primeiroDiaDoMes;
+    if (!e.data.isBefore(mes)) return false;
+    final acabou = e.recorrenteAte != null && e.recorrenteAte!.isBefore(mes);
+    final acabara = _ate != null && _ate!.isBefore(mes);
+    return !acabou && !acabara;
+  }
+
   CategoriaDeLancamento? get _categoriaEscolhida {
     for (final c in widget.categorias) {
       if (c.valor == _categoria) return c;
@@ -160,10 +264,14 @@ class _FormularioDeLancamentoState extends State<FormularioDeLancamento> {
 
   // ── Calculadora de combustível ───────────────────────────────────────────
 
+  // O consumo e o preço do litro leem o ponto sempre como decimal: gasolina
+  // a "5.899" é R$ 5,899, e não cinco mil.
   double? get _calculado => custoDoCombustivel(
         km: numeroDigitado(_calcKmCtrl.text),
-        consumoKmPorLitro: numeroDigitado(_calcConsumoCtrl.text),
-        precoDoLitro: numeroDigitado(_calcPrecoCtrl.text),
+        consumoKmPorLitro:
+            numeroDigitado(_calcConsumoCtrl.text, pontoPodeSerMilhar: false),
+        precoDoLitro:
+            numeroDigitado(_calcPrecoCtrl.text, pontoPodeSerMilhar: false),
       );
 
   void _usarCalculado() {
@@ -178,12 +286,16 @@ class _FormularioDeLancamentoState extends State<FormularioDeLancamento> {
 
   // ── Datas ────────────────────────────────────────────────────────────────
 
+  /// A data do pagamento vai até hoje (SCRUM-49). Regime de caixa: o
+  /// lançamento entra no dia em que foi pago — com data futura ele era salvo
+  /// e sumia da lista, sem como editar nem excluir. O backend recusa o mesmo.
   Future<void> _escolherData() async {
     final escolhida = await showDatePicker(
       context: context,
-      initialDate: _data,
+      // Um lançamento antigo com data futura abre no limite.
+      initialDate: _data.isAfter(_hoje) ? _hoje : _data,
       firstDate: DateTime(widget.hoje.year - 5),
-      lastDate: DateTime(widget.hoje.year + 1, 12, 31),
+      lastDate: _hoje,
     );
     if (escolhida == null) return;
     setState(() {
@@ -205,10 +317,127 @@ class _FormularioDeLancamentoState extends State<FormularioDeLancamento> {
 
   // ── Salvar ───────────────────────────────────────────────────────────────
 
+  /// "A mudança vale a partir de quando?" — devolve nulo se a pessoa fechou
+  /// sem escolher.
+  Future<_AlcanceDaEdicao?> _perguntarAlcance() {
+    Widget opcao({
+      required Key chave,
+      required String titulo,
+      required String detalhe,
+      required _AlcanceDaEdicao valor,
+      required bool padrao,
+      required BuildContext ctx,
+    }) {
+      final conteudo = Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(titulo,
+                style: tsJakarta(13.5, FontWeight.w800,
+                    color: padrao ? Colors.white : AppColors.ink)),
+            const SizedBox(height: 2),
+            Text(detalhe,
+                style: tsJakarta(11.5, FontWeight.w600,
+                    color: padrao ? Colors.white : AppColors.mutedTexto,
+                    height: 1.35)),
+          ],
+        ),
+      );
+      final estilo = ButtonStyle(
+        alignment: Alignment.centerLeft,
+        minimumSize: const WidgetStatePropertyAll(Size.fromHeight(56)),
+        padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: 14, vertical: 8)),
+        shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+      );
+      void escolher() => Navigator.pop(ctx, valor);
+      return padrao
+          ? FilledButton(
+              key: chave,
+              autofocus: true,
+              onPressed: escolher,
+              style: estilo.copyWith(
+                backgroundColor:
+                    const WidgetStatePropertyAll(AppColors.tealTexto),
+                foregroundColor: const WidgetStatePropertyAll(Colors.white),
+              ),
+              child: conteudo,
+            )
+          : OutlinedButton(
+              key: chave,
+              onPressed: escolher,
+              style: estilo.copyWith(
+                foregroundColor: const WidgetStatePropertyAll(AppColors.ink),
+                side: const WidgetStatePropertyAll(
+                    BorderSide(color: AppColors.line, width: 1.5)),
+              ),
+              child: conteudo,
+            );
+    }
+
+    return showDialog<_AlcanceDaEdicao>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('A mudança vale a partir de quando?',
+            style: tsBricolage(17, FontWeight.w800, color: AppColors.ink)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Este lançamento repete todo mês e já entrou no resultado de '
+              'meses anteriores.',
+              style: tsJakarta(12.5, FontWeight.w500,
+                  color: AppColors.text, height: 1.45),
+            ),
+            const SizedBox(height: 14),
+            opcao(
+              chave: const Key('lancamento-aplicar-deste-mes'),
+              titulo: 'Aplicar a partir deste mês',
+              detalhe: 'Os meses anteriores ficam como estavam.',
+              valor: _AlcanceDaEdicao.desteMes,
+              padrao: true,
+              ctx: ctx,
+            ),
+            const SizedBox(height: 8),
+            opcao(
+              chave: const Key('lancamento-corrigir-todos'),
+              titulo: 'Corrigir todos os meses',
+              detalhe: 'Muda também o resultado dos meses que já passaram.',
+              valor: _AlcanceDaEdicao.todosOsMeses,
+              padrao: false,
+              ctx: ctx,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Voltar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _salvar() async {
     if (_salvando) return;
     setState(() => _erro = null);
     if (!_formKey.currentState!.validate()) return;
+
+    // Trocar o valor do seguro não pode reescrever os meses que já fecharam
+    // sem a pessoa pedir (SCRUM-49): pergunta antes.
+    DateTime? aplicarAPartirDe;
+    if (_alteraMesesPassados) {
+      final alcance = await _perguntarAlcance();
+      if (alcance == null || !mounted) return;
+      if (alcance == _AlcanceDaEdicao.desteMes) {
+        aplicarAPartirDe = _primeiroDiaDoMes;
+      }
+    }
 
     final lancamento = LancamentoGerencial(
       categoria: _categoria!,
@@ -226,7 +455,8 @@ class _FormularioDeLancamentoState extends State<FormularioDeLancamento> {
     setState(() => _salvando = true);
     try {
       if (_editando) {
-        await api.atualizarLancamento(widget.existente!.id!, lancamento);
+        await api.atualizarLancamento(widget.existente!.id!, lancamento,
+            aplicarAPartirDe: aplicarAPartirDe);
       } else {
         await api.criarLancamento(lancamento);
       }
@@ -310,6 +540,7 @@ class _FormularioDeLancamentoState extends State<FormularioDeLancamento> {
                             decimal: true),
                         inputFormatters: [_soNumeros],
                         decoration: _decoracao(dica: '0,00'),
+                        onChanged: (_) => setState(() {}),
                         validator: (v) {
                           final n = numeroDigitado(v ?? '');
                           if (n == null) return 'Informe o valor';
@@ -317,6 +548,23 @@ class _FormularioDeLancamentoState extends State<FormularioDeLancamento> {
                           return null;
                         },
                       ),
+                      // O valor como foi entendido: quem digitou "1.500" vê
+                      // "= R$ 1.500,00" antes de salvar, e não R$ 1,50 depois.
+                      if (_valorLido != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 5, left: 2),
+                          child: Semantics(
+                            label: 'Valor que será salvo: '
+                                '${FormatoFiscal.moeda(_valorLido!)}',
+                            excludeSemantics: true,
+                            child: Text(
+                              '= ${FormatoFiscal.moeda(_valorLido!)}',
+                              key: const Key('lancamento-valor-lido'),
+                              style: tsJakarta(11.5, FontWeight.w700,
+                                  color: AppColors.tealTexto),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),

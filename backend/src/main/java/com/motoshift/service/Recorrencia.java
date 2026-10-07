@@ -51,6 +51,19 @@ public final class Recorrencia {
         return datas;
     }
 
+    /**
+     * A primeira ocorrência de uma recorrência do dia {@code diaDoMes} que cai
+     * em {@code aPartirDe} ou depois: neste mês, se o dia ainda não passou; no
+     * mês seguinte, se já passou. Mês mais curto que o dia, último dia dele.
+     */
+    public static LocalDate primeiraAPartirDe(int diaDoMes, LocalDate aPartirDe) {
+        YearMonth mes = YearMonth.from(aPartirDe);
+        LocalDate neste = mes.atDay(Math.min(diaDoMes, mes.lengthOfMonth()));
+        if (!neste.isBefore(aPartirDe)) return neste;
+        YearMonth seguinte = mes.plusMonths(1);
+        return seguinte.atDay(Math.min(diaDoMes, seguinte.lengthOfMonth()));
+    }
+
     /** Quantas vezes acontece no período — o que a DRE multiplica pelo valor. */
     public static int vezes(LocalDate primeira, LocalDate ate, LocalDate inicio, LocalDate fim) {
         return ocorrencias(primeira, ate, inicio, fim).size();

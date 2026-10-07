@@ -69,7 +69,8 @@ escopo era menor. Ela não foi alterada lá; a correspondência é esta:
 ### Conta e acesso
 
 **RF01 — Autenticação.** O usuário entra com e-mail e senha e recebe um token
-JWT, que identifica a conta e o papel em toda requisição. O e-mail não
+JWT, que identifica a conta e o papel em toda requisição. O papel é o da
+conta: o login não o pergunta. O e-mail não
 diferencia maiúsculas nem espaços nas pontas. Depois de 5 senhas erradas a
 conta fica bloqueada por 15 minutos; o contador mora no banco e vale para
 todas as instâncias. O app restaura a sessão ao abrir e volta ao login quando
@@ -78,9 +79,10 @@ o token deixa de valer.
 **RF02 — Painéis.** Cada papel tem um painel inicial com os números do
 período: para o entregador, saldo, ganhos do mês, turnos aceitos e
 concluídos, a meta do mês e os ganhos dos últimos dias; para o lojista, saldo,
-turnos publicados, gasto e reputação dos entregadores que o atenderam. As
-telas se atualizam ao puxar para baixo (celular) ou pelo botão "Atualizar"
-(desktop).
+turnos publicados, gasto e reputação dos entregadores que o atenderam. Os dois
+painéis mostram o resultado do mês — lucro ou prejuízo, por extenso — e levam
+à demonstração. As telas se atualizam ao puxar para baixo (celular) ou pelo
+botão "Atualizar" (desktop).
 
 **RF03 — Cadastro.** A conta nasce com um papel e um documento: CNPJ para o
 lojista (14 dígitos), CNH para o entregador (11 dígitos). Documento, e-mail e
@@ -165,7 +167,10 @@ prejuízo) do período numa DRE simplificada, em regime de caixa, que combina o
 extrato com custos e receitas que ele informa. O que é informado à mão não é
 transação: não move saldo nem entra no extrato. O entregador vê margem
 líquida, lucro por hora e por turno, custo por km e ponto de equilíbrio; o
-lojista, o custo de entrega sobre a receita e o resultado por turno.
+lojista, o custo de entrega sobre a receita e o resultado por turno. A data de
+um lançamento é a do pagamento, até hoje. Uma conta que se repete todo mês
+pode ter o valor alterado só dali em diante, sem mudar o resultado dos meses
+que já passaram.
 
 **RF14 — Relatórios.** Cada papel tem um relatório financeiro do período —
 resumo, fluxo de caixa e quebra por tipo, com exportação em planilha e PDF — e
@@ -259,8 +264,8 @@ são classes do backend.
 
 | RF | Cards | Classes principais | Testes |
 |---|---|---|---|
-| RF01 Autenticação | SCRUM-1, SCRUM-10, SCRUM-28, SCRUM-38 | `AuthController`, `AuthService`, `JwtService`, `JwtAuthFilter`, `Usuario` · app: `views/login`, `AuthService` | `AuthServiceTest`, `EmailSemMaiusculasTest`, `SegurancaDaApiTest` · `telas/login_e_cadastro_test.dart` |
-| RF02 Painéis | SCRUM-2, SCRUM-11, SCRUM-39 | `DashboardController`, `DashboardService` · app: `views/dashboard_motoboy`, `views/dashboard_lojista`, `AdaptiveScaffold` | `CarteiraServiceTest` · `goldens/motoboy_screens_test.dart`, `goldens/lojista_screens_test.dart`, `telas/atualizar_test.dart` |
+| RF01 Autenticação | SCRUM-1, SCRUM-10, SCRUM-28, SCRUM-38, SCRUM-49 | `AuthController`, `AuthService`, `JwtService`, `JwtAuthFilter`, `Usuario` · app: `views/login`, `AuthService` | `AuthServiceTest`, `EmailSemMaiusculasTest`, `SegurancaDaApiTest` · `telas/login_e_cadastro_test.dart` |
+| RF02 Painéis | SCRUM-2, SCRUM-11, SCRUM-39, SCRUM-49 | `DashboardController`, `DashboardService` · app: `views/dashboard_motoboy`, `views/dashboard_lojista`, `AdaptiveScaffold` | `CarteiraServiceTest` · `goldens/motoboy_screens_test.dart`, `goldens/lojista_screens_test.dart`, `telas/atualizar_test.dart` |
 | RF03 Cadastro | SCRUM-3, SCRUM-12 | `AuthService.registrar`, `RegistroRequest`, `CarteiraService` · app: `views/cadastro`, `Validators` | `AuthServiceTest`, `SegurancaDaApiTest` · `telas/login_e_cadastro_test.dart` |
 | RF04 Publicar turno | SCRUM-4, SCRUM-13 | `TurnoController`, `TurnoService.criar`, `PagamentoTurnoService.reservar` · app: `views/agendar_turno` | `TurnoServiceTest`, `ReservaELiquidacaoTest`, `TurnoControllerTest` · `repetir/repetir_turno_test.dart`, `localizacao/publicar_turno_ponto_test.dart` |
 | RF05 Aceitar turno | SCRUM-5, SCRUM-14, SCRUM-27 | `TurnoService.aceitar`, `TurnoRepository.buscarTravandoAsVagas`, `TurnoInscricao` · app: `views/detalhe_turno` | `TurnoServiceTest`, `AceiteConcorrentePostgresTest`, `TurnoRepositoryTest` |
@@ -271,7 +276,7 @@ são classes do backend.
 | RF10 Localização | SCRUM-9, SCRUM-18 | `TurnoConsultaService`, `GeoUtils`, `TurnoRepository` · app: `LocalizacaoService`, `widgets/mapa_raio.dart`, `views/meus_turnos` | `FiltroPorDistanciaTest`, `GeoUtilsTest` · `localizacao/perto_de_mim_test.dart`, `localizacao/ponto_da_loja_test.dart`, `localizacao/localizacao_service_test.dart` |
 | RF11 Documentos fiscais | — | `NotaFiscalController`, `NotaFiscalService`, `DocumentoFiscalService`, `InformeRendimentosService`, `EmissorSimulado` · app: `views/notas_fiscais`, `views/documento_fiscal` | `NotaFiscalServiceTest`, `DocumentoFiscalServiceTest`, `NotasEInformeTest`, `RetencaoNaFonteTest`, `NotaFiscalControllerTest` · `fiscal/quem_emite_test.dart`, `documento/documento_fiscal_test.dart` |
 | RF12 Carteira e ledger | SCRUM-6, SCRUM-15, SCRUM-30 | `CarteiraController`, `LedgerService`, `Movimento`, `CobrancaService`, `ExtratoService`, `ConsistenciaService`, `GatewayPagamentoSimulado` · app: `views/carteira`, `views/extrato`, `views/recarga` | `LedgerServiceTest`, `InvarianteTest`, `CobrancaServiceTest`, `ExtratoServiceTest`, `CarteiraPeloHttpTest`, `ConsistenciaSemPerfilTest` · `telas/extrato_filtrado_test.dart`, `telas/recarga_test.dart` |
-| RF13 Resultado financeiro | SCRUM-6, SCRUM-47 | `DreController`, `DreService`, `LancamentoGerencialController`, `LancamentoGerencialService`, `Recorrencia`, `CategoriaLancamento` · app: `views/resultado` | `DreServiceTest`, `RecorrenciaTest`, `LancamentoGerencialHttpTest`, `LancamentosGerenciaisForaDoLedgerTest`, `MigracoesPostgresTest` (V25) · `telas/resultado_test.dart`, `models/dre_test.dart`, `goldens/resultado_screens_test.dart` |
+| RF13 Resultado financeiro | SCRUM-6, SCRUM-47, SCRUM-49 | `DreController`, `DreService`, `LancamentoGerencialController`, `LancamentoGerencialService`, `Recorrencia`, `CategoriaLancamento` · app: `views/resultado` | `DreServiceTest`, `RecorrenciaTest`, `LancamentoGerencialHttpTest`, `LancamentosGerenciaisForaDoLedgerTest`, `MigracoesPostgresTest` (V25) · `telas/resultado_test.dart`, `models/dre_test.dart`, `goldens/resultado_screens_test.dart` |
 | RF14 Relatórios | — | `RelatorioController`, `RelatorioService`, `ExtratoService`, `AnthropicService` · app: `views/relatorios_financeiros`, `services/relatorio_pdf.dart` | `RelatorioServiceTest`, `ExtratoServiceTest` · `exportacao/exportar_pdf_test.dart`, `telas/cada_papel_ve_o_seu_test.dart` |
 | RF15 Check-in e check-out | — | `CheckinService`, `TurnoInscricao`, `Reputacao.pontualidade` · app: `widgets/checkin_do_turno.dart` | `CheckinServiceTest` · `checkin/checkin_test.dart` |
 | RF16 Turno que se resolve sozinho | SCRUM-9, SCRUM-19, SCRUM-31 | `TurnoExpiracaoService`, `TurnoExpiracaoJobs`, `TurnoLembreteService`, `TurnoService.finalizarPeloSistema` | `TurnoExpiracaoServiceTest`, `FinalizacaoAutomaticaTest`, `TurnoLembreteServiceTest`, `JobsDesligadosTest` · `telas/turnos_expirados_test.dart` |

@@ -7,15 +7,15 @@ class AuthApi {
 
   AuthApi(this._client);
 
+  /// E-mail e senha, e mais nada: o backend descobre o perfil pela conta. O
+  /// `tipo` que o app mandava aqui era ignorado do outro lado (SCRUM-49).
   Future<Map<String, dynamic>> login({
     required String email,
     required String senha,
-    required TipoUsuario tipo,
   }) async {
     final data = await _client.post('/auth/login', {
       'email': email,
       'senha': senha,
-      'tipo': tipo.name.toUpperCase(),
     });
     // Guarda o token já aqui: sem isto, a primeira chamada depois do login
     // sairia sem Authorization e voltaria 401.

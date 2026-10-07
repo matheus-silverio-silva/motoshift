@@ -2,6 +2,7 @@ import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../models/dre.dart';
 import '../../models/turno.dart';
 import '../../presentation/providers/notificacao_provider.dart';
 import '../../presentation/providers/turno_provider.dart';
@@ -12,7 +13,10 @@ import '../meus_turnos/meus_turnos_screen.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/formato_fiscal.dart';
 import '../../utils/serie_diaria.dart';
+import '../../widgets/situacao_do_resultado.dart';
+import '../resultado/lancamento_form.dart';
 import '../../widgets/meta_do_mes.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
@@ -52,6 +56,10 @@ class DashboardMotoboyScreen extends StatefulWidget {
 class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
   Map<String, dynamic>? _dashData;
 
+  /// A DRE do mês corrente, para o cartão "Resultado do mês". Nula enquanto
+  /// não chegou e quando a busca falhou — nos dois casos o cartão não existe.
+  Dre? _resultadoDoMes;
+
   @override
   void initState() {
     super.initState();
@@ -69,13 +77,50 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
     // botão Atualizar do desktop) até a tela estar de fato atualizada.
     final turnos = context.read<TurnoProvider>().carregarMeusTurnos(id);
     final sino = context.read<NotificacaoProvider>().carregarContagem(id);
+    final resultado = _carregarResultadoDoMes(api);
 
     try {
       final data = await api.dashboard.dashboardMotoboy(id);
       if (mounted) setState(() => _dashData = data);
     } catch (_) {}
-    await Future.wait([turnos, sino]);
+    await Future.wait([turnos, sino, resultado]);
   }
+
+  /// O resultado do mês até hoje. Falhou, o cartão some: é um atalho para a
+  /// tela de resultado, e não pode levar o painel junto.
+  Future<void> _carregarResultadoDoMes(ApiService api) async {
+    final hoje = widget.agora ?? clock.now();
+    Dre? dre;
+    try {
+      dre = await api.financeiro.buscarDre(
+          dataInicio: DateTime(hoje.year, hoje.month, 1), dataFim: hoje);
+    } catch (_) {
+      dre = null;
+    }
+    if (mounted) setState(() => _resultadoDoMes = dre);
+  }
+
+  Widget _cartaoDoResultado({double espacoAbaixo = 12}) {
+    final dre = _resultadoDoMes;
+    if (dre == null) return const SizedBox.shrink();
+    return Padding(
+      padding: EdgeInsets.only(bottom: espacoAbaixo),
+      child: CartaoResultadoDoMes(
+        dre: dre,
+        aoAbrirResultado: () =>
+            NavConfig.irParaSecao(context, AppRoutes.resultado),
+        aoInformar: () async {
+          final salvou = await informarLancamento(context,
+              hoje: widget.agora ?? clock.now());
+          if (salvou && mounted) _carregar();
+        },
+      ),
+    );
+  }
+
+  /// "4,70": a nota com vírgula, como todo número do app.
+  static String _nota(double score) =>
+      score.toStringAsFixed(2).replaceAll('.', ',');
 
   String _greeting() {
     final h = (widget.agora ?? clock.now()).hour;
@@ -123,6 +168,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
           const SizedBox(height: 12),
           _buildStats(),
           const SizedBox(height: 12),
+          _cartaoDoResultado(),
           _metaDoMes(auth),
           const SizedBox(height: 16),
           // Só ocupa espaço quando há algo a resolver; sem pendência, some.
@@ -244,7 +290,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
                 icon: Icons.military_tech_outlined,
                 iconColor: AppColors.amber,
                 label: 'Score de reputação',
-                value: score == null ? '—' : score.toStringAsFixed(2),
+                value: score == null ? '—' : _nota(score),
                 sub: _scoreLabel(score),
                 subColor: _scoreColor(score),
               ),
@@ -256,8 +302,8 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
                 minHeight: _alturaKpi,
                 icon: Icons.payments_outlined,
                 label: 'Ganhos mês',
-                value: 'R\$ ${_ganhosMensais.toStringAsFixed(0)}',
-                sub: 'acumulado na carteira',
+                value: FormatoFiscal.moeda(_ganhosMensais),
+                sub: 'turnos e gorjetas recebidos',
                 subColor: AppColors.muted,
               ),
             ),
@@ -278,7 +324,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
               child: WalletKpiCard(
                 minHeight: _alturaKpi,
                 label: 'Saldo',
-                value: 'R\$ ${_saldo.toStringAsFixed(0)}',
+                value: FormatoFiscal.moeda(_saldo),
                 actionLabel: 'Sacar via Pix',
                 // Abre a Carteira ja no dialogo de saque. Antes apontava para
                 // /sacar-pix, um stub "em breve" — enquanto a Carteira ao lado
@@ -304,6 +350,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  _cartaoDoResultado(espacoAbaixo: 16),
                   _metaDoMes(auth),
                   const SizedBox(height: 16),
                   const PainelPendencias(),
@@ -348,7 +395,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
         for (final t in aceitos.take(4)) ...[
           ShiftRow(
             horario: t.horarioFormatado,
-            valor: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
+            valor: FormatoFiscal.moeda(t.valorEstimado),
             meta: '${t.titulo} · ${t.regiao}',
             icon: t.status == StatusTurno.emAndamento
                 ? Icons.schedule_outlined
@@ -384,7 +431,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
           flex: 3,
           child: StatCard(
             label: 'Score de reputação',
-            value: score == null ? '—' : score.toStringAsFixed(2),
+            value: score == null ? '—' : _nota(score),
             sub: _scoreLabel(score),
             subColor: scoreC,
           ),
@@ -407,10 +454,16 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
                       style: tsJakarta(8.5, FontWeight.w700,
                           color: const Color(0xFFBFE5E3))),
                   const SizedBox(height: 3),
-                  Text(
-                    'R\$ ${_saldo.toStringAsFixed(0)}',
-                    style: tsBricolage(16, FontWeight.w800,
-                        color: Colors.white),
+                  // Com centavos o saldo ficou mais comprido: encolhe para
+                  // caber no cartão estreito, em vez de estourar.
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      FormatoFiscal.moeda(_saldo),
+                      style: tsBricolage(16, FontWeight.w800,
+                          color: Colors.white),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Container(
@@ -449,9 +502,11 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
         Expanded(
           child: StatCard(
             label: 'Ganhos mês',
-            value: 'R\$ ${_ganhosMensais.toStringAsFixed(0)}',
-            sub: '+ este mês',
-            subColor: AppColors.good,
+            value: FormatoFiscal.moeda(_ganhosMensais),
+            // Era "+ este mês", que não dizia o quê. O número é a soma dos
+            // pagamentos de turno e das gorjetas recebidos no mês.
+            sub: 'turnos e gorjetas',
+            subColor: AppColors.mutedTexto,
           ),
         ),
         const SizedBox(width: 8),
@@ -496,7 +551,7 @@ class _DashboardMotoboyScreenState extends State<DashboardMotoboyScreen> {
                     horario: t.horarioFormatado,
                     name: t.titulo,
                     meta: [t.regiao],
-                    value: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
+                    value: FormatoFiscal.moeda(t.valorEstimado),
                     iconData: Icons.two_wheeler_rounded,
                     pillLabel: t.status.label,
                     pillVariant: t.status == StatusTurno.emAndamento

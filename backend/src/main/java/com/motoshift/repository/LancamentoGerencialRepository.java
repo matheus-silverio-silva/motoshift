@@ -19,6 +19,13 @@ public interface LancamentoGerencialRepository extends JpaRepository<LancamentoG
     Optional<LancamentoGerencial> findByIdAndUsuarioId(Long id, Long usuarioId);
 
     /**
+     * Os lançamentos deste usuário que ainda não começaram: data depois de
+     * {@code hoje}. Não contam em período nenhum, mas a lista da tela os
+     * mostra — ver {@code LancamentoGerencialService.listar}.
+     */
+    List<LancamentoGerencial> findByUsuarioIdAndDataAfterOrderByDataDescIdDesc(Long usuarioId, LocalDate hoje);
+
+    /**
      * Os lançamentos que PODEM ter efeito em [inicio, fim]: os avulsos com a
      * data dentro, e os recorrentes que já começaram e ainda não terminaram.
      *

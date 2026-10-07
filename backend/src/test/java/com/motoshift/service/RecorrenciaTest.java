@@ -88,6 +88,19 @@ class RecorrenciaTest {
     }
 
     @Test
+    @DisplayName("primeira ocorrência a partir de uma data: neste mês se o dia ainda não passou, no seguinte se já passou")
+    void primeiraAPartirDe() {
+        // O próprio dia conta.
+        assertThat(Recorrencia.primeiraAPartirDe(20, dia(2026, 10, 1))).isEqualTo(dia(2026, 10, 20));
+        assertThat(Recorrencia.primeiraAPartirDe(20, dia(2026, 10, 20))).isEqualTo(dia(2026, 10, 20));
+        assertThat(Recorrencia.primeiraAPartirDe(20, dia(2026, 10, 21))).isEqualTo(dia(2026, 11, 20));
+        // Mês curto: o último dia dele. E a virada do ano.
+        assertThat(Recorrencia.primeiraAPartirDe(31, dia(2026, 2, 1))).isEqualTo(dia(2026, 2, 28));
+        assertThat(Recorrencia.primeiraAPartirDe(31, dia(2026, 4, 30))).isEqualTo(dia(2026, 4, 30));
+        assertThat(Recorrencia.primeiraAPartirDe(5, dia(2026, 12, 6))).isEqualTo(dia(2027, 1, 5));
+    }
+
+    @Test
     @DisplayName("período invertido ou datas ausentes não dão ocorrência nenhuma")
     void entradasSemSentido() {
         assertThat(Recorrencia.vezes(dia(2026, 1, 10), null, dia(2026, 3, 1), dia(2026, 2, 1))).isZero();

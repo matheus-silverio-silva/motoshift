@@ -293,6 +293,108 @@ class LancamentoGerencialHttpTest {
     }
 
     @Test
+    @DisplayName("data de pagamento depois de hoje: 400 com a mensagem do regime de caixa, no POST e no PUT; o \"até quando\" pode ser futuro")
+    void dataFutura_400() throws Exception {
+        String mensagem = "No regime de caixa, o lançamento entra no dia em que foi pago. "
+                + "Informe uma data até hoje.";
+        Map<String, Object> amanha = lancamento("seguro", "70.00");
+        amanha.put("data", hoje.plusDays(1).toString());
+
+        mvc.perform(como(entregador, post("/api/financeiro/lancamentos"), amanha))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("requisicao_invalida"))
+                .andExpect(jsonPath("$.mensagem").value(mensagem));
+
+        long id = criar(entregador, lancamento("seguro", "70.00"));
+        mvc.perform(como(entregador, put("/api/financeiro/lancamentos/" + id), amanha))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem").value(mensagem));
+        // Só o de hoje existe, com a data de hoje.
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM lancamentos_gerenciais WHERE usuario_id = ? AND data > ?",
+                Integer.class, entregador.getId(), java.sql.Date.valueOf(hoje))).isZero();
+
+        Map<String, Object> comFim = lancamento("celular_internet", "35.00");
+        comFim.put("recorrente", true);
+        comFim.put("recorrenteAte", hoje.plusYears(1).toString());
+        mvc.perform(como(entregador, post("/api/financeiro/lancamentos"), comFim))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.recorrenteAte").value(hoje.plusYears(1).toString()));
+    }
+
+    @Test
+    @DisplayName("PUT com aplicarAPartirDe num recorrente: responde o lançamento novo, encerra o antigo na véspera e a DRE que atravessa a troca soma os dois valores")
+    void editarRecorrenteAPartirDeUmaData() throws Exception {
+        LocalDate primeira = hoje.minusMonths(3);
+        LocalDate esteMes = hoje.withDayOfMonth(1);
+        Map<String, Object> seguro = lancamento("seguro", "70.00");
+        seguro.put("data", primeira.toString());
+        seguro.put("recorrente", true);
+        long antigo = criar(entregador, seguro);
+
+        Map<String, Object> reajuste = new LinkedHashMap<>(seguro);
+        reajuste.put("valor", "100.00");
+        reajuste.put("aplicarAPartirDe", esteMes.toString());
+        JsonNode novo = corpo(mvc.perform(como(entregador, put("/api/financeiro/lancamentos/" + antigo), reajuste))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valor").value(100.00))
+                .andExpect(jsonPath("$.recorrente").value(true))
+                .andExpect(jsonPath("$.recorrenteAte").doesNotExist()));
+        long novoId = novo.get("id").asLong();
+        assertThat(novoId).isNotEqualTo(antigo);
+        assertThat(LocalDate.parse(novo.get("data").asText())).isBetween(esteMes, hoje);
+
+        assertThat(jdbc.queryForObject(
+                "SELECT recorrente_ate FROM lancamentos_gerenciais WHERE id = ?",
+                java.sql.Date.class, antigo).toLocalDate()).isEqualTo(esteMes.minusDays(1));
+        assertThat(jdbc.queryForObject(
+                "SELECT valor FROM lancamentos_gerenciais WHERE id = ?", String.class, antigo))
+                .startsWith("70.00");
+
+        // O período inteiro: o novo, uma vez; o antigo, nos três meses de antes.
+        mvc.perform(como(entregador, get("/api/financeiro/lancamentos")
+                        .param("dataInicio", primeira.toString()).param("dataFim", hoje.toString())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].id").value(novoId))
+                .andExpect(jsonPath("$[0].ocorrenciasNoPeriodo").value(1))
+                .andExpect(jsonPath("$[0].valorNoPeriodo").value(100.00))
+                .andExpect(jsonPath("$[1].id").value(antigo))
+                .andExpect(jsonPath("$[1].ocorrenciasNoPeriodo").value(3))
+                .andExpect(jsonPath("$[1].valorNoPeriodo").value(210.00));
+
+        dre(entregador, primeira, hoje).andExpect(jsonPath("$.resultado").value(-310.00));
+        dre(entregador, primeira, esteMes.minusDays(1)).andExpect(jsonPath("$.resultado").value(-210.00));
+        dre(entregador, esteMes, hoje).andExpect(jsonPath("$.resultado").value(-100.00));
+    }
+
+    @Test
+    @DisplayName("aplicarAPartirDe fora do lugar: 400 num lançamento que não se repete e com data futura; no POST é ignorado")
+    void aplicarAPartirDe_foraDoLugar() throws Exception {
+        long avulso = criar(entregador, lancamento("combustivel", "30.00"));
+        Map<String, Object> noAvulso = lancamento("combustivel", "40.00");
+        noAvulso.put("aplicarAPartirDe", hoje.toString());
+        mvc.perform(como(entregador, put("/api/financeiro/lancamentos/" + avulso), noAvulso))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("requisicao_invalida"));
+
+        Map<String, Object> seguro = lancamento("seguro", "70.00");
+        seguro.put("data", hoje.minusMonths(3).toString());
+        seguro.put("recorrente", true);
+        // No POST o campo não quer dizer nada: cria um lançamento só.
+        seguro.put("aplicarAPartirDe", hoje.toString());
+        long id = criar(entregador, seguro);
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM lancamentos_gerenciais WHERE usuario_id = ? AND recorrente = true",
+                Integer.class, entregador.getId())).isEqualTo(1);
+
+        seguro.put("aplicarAPartirDe", hoje.plusDays(1).toString());
+        mvc.perform(como(entregador, put("/api/financeiro/lancamentos/" + id), seguro))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem").value("Informe uma data até hoje para aplicar a mudança."));
+    }
+
+    @Test
     @DisplayName("turnoId: vale o turno em que o entregador fez check-in e o que o lojista publicou; o alheio é 400")
     void turnoInformado() throws Exception {
         Turno meu = cenario.turnoPago(lojista.getId(), "120.00", entregador.getId());
@@ -394,8 +496,12 @@ class LancamentoGerencialHttpTest {
     }
 
     private ResultActions dreDeHoje(Usuario u) throws Exception {
+        return dre(u, hoje, hoje);
+    }
+
+    private ResultActions dre(Usuario u, LocalDate de, LocalDate ate) throws Exception {
         return mvc.perform(como(u, get("/api/financeiro/dre")
-                        .param("dataInicio", hoje.toString()).param("dataFim", hoje.toString())))
+                        .param("dataInicio", de.toString()).param("dataFim", ate.toString())))
                 .andExpect(status().isOk());
     }
 

@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,6 +37,18 @@ import java.util.List;
  * recorrente, uma vez por ocorrência ({@link Recorrencia}). E nenhum dos dois
  * conta além de hoje — é regime de caixa: a conta que vence no dia 20 ainda
  * não foi paga no dia 7.
+ *
+ * <p><b>Data de pagamento é até hoje (SCRUM-49).</b> Pelo mesmo regime de
+ * caixa, um lançamento não pode nascer com data futura: ele seria salvo e
+ * sumiria — a lista só mostra o que já conta, e não havia mais como editá-lo
+ * ou excluí-lo. O "até quando" de um recorrente pode ficar no futuro.
+ *
+ * <p><b>Editar um recorrente sem reescrever o passado (SCRUM-49).</b> Um
+ * recorrente é uma regra, não uma linha por mês: trocar o valor do seguro
+ * mudava todos os meses anteriores. Com {@code aplicarAPartirDe} no
+ * {@code PUT}, a regra antiga é encerrada no dia anterior e nasce uma nova,
+ * com os dados novos, na primeira ocorrência a partir dessa data — ver
+ * {@link #atualizar}.
  */
 @Service
 public class LancamentoGerencialService {
@@ -81,12 +94,32 @@ public class LancamentoGerencialService {
         return ocorridos;
     }
 
+    /**
+     * A lista da tela: o que conta no período e, à frente, o que ainda vai
+     * começar.
+     *
+     * <p>"O que ainda vai começar" são os lançamentos com data depois de hoje:
+     * a regra nova de um recorrente editado "a partir deste mês", quando o dia
+     * dele ainda não chegou, e o que foi gravado com data futura antes de isso
+     * ser recusado. Não contam em período nenhum (zero ocorrências, valor
+     * zero no período — a DRE continua somando o mesmo que a lista), mas têm
+     * de aparecer em algum lugar para poderem ser conferidos, corrigidos ou
+     * excluídos. Entram em todo período que chega até hoje.
+     */
     @Transactional(readOnly = true)
     public List<LancamentoGerencialResponse> listar(Long usuarioId, LocalDate inicio, LocalDate fim) {
         Periodo p = Periodo.de(inicio, fim);
-        return doPeriodo(usuarioId, p.dataInicio(), p.dataFim()).stream()
-                .map(o -> LancamentoGerencialResponse.de(o.lancamento(), o.vezes()))
-                .toList();
+        LocalDate hoje = LocalDate.now();
+        List<LancamentoGerencialResponse> lista = new ArrayList<>();
+        if (!p.dataFim().isBefore(hoje)) {
+            for (LancamentoGerencial l : repo.findByUsuarioIdAndDataAfterOrderByDataDescIdDesc(usuarioId, hoje)) {
+                lista.add(LancamentoGerencialResponse.de(l, 0));
+            }
+        }
+        for (Ocorrido o : doPeriodo(usuarioId, p.dataInicio(), p.dataFim())) {
+            lista.add(LancamentoGerencialResponse.de(o.lancamento(), o.vezes()));
+        }
+        return lista;
     }
 
     /** As categorias que o papel pode lançar, na ordem da DRE dele. */
@@ -104,12 +137,69 @@ public class LancamentoGerencialService {
         return LancamentoGerencialResponse.de(repo.save(l));
     }
 
+    /**
+     * Edita um lançamento.
+     *
+     * <p>Sem {@code aplicarAPartirDe}, a edição corrige o lançamento como ele
+     * é — num recorrente, o histórico inteiro.
+     *
+     * <p>Com {@code aplicarAPartirDe}, num recorrente que já aconteceu antes
+     * dessa data, o passado fica como está: o lançamento antigo passa a valer
+     * só até o dia anterior ({@code recorrenteAte}) e um novo é criado com os
+     * dados da requisição, começando na primeira ocorrência a partir da data.
+     * Os dois na mesma transação; a resposta é o novo. Se nada aconteceu antes
+     * da data, não há passado a preservar, e a edição é a comum.
+     */
     @Transactional
     public LancamentoGerencialResponse atualizar(Long id, Long usuarioId, String papel,
                                                  LancamentoGerencialRequest req) {
         LancamentoGerencial l = doDono(id, usuarioId);
+        LocalDate aPartirDe = req.getAplicarAPartirDe();
+        if (aPartirDe != null) {
+            if (!l.isRecorrente() || !req.isRecorrente()) {
+                throw invalido("\"Aplicar a partir de\" só vale para lançamento que se repete todo mês. "
+                        + "Para encerrar a recorrência, informe até quando ela vale.");
+            }
+            if (aPartirDe.isAfter(LocalDate.now())) {
+                throw invalido("Informe uma data até hoje para aplicar a mudança.");
+            }
+            if (aPartirDe.isAfter(l.getData())) {
+                return LancamentoGerencialResponse.de(aplicarDaliEmDiante(l, usuarioId, papel, req, aPartirDe));
+            }
+        }
         preencher(l, usuarioId, papel, req);
         return LancamentoGerencialResponse.de(repo.save(l));
+    }
+
+    /**
+     * Encerra {@code antigo} na véspera de {@code aPartirDe} e cria o
+     * lançamento que vale dali em diante.
+     *
+     * <p>O novo começa na primeira ocorrência em {@code aPartirDe} ou depois,
+     * no dia do mês que a requisição traz. Num mês mais curto que esse dia, a
+     * primeira ocorrência cai no último dia do mês — e é esse o dia que a
+     * regra nova passa a seguir.
+     */
+    private LancamentoGerencial aplicarDaliEmDiante(LancamentoGerencial antigo, Long usuarioId,
+                                                    String papel, LancamentoGerencialRequest req,
+                                                    LocalDate aPartirDe) {
+        LancamentoGerencial novo = new LancamentoGerencial(usuarioId);
+        preencher(novo, usuarioId, papel, req);
+
+        LocalDate inicio = Recorrencia.primeiraAPartirDe(req.getData().getDayOfMonth(), aPartirDe);
+        if (novo.getRecorrenteAte() != null && novo.getRecorrenteAte().isBefore(inicio)) {
+            throw invalido("A recorrência termina antes de " + inicio.format(DATA)
+                    + ": não há meses seguintes para aplicar a mudança.");
+        }
+        novo.setData(inicio);
+
+        // Encerrar, nunca estender: se a regra antiga já acabava antes, fica.
+        LocalDate vespera = aPartirDe.minusDays(1);
+        if (antigo.getRecorrenteAte() == null || antigo.getRecorrenteAte().isAfter(vespera)) {
+            antigo.setRecorrenteAte(vespera);
+        }
+        repo.save(antigo);
+        return repo.save(novo);
     }
 
     @Transactional
@@ -135,6 +225,9 @@ public class LancamentoGerencialService {
         }
         if (req.getData().getYear() < 2000 || req.getData().getYear() > 2100) {
             throw invalido("Data fora do intervalo aceito.");
+        }
+        if (req.getData().isAfter(LocalDate.now())) {
+            throw invalido(DATA_FUTURA);
         }
         if (req.getRecorrenteAte() != null) {
             if (!req.isRecorrente()) {
@@ -203,6 +296,12 @@ public class LancamentoGerencialService {
             throw invalido("Informe um turno de que você participou.");
         }
     }
+
+    /** A mensagem do 400 para data de pagamento depois de hoje. */
+    public static final String DATA_FUTURA = "No regime de caixa, o lançamento entra no dia em que "
+            + "foi pago. Informe uma data até hoje.";
+
+    private static final DateTimeFormatter DATA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private static ResponseStatusException invalido(String mensagem) {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, mensagem);

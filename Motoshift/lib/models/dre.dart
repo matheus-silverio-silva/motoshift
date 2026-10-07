@@ -88,6 +88,12 @@ class LinhaDre {
   /// "(−) Combustível", como numa DRE impressa.
   String get rotuloComSinal => subtrai ? '(−) $rotulo' : rotulo;
 
+  /// Linha comum sem valor no período. A tela e o PDF não a mostram — a
+  /// retenção na fonte de quem não tem retenção, o seguro de quem não tem
+  /// seguro. Subtotal e resultado nunca são "zerados": são a conta, e
+  /// aparecem mesmo valendo zero.
+  bool get zerada => tipo == TipoDeLinhaDre.linha && valor == 0;
+
   factory LinhaDre.fromJson(Map<String, dynamic> json) => LinhaDre(
         chave: json['chave'] as String? ?? '',
         rotulo: json['rotulo'] as String? ?? '',

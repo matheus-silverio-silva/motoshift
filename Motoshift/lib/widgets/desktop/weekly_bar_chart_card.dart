@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../utils/formato_fiscal.dart';
 import '../../utils/resumo_acessivel.dart';
 import '../../utils/serie_diaria.dart';
 import 'panel_card.dart';
@@ -106,7 +107,7 @@ class WeeklyBarChartCard extends StatelessWidget {
                 getTooltipItem: (group, groupIndex, rod, rodIndex) {
                   final destacado = group.x == destaque;
                   return BarTooltipItem(
-                    'R\$ ${rod.toY.toStringAsFixed(0)}',
+                    FormatoFiscal.moeda(rod.toY),
                     tsJakarta(
                       11,
                       destacado ? FontWeight.w800 : FontWeight.w700,

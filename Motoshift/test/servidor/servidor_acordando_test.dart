@@ -457,7 +457,6 @@ class _AuthQueRegistra extends FakeAuthApi {
   Future<Map<String, dynamic>> login({
     required String email,
     required String senha,
-    required TipoUsuario tipo,
   }) async {
     logins.add((email, senha));
     throw const ApiException(401, 'Credenciais inválidas.');

@@ -13,7 +13,14 @@ public class LoginRequest {
     @NotBlank
     private String senha;
 
-    // Ignorado na autenticação, mas aceito para não quebrar o JSON do Flutter
+    /**
+     * Aceito e <b>não usado</b>. O perfil de quem entra é o da conta — vem do
+     * e-mail, não do que a tela mandar —, e por isso a escolha "Sou Lojista /
+     * Sou Motoboy" saiu da tela de login (SCRUM-49): ela não tinha efeito. O
+     * campo continua aqui só para o app antigo, que ainda o envia, não levar
+     * um erro de JSON no login. No cadastro o {@code tipo} vale, e é
+     * obrigatório.
+     */
     private String tipo;
 
     public String getEmail() { return email; }

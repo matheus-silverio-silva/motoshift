@@ -5,9 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/dre.dart';
 import '../../models/extrato_filtro.dart';
 import '../../models/lancamento_gerencial.dart';
-import '../../models/turno.dart';
 import '../../models/usuario.dart';
-import '../../presentation/providers/turno_provider.dart';
 import '../../routes/app_routes.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
@@ -19,6 +17,7 @@ import '../../widgets/app_header.dart';
 import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/desktop/panel_card.dart';
 import '../../widgets/seletor_de_periodo.dart';
+import '../../widgets/situacao_do_resultado.dart';
 import 'lancamento_form.dart';
 
 /// Resultado do período — lucro ou prejuízo — numa DRE simplificada (RF13).
@@ -66,6 +65,9 @@ class _ResultadoScreenState extends State<ResultadoScreen> {
 
   bool _carregando = true;
   String? _erro;
+
+  /// "Mostrar todas as linhas" da demonstração: as zeradas voltam.
+  bool _mostrarLinhasZeradas = false;
 
   ScrollController? _rolagemDoGrafico;
 
@@ -154,16 +156,6 @@ class _ResultadoScreenState extends State<ResultadoScreen> {
 
   // ── Lançamentos ──────────────────────────────────────────────────────────
 
-  /// Turnos já encerrados do usuário, para ligar um lançamento a um deles. Sai
-  /// do que o app já carregou; quem confere a participação é o backend.
-  List<Turno> get _turnosParaOFormulario {
-    final provider = context.read<TurnoProvider>();
-    final turnos = (_souLojista ? provider.turnosLojista : provider.meusTurnos)
-        .where((t) => t.id != null && t.status == StatusTurno.finalizado)
-        .toList()
-      ..sort((a, b) => b.dataInicio.compareTo(a.dataInicio));
-    return turnos.take(30).toList();
-  }
 
   Future<void> _abrirFormulario([LancamentoGerencial? existente]) async {
     final salvou = await abrirFormularioDeLancamento(
@@ -171,7 +163,7 @@ class _ResultadoScreenState extends State<ResultadoScreen> {
       categorias: _categorias,
       hoje: _hoje,
       existente: existente,
-      turnos: _turnosParaOFormulario,
+      turnos: turnosParaOLancamento(context),
     );
     if (salvou && mounted) {
       _avisar(existente == null ? 'Lançamento salvo.' : 'Lançamento atualizado.');
@@ -320,7 +312,9 @@ class _ResultadoScreenState extends State<ResultadoScreen> {
       prefixoDaChave: 'resultado-periodo',
       selecionado: _atalho,
       onSelecionar: _escolherAtalho,
-      depois: [
+      // Na frente: a linha rola de lado, e o período em vigor não pode ficar
+      // escondido depois dos atalhos.
+      antes: [
         if (mes != null)
           InputChip(
             key: const Key('resultado-periodo-mes'),
@@ -340,26 +334,7 @@ class _ResultadoScreenState extends State<ResultadoScreen> {
   /// cor — quem não distingue verde de vermelho lê "Prejuízo".
   Widget _faixaDeSituacao() {
     final dre = _dre!;
-    final (fundo, borda, cor, icone) = switch (dre.situacao) {
-      SituacaoDre.lucro => (
-          AppColors.goodSoft,
-          AppColors.good,
-          const Color(0xFF0B5C43),
-          Icons.trending_up_rounded
-        ),
-      SituacaoDre.prejuizo => (
-          AppColors.errorContainer,
-          AppColors.error,
-          const Color(0xFF8C1212),
-          Icons.trending_down_rounded
-        ),
-      SituacaoDre.equilibrio => (
-          AppColors.surface2,
-          AppColors.line,
-          AppColors.tealDeep,
-          Icons.drag_handle_rounded
-        ),
-    };
+    final visual = VisualDaSituacao.de(dre.situacao);
     final (de, ate) = (dre.dataInicio, dre.dataFim);
 
     return Semantics(
@@ -371,30 +346,14 @@ class _ResultadoScreenState extends State<ResultadoScreen> {
         key: const Key('resultado-situacao'),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: fundo,
+          color: visual.fundo,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borda, width: 1.5),
+          border: Border.all(color: visual.borda, width: 1.5),
         ),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: borda, width: 1.5),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icone, size: 22, color: cor),
-                  const SizedBox(height: 2),
-                  Text(dre.situacao.rotulo,
-                      key: const Key('resultado-situacao-rotulo'),
-                      style: tsJakarta(10.5, FontWeight.w800, color: cor)),
-                ],
-              ),
-            ),
+            SeloDeSituacao(dre.situacao,
+                chaveDoRotulo: const Key('resultado-situacao-rotulo')),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -462,8 +421,16 @@ class _ResultadoScreenState extends State<ResultadoScreen> {
 
   // ── A demonstração ───────────────────────────────────────────────────────
 
+  /// As linhas zeradas ficam de fora (SCRUM-49): quem não tem retenção na
+  /// fonte, seguro nem parcela lia seis "R$ 0,00" para achar os três números
+  /// que importam. Subtotais e resultado aparecem sempre — são a conta. O
+  /// backend continua mandando todas as linhas, e o link do fim as devolve.
   Widget _painelDaDre() {
     final dre = _dre!;
+    final zeradas = dre.linhas.where((l) => l.zerada).length;
+    final linhas = _mostrarLinhasZeradas
+        ? dre.linhas
+        : dre.linhas.where((l) => !l.zerada).toList();
     return PanelCard(
       key: const Key('resultado-dre'),
       title: 'Demonstração do resultado',
@@ -471,7 +438,28 @@ class _ResultadoScreenState extends State<ResultadoScreen> {
       padding: const EdgeInsets.all(16),
       gap: 8,
       child: Column(
-        children: [for (final l in dre.linhas) _linhaDaDre(l)],
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final l in linhas) _linhaDaDre(l),
+          if (zeradas > 0)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const Key('dre-mostrar-todas'),
+                onPressed: () => setState(
+                    () => _mostrarLinhasZeradas = !_mostrarLinhasZeradas),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.tealTexto,
+                  minimumSize: const Size(0, 44),
+                  padding: EdgeInsets.zero,
+                  textStyle: tsJakarta(12.5, FontWeight.w700),
+                ),
+                child: Text(_mostrarLinhasZeradas
+                    ? 'Ocultar linhas sem valor'
+                    : 'Mostrar todas as linhas'),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -592,8 +580,9 @@ class _ResultadoScreenState extends State<ResultadoScreen> {
                 '${dre.inteiro('turnosFinalizados') ?? 0}'),
             _indicador('custo-por-turno', 'Custo médio por turno',
                 _moedaOuTraco(dre.numero('custoMedioPorTurno'))),
-            _indicador('resultado-por-turno', 'Resultado por turno',
-                _moedaOuTraco(dre.numero('resultadoPorTurno'))),
+            _indicadorDeResultado('resultado-por-turno', 'turno',
+                dre.numero('resultadoPorTurno'),
+                positivo: 'Resultado'),
             _indicador('gorjetas', 'Gorjetas dadas',
                 _moedaOuTraco(dre.numero('gorjetasDadas'))),
           ]
@@ -603,10 +592,10 @@ class _ResultadoScreenState extends State<ResultadoScreen> {
             _indicador('turnos', 'Turnos pagos', '${dre.inteiro('turnosPagos') ?? 0}'),
             _indicador('horas', 'Horas trabalhadas',
                 _horas(dre.numero('horasTrabalhadas'))),
-            _indicador('lucro-por-hora', 'Lucro por hora',
-                _moedaOuTraco(dre.numero('lucroPorHora'))),
-            _indicador('lucro-por-turno', 'Lucro por turno',
-                _moedaOuTraco(dre.numero('lucroPorTurno'))),
+            _indicadorDeResultado(
+                'lucro-por-hora', 'hora', dre.numero('lucroPorHora')),
+            _indicadorDeResultado(
+                'lucro-por-turno', 'turno', dre.numero('lucroPorTurno')),
             _indicador('custo-por-km', 'Custo por km',
                 _moedaOuTraco(dre.numero('custoPorKm')),
                 ajuda: dre.numero('custoPorKm') == null
@@ -643,7 +632,24 @@ class _ResultadoScreenState extends State<ResultadoScreen> {
     return Column(children: linhas);
   }
 
-  Widget _indicador(String chave, String rotulo, String valor, {String? ajuda}) {
+  /// Um indicador que é resultado dividido por alguma coisa — por hora, por
+  /// turno. Negativo, ele muda de nome: "Prejuízo por hora", com o valor sem
+  /// sinal. "Lucro por hora: −R$ 12,00" obrigava a ler o sinal para entender
+  /// o rótulo ao contrário (SCRUM-49). O texto e a cor seguem a faixa de
+  /// situação; a cor só reforça o que o rótulo já diz.
+  Widget _indicadorDeResultado(String chave, String por, double? valor,
+      {String positivo = 'Lucro'}) {
+    if (valor == null) return _indicador(chave, '$positivo por $por', '—');
+    if (valor < 0) {
+      return _indicador(chave, 'Prejuízo por $por', FormatoFiscal.moeda(valor.abs()),
+          cor: VisualDaSituacao.prejuizo.cor);
+    }
+    return _indicador(chave, '$positivo por $por', FormatoFiscal.moeda(valor),
+        cor: valor > 0 ? VisualDaSituacao.lucro.cor : null);
+  }
+
+  Widget _indicador(String chave, String rotulo, String valor,
+      {String? ajuda, Color? cor}) {
     return MergeSemantics(
       child: Container(
         key: Key('indicador-$chave'),
@@ -660,7 +666,8 @@ class _ResultadoScreenState extends State<ResultadoScreen> {
             Text(rotulo,
                 style: tsJakarta(11, FontWeight.w700, color: AppColors.mutedTexto)),
             const SizedBox(height: 4),
-            Text(valor, style: tsBricolage(17, FontWeight.w800, color: AppColors.ink)),
+            Text(valor,
+                style: tsBricolage(17, FontWeight.w800, color: cor ?? AppColors.ink)),
             if (ajuda != null && ajuda.isNotEmpty) ...[
               const SizedBox(height: 3),
               Text(ajuda,
@@ -940,9 +947,15 @@ class _ResultadoScreenState extends State<ResultadoScreen> {
 
   Widget _itemDeLancamento(LancamentoGerencial l) {
     final vezes = l.ocorrenciasNoPeriodo ?? 1;
-    final quando = l.recorrente
-        ? 'Todo dia ${l.data.day}${vezes > 1 ? ' · $vezes vezes no período' : ''}'
-        : FormatoFiscal.data(l.data);
+    // Data futura: está aqui para poder ser conferido e corrigido, e diz que
+    // ainda não entrou na conta.
+    final quando = l.aindaNaoConta
+        ? (l.recorrente
+            ? 'Começa em ${FormatoFiscal.data(l.data)} · todo dia ${l.data.day} · ainda não conta'
+            : 'Data futura: ${FormatoFiscal.data(l.data)} · ainda não conta')
+        : l.recorrente
+            ? 'Todo dia ${l.data.day}${vezes > 1 ? ' · $vezes vezes no período' : ''}'
+            : FormatoFiscal.data(l.data);
     final detalhe = [
       quando,
       if ((l.descricao ?? '').isNotEmpty) l.descricao!,

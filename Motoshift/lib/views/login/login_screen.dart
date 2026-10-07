@@ -22,7 +22,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _senhaCtrl = TextEditingController();
-  TipoUsuario _tipo = TipoUsuario.lojista;
   bool _senhaVisivel = false;
 
   @override
@@ -54,7 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
     // O backend já ignora maiúsculas e espaços no e-mail; mandar normalizado
     // deixa a sessão guardada no aparelho na mesma forma.
     final ok = await auth.login(
-        Validators.normalizarEmail(_emailCtrl.text), _senhaCtrl.text, _tipo);
+        Validators.normalizarEmail(_emailCtrl.text), _senhaCtrl.text);
     if (!mounted) return;
     if (ok) {
       // Diz ao sistema que o formulário foi enviado: é o que faz o gerenciador
@@ -173,12 +172,11 @@ class _LoginScreenState extends State<LoginScreen> {
           Text('Entre para acessar seus turnos',
               style: tsJakarta(11, FontWeight.w600, color: AppColors.mutedTexto)),
           const SizedBox(height: 15),
-          // Segmented control
-          _SegmentControl(
-            value: _tipo,
-            onChanged: (t) => setState(() => _tipo = t),
-          ),
-          const SizedBox(height: 4),
+          // Não há mais "Sou Lojista / Sou Motoboy" aqui (SCRUM-49): o perfil
+          // é o da conta, e o backend nunca usou a escolha — entrar como
+          // "lojista" com o e-mail de um entregador abria o painel do
+          // entregador. No cadastro a escolha continua, e lá ela vale.
+          //
           // AutofillGroup: e-mail e senha são um formulário só para o
           // gerenciador de senhas — ele preenche os dois de uma vez e, no
           // sucesso (finishAutofillContext), oferece salvar.
@@ -371,79 +369,6 @@ class _BotaoEntrar extends StatelessWidget {
         const Icon(Icons.arrow_forward_rounded,
             color: Color(0xFFFFFFFF), size: 15),
       ],
-    );
-  }
-}
-
-// ── Segmented control ─────────────────────────────────────────────────────────
-class _SegmentControl extends StatelessWidget {
-  const _SegmentControl({required this.value, required this.onChanged});
-  final TipoUsuario value;
-  final ValueChanged<TipoUsuario> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.surface2,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          _Seg(
-            label: 'Sou Lojista',
-            active: value == TipoUsuario.lojista,
-            onTap: () => onChanged(TipoUsuario.lojista),
-          ),
-          _Seg(
-            label: 'Sou Motoboy',
-            active: value == TipoUsuario.motoboy,
-            onTap: () => onChanged(TipoUsuario.motoboy),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Seg extends StatelessWidget {
-  const _Seg(
-      {required this.label, required this.active, required this.onTap});
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: active ? AppColors.tealTexto : Colors.transparent,
-            borderRadius: BorderRadius.circular(9),
-            boxShadow: active
-                ? const [
-                    BoxShadow(
-                      color: Color(0xB30E8B8C),
-                      blurRadius: 14,
-                      offset: Offset(0, 6),
-                    )
-                  ]
-                : null,
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: tsJakarta(11, FontWeight.w700,
-                  color: active ? const Color(0xFFFFFFFF) : AppColors.tealDeep),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

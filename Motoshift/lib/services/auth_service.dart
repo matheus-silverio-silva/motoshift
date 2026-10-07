@@ -81,12 +81,14 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> login(String email, String senha, TipoUsuario tipo) async {
+  /// Entra com e-mail e senha. O perfil não é pergunta: vem da conta, na
+  /// resposta do backend.
+  Future<bool> login(String email, String senha) async {
     _carregando = true;
     _erro = null;
     notifyListeners();
     try {
-      final resp = await _api.auth.login(email: email, senha: senha, tipo: tipo);
+      final resp = await _api.auth.login(email: email, senha: senha);
       final token = resp['token'] as String;
       final userData = resp['usuario'] as Map<String, dynamic>;
       _usuario = Usuario.fromJson(userData);

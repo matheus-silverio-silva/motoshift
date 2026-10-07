@@ -1680,6 +1680,7 @@ class FakeFinanceiroApi extends FinanceiroApi {
     this.comPrejuizo = false,
     this.semLancamentos = false,
     this.erroAoSalvar,
+    this.erroNaDre,
   }) : super(ApiClient());
 
   final TipoUsuario papel;
@@ -1689,15 +1690,23 @@ class FakeFinanceiroApi extends FinanceiroApi {
   final bool semLancamentos;
   final ApiException? erroAoSalvar;
 
+  /// A DRE fora do ar — para o painel, que tem de continuar de pé sem ela.
+  final ApiException? erroNaDre;
+
   /// Os períodos pedidos, na ordem.
   final List<(DateTime?, DateTime?)> periodosPedidos = [];
   final List<int?> anosPedidos = [];
   final List<LancamentoGerencial> criados = [];
   final List<(int, LancamentoGerencial)> atualizados = [];
+
+  /// O `aplicarAPartirDe` de cada edição, na ordem: nulo quando a edição
+  /// corrige o histórico inteiro.
+  final List<DateTime?> alcancesDasEdicoes = [];
   final List<int> excluidos = [];
 
   @override
   Future<Dre> buscarDre({DateTime? dataInicio, DateTime? dataFim}) async {
+    if (erroNaDre != null) throw erroNaDre!;
     periodosPedidos.add((dataInicio, dataFim));
     final base = papel == TipoUsuario.lojista
         ? fakeDreLojista()
@@ -1747,9 +1756,14 @@ class FakeFinanceiroApi extends FinanceiroApi {
   }
 
   @override
-  Future<LancamentoGerencial> atualizarLancamento(int id, LancamentoGerencial l) async {
+  Future<LancamentoGerencial> atualizarLancamento(
+    int id,
+    LancamentoGerencial l, {
+    DateTime? aplicarAPartirDe,
+  }) async {
     if (erroAoSalvar != null) throw erroAoSalvar!;
     atualizados.add((id, l));
+    alcancesDasEdicoes.add(aplicarAPartirDe);
     return l;
   }
 
@@ -1852,6 +1866,10 @@ class FakeTurnoApiDatasFixas extends FakeTurnoApi {
 }
 
 class FakeApiDatasFixas extends FakeApiService {
+  /// [tipoUsuario] escolhe a carteira e a DRE do papel, como no
+  /// [FakeApiService]: o painel da loja mostra o resultado da loja.
+  FakeApiDatasFixas({super.tipoUsuario});
+
   @override
   TurnoApi get turnos => _turnosDatasFixas;
   final TurnoApi _turnosDatasFixas = FakeTurnoApiDatasFixas();

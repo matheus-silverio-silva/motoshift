@@ -2,14 +2,19 @@ import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../models/dre.dart';
 import '../../models/turno.dart';
 import '../../presentation/providers/notificacao_provider.dart';
 import '../../presentation/providers/turno_provider.dart';
 import '../../routes/app_routes.dart';
+import '../../routes/nav_config.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/formato_fiscal.dart';
 import '../../utils/serie_diaria.dart';
+import '../../widgets/situacao_do_resultado.dart';
+import '../resultado/lancamento_form.dart';
 import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/desktop/app_topbar.dart';
@@ -40,6 +45,10 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
   Map<String, dynamic>? _dashData;
   bool _loadingDash = false;
 
+  /// A DRE do mês corrente, para o cartão "Resultado do mês". Nula enquanto
+  /// não chegou e quando a busca falhou — nos dois casos o cartão não existe.
+  Dre? _resultadoDoMes;
+
   @override
   void initState() {
     super.initState();
@@ -54,10 +63,12 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
     if (id == null) return;
 
     setState(() => _loadingDash = true);
+    final resultado = _carregarResultadoDoMes(api);
     try {
       final data = await api.dashboard.dashboardLojista(id);
       if (mounted) setState(() => _dashData = data);
     } catch (_) {}
+    await resultado;
     if (!mounted) return;
     setState(() => _loadingDash = false);
 
@@ -69,6 +80,42 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
       context.read<NotificacaoProvider>().carregarContagem(id),
     ]);
   }
+
+  /// O resultado do mês até hoje. Falhou, o cartão some: é um atalho para a
+  /// tela de resultado, e não pode levar o painel junto.
+  Future<void> _carregarResultadoDoMes(ApiService api) async {
+    final hoje = widget.agora ?? clock.now();
+    Dre? dre;
+    try {
+      dre = await api.financeiro.buscarDre(
+          dataInicio: DateTime(hoje.year, hoje.month, 1), dataFim: hoje);
+    } catch (_) {
+      dre = null;
+    }
+    if (mounted) setState(() => _resultadoDoMes = dre);
+  }
+
+  Widget _cartaoDoResultado({double espacoAbaixo = 14}) {
+    final dre = _resultadoDoMes;
+    if (dre == null) return const SizedBox.shrink();
+    return Padding(
+      padding: EdgeInsets.only(bottom: espacoAbaixo),
+      child: CartaoResultadoDoMes(
+        dre: dre,
+        aoAbrirResultado: () =>
+            NavConfig.irParaSecao(context, AppRoutes.resultado),
+        aoInformar: () async {
+          final salvou = await informarLancamento(context,
+              hoje: widget.agora ?? clock.now());
+          if (salvou && mounted) _carregar();
+        },
+      ),
+    );
+  }
+
+  /// "4,5": a nota com vírgula, como todo número do app.
+  static String _nota(double nota) =>
+      nota.toStringAsFixed(1).replaceAll('.', ',');
 
   String _greeting() {
     final h = (widget.agora ?? clock.now()).hour;
@@ -147,6 +194,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
         children: [
           _buildStats(),
           const SizedBox(height: 14),
+          _cartaoDoResultado(),
           // Só ocupa espaço quando há algo a resolver; sem pendência, some.
           const PainelPendencias(),
           _buildPublicarBtn(),
@@ -209,7 +257,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
                 size: StatCardSize.large,
                 icon: Icons.payments_outlined,
                 label: 'Gasto total',
-                value: 'R\$ ${_totalGasto.toStringAsFixed(0)}',
+                value: FormatoFiscal.moeda(_totalGasto),
                 sub:
                     '$_turnosFinalizados ${_turnosFinalizados == 1 ? 'turno finalizado' : 'turnos finalizados'}',
                 subColor: AppColors.muted,
@@ -234,7 +282,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
                 iconColor: AppColors.amber,
                 label: 'Avaliação',
                 value: _avaliacaoMedia != null
-                    ? _avaliacaoMedia!.toStringAsFixed(1)
+                    ? _nota(_avaliacaoMedia!)
                     : 'N/D',
                 sub: _avaliacaoMedia != null ? '★ recebida' : 'sem notas',
                 subColor: AppColors.amber,
@@ -255,6 +303,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  _cartaoDoResultado(espacoAbaixo: 16),
                   const PainelPendencias(),
                   PanelCard(
                     title: 'Próximos turnos',
@@ -300,7 +349,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
         for (final t in proximos.take(4)) ...[
           ShiftRow(
             horario: t.horarioFormatado,
-            valor: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
+            valor: FormatoFiscal.moeda(t.valorEstimado),
             meta: _metaDoTurno(t),
             icon: t.status == StatusTurno.emAndamento
                 ? Icons.schedule_outlined
@@ -365,7 +414,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
               Expanded(
                 child: StatCard(
                   label: 'Gasto total',
-                  value: 'R\$ ${_totalGasto.toStringAsFixed(0)}',
+                  value: FormatoFiscal.moeda(_totalGasto),
                   sub: '$_turnosFinalizados turnos',
                   subColor: AppColors.muted,
                 ),
@@ -375,7 +424,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
                 child: StatCard(
                   label: 'Avaliação',
                   value: _avaliacaoMedia != null
-                      ? _avaliacaoMedia!.toStringAsFixed(1)
+                      ? _nota(_avaliacaoMedia!)
                       : 'N/D',
                   sub: _avaliacaoMedia != null ? '★ recebida' : 'sem notas',
                   subColor: AppColors.amber,
@@ -462,7 +511,7 @@ class _DashboardLojistScreenState extends State<DashboardLojistScreen> {
                     t.regiao,
                     '${t.raioEntregaKm.toStringAsFixed(0)} km',
                   ],
-                  value: 'R\$ ${t.valorEstimado.toStringAsFixed(0)}',
+                  value: FormatoFiscal.moeda(t.valorEstimado),
                   iconData: Icons.store_outlined,
                   pillLabel: t.status.label,
                   pillVariant: _pillFor(t.status),

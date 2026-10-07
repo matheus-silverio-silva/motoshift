@@ -189,18 +189,27 @@ class RelatorioPdf {
           IdentidadePdf.linha('Atenção',
               'Nenhum custo ou receita foi informado: o resultado ignora o que não passou pela plataforma'),
       ]),
+      // Como na tela: as linhas sem valor ficam de fora; subtotais e
+      // resultado, sempre. O papel não tem "mostrar todas", então diz que
+      // omitiu.
       IdentidadePdf.tabela(
         colunas: const ['Linha', 'Origem', 'Valor'],
         alinharADireita: const {2},
         linhas: [
           for (final l in dre.linhas)
-            [
-              l.tipo == TipoDeLinhaDre.linha ? l.rotuloComSinal : '= ${l.rotulo}',
-              l.origem.rotulo,
-              FormatoFiscal.moeda(l.valor),
-            ],
+            if (!l.zerada)
+              [
+                l.tipo == TipoDeLinhaDre.linha ? l.rotuloComSinal : '= ${l.rotulo}',
+                l.origem.rotulo,
+                FormatoFiscal.moeda(l.valor),
+              ],
         ],
       ),
+      if (dre.linhas.any((l) => l.zerada))
+        IdentidadePdf.bloco('Observação', [
+          IdentidadePdf.linha('Linhas omitidas',
+              'As linhas sem valor no período não aparecem na demonstração'),
+        ]),
     ];
   }
 

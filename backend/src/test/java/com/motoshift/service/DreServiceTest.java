@@ -3,6 +3,9 @@ package com.motoshift.service;
 import com.motoshift.dto.DreResponse;
 import com.motoshift.dto.DreResponse.Linha;
 import com.motoshift.dto.LancamentoGerencialRequest;
+import com.motoshift.dto.LancamentoGerencialResponse;
+import com.motoshift.entity.CategoriaLancamento;
+import com.motoshift.entity.LancamentoGerencial;
 import com.motoshift.entity.NaturezaTransacao;
 import com.motoshift.entity.StatusTransacao;
 import com.motoshift.entity.StatusTurno;
@@ -10,6 +13,7 @@ import com.motoshift.entity.TipoTransacao;
 import com.motoshift.entity.Transacao;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.Usuario;
+import com.motoshift.repository.LancamentoGerencialRepository;
 import com.motoshift.repository.TransacaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
@@ -20,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -29,6 +34,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * A DRE dos dois papéis: o que entra, o que não entra e a última linha
@@ -50,6 +56,7 @@ class DreServiceTest {
 
     @Autowired private DreService dre;
     @Autowired private LancamentoGerencialService gerenciais;
+    @Autowired private LancamentoGerencialRepository gerencialRepo;
     @Autowired private TransacaoRepository transacaoRepo;
     @Autowired private TurnoRepository turnoRepo;
     @Autowired private UsuarioRepository usuarioRepo;
@@ -357,12 +364,210 @@ class DreServiceTest {
                 .isEqualByComparingTo("30.00");
 
         // Uma conta de amanhã não foi paga: um período que vai até a semana
-        // que vem a ignora.
-        informar(entregador, "seguro", "70.00", LocalDate.now().plusDays(1), null);
+        // que vem a ignora. Não dá mais para criá-la pelo serviço (SCRUM-49);
+        // esta é a linha que já estava no banco antes de a data futura ser
+        // recusada.
+        gravarDireto(entregador, "seguro", "70.00", LocalDate.now().plusDays(1), false);
         informar(entregador, "seguro", "5.00", LocalDate.now(), null);
         DreResponse futuro = dre.dre(entregador.getId(), "motoboy",
                 LocalDate.now().minusDays(1), LocalDate.now().plusDays(7));
         assertThat(valor(futuro, "seguro")).isEqualByComparingTo("5.00");
+    }
+
+    @Test
+    @DisplayName("data de pagamento depois de hoje é recusada ao criar e ao editar; o \"até quando\" do recorrente pode ser futuro")
+    void dataFutura_recusada() {
+        LocalDate amanha = LocalDate.now().plusDays(1);
+
+        assertThatThrownBy(() -> informar(entregador, "seguro", "70.00", amanha, null))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("No regime de caixa, o lançamento entra no dia em que foi pago. "
+                        + "Informe uma data até hoje.");
+
+        Long id = informar(entregador, "seguro", "70.00", LocalDate.now(), null);
+        assertThatThrownBy(() -> gerenciais.atualizar(id, entregador.getId(), "motoboy",
+                pedido("seguro", "70.00", amanha, null)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Informe uma data até hoje.");
+        assertThat(gerencialRepo.findById(id).orElseThrow().getData()).isEqualTo(LocalDate.now());
+
+        LancamentoGerencialRequest comFim = pedido("celular_internet", "35.00", LocalDate.now(), null);
+        comFim.setRecorrente(true);
+        comFim.setRecorrenteAte(LocalDate.now().plusYears(1));
+        assertThat(gerenciais.criar(entregador.getId(), "motoboy", comFim).recorrenteAte())
+                .isEqualTo(LocalDate.now().plusYears(1));
+    }
+
+    @Test
+    @DisplayName("editar um recorrente a partir de uma data não reescreve o passado: os meses anteriores ficam com o valor antigo e os seguintes com o novo")
+    void recorrenteEditadoAPartirDeUmaData() {
+        // Seguro de R$ 70 há três meses, no dia do mês de hoje: três
+        // vencimentos em meses anteriores e o deste mês, que é hoje.
+        LocalDate hoje = LocalDate.now();
+        LocalDate primeira = hoje.minusMonths(3);
+        LocalDate esteMes = hoje.withDayOfMonth(1);
+        LancamentoGerencialRequest seguro = pedido("seguro", "70.00", primeira, null);
+        seguro.setRecorrente(true);
+        Long antigoId = gerenciais.criar(entregador.getId(), "motoboy", seguro).id();
+        assertThat(valor(dre.dre(entregador.getId(), "motoboy", primeira, hoje), "seguro"))
+                .isEqualByComparingTo("280.00");
+
+        // O seguro subiu para R$ 100 — a partir deste mês.
+        LancamentoGerencialRequest reajuste = pedido("seguro", "100.00", primeira, null);
+        reajuste.setRecorrente(true);
+        reajuste.setDescricao("Reajuste anual");
+        reajuste.setAplicarAPartirDe(esteMes);
+        LancamentoGerencialResponse novo =
+                gerenciais.atualizar(antigoId, entregador.getId(), "motoboy", reajuste);
+
+        // Responde o novo: outra linha, com os dados novos, começando no
+        // vencimento deste mês.
+        assertThat(novo.id()).isNotEqualTo(antigoId);
+        assertThat(novo.valor()).isEqualByComparingTo("100.00");
+        assertThat(novo.recorrente()).isTrue();
+        assertThat(novo.recorrenteAte()).isNull();
+        assertThat(novo.descricao()).isEqualTo("Reajuste anual");
+        assertThat(novo.data()).isEqualTo(Recorrencia.primeiraAPartirDe(primeira.getDayOfMonth(), esteMes));
+        assertThat(novo.data()).isBetween(esteMes, hoje);
+
+        // O antigo ficou como era, encerrado na véspera.
+        LancamentoGerencial antigo = gerencialRepo.findById(antigoId).orElseThrow();
+        assertThat(antigo.getValor()).isEqualByComparingTo("70.00");
+        assertThat(antigo.getData()).isEqualTo(primeira);
+        assertThat(antigo.getRecorrenteAte()).isEqualTo(esteMes.minusDays(1));
+
+        // Os meses anteriores continuam valendo R$ 70 cada...
+        DreResponse antes = dre.dre(entregador.getId(), "motoboy", primeira, esteMes.minusDays(1));
+        assertThat(valor(antes, "seguro")).isEqualByComparingTo("210.00");
+        // ...este mês vale R$ 100...
+        DreResponse agora = dre.dre(entregador.getId(), "motoboy", esteMes, hoje);
+        assertThat(valor(agora, "seguro")).isEqualByComparingTo("100.00");
+        // ...e a DRE de um período que atravessa a troca soma os dois.
+        DreResponse atravessa = dre.dre(entregador.getId(), "motoboy", primeira, hoje);
+        assertThat(valor(atravessa, "seguro")).isEqualByComparingTo("310.00");
+        assertThat(atravessa.lancamentosManuais()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("sem \"aplicar a partir de\", editar um recorrente corrige o histórico inteiro, como antes")
+    void recorrenteEditadoSemData_corrigeTudo() {
+        LocalDate hoje = LocalDate.now();
+        LocalDate primeira = hoje.minusMonths(3);
+        LancamentoGerencialRequest seguro = pedido("seguro", "70.00", primeira, null);
+        seguro.setRecorrente(true);
+        Long id = gerenciais.criar(entregador.getId(), "motoboy", seguro).id();
+
+        LancamentoGerencialRequest correcao = pedido("seguro", "100.00", primeira, null);
+        correcao.setRecorrente(true);
+        LancamentoGerencialResponse editado =
+                gerenciais.atualizar(id, entregador.getId(), "motoboy", correcao);
+
+        assertThat(editado.id()).isEqualTo(id);
+        assertThat(valor(dre.dre(entregador.getId(), "motoboy", primeira, hoje), "seguro"))
+                .isEqualByComparingTo("400.00");
+        assertThat(gerencialRepo.findById(id).orElseThrow().getRecorrenteAte()).isNull();
+    }
+
+    @Test
+    @DisplayName("\"aplicar a partir de\": só em recorrente, só até hoje; sem passado antes da data é a edição comum; e nunca estende o que já tinha acabado")
+    void aplicarAPartirDe_cantos() {
+        LocalDate hoje = LocalDate.now();
+        LocalDate primeira = hoje.minusMonths(3);
+
+        // Num avulso não quer dizer nada.
+        Long avulso = informar(entregador, "combustivel", "30.00", hoje, null);
+        LancamentoGerencialRequest noAvulso = pedido("combustivel", "40.00", hoje, null);
+        noAvulso.setAplicarAPartirDe(hoje);
+        assertThatThrownBy(() -> gerenciais.atualizar(avulso, entregador.getId(), "motoboy", noAvulso))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("só vale para lançamento que se repete todo mês");
+
+        LancamentoGerencialRequest seguro = pedido("seguro", "70.00", primeira, null);
+        seguro.setRecorrente(true);
+        Long id = gerenciais.criar(entregador.getId(), "motoboy", seguro).id();
+
+        // Desmarcar "repete todo mês" junto: encerrar é pelo "até quando".
+        LancamentoGerencialRequest virandoAvulso = pedido("seguro", "100.00", primeira, null);
+        virandoAvulso.setAplicarAPartirDe(hoje.withDayOfMonth(1));
+        assertThatThrownBy(() -> gerenciais.atualizar(id, entregador.getId(), "motoboy", virandoAvulso))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("informe até quando ela vale");
+
+        // Data futura.
+        LancamentoGerencialRequest noFuturo = pedido("seguro", "100.00", primeira, null);
+        noFuturo.setRecorrente(true);
+        noFuturo.setAplicarAPartirDe(hoje.plusDays(1));
+        assertThatThrownBy(() -> gerenciais.atualizar(id, entregador.getId(), "motoboy", noFuturo))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Informe uma data até hoje para aplicar a mudança.");
+
+        // A recorrência nova acabaria antes de começar.
+        LancamentoGerencialRequest jaAcabou = pedido("seguro", "100.00", primeira, null);
+        jaAcabou.setRecorrente(true);
+        jaAcabou.setRecorrenteAte(hoje.withDayOfMonth(1).minusDays(1));
+        jaAcabou.setAplicarAPartirDe(hoje.withDayOfMonth(1));
+        assertThatThrownBy(() -> gerenciais.atualizar(id, entregador.getId(), "motoboy", jaAcabou))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("não há meses seguintes para aplicar a mudança");
+        // Nada disso mexeu no lançamento.
+        assertThat(gerencialRepo.findById(id).orElseThrow().getRecorrenteAte()).isNull();
+        assertThat(gerencialRepo.findById(id).orElseThrow().getValor()).isEqualByComparingTo("70.00");
+
+        // Sem ocorrência antes da data, não há passado a preservar: é a
+        // edição comum, na mesma linha.
+        LancamentoGerencialRequest desdeOComeco = pedido("seguro", "80.00", primeira, null);
+        desdeOComeco.setRecorrente(true);
+        desdeOComeco.setAplicarAPartirDe(primeira);
+        long linhasAntes = gerencialRepo.count();
+        assertThat(gerenciais.atualizar(id, entregador.getId(), "motoboy", desdeOComeco).id()).isEqualTo(id);
+        assertThat(gerencialRepo.count()).isEqualTo(linhasAntes);
+
+        // Um recorrente que já tinha acabado antes da data continua acabando
+        // onde acabava: a divisão encerra, não estende.
+        LocalDate fimAntigo = primeira.plusDays(40);
+        LancamentoGerencialRequest comFim = pedido("celular_internet", "35.00", primeira, null);
+        comFim.setRecorrente(true);
+        comFim.setRecorrenteAte(fimAntigo);
+        Long celular = gerenciais.criar(entregador.getId(), "motoboy", comFim).id();
+        LancamentoGerencialRequest retomado = pedido("celular_internet", "45.00", primeira, null);
+        retomado.setRecorrente(true);
+        retomado.setAplicarAPartirDe(hoje.withDayOfMonth(1));
+        gerenciais.atualizar(celular, entregador.getId(), "motoboy", retomado);
+        assertThat(gerencialRepo.findById(celular).orElseThrow().getRecorrenteAte()).isEqualTo(fimAntigo);
+    }
+
+    @Test
+    @DisplayName("a lista mostra à frente o que ainda vai começar, com zero ocorrências — não conta na DRE, mas dá para corrigir e excluir")
+    void listaMostraOQueAindaVaiComecar() {
+        LocalDate hoje = LocalDate.now();
+        Long futuro = gravarDireto(entregador, "seguro", "70.00", hoje.plusDays(3), true);
+        Long deHoje = informar(entregador, "combustivel", "30.00", hoje, null);
+
+        List<LancamentoGerencialResponse> lista = gerenciais.listar(entregador.getId(), hoje.minusDays(6), hoje);
+        assertThat(lista).extracting(LancamentoGerencialResponse::id).containsExactly(futuro, deHoje);
+        assertThat(lista.get(0).ocorrenciasNoPeriodo()).isZero();
+        assertThat(lista.get(0).valorNoPeriodo()).isEqualByComparingTo("0.00");
+        assertThat(lista.get(1).ocorrenciasNoPeriodo()).isEqualTo(1);
+
+        // A lista e a DRE continuam somando o mesmo.
+        DreResponse r = dre.dre(entregador.getId(), "motoboy", hoje.minusDays(6), hoje);
+        assertThat(valor(r, "seguro")).isEqualByComparingTo("0.00");
+        assertThat(valor(r, "combustivel")).isEqualByComparingTo("30.00");
+        assertThat(r.lancamentosManuais()).isEqualTo(1);
+
+        // Num período que já acabou, ele não tem o que fazer.
+        assertThat(gerenciais.listar(entregador.getId(), inicio, fim)).isEmpty();
+
+        // Corrigir exige trazer a data para hoje ou antes; excluir, nada.
+        assertThatThrownBy(() -> gerenciais.atualizar(futuro, entregador.getId(), "motoboy",
+                pedido("seguro", "70.00", hoje.plusDays(3), null)))
+                .isInstanceOf(ResponseStatusException.class);
+        gerenciais.atualizar(futuro, entregador.getId(), "motoboy", pedido("seguro", "70.00", hoje, null));
+        assertThat(valor(dre.dre(entregador.getId(), "motoboy", hoje, hoje), "seguro"))
+                .isEqualByComparingTo("70.00");
+        gerenciais.excluir(futuro, entregador.getId());
+        assertThat(gerenciais.listar(entregador.getId(), hoje, hoje))
+                .extracting(LancamentoGerencialResponse::id).containsExactly(deHoje);
     }
 
     @Test
@@ -494,5 +699,20 @@ class DreServiceTest {
 
     private Long informar(Usuario quem, String categoria, String valor, LocalDate data, String km) {
         return gerenciais.criar(quem.getId(), quem.getTipo(), pedido(categoria, valor, data, km)).id();
+    }
+
+    /**
+     * Uma linha gravada sem passar pelo serviço — o que já estava no banco
+     * antes de a data futura ser recusada, ou a regra nova de um recorrente
+     * que ainda vai começar.
+     */
+    private Long gravarDireto(Usuario quem, String categoria, String valor, LocalDate data,
+                              boolean recorrente) {
+        LancamentoGerencial l = new LancamentoGerencial(quem.getId());
+        l.setCategoria(CategoriaLancamento.de(categoria));
+        l.setValor(new BigDecimal(valor));
+        l.setData(data);
+        l.setRecorrente(recorrente);
+        return gerencialRepo.save(l).getId();
     }
 }

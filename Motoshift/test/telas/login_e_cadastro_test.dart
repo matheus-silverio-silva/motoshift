@@ -71,6 +71,15 @@ void main() {
       expect(find.text('E-mail inválido'), findsOneWidget);
     });
 
+    testWidgets('não pergunta o perfil: quem diz se é loja ou entregador é a conta',
+        (tester) async {
+      await pumpGolden(tester, child: const LoginScreen());
+
+      expect(find.text('Sou Lojista'), findsNothing);
+      expect(find.text('Sou Motoboy'), findsNothing);
+      expect(find.text('Entrar'), findsOneWidget);
+    });
+
     testWidgets('o e-mail é "próximo", a senha é "concluir", com as dicas de autofill',
         (tester) async {
       await pumpGolden(tester, child: const LoginScreen());
@@ -86,7 +95,24 @@ void main() {
     });
   });
 
+  test('o login manda só e-mail e senha — o perfil não vai, porque o backend não o usa',
+      () async {
+    final cliente = _ClienteQueGrava();
+
+    await AuthApi(cliente).login(email: 'claudia@teste.com', senha: 'senha123');
+
+    expect(cliente.caminho, '/auth/login');
+    expect(cliente.corpo, {'email': 'claudia@teste.com', 'senha': 'senha123'});
+  });
+
   group('cadastro', () {
+    testWidgets('no cadastro a escolha de perfil continua, e lá ela vale', (tester) async {
+      await pumpGolden(tester, child: const CadastroScreen());
+
+      expect(find.text('Sou Lojista'), findsOneWidget);
+      expect(find.text('Sou Motoboy'), findsOneWidget);
+    });
+
     Future<void> preencher(WidgetTester tester, {required String email}) async {
       await tester.enterText(campo('cadastro-nome'), 'Maria Andrade');
       await tester.enterText(campo('cadastro-email'), email);
@@ -152,6 +178,19 @@ void main() {
   });
 }
 
+/// O transporte que só anota o POST e devolve uma sessão qualquer.
+class _ClienteQueGrava extends ApiClient {
+  String? caminho;
+  Map<String, dynamic>? corpo;
+
+  @override
+  Future<dynamic> post(String path, Map<String, dynamic> body) async {
+    caminho = path;
+    corpo = body;
+    return <String, dynamic>{'token': 'token-de-teste', 'usuario': <String, dynamic>{}};
+  }
+}
+
 /// Registra o que chegaria ao backend e recusa — assim o teste não precisa de
 /// navegação nem de sessão: o que interessa é a chamada.
 class _AuthQueRegistra extends FakeAuthApi {
@@ -162,7 +201,6 @@ class _AuthQueRegistra extends FakeAuthApi {
   Future<Map<String, dynamic>> login({
     required String email,
     required String senha,
-    required TipoUsuario tipo,
   }) async {
     logins.add((email, senha));
     throw const ApiException(401, 'Credenciais inválidas.');

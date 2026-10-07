@@ -63,9 +63,20 @@ class FinanceiroApi {
     return LancamentoGerencial.fromJson(data as Map<String, dynamic>);
   }
 
+  /// Edita um lançamento.
+  ///
+  /// Num recorrente, [aplicarAPartirDe] preserva o passado: os meses antes
+  /// dessa data ficam com os valores antigos, e a resposta é o lançamento
+  /// NOVO, que vale dali em diante. Sem ele, a edição corrige todos os meses.
   Future<LancamentoGerencial> atualizarLancamento(
-      int id, LancamentoGerencial l) async {
-    final data = await _client.put('/financeiro/lancamentos/$id', l.toJson());
+    int id,
+    LancamentoGerencial l, {
+    DateTime? aplicarAPartirDe,
+  }) async {
+    final data = await _client.put('/financeiro/lancamentos/$id', {
+      ...l.toJson(),
+      if (aplicarAPartirDe != null) 'aplicarAPartirDe': _data(aplicarAPartirDe),
+    });
     return LancamentoGerencial.fromJson(data as Map<String, dynamic>);
   }
 

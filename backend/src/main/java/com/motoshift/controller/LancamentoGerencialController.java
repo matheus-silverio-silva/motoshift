@@ -57,8 +57,11 @@ public class LancamentoGerencialController {
     @Operation(summary = "Lançamentos do período",
                description = "O que o usuário informou e que conta no período: os avulsos com "
                        + "a data dentro dele e os recorrentes com ocorrência nele (cada um com "
-                       + "ocorrenciasNoPeriodo e valorNoPeriodo). Sem datas, o mês corrente. "
-                       + "Paginação opcional (?pagina=&tamanho=), com o total em X-Total-Count.")
+                       + "ocorrenciasNoPeriodo e valorNoPeriodo). Num período que chega até "
+                       + "hoje, vêm à frente os que ainda vão começar (data futura), com zero "
+                       + "ocorrências — não contam, mas dá para corrigi-los. Sem datas, o mês "
+                       + "corrente. Paginação opcional (?pagina=&tamanho=), com o total em "
+                       + "X-Total-Count.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Os lançamentos, do mais recente para o mais antigo"),
         @ApiResponse(responseCode = "400", description = "Data final anterior à inicial")
@@ -78,11 +81,12 @@ public class LancamentoGerencialController {
 
     @Operation(summary = "Informar um custo ou uma receita",
                description = "Não é transação: não move saldo, não entra no extrato e não gera "
-                       + "documento fiscal. Só alimenta a DRE.")
+                       + "documento fiscal. Só alimenta a DRE. A data é a do pagamento, até hoje "
+                       + "(regime de caixa); o recorrenteAte pode ser futuro.")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Lançamento criado"),
-        @ApiResponse(responseCode = "400", description = "Dados inválidos, categoria de outro papel "
-                + "ou turno de que o usuário não participou")
+        @ApiResponse(responseCode = "400", description = "Dados inválidos, data depois de hoje, "
+                + "categoria de outro papel ou turno de que o usuário não participou")
     })
     @PostMapping("/lancamentos")
     public ResponseEntity<LancamentoGerencialResponse> criar(
@@ -92,10 +96,18 @@ public class LancamentoGerencialController {
                 .body(service.criar(atual.id(), atual.tipo(), req));
     }
 
-    @Operation(summary = "Editar um lançamento")
+    @Operation(summary = "Editar um lançamento",
+               description = "Sem aplicarAPartirDe, corrige o lançamento como ele é — num "
+                       + "recorrente, todos os meses. Com aplicarAPartirDe (uma data até hoje), "
+                       + "num recorrente que já aconteceu antes dela, o passado fica como está: "
+                       + "o lançamento antigo é encerrado na véspera e um novo é criado com os "
+                       + "dados enviados, começando na primeira ocorrência a partir da data. A "
+                       + "resposta é o novo.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Lançamento atualizado"),
-        @ApiResponse(responseCode = "400", description = "Dados inválidos"),
+        @ApiResponse(responseCode = "200", description = "Lançamento atualizado — ou o novo, quando "
+                + "aplicarAPartirDe dividiu o recorrente"),
+        @ApiResponse(responseCode = "400", description = "Dados inválidos, data depois de hoje, ou "
+                + "aplicarAPartirDe num lançamento que não se repete"),
         @ApiResponse(responseCode = "404", description = "Não existe, ou é de outro usuário")
     })
     @PutMapping("/lancamentos/{id}")

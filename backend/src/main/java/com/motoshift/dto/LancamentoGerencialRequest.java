@@ -43,6 +43,15 @@ public class LancamentoGerencialRequest {
     @Size(max = 200, message = "A descrição tem no máximo 200 caracteres")
     private String descricao;
 
+    /**
+     * Só no {@code PUT} de um recorrente (SCRUM-49): a partir de que dia os
+     * dados novos valem. Com ele, o que já aconteceu antes continua com os
+     * valores antigos — o lançamento é encerrado na véspera e um novo nasce
+     * com os dados desta requisição. Sem ele, a edição corrige o histórico
+     * inteiro. Ignorado no {@code POST}.
+     */
+    private LocalDate aplicarAPartirDe;
+
     public String getCategoria() { return categoria; }
     public void setCategoria(String categoria) {
         this.categoria = categoria == null ? null : categoria.trim();
@@ -68,4 +77,7 @@ public class LancamentoGerencialRequest {
 
     public String getDescricao() { return descricao; }
     public void setDescricao(String descricao) { this.descricao = descricao; }
+
+    public LocalDate getAplicarAPartirDe() { return aplicarAPartirDe; }
+    public void setAplicarAPartirDe(LocalDate aplicarAPartirDe) { this.aplicarAPartirDe = aplicarAPartirDe; }
 }

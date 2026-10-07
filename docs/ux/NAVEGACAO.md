@@ -167,7 +167,13 @@ dois papéis: o backend monta a DRE de quem está logado.
   devolve a pessoa à DRE, já recalculada.
 - **O período** usa os mesmos atalhos dos Relatórios (o widget
   `SeletorDePeriodo` é compartilhado) e mais um caminho: tocar num mês do
-  gráfico "Mês a mês" apura aquele mês.
+  gráfico "Mês a mês" apura aquele mês. As fichas ficam numa linha só, que
+  rola de lado no celular; o mês escolhido no gráfico entra na frente dos
+  atalhos, para ficar à vista sem rolar.
+- **Do painel para o Resultado** há o cartão "Resultado do mês", nos dois
+  papéis: diz a situação por extenso ("Lucro de R$ 111,95") e troca de seção
+  como o cartão dos Relatórios. Sem nada informado no mês, ele convida a
+  informar os custos e abre o formulário ali mesmo, sobre o painel.
 
 ## 4. Um conceito, um nome
 

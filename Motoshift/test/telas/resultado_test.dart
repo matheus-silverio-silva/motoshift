@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:moto_shift/models/dre.dart';
 import 'package:moto_shift/models/extrato_filtro.dart';
+import 'package:moto_shift/models/lancamento_gerencial.dart';
 import 'package:moto_shift/models/usuario.dart';
 import 'package:moto_shift/routes/app_routes.dart';
 import 'package:moto_shift/services/api/api_client.dart';
@@ -8,6 +10,7 @@ import 'package:moto_shift/services/api/financeiro_api.dart';
 import 'package:moto_shift/utils/formato_fiscal.dart';
 import 'package:moto_shift/views/resultado/lancamento_form.dart';
 import 'package:moto_shift/views/resultado/resultado_screen.dart';
+import 'package:moto_shift/widgets/situacao_do_resultado.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../navegacao/app_de_teste.dart';
@@ -54,6 +57,19 @@ void main() {
     );
     return financeiro;
   }
+
+  Future<void> montarCom(
+    WidgetTester tester,
+    FakeFinanceiroApi financeiro, {
+    TipoUsuario papel = TipoUsuario.motoboy,
+  }) =>
+      pumpGolden(
+        tester,
+        child: ResultadoScreen(agora: dataAncoraGolden),
+        tipoUsuario: papel,
+        apiFake: _Api(papel, financeiro),
+        viewport: alto,
+      );
 
   Future<void> tocar(WidgetTester tester, String chave) async {
     await tester.ensureVisible(find.byKey(Key(chave)));
@@ -117,9 +133,9 @@ void main() {
       await montar(tester);
 
       for (final chave in [
-        'pagamentos_recebidos', 'gorjetas_recebidas', 'receita_bruta', 'retencoes_na_fonte',
-        'das_mei', 'receita_liquida', 'combustivel', 'manutencao', 'margem_de_contribuicao',
-        'celular_internet', 'seguro', 'parcela_ou_aluguel_veiculo', 'outra_despesa_entregador',
+        'pagamentos_recebidos', 'gorjetas_recebidas', 'receita_bruta',
+        'das_mei', 'receita_liquida', 'combustivel', 'margem_de_contribuicao',
+        'celular_internet', 'seguro', 'parcela_ou_aluguel_veiculo',
         'resultado',
       ]) {
         expect(find.byKey(Key('dre-$chave')), findsOneWidget, reason: chave);
@@ -135,6 +151,124 @@ void main() {
       expect(na('receita_bruta', '= Receita bruta'), findsOneWidget);
       expect(na('resultado', '= Resultado do período'), findsOneWidget);
       expect(na('resultado', FormatoFiscal.moeda(111.95)), findsOneWidget);
+    });
+
+    testWidgets(
+        'linhas sem valor ficam de fora — a retenção só aparece se houver — e "Mostrar todas as linhas" as devolve',
+        (tester) async {
+      await montar(tester);
+      const zeradas = ['retencoes_na_fonte', 'manutencao', 'outra_despesa_entregador'];
+
+      for (final chave in zeradas) {
+        expect(find.byKey(Key('dre-$chave')), findsNothing, reason: chave);
+      }
+      expect(find.text('Mostrar todas as linhas'), findsOneWidget);
+
+      await tocar(tester, 'dre-mostrar-todas');
+      for (final chave in zeradas) {
+        expect(find.byKey(Key('dre-$chave')), findsOneWidget, reason: chave);
+      }
+      expect(find.text('Ocultar linhas sem valor'), findsOneWidget);
+
+      await tocar(tester, 'dre-mostrar-todas');
+      expect(find.byKey(const Key('dre-retencoes_na_fonte')), findsNothing);
+    });
+
+    testWidgets('subtotal e resultado aparecem mesmo valendo zero; sem linha zerada não há link',
+        (tester) async {
+      final financeiro = _FinanceiroCom(dre: Dre(
+        papel: TipoUsuario.motoboy,
+        dataInicio: DateTime(2026, 8, 1),
+        dataFim: DateTime(2026, 8, 19),
+        linhas: const [
+          LinhaDre(chave: 'pagamentos_recebidos', rotulo: 'Pagamentos de turnos', valor: 50),
+          LinhaDre(chave: 'das_mei', rotulo: 'DAS do MEI', valor: 50, subtrai: true),
+          LinhaDre(
+              chave: 'receita_liquida',
+              rotulo: 'Receita líquida',
+              valor: 0,
+              tipo: TipoDeLinhaDre.subtotal),
+          LinhaDre(
+              chave: 'resultado',
+              rotulo: 'Resultado do período',
+              valor: 0,
+              tipo: TipoDeLinhaDre.resultado),
+        ],
+        resultado: 0,
+        situacao: SituacaoDre.equilibrio,
+        lancamentosManuais: 1,
+      ));
+      await montarCom(tester, financeiro);
+
+      expect(find.byKey(const Key('dre-receita_liquida')), findsOneWidget);
+      expect(find.byKey(const Key('dre-resultado')), findsOneWidget);
+      expect(find.byKey(const Key('dre-mostrar-todas')), findsNothing);
+    });
+
+    testWidgets(
+        'com resultado negativo, "Lucro por hora" e "Lucro por turno" viram "Prejuízo por…", com o valor sem sinal',
+        (tester) async {
+      await montar(tester, comPrejuizo: true);
+      Finder no(String chave, String texto) => find.descendant(
+          of: find.byKey(Key('indicador-$chave')), matching: find.text(texto));
+
+      expect(no('lucro-por-hora', 'Prejuízo por hora'), findsOneWidget);
+      expect(no('lucro-por-hora', FormatoFiscal.moeda(19.25)), findsOneWidget);
+      expect(no('lucro-por-turno', 'Prejuízo por turno'), findsOneWidget);
+      expect(no('lucro-por-turno', FormatoFiscal.moeda(77.01)), findsOneWidget);
+      expect(find.text('Lucro por hora'), findsNothing);
+      // Sem sinal de menos nos dois cartões: quem diz "prejuízo" é o rótulo.
+      for (final chave in ['lucro-por-hora', 'lucro-por-turno']) {
+        expect(
+            find.descendant(
+                of: find.byKey(Key('indicador-$chave')), matching: find.textContaining('-')),
+            findsNothing,
+            reason: chave);
+      }
+      // A cor é a da faixa de prejuízo — e só reforça o que o rótulo já diz.
+      final valor = tester.widget<Text>(no('lucro-por-hora', FormatoFiscal.moeda(19.25)));
+      expect(valor.style!.color, VisualDaSituacao.prejuizo.cor);
+    });
+
+    testWidgets('com resultado positivo, os rótulos são "Lucro por hora" e "Lucro por turno"',
+        (tester) async {
+      await montar(tester);
+      Finder no(String chave, String texto) => find.descendant(
+          of: find.byKey(Key('indicador-$chave')), matching: find.text(texto));
+
+      expect(no('lucro-por-hora', 'Lucro por hora'), findsOneWidget);
+      expect(no('lucro-por-hora', FormatoFiscal.moeda(7)), findsOneWidget);
+      expect(no('lucro-por-turno', 'Lucro por turno'), findsOneWidget);
+      final valor = tester.widget<Text>(no('lucro-por-hora', FormatoFiscal.moeda(7)));
+      expect(valor.style!.color, VisualDaSituacao.lucro.cor);
+    });
+
+    testWidgets('lojista: "Resultado por turno" vira "Prejuízo por turno" quando a operação dá prejuízo',
+        (tester) async {
+      final base = fakeDreLojista();
+      await montarCom(
+        tester,
+        _FinanceiroCom(
+          papel: TipoUsuario.lojista,
+          dre: Dre(
+            papel: TipoUsuario.lojista,
+            dataInicio: base.dataInicio,
+            dataFim: base.dataFim,
+            linhas: base.linhas,
+            resultado: -338,
+            situacao: SituacaoDre.prejuizo,
+            indicadores: const {'turnosFinalizados': 4, 'resultadoPorTurno': -84.5},
+            lancamentosManuais: 2,
+          ),
+        ),
+        papel: TipoUsuario.lojista,
+      );
+      Finder no(String texto) => find.descendant(
+          of: find.byKey(const Key('indicador-resultado-por-turno')), matching: find.text(texto));
+
+      expect(no('Prejuízo por turno'), findsOneWidget);
+      expect(no(FormatoFiscal.moeda(84.5)), findsOneWidget);
+      expect(find.text('Resultado por turno'), findsNothing);
     });
 
     testWidgets('lojista: a DRE da operação de entrega, com os indicadores dele',
@@ -225,6 +359,31 @@ void main() {
       }
     });
 
+    testWidgets('no celular os atalhos ficam numa linha só, que rola de lado', (tester) async {
+      await montar(tester, viewport: const Size(360, 2600));
+
+      final alturas = {
+        for (final a in AtalhoDePeriodo.values)
+          tester.getTopLeft(find.byKey(Key('resultado-periodo-${a.name}'))).dy,
+      };
+      expect(alturas, hasLength(1), reason: 'nenhuma ficha caiu para a linha de baixo');
+      final linha = tester.widget<SingleChildScrollView>(
+          find.byKey(const Key('resultado-periodo-linha')));
+      expect(linha.scrollDirection, Axis.horizontal);
+    });
+
+    testWidgets('o mês escolhido no gráfico vem na frente dos atalhos, à vista sem rolar',
+        (tester) async {
+      await montar(tester, viewport: const Size(360, 2600));
+      await tocar(tester, 'resultado-mes-6');
+
+      final mes = tester.getTopLeft(find.byKey(const Key('resultado-periodo-mes')));
+      final primeiroAtalho = tester.getTopLeft(
+          find.byKey(Key('resultado-periodo-${AtalhoDePeriodo.values.first.name}')));
+      expect(mes.dx, lessThan(primeiroAtalho.dx));
+      expect(mes.dx, lessThan(360));
+    });
+
     testWidgets('mês que ainda não chegou não é botão', (tester) async {
       final api = await montar(tester, viewport: desktopAlto);
       final antes = api.periodosPedidos.length;
@@ -277,6 +436,31 @@ void main() {
       expect(find.text('Todo dia 5 · Parcela do consórcio da moto'), findsOneWidget);
     });
 
+    testWidgets(
+        'o que ainda vai começar aparece na lista dizendo que não conta, e dá para editar e excluir',
+        (tester) async {
+      await montarCom(
+        tester,
+        _FinanceiroCom(lancamentos: [
+          LancamentoGerencial(
+              id: 31,
+              categoria: 'seguro',
+              rotuloDaCategoria: 'Seguro',
+              valor: 100,
+              data: DateTime(2026, 8, 25),
+              recorrente: true,
+              ocorrenciasNoPeriodo: 0,
+              valorNoPeriodo: 0),
+        ]),
+      );
+
+      expect(find.text('Começa em 25/08/2026 · todo dia 25 · ainda não conta'), findsOneWidget);
+      // O valor de uma ocorrência, e não "R$ 0,00".
+      expect(find.text('− ${FormatoFiscal.moeda(100)}'), findsOneWidget);
+      expect(find.byKey(const Key('lancamento-editar-31')), findsOneWidget);
+      expect(find.byKey(const Key('lancamento-excluir-31')), findsOneWidget);
+    });
+
     testWidgets('a receita informada pela loja aparece com "+"', (tester) async {
       await montar(tester, papel: TipoUsuario.lojista);
 
@@ -319,6 +503,76 @@ void main() {
       expect(enviado.valor, 9.0);
       expect(enviado.km, 42.0);
       expect(find.text('Lançamento atualizado.'), findsOneWidget);
+      // Um lançamento avulso não tem meses anteriores: não pergunta nada.
+      expect(api.alcancesDasEdicoes, [null]);
+    });
+
+    testWidgets(
+        'editar um recorrente de meses anteriores pergunta o alcance; o padrão aplica a partir deste mês',
+        (tester) async {
+      final api = await montar(tester);
+
+      // A parcela de todo dia 5, desde abril. Hoje é 19/08/2026.
+      await tocar(tester, 'lancamento-editar-23');
+      await tester.enterText(find.byKey(const Key('lancamento-valor')), '120');
+      await tocar(tester, 'lancamento-salvar');
+
+      expect(find.text('A mudança vale a partir de quando?'), findsOneWidget);
+      expect(api.atualizados, isEmpty, reason: 'nada é salvo antes da escolha');
+      // O padrão é o que preserva o passado: é ele o botão preenchido.
+      expect(
+          find.ancestor(
+              of: find.text('Aplicar a partir deste mês'), matching: find.byType(FilledButton)),
+          findsOneWidget);
+
+      await tocar(tester, 'lancamento-aplicar-deste-mes');
+
+      final (id, enviado) = api.atualizados.single;
+      expect(id, 23);
+      expect(enviado.valor, 120.0);
+      expect(enviado.recorrente, isTrue);
+      expect(api.alcancesDasEdicoes, [DateTime(2026, 8, 1)]);
+      expect(find.text('Lançamento atualizado.'), findsOneWidget);
+    });
+
+    testWidgets('"Corrigir todos os meses" manda a edição sem data: o histórico inteiro muda',
+        (tester) async {
+      final api = await montar(tester);
+
+      await tocar(tester, 'lancamento-editar-23');
+      await tester.enterText(find.byKey(const Key('lancamento-valor')), '120');
+      await tocar(tester, 'lancamento-salvar');
+      await tocar(tester, 'lancamento-corrigir-todos');
+
+      expect(api.atualizados.single.$1, 23);
+      expect(api.alcancesDasEdicoes, [null]);
+    });
+
+    testWidgets('fechar a pergunta sem escolher não salva, e o formulário continua aberto',
+        (tester) async {
+      final api = await montar(tester);
+
+      await tocar(tester, 'lancamento-editar-23');
+      await tocar(tester, 'lancamento-salvar');
+      await tester.tap(find.text('Voltar'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(api.atualizados, isEmpty);
+      expect(find.text('Editar lançamento'), findsOneWidget);
+    });
+
+    testWidgets('desmarcar "repete todo mês" não pergunta: deixa de ser recorrente por inteiro',
+        (tester) async {
+      final api = await montar(tester);
+
+      await tocar(tester, 'lancamento-editar-23');
+      await tocar(tester, 'lancamento-recorrente');
+      await tocar(tester, 'lancamento-salvar');
+
+      expect(find.text('A mudança vale a partir de quando?'), findsNothing);
+      expect(api.atualizados.single.$2.recorrente, isFalse);
+      expect(api.alcancesDasEdicoes, [null]);
     });
   });
 
@@ -402,6 +656,46 @@ void main() {
       expect(enviado['categoria'], 'seguro');
     });
 
+    testWidgets('"1.500" é mil e quinhentos: o formulário mostra o valor lido e é ele que vai',
+        (tester) async {
+      final api = await montar(tester);
+      await abrir(tester);
+      await escolherCategoria(tester, 'Parcela');
+
+      expect(find.byKey(const Key('lancamento-valor-lido')), findsNothing);
+      await tester.enterText(find.byKey(const Key('lancamento-valor')), '1.500');
+      await tester.pump();
+      expect(find.text('= ${FormatoFiscal.moeda(1500)}'), findsOneWidget);
+
+      await tester.enterText(find.byKey(const Key('lancamento-valor')), '12.5');
+      await tester.pump();
+      expect(find.text('= ${FormatoFiscal.moeda(12.5)}'), findsOneWidget);
+
+      await tester.enterText(find.byKey(const Key('lancamento-valor')), '1.500');
+      await tocar(tester, 'lancamento-salvar');
+      expect(api.criados.single.valor, 1500.0);
+      expect(api.criados.single.toJson()['valor'], 1500.0);
+    });
+
+    testWidgets('a data do pagamento vai até hoje; o "até quando" do recorrente pode ser futuro',
+        (tester) async {
+      await montar(tester);
+      await abrir(tester);
+      final hoje = DateTime(2026, 8, 19);
+
+      await tocar(tester, 'lancamento-data');
+      expect(tester.widget<DatePickerDialog>(find.byType(DatePickerDialog)).lastDate, hoje);
+      await tester.tap(find.text('Cancelar').last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      await tocar(tester, 'lancamento-recorrente');
+      await tocar(tester, 'lancamento-ate');
+      expect(
+          tester.widget<DatePickerDialog>(find.byType(DatePickerDialog)).lastDate.isAfter(hoje),
+          isTrue);
+    });
+
     testWidgets('valida antes de chamar o backend: categoria, valor e km', (tester) async {
       final api = await montar(tester);
       await abrir(tester);
@@ -474,6 +768,26 @@ void main() {
       });
     }
   });
+}
+
+/// O financeiro com a DRE ou a lista que o teste escolhe.
+class _FinanceiroCom extends FakeFinanceiroApi {
+  _FinanceiroCom({super.papel, this.dre, this.lancamentos});
+
+  final Dre? dre;
+  final List<LancamentoGerencial>? lancamentos;
+
+  @override
+  Future<Dre> buscarDre({DateTime? dataInicio, DateTime? dataFim}) async =>
+      dre ?? await super.buscarDre(dataInicio: dataInicio, dataFim: dataFim);
+
+  @override
+  Future<List<LancamentoGerencial>> listarLancamentos({
+    DateTime? dataInicio,
+    DateTime? dataFim,
+  }) async =>
+      lancamentos ??
+      await super.listarLancamentos(dataInicio: dataInicio, dataFim: dataFim);
 }
 
 /// O fake da API com o financeiro que o teste escolhe.

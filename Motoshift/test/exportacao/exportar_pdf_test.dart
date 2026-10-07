@@ -152,6 +152,27 @@ void main() {
       expect(texto, contains('Resultado do período'));
       expect(texto, contains('420,00'));
       expect(texto, contains('Caixa'));
+      // Como na tela, as linhas sem valor ficam de fora (SCRUM-49) — e o PDF,
+      // que não tem "mostrar todas", diz que omitiu.
+      expect(texto, isNot(contains('Retenções na fonte')));
+      expect(texto, isNot(contains('Outra despesa')));
+      expect(texto, contains('Linhas omitidas'));
+    });
+
+    test('sem linha zerada, o PDF não fala em linhas omitidas', () async {
+      final bytes = await RelatorioPdf.relatorio(
+        titular: _lojista,
+        de: DateTime(2026, 8, 1),
+        ate: DateTime(2026, 8, 19),
+        resumo: fakeResumoLojista(),
+        fluxo: fakeFluxo(),
+        lancamentos: fakeExtrato(),
+        dre: fakeDreLojista(),
+        geradoEm: geradoEm,
+        comprimir: false,
+      );
+
+      expect(textoDoPdf(bytes), isNot(contains('Linhas omitidas')));
     });
 
     test('lojista: a DRE da operação de entrega', () async {

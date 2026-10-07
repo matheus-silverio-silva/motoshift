@@ -82,8 +82,16 @@ class LancamentoGerencial {
   /// `valor × ocorrenciasNoPeriodo`: o peso deste lançamento na DRE do período.
   final double? valorNoPeriodo;
 
-  /// O que a lista mostra: o peso no período, ou o valor da ocorrência.
-  double get valorExibido => valorNoPeriodo ?? valor;
+  /// Ainda não conta em período nenhum: a data dele é futura. A lista o
+  /// mostra mesmo assim (zero ocorrências), para dar como corrigir — é a
+  /// regra nova de um recorrente editado "a partir deste mês" cujo dia ainda
+  /// não chegou.
+  bool get aindaNaoConta => ocorrenciasNoPeriodo == 0;
+
+  /// O que a lista mostra: o peso no período, ou o valor de uma ocorrência
+  /// quando não há peso a mostrar.
+  double get valorExibido =>
+      aindaNaoConta ? valor : (valorNoPeriodo ?? valor);
 
   factory LancamentoGerencial.fromJson(Map<String, dynamic> json) {
     final categoria = json['categoria'] as String? ?? '';

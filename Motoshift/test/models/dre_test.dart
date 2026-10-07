@@ -272,12 +272,51 @@ void main() {
     });
   });
 
-  test('número digitado: vírgula decimal, ponto decimal e ponto de milhar', () {
-    expect(numeroDigitado('7,50'), 7.5);
-    expect(numeroDigitado('7.50'), 7.5);
-    expect(numeroDigitado(' 1.234,56 '), 1234.56);
-    expect(numeroDigitado('42'), 42);
-    expect(numeroDigitado(''), isNull);
-    expect(numeroDigitado('abc'), isNull);
+  group('número digitado (SCRUM-49)', () {
+    test('com vírgula, ela é o decimal e o ponto é milhar', () {
+      expect(numeroDigitado('7,50'), 7.5);
+      expect(numeroDigitado('1.500,00'), 1500);
+      expect(numeroDigitado(' 1.234,56 '), 1234.56);
+      expect(numeroDigitado('1.234.567,8'), 1234567.8);
+    });
+
+    test('sem vírgula, ponto seguido de exatamente três dígitos, em um ou mais grupos, é milhar',
+        () {
+      // O defeito: "1.500" era lido como 1,5 — uma parcela de R$ 1.500 era
+      // salva como R$ 1,50.
+      expect(numeroDigitado('1.500'), 1500);
+      expect(numeroDigitado('12.500'), 12500);
+      expect(numeroDigitado('1.234.567'), 1234567);
+      expect(numeroDigitado('999.999'), 999999);
+    });
+
+    test('qualquer outro ponto é decimal', () {
+      expect(numeroDigitado('12.5'), 12.5);
+      expect(numeroDigitado('0.75'), 0.75);
+      expect(numeroDigitado('1.50'), 1.5);
+      expect(numeroDigitado('7.50'), 7.5);
+      expect(numeroDigitado('1.5000'), 1.5);
+      // Zero à esquerda não abre grupo de milhar, e grupo de quatro dígitos
+      // não é milhar.
+      expect(numeroDigitado('0.750'), 0.75);
+      expect(numeroDigitado('1234.567'), 1234.567);
+    });
+
+    test('sem separador é o número; o que não é número é nulo', () {
+      expect(numeroDigitado('42'), 42);
+      expect(numeroDigitado('1500'), 1500);
+      expect(numeroDigitado(''), isNull);
+      expect(numeroDigitado('   '), isNull);
+      expect(numeroDigitado('abc'), isNull);
+      expect(numeroDigitado('1.2.3'), isNull);
+      expect(numeroDigitado('1,2,3'), isNull);
+    });
+
+    test('preço do litro e consumo: três casas depois do ponto são decimais', () {
+      expect(numeroDigitado('5.899', pontoPodeSerMilhar: false), 5.899);
+      expect(numeroDigitado('5,899', pontoPodeSerMilhar: false), 5.899);
+      // A vírgula continua mandando: com ela, o ponto é milhar.
+      expect(numeroDigitado('1.234,5', pontoPodeSerMilhar: false), 1234.5);
+    });
   });
 }

@@ -110,6 +110,14 @@ Por que caixa, e não competência:
 vence no dia 20 não está paga no dia 7, mesmo que o período pedido vá até o
 fim do mês.
 
+**A data do pagamento é até hoje.** Pelo mesmo motivo, um lançamento não nasce
+com data futura: `POST` e `PUT` respondem 400 — "No regime de caixa, o
+lançamento entra no dia em que foi pago. Informe uma data até hoje." —, e o
+seletor de data do formulário para em hoje. Antes o formulário aceitava até o
+fim do ano seguinte: o lançamento era salvo e **sumia**, porque a lista só
+mostra o que já conta, e não havia mais como editá-lo nem excluí-lo. O "até
+quando" de um recorrente continua podendo ficar no futuro.
+
 ## 4. Por que o custo informado fica fora do ledger
 
 Um **lançamento gerencial** (tabela `lancamentos_gerenciais`, migração V25)
@@ -182,6 +190,30 @@ O cálculo é uma função pura (`service.Recorrencia`), sem banco e sem relógi
 testada nos cantos: dia 31 em fevereiro, período de meio mês e recorrência que
 termina antes do fim do período.
 
+### 6.1 Editar sem reescrever o passado
+
+Como o recorrente é uma regra, trocar o valor dela trocava **todos os meses**:
+o seguro que subiu em outubro mudava o resultado de julho. O `PUT` aceita o
+campo opcional `aplicarAPartirDe` (uma data até hoje):
+
+- **com ele**, num recorrente que já aconteceu antes dessa data, o lançamento
+  antigo é encerrado na véspera (`recorrente_ate`) e um **novo** é criado com
+  os dados enviados, começando na primeira ocorrência a partir da data. Os dois
+  na mesma transação; a resposta é o novo. Os meses anteriores continuam com o
+  valor antigo, e a DRE de um período que atravessa a troca soma os dois;
+- **sem ele**, a edição corrige o histórico inteiro, como sempre foi.
+
+No app, salvar a edição de um recorrente que começou em mês anterior pergunta
+"A mudança vale a partir de quando?": **Aplicar a partir deste mês** (o padrão,
+que manda o dia 1º do mês corrente) ou **Corrigir todos os meses**.
+
+Quando o dia do recorrente ainda não chegou neste mês, a regra nova começa no
+futuro. Ela não conta em período nenhum, mas a lista a mostra à frente — "Começa
+em 20/10/2026 · ainda não conta" —, para poder ser conferida, corrigida ou
+excluída. O mesmo vale para o que foi gravado com data futura antes de isso
+ser recusado: aparece na lista de todo período que chega até hoje, com zero
+ocorrências, e a soma da lista continua igual à da DRE.
+
 ## 7. Indicadores
 
 **Entregador**
@@ -228,6 +260,28 @@ número, e esconderia que a conta não fecha.
 A situação **nunca é só uma cor**: a faixa do topo diz por extenso ("Lucro de
 R$ 106,95 no período"), com ícone e rótulo; o resultado de cada mês leva o
 sinal escrito; e o gráfico tem um resumo em texto para o leitor de tela.
+
+Na tela e no PDF:
+
+- **Linhas sem valor ficam de fora.** A retenção na fonte de quem não tem
+  retenção, o seguro de quem não tem seguro. Subtotais e resultado aparecem
+  sempre. O backend continua mandando todas as linhas (as chaves são
+  estáveis); na tela, "Mostrar todas as linhas" as devolve, e o PDF diz que
+  omitiu.
+- **Indicador negativo muda de nome.** "Lucro por hora" e "Lucro por turno"
+  viram "Prejuízo por hora" e "Prejuízo por turno", com o valor sem sinal; na
+  loja, "Resultado por turno" vira "Prejuízo por turno". A cor é a da faixa de
+  situação e só reforça o rótulo.
+- **O valor digitado é mostrado como foi lido.** "1.500" é mil e quinhentos, e
+  embaixo do campo aparece "= R$ 1.500,00" antes de salvar. Com vírgula, o
+  ponto é milhar; sem vírgula, ponto seguido de exatamente três dígitos (em um
+  ou mais grupos) é milhar; qualquer outro ponto é decimal ("12.5", "0.75").
+  No preço do litro e no consumo, três casas depois do ponto são decimais
+  ("5.899").
+- **No painel.** Os dois painéis têm o cartão "Resultado do mês", com a
+  situação por extenso e o mesmo selo desta tela; tocar abre o resultado. Sem
+  nada informado no mês, o cartão convida a informar os custos e abre o
+  formulário. Se a DRE não responde, o cartão some e o painel continua.
 
 ## 9. Um exemplo, tirado da massa de demonstração
 
@@ -282,7 +336,7 @@ pagaram a taxa de R$ 8, e os entregadores custaram o mesmo de sempre.
 | GET | `/api/financeiro/categorias` | As categorias do papel do token |
 | GET | `/api/financeiro/lancamentos?dataInicio&dataFim` | Os lançamentos que contam no período (paginação opcional) |
 | POST | `/api/financeiro/lancamentos` | Informar um custo ou uma receita |
-| PUT | `/api/financeiro/lancamentos/{id}` | Editar |
+| PUT | `/api/financeiro/lancamentos/{id}` | Editar. Com `aplicarAPartirDe` num recorrente, preserva os meses anteriores e responde o lançamento novo (seção 6.1) |
 | DELETE | `/api/financeiro/lancamentos/{id}` | Excluir |
 
 Todas exigem token. Nenhuma recebe id de usuário nem papel: os dois saem do
@@ -324,9 +378,10 @@ resultado, e não só o faturamento; se nada foi informado à mão no período, 
 
 | Teste | O que prende |
 |---|---|
-| `DreServiceTest` | Lucro, prejuízo, equilíbrio e período vazio; reserva e liberação fora; gorjeta nos dois lados; retenções; período anterior; ponto de equilíbrio nulo |
-| `RecorrenciaTest` | Dia 31 em fevereiro, período de meio mês, recorrência que termina antes |
-| `LancamentoGerencialHttpTest` | CRUD, 404 para o de outro usuário, categoria do papel errado, turno alheio, 401 sem token |
+| `DreServiceTest` | Lucro, prejuízo, equilíbrio e período vazio; reserva e liberação fora; gorjeta nos dois lados; retenções; período anterior; ponto de equilíbrio nulo; data futura recusada; recorrente editado a partir de uma data, com a DRE que atravessa a troca; o que ainda vai começar aparece na lista sem contar |
+| `RecorrenciaTest` | Dia 31 em fevereiro, período de meio mês, recorrência que termina antes, primeira ocorrência a partir de uma data |
+| `LancamentoGerencialHttpTest` | CRUD, 404 para o de outro usuário, categoria do papel errado, turno alheio, 401 sem token, 400 para data futura, `aplicarAPartirDe` pelo HTTP |
+| `telas/resultado_test.dart`, `telas/resultado_no_painel_test.dart`, `models/dre_test.dart` (app) | Linhas zeradas e o link, rótulos com resultado negativo, a pergunta ao editar um recorrente, o valor lido embaixo do campo, a data até hoje, o cartão dos painéis |
 | `LancamentosGerenciaisForaDoLedgerTest` | Criar, editar e excluir não mexem em saldo nem nas invariantes |
 | `RelatorioServiceTest` | Os números do relatório são os da DRE; a IA recebe o resultado e o aviso |
 | `MassaDemonstracaoTest` | O mês de lucro e o de prejuízo existem, para o Carlos e para a Cláudia |
