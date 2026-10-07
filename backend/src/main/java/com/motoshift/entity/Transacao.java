@@ -119,7 +119,7 @@ public class Transacao {
      *   saque:{cobrancaId}                          debito do saque
      *   estorno:saque:{cobrancaId}                  devolucao de saque recusado
      *   reserva:turno:{turnoId}                     bloqueio ao publicar
-     *   liberacao:turno:{turnoId}:{motivo}          cancelamento | expiracao | sobra
+     *   liberacao:turno:{turnoId}:{motivo}          cancelamento | expiracao | sobra | sem_checkin
      *   liquidacao:inscricao:{inscricaoId}:debito   lado do lojista
      *   liquidacao:inscricao:{inscricaoId}:credito  lado do entregador
      *   liquidacao:turno:{turnoId}:{motoboyId}:...  turno sem inscricao (pre-V5)

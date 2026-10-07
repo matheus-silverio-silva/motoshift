@@ -97,6 +97,7 @@ class NavConfig {
     AppRoutes.documentoFiscal: AppRoutes.carteira,
     AppRoutes.dadosPessoais: AppRoutes.perfil,
     AppRoutes.cnhVeiculo: AppRoutes.perfil,
+    AppRoutes.alterarSenha: AppRoutes.perfil,
     // Perfil de outra conta também pertence à seção Perfil: é a mesma ideia
     // (quem é alguém), só que de outra pessoa.
     AppRoutes.perfilPublico: AppRoutes.perfil,
@@ -171,6 +172,13 @@ class NavConfig {
         label: 'Relatórios',
         route: AppRoutes.relatorioFinanceiro,
       ),
+      // Lucro ou prejuízo (RF13). Seção própria, e não aba dos Relatórios:
+      // lá está o que passou pela carteira; aqui, o que sobrou.
+      const NavItem(
+        icon: Icons.trending_up_rounded,
+        label: 'Resultado',
+        route: AppRoutes.resultado,
+      ),
       const NavItem(
         icon: Icons.receipt_long_outlined,
         label: 'Notas fiscais',
@@ -237,6 +245,13 @@ class NavConfig {
         icon: Icons.insights_outlined,
         label: 'Relatórios',
         route: AppRoutes.relatorioFinanceiro,
+      ),
+      // Lucro ou prejuízo (RF13). Seção própria, e não aba dos Relatórios:
+      // lá está o que passou pela carteira; aqui, o que sobrou.
+      const NavItem(
+        icon: Icons.trending_up_rounded,
+        label: 'Resultado',
+        route: AppRoutes.resultado,
       ),
       const NavItem(
         icon: Icons.receipt_long_outlined,

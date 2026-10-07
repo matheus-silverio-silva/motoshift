@@ -73,6 +73,7 @@ class MassaDemonstracaoTest {
     @Autowired private com.motoshift.service.Selos selos;
     @Autowired private com.motoshift.service.FavoritoService favoritos;
     @Autowired private com.motoshift.service.TurnoConsultaService consultas;
+    @Autowired private com.motoshift.service.DreService dre;
 
     @Test
     @DisplayName("sem MOTOSHIFT_SEED_RESET o boot nao apaga nem cria nada")
@@ -196,8 +197,10 @@ class MassaDemonstracaoTest {
         List<Usuario> contas = contasDaMassa();
         List<Turno> turnos = turnosDaMassa();
 
+        // Seis publicados à espera de entregador e um sétimo que reabriu: o
+        // Ricardo tinha aceitado e desistiu com folga.
         assertThat(turnos).filteredOn(t -> t.getStatus() == StatusTurno.ABERTO)
-                .hasSize(6)
+                .hasSize(7)
                 .allSatisfy(t -> assertThat(t.getDataInicio()).isAfter(agora));
 
         // Três aceitos por começar: dois para amanhã e um em menos de 1 hora
@@ -231,19 +234,31 @@ class MassaDemonstracaoTest {
                     assertThat(t.getExpiradoEm()).isBefore(agora);
                 });
 
-        // Dois cancelados: um com folga, pelo Ricardo, e um tardio pela regra
-        // do ScoreService (atualizado a menos de 1h do início) — do Thiago.
+        // Duas desistências, cada uma na inscrição de quem desistiu (V22): a
+        // do Ricardo com folga — o turno reabriu, sem entregador —, e a do
+        // Thiago em cima da hora, a menos de 1h do início.
         Long thiago = id("thiago@teste.com");
         Long ricardo = id("ricardo@teste.com");
+        Long claudia = id("claudia@teste.com");
+        assertThat(inscricaoRepo.desistenciasDe(ricardo)).singleElement().satisfies(d -> {
+            assertThat(d.canceladoEm()).isBefore(d.inicioDoTurno().minusHours(1));
+            Turno reaberto = turnoRepo.findById(d.turnoId()).orElseThrow();
+            assertThat(reaberto.getStatus()).isEqualTo(StatusTurno.ABERTO);
+            assertThat(reaberto.getMotoboyId()).isNull();
+        });
+        assertThat(inscricaoRepo.desistenciasDe(thiago)).singleElement().satisfies(d ->
+                assertThat(d.canceladoEm()).isAfter(d.inicioDoTurno().minusHours(1)));
+
+        // Um turno cancelado — pela loja: sem entregador a meia hora do
+        // início, a Cláudia cancelou o turno de que o Thiago tinha desistido.
         assertThat(turnos).filteredOn(t -> t.getStatus() == StatusTurno.CANCELADO)
-                .hasSize(2)
-                .anySatisfy(t -> {
-                    assertThat(t.getMotoboyId()).isEqualTo(thiago);
-                    assertThat(t.getAtualizadoEm()).isAfter(t.getDataInicio().minusHours(1));
-                })
-                .anySatisfy(t -> {
-                    assertThat(t.getMotoboyId()).isEqualTo(ricardo);
-                    assertThat(t.getAtualizadoEm()).isBefore(t.getDataInicio().minusHours(1));
+                .singleElement()
+                .satisfies(t -> {
+                    assertThat(t.getCanceladoPorId()).isEqualTo(claudia);
+                    assertThat(t.getMotoboyId()).isNull();
+                    assertThat(inscricaoRepo.desistenciasDe(thiago))
+                            .extracting(com.motoshift.repository.Desistencia::turnoId)
+                            .containsExactly(t.getId());
                 });
 
         assertThat(contas).filteredOn(u -> "motoboy".equals(u.getTipo()))
@@ -330,7 +345,7 @@ class MassaDemonstracaoTest {
     }
 
     @Test
-    @DisplayName("score e média saem da regra: Thiago 4,5 pelo cancelamento tardio, lojista sem score")
+    @DisplayName("score e média saem da regra: Thiago 4,5 pela desistência em cima da hora, lojista sem score")
     void reputacaoDerivada() {
         massa.resetar();
 
@@ -400,7 +415,7 @@ class MassaDemonstracaoTest {
                 .contains("turno_aceito", "avaliacao_pendente", "turno_cancelado", "turno_expirado",
                           "nota_fiscal_emitida", "nota_fiscal_cancelada",
                           "entregador_chegou", "entregador_saiu", "gorjeta_recebida",
-                          "turno_de_favorito", "turno_lembrete");
+                          "turno_de_favorito", "turno_lembrete", "entregador_desistiu");
     }
 
     /**
@@ -463,7 +478,7 @@ class MassaDemonstracaoTest {
         assertThat(codigosDosSelos(carlos)).containsExactly(
                 "turnos_concluidos", "sem_cancelar", "nota_alta", "pontual");
         assertThat(codigosDosSelos(lucas)).containsExactly("turnos_concluidos", "sem_cancelar");
-        assertThat(codigosDosSelos(ricardo)).as("cancelou o turno de folga").containsExactly("pontual");
+        assertThat(codigosDosSelos(ricardo)).as("desistiu de uma vaga, com folga").containsExactly("pontual");
         assertThat(codigosDosSelos(thiago)).isEmpty();
         assertThat(codigosDosSelos(claudia)).containsExactly("paga_gorjeta", "toda_semana");
         assertThat(codigosDosSelos(maria)).containsExactly("nota_alta", "toda_semana");
@@ -543,6 +558,81 @@ class MassaDemonstracaoTest {
             assertThat(c.getSaldoBloqueado().signum())
                     .as("bloqueado de %s", u.getEmail()).isNotNegative();
         }
+    }
+
+    /**
+     * A DRE (RF13) tem os dois casos para mostrar, nas duas contas que a
+     * documentação aponta: o Carlos (entregador) e a Cláudia (lojista) fecham
+     * o MÊS PASSADO com lucro e o MÊS RETRASADO com prejuízo.
+     *
+     * <p>A massa é datada a partir de hoje, então o teste pergunta pelos meses
+     * do calendário relativos a hoje — e os valores foram escolhidos para a
+     * resposta não depender de quantas semanas o mês teve: a manutenção de R$
+     * 420 do Carlos é maior do que o melhor mês dele, e a taxa da promoção da
+     * Cláudia é menor do que o turno mais barato dela.
+     */
+    @Test
+    @DisplayName("resultado: Carlos e Cláudia têm o mês passado com lucro e o retrasado com prejuízo")
+    void mesesDeLucroEDePrejuizo() {
+        massa.resetar();
+        java.time.YearMonth passado = java.time.YearMonth.now().minusMonths(1);
+        java.time.YearMonth retrasado = java.time.YearMonth.now().minusMonths(2);
+        Long carlos = id("motoboy@teste.com");
+        Long claudia = id("claudia@teste.com");
+
+        // ── Carlos, mês passado: um turno por semana paga as contas. ──────
+        com.motoshift.dto.DreResponse lucroDoCarlos = dre.dre(carlos, "motoboy",
+                passado.atDay(1), passado.atEndOfMonth());
+        assertThat(lucroDoCarlos.situacao()).isEqualTo("lucro");
+        assertThat(lucroDoCarlos.resultado()).isPositive();
+        int turnosDoCarlos = (Integer) lucroDoCarlos.indicadores().get("turnosPagos");
+        assertThat(turnosDoCarlos).isGreaterThanOrEqualTo(3);
+        assertThat(linhaDaDre(lucroDoCarlos, "das_mei")).isEqualByComparingTo("86.05");
+        assertThat(linhaDaDre(lucroDoCarlos, "celular_internet")).isEqualByComparingTo("35.00");
+        assertThat(linhaDaDre(lucroDoCarlos, "seguro")).isEqualByComparingTo("32.00");
+        assertThat(linhaDaDre(lucroDoCarlos, "parcela_ou_aluguel_veiculo")).isEqualByComparingTo("95.00");
+        // Combustível por turno, com os km — é de onde sai o custo por km.
+        assertThat(linhaDaDre(lucroDoCarlos, "combustivel"))
+                .isEqualByComparingTo(new BigDecimal("7.50").multiply(BigDecimal.valueOf(turnosDoCarlos)));
+        assertThat(linhaDaDre(lucroDoCarlos, "manutencao")).isEqualByComparingTo("0.00");
+        assertThat((BigDecimal) lucroDoCarlos.indicadores().get("custoPorKm")).isEqualByComparingTo("0.18");
+        assertThat(lucroDoCarlos.indicadores().get("pontoDeEquilibrioTurnos")).isNotNull();
+
+        // ── Carlos, mês retrasado: a manutenção custou mais do que o mês rendeu. ──
+        com.motoshift.dto.DreResponse prejuizoDoCarlos = dre.dre(carlos, "motoboy",
+                retrasado.atDay(1), retrasado.atEndOfMonth());
+        assertThat(prejuizoDoCarlos.situacao()).isEqualTo("prejuizo");
+        assertThat(prejuizoDoCarlos.resultado()).isNegative();
+        assertThat(linhaDaDre(prejuizoDoCarlos, "manutencao")).isEqualByComparingTo("420.00");
+        assertThat(linhaDaDre(prejuizoDoCarlos, "receita_bruta")).isPositive();
+
+        // ── Cláudia, mês passado: as taxas cobradas cobrem os entregadores. ──
+        com.motoshift.dto.DreResponse lucroDaClaudia = dre.dre(claudia, "lojista",
+                passado.atDay(1), passado.atEndOfMonth());
+        assertThat(lucroDaClaudia.situacao()).isEqualTo("lucro");
+        assertThat(linhaDaDre(lucroDaClaudia, "receita_de_entregas"))
+                .isGreaterThan(linhaDaDre(lucroDaClaudia, "custo_dos_entregadores"));
+        assertThat(linhaDaDre(lucroDaClaudia, "entrega_fora_do_app")).isEqualByComparingTo("45.00");
+        assertThat(linhaDaDre(lucroDaClaudia, "outra_despesa_entrega")).isEqualByComparingTo("60.00");
+
+        // ── Cláudia, mês retrasado: a promoção de frete grátis. ───────────
+        com.motoshift.dto.DreResponse prejuizoDaClaudia = dre.dre(claudia, "lojista",
+                retrasado.atDay(1), retrasado.atEndOfMonth());
+        assertThat(prejuizoDaClaudia.situacao()).isEqualTo("prejuizo");
+        assertThat(linhaDaDre(prejuizoDaClaudia, "receita_de_entregas")).isPositive()
+                .isLessThan(linhaDaDre(prejuizoDaClaudia, "custo_dos_entregadores"));
+
+        // Quem não informou nada continua com a DRE só do extrato.
+        assertThat(dre.dre(id("ricardo@teste.com"), "motoboy", passado.atDay(1), passado.atEndOfMonth())
+                .lancamentosManuais()).isZero();
+
+        // E nada disso passou pelo ledger: as invariantes seguem fechando.
+        consistencia.verificarConsistencia(idsDaMassa()).exigirConsistente();
+    }
+
+    private static BigDecimal linhaDaDre(com.motoshift.dto.DreResponse r, String chave) {
+        return r.linhas().stream().filter(l -> l.chave().equals(chave)).findFirst()
+                .orElseThrow(() -> new AssertionError("sem a linha " + chave)).valor();
     }
 
     /**
@@ -649,7 +739,7 @@ class MassaDemonstracaoTest {
             "turno_pendente_finalizacao", "avaliacao_pendente", "pagamento_confirmado",
             "nota_fiscal_emitida", "nota_fiscal_cancelada",
             "entregador_chegou", "entregador_saiu", "gorjeta_recebida", "turno_de_favorito",
-            "turno_lembrete");
+            "turno_lembrete", "entregador_desistiu", "turno_falta");
 
     /** As tags do app (lib/models/tags_de_avaliacao.dart), por papel de quem é avaliado. */
     private static final Set<String> TAGS_DO_ENTREGADOR = Set.of(

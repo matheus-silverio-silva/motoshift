@@ -5,15 +5,38 @@ import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface TurnoRepository extends JpaRepository<Turno, Long> {
+
+    /**
+     * O turno, com a linha travada ate o fim da transacao (SELECT ... FOR
+     * UPDATE). So para quem mexe na ocupacao das vagas: aceitar e desistir.
+     *
+     * <p>O aceite conta as inscricoes e grava em seguida. Sem trava, dois
+     * entregadores que tocassem "Aceitar" na ultima vaga ao mesmo tempo liam
+     * os dois "0 de 1 ocupada" e entravam os dois — a unicidade da inscricao
+     * e por (turno, entregador), entao nao barrava. Com a linha do turno
+     * travada, o segundo espera o primeiro commitar e ja le o turno lotado.
+     *
+     * <p>Pessimista, e nao {@code @Version}: a disputa pela ultima vaga e o
+     * caso esperado, nao a excecao, e a resposta certa para quem perdeu e um
+     * 409 "vagas preenchidas" — nao um erro de concorrencia para repetir. E a
+     * finalizacao e o cancelamento, que tambem gravam o turno, nao passam a
+     * falhar por causa de um aceite simultaneo.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t from Turno t where t.id = :id")
+    Optional<Turno> buscarTravandoAsVagas(@Param("id") Long id);
 
     List<Turno> findByLojistId(Long lojistId);
 
@@ -76,8 +99,9 @@ public interface TurnoRepository extends JpaRepository<Turno, Long> {
     /** Se o entregador já tem turno encerrado — a base de "tem histórico". */
     boolean existsByMotoboyIdAndStatusIn(Long motoboyId, List<StatusTurno> statuses);
 
-    /** Cancelou algum turno depois de {@code desde}? (V19) — o selo "30 dias sem cancelar". */
-    boolean existsByCanceladoPorIdAndCanceladoEmAfter(Long canceladoPorId, LocalDateTime desde);
+    // existsByCanceladoPorIdAndCanceladoEmAfter saiu daqui: o selo "30 dias sem
+    // cancelar" lê a desistência na inscrição (V22). turnos.cancelado_por_id
+    // passou a dizer só quem cancelou o TURNO, e esse é sempre o lojista.
 
     /** Inícios dos turnos da loja num status, desde uma data — o selo "Contrata toda semana". */
     @Query("select t.dataInicio from Turno t where t.lojistId = :lojistaId "
@@ -123,6 +147,14 @@ public interface TurnoRepository extends JpaRepository<Turno, Long> {
     // finalizou. Janela, e não "antes de agora": ver cobrarFinalizacaoPendente.
     List<Turno> findByStatusInAndDataFimBetween(List<StatusTurno> statuses,
                                                 LocalDateTime de, LocalDateTime ate);
+
+    // Turnos aceitos ou em andamento cujo fim passou do prazo — os que a
+    // finalizacao automatica fecha. So os ids: cada um e fechado na propria
+    // transacao, e carrega-lo aqui o prenderia a esta.
+    @Query("select t.id from Turno t where t.status in :statuses and t.dataFim < :limite "
+         + "order by t.dataFim asc")
+    List<Long> idsComFimAntesDe(@Param("statuses") List<StatusTurno> statuses,
+                                @Param("limite") LocalDateTime limite);
 
     // Turnos que começam dentro de uma janela (aviso de "vai vencer").
     List<Turno> findByStatusAndDataInicioBetween(

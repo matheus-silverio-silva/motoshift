@@ -1,5 +1,7 @@
 package com.motoshift.service;
 
+import com.motoshift.dto.DreResponse;
+import com.motoshift.dto.LancamentoGerencialRequest;
 import com.motoshift.dto.RelatorioFinanceiroResponse;
 import com.motoshift.entity.NaturezaTransacao;
 import com.motoshift.entity.StatusTransacao;
@@ -27,6 +29,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -43,6 +47,8 @@ import static org.mockito.Mockito.when;
 class RelatorioServiceTest {
 
     @Autowired private RelatorioService relatorios;
+    @Autowired private DreService dre;
+    @Autowired private LancamentoGerencialService gerenciais;
     @Autowired private TransacaoRepository transacaoRepo;
     @Autowired private TurnoRepository turnoRepo;
     @Autowired private UsuarioRepository usuarioRepo;
@@ -167,7 +173,99 @@ class RelatorioServiceTest {
         assertThat(r.numeros().get("gastoTotal")).isEqualTo(new BigDecimal("0.00"));
     }
 
+    // -- Resultado (RF13): os números vêm da DRE ------------------------------
+
+    /** Dez dias até hoje: contém os lançamentos do cenário (3 dias atrás) em qualquer dia do mês. */
+    private final LocalDate de = LocalDate.now().minusDays(10);
+    private final LocalDate ate = LocalDate.now();
+
+    @Test
+    @DisplayName("entregador: resultado, situação, margem e ponto de equilíbrio são os da DRE do mesmo período")
+    void motoboy_resultadoVemDaDre() {
+        informar(entregador, "combustivel", "40.00");
+        informar(entregador, "celular_internet", "50.00");
+
+        RelatorioFinanceiroResponse r = relatorios.doMotoboy(entregador.getId(), de, ate);
+        DreResponse d = dre.dre(entregador.getId(), "motoboy", de, ate);
+
+        // 240 recebidos − 40 de combustível − 50 de celular.
+        assertThat(r.numeros().get("resultadoDoPeriodo")).isEqualTo(new BigDecimal("150.00"));
+        assertThat(r.numeros().get("situacao")).isEqualTo("lucro");
+        assertThat(r.numeros().get("resultadoDoPeriodo")).isEqualTo(d.resultado());
+        assertThat(r.numeros().get("situacao")).isEqualTo(d.situacao());
+        assertThat(r.numeros().get("margemLiquida")).isEqualTo(d.indicadores().get("margemLiquida"))
+                .isEqualTo(new BigDecimal("62.50"));
+        // Fixas de 50 ÷ margem por turno de 100 → 1 turno.
+        assertThat(r.numeros().get("pontoDeEquilibrioTurnos"))
+                .isEqualTo(d.indicadores().get("pontoDeEquilibrioTurnos")).isEqualTo(1);
+
+        // As chaves de antes continuam, com os valores de antes: faturamento não virou lucro.
+        assertThat(r.numeros().get("ganhosTotais")).isEqualTo(new BigDecimal("240.00"));
+        assertThat(r.numeros()).containsKeys("turnosPagos", "ticketMedioPorTurno",
+                "horasTrabalhadas", "valorPorHora", "saquesNoPeriodo", "gorjetasRecebidas");
+    }
+
+    @Test
+    @DisplayName("lojista: resultado, situação e custo sobre a receita são os da DRE do mesmo período")
+    void lojista_resultadoVemDaDre() {
+        informar(lojista, "taxa_de_entrega_cobrada", "200.00");
+
+        RelatorioFinanceiroResponse r = relatorios.doLojista(lojista.getId(), de, ate);
+        DreResponse d = dre.dre(lojista.getId(), "lojista", de, ate);
+
+        // 200 de taxas − 240 pagos a entregadores.
+        assertThat(r.numeros().get("resultadoDoPeriodo")).isEqualTo(new BigDecimal("-40.00"));
+        assertThat(r.numeros().get("situacao")).isEqualTo("prejuizo");
+        assertThat(r.numeros().get("resultadoDoPeriodo")).isEqualTo(d.resultado());
+        assertThat(r.numeros().get("custoSobreReceita"))
+                .isEqualTo(d.indicadores().get("custoSobreReceita"))
+                .isEqualTo(new BigDecimal("120.00"));
+        // O ponto de equilíbrio é do entregador: na loja a chave nem existe.
+        assertThat(r.numeros()).doesNotContainKey("pontoDeEquilibrioTurnos");
+        assertThat(r.numeros().get("gastoTotal")).isEqualTo(new BigDecimal("240.00"));
+    }
+
+    @Test
+    @DisplayName("a IA recebe o resultado — e o aviso de que ele ignora custos não informados, quando é o caso")
+    void ia_comentaOResultado() {
+        org.mockito.ArgumentCaptor<String> contexto = org.mockito.ArgumentCaptor.forClass(String.class);
+
+        relatorios.doMotoboy(entregador.getId(), de, ate);
+        verify(anthropic, atLeastOnce()).chamarClaude(any(), contexto.capture());
+        assertThat(contexto.getValue())
+                .contains("Resultado do período")
+                .contains("R$ 240.00 — lucro")
+                .contains("Comente o RESULTADO do período")
+                // Nada foi informado: o "lucro" é só faturamento, e a IA tem de dizer.
+                .contains("o resultado ignora custos não informados");
+
+        informar(entregador, "manutencao", "300.00");
+        relatorios.doMotoboy(entregador.getId(), de, ate);
+        verify(anthropic, atLeastOnce()).chamarClaude(any(), contexto.capture());
+        assertThat(contexto.getValue())
+                .contains("R$ -60.00 — prejuízo")
+                .contains("1 lançamento(s)")
+                .doesNotContain("ignora custos não informados");
+
+        relatorios.doLojista(lojista.getId(), de, ate);
+        verify(anthropic, atLeastOnce()).chamarClaude(any(), contexto.capture());
+        assertThat(contexto.getValue())
+                .contains("Resultado da operação de entrega")
+                .contains("R$ -240.00 — prejuízo")
+                .contains("sem receita de entrega informada")
+                .contains("o resultado ignora custos não informados");
+    }
+
     // -- Apoio ---------------------------------------------------------------
+
+    /** Um custo ou uma receita informados à mão, três dias atrás — junto dos lançamentos do cenário. */
+    private void informar(Usuario quem, String categoria, String valor) {
+        LancamentoGerencialRequest req = new LancamentoGerencialRequest();
+        req.setCategoria(categoria);
+        req.setValor(new BigDecimal(valor));
+        req.setData(LocalDate.now().minusDays(3));
+        gerenciais.criar(quem.getId(), quem.getTipo(), req);
+    }
 
     private Usuario conta(String tipo, String nome) {
         Usuario u = new Usuario();

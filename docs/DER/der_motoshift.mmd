@@ -17,7 +17,11 @@ erDiagram
     TRANSACOES ||--o| NOTAS_FISCAIS : "pagamento documentado por"
     USUARIOS ||--o{ FAVORITOS : "favorita (lojista_id)"
     USUARIOS ||--o{ TURNOS : "cancela (cancelado_por_id)"
+    USUARIOS ||--o{ TURNO_INSCRICOES : "desiste ou cancela (cancelado_por_id)"
     USUARIOS ||--o{ FAVORITOS : "e favorito (motoboy_id)"
+    USUARIOS ||--o{ CODIGOS_RECUPERACAO_SENHA : "pede (usuario_id)"
+    USUARIOS ||--o{ LANCAMENTOS_GERENCIAIS : "informa (usuario_id)"
+    TURNOS   ||--o{ LANCAMENTOS_GERENCIAIS : "e citado por (turno_id)"
 
     USUARIOS {
         BIGINT id PK "IDENTITY"
@@ -78,12 +82,14 @@ erDiagram
         BIGINT id PK "IDENTITY"
         BIGINT turno_id FK "NOT NULL - turnos.id"
         BIGINT motoboy_id FK "NOT NULL - usuarios.id"
-        VARCHAR status "NOT NULL - aceito|finalizado|cancelado"
+        VARCHAR status "NOT NULL - CHECK (V21): aceito|finalizado|faltou|cancelado"
         VARCHAR pagamento_status "null|pendente|pago - pago na finalizacao"
         TIMESTAMP checkin_em "Cheguei (V16)"
         FLOAT checkin_latitude "de onde (V16)"
         FLOAT checkin_longitude "de onde (V16)"
         TIMESTAMP checkout_em "Encerrar turno - so depois do checkin (V16)"
+        BIGINT cancelado_por_id FK "usuarios.id - o proprio entregador (desistiu) ou o lojista (V22)"
+        TIMESTAMP cancelado_em "V22"
         TIMESTAMP criado_em "NOT NULL"
         UNIQUE uk_turno_motoboy UK "(turno_id, motoboy_id)"
     }
@@ -158,6 +164,30 @@ erDiagram
         BIGINT lojista_id PK,FK "NOT NULL - usuarios.id - V18"
         BIGINT motoboy_id PK,FK "NOT NULL - usuarios.id"
         TIMESTAMP criado_em "NOT NULL - default now()"
+    }
+
+    CODIGOS_RECUPERACAO_SENHA {
+        BIGINT id PK "IDENTITY - V24"
+        BIGINT usuario_id FK "NOT NULL - usuarios.id - ON DELETE CASCADE"
+        VARCHAR codigo_hash "NOT NULL - BCrypt do codigo de 6 digitos"
+        TIMESTAMP criado_em "NOT NULL"
+        TIMESTAMP expira_em "NOT NULL - criado_em + 15 min"
+        INTEGER tentativas "NOT NULL - default 0, maximo 5"
+    }
+
+    LANCAMENTOS_GERENCIAIS {
+        BIGINT id PK "IDENTITY - V25"
+        BIGINT usuario_id FK "NOT NULL - usuarios.id"
+        VARCHAR categoria "NOT NULL - CHECK no dominio; decide papel e grupo da DRE"
+        NUMERIC valor "NOT NULL - sempre positivo"
+        DATE data "NOT NULL - dia do pagamento (caixa)"
+        BOOLEAN recorrente "NOT NULL - default false"
+        DATE recorrente_ate "so com recorrente"
+        BIGINT turno_id FK "turnos.id"
+        NUMERIC km "maior que zero"
+        VARCHAR descricao ""
+        TIMESTAMP criado_em "NOT NULL"
+        TIMESTAMP atualizado_em "NOT NULL"
     }
 
     NOTAS_FISCAIS {

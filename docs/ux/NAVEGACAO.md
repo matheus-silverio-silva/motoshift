@@ -72,6 +72,7 @@ flowchart LR
     mAgenda[Agenda]
     mCarteira[Carteira]
     mRelatorios[Relatórios]
+    mResultado[Resultado]
     mNotas[Notas fiscais]
     mAval[Avaliações]
     mNotif[Notificações]
@@ -86,6 +87,7 @@ flowchart LR
     lPublicar[Publicar turno]
     lSaldo[Saldo]
     lRelatorios[Relatórios]
+    lResultado[Resultado]
     lNotas[Notas fiscais]
     lAval[Avaliações]
     lNotif[Notificações]
@@ -102,6 +104,7 @@ flowchart LR
     recarga[Adicionar saldo]
     dados[Dados pessoais]
     cnh[CNH e veículo / Endereço]
+    senha[Alterar senha]
   end
 
   login -->|entregador| mInicio
@@ -120,6 +123,9 @@ flowchart LR
   lPublicar -->|sem saldo| recarga
   mPerfil & lPerfil --> dados
   mPerfil & lPerfil --> cnh
+  mPerfil & lPerfil --> senha
+  mRelatorios -->|"Ver resultado"| mResultado
+  lRelatorios -->|"Ver resultado"| lResultado
 ```
 
 ### Menu por papel
@@ -127,7 +133,7 @@ flowchart LR
 | Seção | Entregador | Lojista |
 |---|---|---|
 | **OPERAÇÃO** | Início · Turnos · Agenda | Início · Agenda · Turnos · Publicar turno |
-| **FINANCEIRO** | Carteira · Relatórios · Notas fiscais | Saldo · Relatórios · Notas fiscais |
+| **FINANCEIRO** | Carteira · Relatórios · Resultado · Notas fiscais | Saldo · Relatórios · Resultado · Notas fiscais |
 | **AVALIAÇÕES** | Avaliações (selo com as pendentes) | Avaliações (selo com as pendentes) |
 | **CONTA** | Notificações · Histórico · Perfil | Notificações · Histórico · Perfil |
 | Barra inferior (celular) | Início · Turnos · Carteira · Perfil | Início · Agenda · Turnos · Perfil |
@@ -146,6 +152,29 @@ legível. O menu é completo; a barra é o atalho do dia a dia.
 
 ---
 
+### Resultado: seção própria, ao lado dos Relatórios
+
+**Resultado** (`/resultado`, RF13) é item de menu dos dois papéis, e não uma
+aba dos Relatórios: lá está o que passou pela carteira; aqui, o que sobrou —
+lucro ou prejuízo —, com os custos que a pessoa informa. Uma tela só para os
+dois papéis: o backend monta a DRE de quem está logado.
+
+- **Dos Relatórios para o Resultado** há um cartão, "Ver resultado
+  (lucro/prejuízo)". É troca de seção (`NavConfig.irParaSecao`), como um item
+  de menu: Relatórios e Resultado são irmãos, não pai e filho.
+- **O formulário de lançamento não é rota.** "Informar" abre uma folha
+  inferior no celular e um diálogo no desktop, sobre a própria tela — fechar
+  devolve a pessoa à DRE, já recalculada.
+- **O período** usa os mesmos atalhos dos Relatórios (o widget
+  `SeletorDePeriodo` é compartilhado) e mais um caminho: tocar num mês do
+  gráfico "Mês a mês" apura aquele mês. As fichas ficam numa linha só, que
+  rola de lado no celular; o mês escolhido no gráfico entra na frente dos
+  atalhos, para ficar à vista sem rolar.
+- **Do painel para o Resultado** há o cartão "Resultado do mês", nos dois
+  papéis: diz a situação por extenso ("Lucro de R$ 111,95") e troca de seção
+  como o cartão dos Relatórios. Sem nada informado no mês, ele convida a
+  informar os custos e abre o formulário ali mesmo, sobre o painel.
+
 ## 4. Um conceito, um nome
 
 O item de menu, o título da tela e o botão que leva até ela dizem a mesma
@@ -155,6 +184,7 @@ coisa. Quando dois nomes conviviam, o que ficou está na coluna da esquerda.
 |---|---|---|
 | Turnos (entregador) | Turnos disponíveis | Título do desktop |
 | Relatórios | Relatórios financeiros | Título do desktop |
+| Resultado | DRE · Lucro e prejuízo | — (nasceu com este nome; "DRE" fica para a documentação) |
 | Histórico | Histórico de turnos | Título das duas larguras |
 | Publicar turno | Publicar novo turno · Publicar Turno | Rodapé da lista, card do início, header |
 | Detalhes do turno | Detalhes do Turno · Turno | Header do entregador · header do lojista |
@@ -175,33 +205,46 @@ Continuam diferentes **de propósito**:
 
 ## 5. O que se faz com um turno
 
-As ações são as mesmas nas duas telas de detalhe e nos dois papéis — vêm de
+As ações vêm de um lugar só nas duas telas de detalhe —
 [`AcoesDoTurno`](../../Motoshift/lib/widgets/acoes_do_turno.dart), que aplica as
 regras de `TurnoService` no backend.
 
 | Status | Entregador | Lojista |
 |---|---|---|
-| Aberto, com vaga | **Aceitar turno** | **Cancelar turno** (e **Finalizar turno**, se já há entregador) |
-| Aberto (já aceito por mim, multi-vaga), aceito | **Cheguei** (presença) · **Finalizar turno** · **Cancelar turno** | **Finalizar turno** · **Cancelar turno** |
-| Em andamento (alguém fez check-in) | **Encerrar turno** (presença) · **Finalizar turno** | **Finalizar turno** |
+| Aberto, com vaga | **Aceitar turno** | **Cancelar turno** |
+| Aberto (já aceito por mim, multi-vaga), aceito | **Cheguei** (presença) · **Desistir da vaga** | **Cancelar turno** |
+| Em andamento (alguém fez check-in) | **Encerrar turno** (presença) · **Finalizar turno**, depois do início | **Finalizar turno**, depois do início |
 | Finalizado, com avaliação pendente | **Avaliar a loja** | **Avaliar o entregador** / **Avaliar entregadores** · **Publicar de novo** |
 | Finalizado sem pendência, cancelado, expirado | Só o status por extenso — "Turno finalizado", "Turno cancelado" | O status por extenso · **Publicar de novo** |
 
-- **Os dois participantes finalizam.** O backend aceita desde que o dinheiro
-  passou a ser reservado na publicação: finalizar não cria compromisso, só
-  transfere o que já estava reservado.
+- **Os dois participantes finalizam — mas só quando vale.** "Finalizar turno"
+  aparece quando o backend aceitaria: o horário de início já passou **e** alguém
+  fez check-in (`Turno.podeSerFinalizado`, com o `algumCheckin` que o backend
+  manda). Antes disso o botão não existe: era por ele que o entregador
+  finalizava um turno de amanhã e recebia na hora. Só quem fez check-in é pago;
+  quem aceitou e não chegou aparece para a loja como "Faltou — sem check-in".
+- **Sair do turno é uma ação para cada lado.** O lojista vê **Cancelar turno**:
+  o turno inteiro cai, a reserva volta e nenhum entregador é penalizado. O
+  entregador vê **Desistir da vaga**: só a vaga dele é liberada (o turno segue,
+  e se estava lotado volta a aparecer entre os disponíveis) e a loja é avisada.
+  Era um botão só para os dois, e a penalidade caía no entregador mesmo quando
+  quem cancelava era a loja.
 - **Presença.** No detalhe do turno do entregador, o bloco **PRESENÇA** tem
   "Cheguei" (check-in, de 30 min antes do início até o fim, a até 500 m do
   ponto) e depois "Encerrar turno" (check-out). A posição vem do
   `LocalizacaoService`; a recusa do backend aparece como veio ("Você está a 1,2
   km do local"). O lojista vê "Chegou às 14:03 (3 min antes) · saiu às 18:02"
   no card de cada entregador, e recebe a notificação de chegada e de saída.
-- **Turno em andamento não se cancela.** Depois do check-in alguém está
-  trabalhando: cancelar devolveria a reserva inteira. A saída é finalizar.
+- **Turno em andamento não se cancela nem se larga.** Depois do check-in
+  alguém está trabalhando: cancelar devolveria a reserva inteira. A saída é
+  finalizar.
 - **Finalizar leva direto à avaliação**, para os dois papéis — o backend
   notifica os dois na mesma transação.
-- **Cancelar avisa a consequência** antes de confirmar: menos de 1 h do início
-  desconta 0,5 do score do entregador; o valor reservado volta inteiro.
+- **Os dois diálogos avisam a consequência** antes de confirmar. O de cancelar
+  (lojista): o valor reservado volta inteiro e nenhum entregador é penalizado.
+  O de desistir (entregador) muda com a hora: a menos de 1 h do início,
+  "desistir agora desconta 0,5 do seu score"; com mais folga, "desistir não
+  muda o seu score".
 - O lojista vê **todos os inscritos** do turno, cada um com "Ver perfil" e,
   quando a nota dele falta, "Avaliar".
 - **Publicar de novo** (lojista, turno finalizado, cancelado ou expirado —
@@ -292,6 +335,32 @@ sumir da fila depois da primeira avaliação.
 
 Turno que não existe mais (ou fora do alcance da conta) não navega e avisa
 "Não foi possível abrir este turno."
+
+### 6.1 Telas que se atualizam
+
+As telas só buscavam os dados ao abrir. Com a tela aberta, o que muda é
+justamente o que está nela — um entregador aceita, faz check-in, desiste; outro
+turno é publicado — e a única saída era sair e voltar.
+
+- **O sino se atualiza sozinho.** Com alguém logado, o `NotificacaoProvider`
+  busca a contagem de não lidas a cada **45 s** (`acompanharSessao`, ligado
+  pelo `app.dart` a cada mudança do `AuthService`). Em segundo plano o relógio
+  para — ninguém está olhando, e no celular é bateria e dados —; ao voltar,
+  busca na hora e retoma. No logout o relógio é cancelado e o sino zera. É
+  polling, e não push, de propósito: uma requisição pequena resolve o caso sem
+  infraestrutura nova no backend.
+- **Puxar para atualizar** (celular e tablet) nos dois painéis, em Turnos do
+  entregador (meus turnos e disponíveis), Turnos do lojista, Agenda e nos dois
+  detalhes de turno. O rolável dessas telas é sempre rolável
+  (`AlwaysScrollableScrollPhysics`): com a lista curta o gesto nem começaria.
+- **"Atualizar" na topbar** (desktop), nas mesmas telas: com mouse não há o
+  que puxar. O botão vira um indicador enquanto recarrega.
+- A tela declara uma coisa só — `AdaptiveScaffold(onAtualizar: …)` — e o
+  scaffold escolhe o gesto de cada tamanho. Tela que não declara não ganha
+  botão.
+- No **detalhe do turno**, atualizar busca o turno de novo no backend e refaz
+  o que a tela guarda: para o lojista, os inscritos e a presença — é onde
+  aparece o "Chegou às 14:03".
 
 ---
 

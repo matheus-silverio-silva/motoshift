@@ -161,14 +161,21 @@ class ConcorrenciaDoLedgerTest {
 
         Long id = turnos.criar(req, lojista.getId()).getId();
 
+        // Finalizar exige turno começado e check-in: o início vai para o
+        // passado e o entregador "chegou" na hora marcada.
+        LocalDateTime inicio = LocalDateTime.now().minusMinutes(1);
+
         TurnoInscricao ins = new TurnoInscricao();
         ins.setTurnoId(id);
         ins.setMotoboyId(entregador.getId());
         ins.setStatus(StatusInscricao.ACEITO);
+        ins.setCheckinEm(inicio);
         inscricaoRepo.save(ins);
 
         Turno t = turnoRepo.findById(id).orElseThrow();
         t.setMotoboyId(entregador.getId());
+        t.setDataInicio(inicio);
+        t.setDataFim(inicio.plusHours(4));
         turnoRepo.save(t);
         return id;
     }

@@ -103,6 +103,24 @@ class Notificacao {
             fundo: AppColors.amberSoft,
             frente: AppColors.onTertiaryContainer,
           ),
+        // Um entregador desistiu da vaga — para o lojista do turno.
+        'entregador_desistiu' => const NotificacaoEstilo(
+            icone: Icons.person_remove_outlined,
+            fundo: AppColors.amberSoft,
+            frente: AppColors.onTertiaryContainer,
+          ),
+        // O job fechou o turno que terminou e ninguém finalizou.
+        'turno_finalizado_automaticamente' => const NotificacaoEstilo(
+            icone: Icons.auto_mode_outlined,
+            fundo: AppColors.tealSoft,
+            frente: AppColors.tealDeep,
+          ),
+        // O turno foi finalizado e este entregador não fez check-in.
+        'turno_falta' => const NotificacaoEstilo(
+            icone: Icons.person_off_outlined,
+            fundo: AppColors.surface3,
+            frente: AppColors.muted,
+          ),
         'turno_expirado' => const NotificacaoEstilo(
             icone: Icons.timer_off_outlined,
             fundo: AppColors.surface3,

@@ -48,7 +48,7 @@ Pacote raiz: `com.motoshift`. Arquitetura em camadas clássica:
 | **Controller** | `controller/` | Expõe endpoints REST, recebe/retorna DTOs |
 | **Service** | `service/` | Regras de negócio (validações, transações) |
 | **Repository** | `repository/` | Acesso a dados (Spring Data JPA) |
-| **Entity** | `entity/` | Tabelas do banco (`Usuario`, `Turno`, `Carteira`, `Transacao`, `Avaliacao`) |
+| **Entity** | `entity/` | Tabelas do banco (`Usuario`, `Turno`, `TurnoInscricao`, `Carteira`, `Transacao`, `Avaliacao`, `NotaFiscal`, `LancamentoGerencial`, entre outras) |
 | **DTO** | `dto/` | Objetos de transferência (separa API do modelo interno) |
 | **Config** | `config/` | `MassaDemonstracao` (massa de teste: `popular()`, `resetar()` e `apagarTudoERecriar()`), `DataInitializer` (gatilho em dev) e `ResetDaMassaNoBoot` (os dois resets, com trava, em qualquer ambiente) |
 
@@ -56,7 +56,8 @@ Pacote raiz: `com.motoshift`. Arquitetura em camadas clássica:
 `PUT /api/turnos/{id}/aceitar` → `TurnoController` → `TurnoService.aceitar()`
 (valida conflito de horário) → `TurnoRepository.save()` → retorna `TurnoResponse`.
 
-Serviços principais: `AuthService`, `TurnoService`, `CarteiraService`,
+Serviços principais: `AuthService`, `TurnoService`, `PagamentoTurnoService`,
+`LedgerService` (o único que altera saldo), `DreService` (lucro e prejuízo) e
 `AnthropicService` (IA).
 
 ---
@@ -68,7 +69,12 @@ Serviços principais: `AuthService`, `TurnoService`, `CarteiraService`,
 - **Telas:** `views/` (uma pasta por tela: login, dashboards, agenda, carteira…).
 - **Acesso à API:** `services/api_service.dart` centraliza as chamadas HTTP;
   `services/auth_service.dart` cuida da sessão.
-- **Tema:** `theme/app_theme.dart` (Material Design 3, fontes via `google_fonts`).
+- **Tema:** `theme/app_theme.dart` (Material Design 3). As fontes (Bricolage
+  Grotesque e Plus Jakarta Sans, SIL OFL) vão **embarcadas** em `assets/fonts`:
+  o `google_fonts` as usa dos assets e a busca em rede está desligada
+  (`GoogleFonts.config.allowRuntimeFetching = false` no `main.dart`). Antes o
+  app baixava cada peso na primeira vez em que ele aparecia — sem internet, a
+  tela abria na fonte do sistema.
 - **Mapa:** `flutter_map` (OpenStreetMap) para região de entrega.
 
 > **Se perguntarem por Clean Architecture:** existiam `domain/` e `data/` de uma
@@ -78,9 +84,15 @@ Serviços principais: `AuthService`, `TurnoService`, `CarteiraService`,
 > `services`, que é o que as telas realmente usam."*
 
 **Configuração da URL da API:** injetada em build via
-`--dart-define=API_URL=...` e lida em `api_service.dart`
+`--dart-define=API_URL=...` e lida em `services/api/api_client.dart`
 (`String.fromEnvironment('API_URL')`). Em dev usa `10.0.2.2:8080` (emulador
 Android) ou `localhost:8080`.
+
+**Servidor acordando:** ao abrir, o app pergunta `GET /api/status`
+(`ServidorService`). Se a resposta não vem em 3 s, a tela avisa "Acordando o
+servidor…", desliga o botão Entrar e pergunta de novo a cada 5 s, por até 4
+min — o plano gratuito da hospedagem desliga o servidor depois de 15 min
+parado. Quem tem sessão salva espera na abertura, sem perder a sessão.
 
 ---
 
@@ -92,30 +104,60 @@ Android) ou `localhost:8080`.
 | RF02 | Dashboard lojista/motoboy | `DashboardController` + `views/dashboard_*` | — |
 | RF03 | Cadastro: CNPJ (14 díg.) / CNH (11 díg.) | `AuthService.registrar()` | parcial |
 | RF04 | Publicar turno, antecedência mínima de 2h | `TurnoService.criar()` | ✅ |
-| RF05 | Reservar turno, sem conflito de horário | `TurnoService.aceitar()` | ✅ |
-| RF06 | Finalizar transfere o valor reservado para o entregador, na mesma transação | `TurnoService.finalizar()` + `PagamentoTurnoService.liquidar()` | ✅ |
-| RF07 | Cancelar < 1h penaliza o score do entregador (−0.5) | `TurnoService.cancelar()` + `Reputacao` | ✅ |
+| RF05 | Reservar turno, sem conflito de horário e sem dois na mesma vaga | `TurnoService.aceitar()` + `TurnoRepository.buscarTravandoAsVagas()` | ✅ |
+| RF06 | Finalizar transfere o valor reservado para o entregador **que fez check-in**, na mesma transação; só depois do início do turno | `TurnoService.finalizar()` + `PagamentoTurnoService.fecharInscricoes()` / `liquidar()` | ✅ |
+| RF07 | Cancelar é do lojista e não penaliza ninguém; desistir da vaga é do entregador e, a < 1h do início, tira 0.5 do score dele | `TurnoService.cancelar()` / `desistir()` + `Reputacao` | ✅ |
+| RF09 | Notificações dentro do app, com o sino que se atualiza | `NotificacaoService` + `NotificacaoProvider` (app) | ✅ |
+| RF12 | Carteira e ledger: recarga, reserva, liquidação, saque e as três invariantes | `LedgerService` + `ConsistenciaService` | ✅ |
+| RF13 | Resultado do período (lucro ou prejuízo) numa DRE em regime de caixa | `DreService` + `LancamentoGerencialService` | ✅ |
+| RF15 | Check-in e check-out, com janela de horário e proximidade | `CheckinService` | ✅ |
+| RF16 | Turno que se resolve sozinho: vencimento, lembrete e finalização automática | `TurnoExpiracaoService` + `TurnoLembreteService` | ✅ |
+| RF19 | Trocar a senha e recuperá-la por código | `SenhaService` | ✅ |
+
+A lista completa — RF01 a RF21 e RNF01 a RNF08, com os cards do Jira, as
+classes e os testes de cada um — está em `docs/REQUIREMENTS.md`. A numeração
+segue o que o código cita: o **RF09 são as notificações**; o relatório por IA é
+o **RF14** e a sugestão de turnos por IA, o **RF08**.
 
 **Regras de negócio mais "perguntáveis":**
 - *Antecedência de 2h:* `LocalDateTime.now().plusHours(2)` — turno antes disso é rejeitado (HTTP 400).
 - *Conflito de horário:* `TurnoRepository.existeConflitoDeAgenda()` — olha as
   inscrições ativas do entregador (inclusive em turno multi-vaga que segue
   "aberto"); se houver sobreposição, retorna HTTP 409.
+- *A última vaga não é de dois:* o aceite conta as inscrições e grava em seguida — e contar e gravar não é
+  atômico. Dois entregadores tocando "Aceitar" na última vaga liam os dois "0 de 1" e entravam os dois (a
+  unicidade da inscrição é por turno + entregador, não barrava). Agora `aceitar` e `desistir` carregam o
+  turno com `@Lock(PESSIMISTIC_WRITE)`: o segundo espera o primeiro commitar e já lê o turno lotado → 409.
+  Trava pessimista, e não `@Version`, porque disputar a última vaga é o caso esperado e a resposta certa é
+  "vagas preenchidas", não um erro para repetir. `AceiteConcorrentePostgresTest`: 8 threads, 1 vaga,
+  exatamente 1 inscrição e 7 respostas 409 — em PostgreSQL, e o teste falha (2 entram) sem a trava.
 - *Crédito na carteira:* acontece na **finalização do turno**, na mesma transação que o encerra —
   o valor sai do saldo **bloqueado** do lojista (reservado quando ele publicou) e entra no
   **disponível** do entregador. Não há confirmação a dar: o compromisso foi assumido na publicação.
   A dupla confirmação manual que existia aqui foi removida (V13) — ver `docs/financeiro/FLUXO-FINANCEIRO.md`.
-- *Penalidade de score:* cancelamento com menos de 1h subtrai 0.5 (mínimo 0.0).
+- *Finalizar só paga quem trabalhou:* finalizar exige turno começado e pelo menos um check-in (409 fora
+  disso). Só a inscrição com check-in recebe; a aceita sem check-in vira `faltou` (V21), sem pagamento e
+  sem penalidade de score, e a parte dela volta ao lojista como sobra. Antes, aceitar um turno de amanhã
+  e tocar "Finalizar" pagava na hora.
+- *Cancelar × desistir:* eram um botão só. A loja cancelava em cima da hora e o entregador perdia score; um
+  entregador saía de um turno de três vagas e o turno caía para os outros dois. Agora `cancelar` é só do
+  lojista dono (turno inteiro, reserva de volta, ninguém penalizado) e `desistir` é só do entregador inscrito
+  (a vaga dele reabre, o turno segue, a loja é avisada). Quem desistiu não aceita o mesmo turno de novo.
+- *Penalidade de score:* desistir da vaga com menos de 1h subtrai 0.5 de quem desistiu (mínimo 0.0).
   A regra (valor inicial e penalidade) mora em `Reputacao`, num lugar só.
 
 ---
 
 ## 6. Inteligência Artificial (Claude / Anthropic)
 
-- `AnthropicService` chama a API da Anthropic (modelo `claude-sonnet-4`).
+- **RF08** (sugestão de turnos) e **RF14** (relatórios com análise).
+- `AnthropicService` chama a API da Anthropic (modelo `claude-sonnet-4`, trocável
+  pela variável `ANTHROPIC_MODEL`, sem recompilar).
 - Usado em: **sugestão de turnos**, **relatórios** (financeiro/operacional) e
   **análise de score** — endpoints `/api/sugestoes`, `/api/relatorio`, `/api/score`.
 - A chave (`ANTHROPIC_API_KEY`) vem de variável de ambiente — **nunca** fica no código.
+- Como cada sugestão é uma chamada paga, `/api/sugestoes` aceita **10 por hora por
+  usuário**; acima disso, 429 com `Retry-After` (`LimiteDeRequisicoesFilter`).
 
 > Se perguntarem "a IA é essencial?": *"Não para o fluxo central de turnos;
 > é uma camada de valor agregado (recomendação e relatórios em linguagem natural)."*
@@ -126,13 +168,14 @@ Android) ou `localhost:8080`.
 
 - **Dev:** H2 em memória (console em `/h2-console`), recriado a cada boot —
   zero configuração. Flyway desligado: as migrações são SQL PostgreSQL.
-- **Prod:** PostgreSQL no Railway (perfil `prod`, `application-prod.properties`).
+- **Prod:** PostgreSQL no Neon (perfil `prod`, `application-prod.properties`).
 - **O schema é das migrações, não do Hibernate.** `ddl-auto=validate` em
   produção: o Hibernate só confere se as entidades batem com o que o Flyway
-  criou. São 11 migrações versionadas em `db/migration`, cada uma com o motivo
-  escrito no cabeçalho.
-- **Integridade no banco.** Desde a V11 são 16 `FOREIGN KEY` com
-  `ON DELETE RESTRICT`. As entidades continuam referenciando por `Long`, sem
+  criou. São 25 migrações versionadas em `db/migration` (V1 a V25), cada uma
+  com o motivo escrito no cabeçalho.
+- **Integridade no banco.** São 25 `FOREIGN KEY` — 18 delas desde a V11 —,
+  todas `ON DELETE RESTRICT`, menos a do código de recuperação de senha (V24),
+  que apaga em cascata. As entidades continuam referenciando por `Long`, sem
   `@ManyToOne` — decisões separadas, explicadas no DER.
 - **Massa de demonstração:** `MassaDemonstracao` — cerca de cinco meses de
   história (recargas, turnos pagos toda semana, saques, avaliações, notas
@@ -147,31 +190,67 @@ Android) ou `localhost:8080`.
 
 ## 8. Deploy
 
-- **Railway** para os dois serviços.
-- Front-end: **Dockerfile multi-stage** (`flutter build web` → servido por **nginx**, com fallback de SPA).
+- **Três peças:** banco no **Neon** (PostgreSQL), back-end no **Render**
+  (`backend/Dockerfile`, plano gratuito) e front-end web no **Firebase
+  Hosting** (`flutter build web` + `firebase deploy`, com fallback de SPA no
+  `firebase.json`).
+- **Mesmo commit, mesmo app:** Flutter **3.41.5** no build, no CI e nos
+  goldens, com as dependências saindo do `pubspec.lock` versionado. O
+  `Motoshift/Dockerfile` (nginx) continua no repositório como alternativa por
+  container.
+- **Cache do front:** o `firebase.json` manda `Cache-Control: no-cache` para o
+  `index.html` e os arquivos que apontam a versão atual (`flutter_bootstrap.js`,
+  `flutter_service_worker.js`, `version.json`, `manifest.json`). Sem isso o
+  navegador podia servir o app antigo por até 1 h depois de um deploy.
+- **Fuso:** o container roda em UTC; o `main` põe a JVM em
+  `America/Sao_Paulo` antes de o Spring subir (variável `MOTOSHIFT_FUSO`), e o
+  Dockerfile define `TZ` e `-Duser.timezone`. Ver a pergunta do fuso, abaixo.
+- **Servidor que dorme:** o plano gratuito desliga o serviço depois de 15 min
+  sem requisição. `GET /api/status` (público, sem banco, fora do limite) é o
+  que um monitor chama a cada 10 min para ele não dormir, e o que o app chama
+  ao abrir para avisar "Acordando o servidor…" em vez de falhar.
+- **CI** (GitHub Actions): `mvn test`, `flutter analyze` e `flutter test` em todo
+  pull request e em todo push na `main`; um commit novo cancela a execução
+  anterior da mesma branch.
 - Back-end: perfil `prod` + PostgreSQL; porta via `$PORT`; healthcheck em
   `/actuator/health`.
 - **Variáveis obrigatórias:** `JWT_SECRET` e `MOTOSHIFT_CORS_ORIGINS`. Sem
   elas o boot falha de propósito — melhor o deploy não subir do que subir
   assinando token com chave de exemplo ou liberando qualquer origem.
+- **O que produção desliga:** o Swagger (`springdoc.*.enabled=false`, e as
+  rotas dele saem das públicas: sem token, 401), a conferência do ledger
+  (`@Profile("!prod")`) e a massa de demonstração no boot.
+- **Limite de requisições:** cadastro e "esqueci minha senha" aceitam 20 a
+  cada 10 minutos por IP. Atrás do proxy da hospedagem o endereço da conexão é
+  o do proxy, igual para todos; o IP de quem chamou vem do `X-Forwarded-For`.
+  No Render o proxy acrescenta também o próprio IP no fim da lista, então vale
+  a **penúltima** entrada (`MOTOSHIFT_LIMITE_PROXIES_CONFIAVEIS=1`): lendo a
+  última, o limite contava todos os usuários juntos. Em memória, por instância.
 
 ---
 
 ## 9. Testes
 
-- **Back-end:** 146 testes (JUnit 5, Mockito, `@SpringBootTest`, `@DataJpaTest`),
-  cobrindo RF01 e RF04–RF07, autorização de ponta a ponta (sem token → 401,
+- **Back-end:** 589 testes (JUnit 5, Mockito, `@SpringBootTest`, `@DataJpaTest`),
+  cobrindo as regras dos turnos (RF04–RF07), o ledger e as invariantes, a DRE,
+  a senha, os limites de requisição, autorização de ponta a ponta (sem token → 401,
   token de outra pessoa → 403, dono → 200), liquidação do pagamento e
   idempotência.
 - **Migrações e schema em PostgreSQL de verdade:** um servidor embarcado sobe
   no próprio teste (sem Docker) e roda Flyway + `ddl-auto=validate` — inclusive
   os casos difíceis, como migrar um banco que já tem linha órfã. Antes disso, a
   primeira execução real das migrações era o deploy.
-- **Front-end:** 91 testes — unidade, widget, acessibilidade (alvo de toque) e
+- **Front-end:** 556 testes — unidade, widget, acessibilidade (alvo de toque,
+  rótulo de tudo o que é clicável e contraste de texto pelo WCAG AA) e
   *golden tests* (comparação visual das telas).
-- *Observação:* os goldens rodam no CI em `windows-latest` porque foram
-  gravados com a fonte do sistema; em outro SO o texto sairia em outra fonte e
-  todos falhariam por diferença de renderização, não por regressão.
+- *Observação:* os goldens são desenhados com as **fontes do próprio app**
+  (os arquivos de `assets/fonts`), e não mais com a fonte do sistema de quem
+  roda o teste — eram gravados em Segoe UI, e por isso não mostravam a cara do
+  app. A troca revelou um estouro de layout de verdade na linha do extrato
+  (16 px além da tela no celular), que a fonte do sistema escondia; desde
+  então "RenderFlex overflowed" deixou de ser silenciado na suíte. O CI segue
+  em `windows-latest` com o Flutter fixo em 3.41.5, que é onde os goldens são
+  gravados: a rasterização muda entre sistemas e entre versões.
 
 ---
 
@@ -188,13 +267,42 @@ motoboy e indisponibilidade ao lojista em picos. O turno agendado dá previsibil
 R: O turno tem um número de vagas. Ao aceitar, o serviço confere se o turno
 está "aberto", se ainda há vaga, se aquele entregador já não está inscrito e se
 o horário não conflita com outro turno dele; qualquer uma delas retorna HTTP
-409. O turno fecha (ACEITO) quando a última vaga é preenchida.
+409. O turno fecha (ACEITO) quando a última vaga é preenchida. E dois toques
+simultâneos na última vaga não entram os dois: o aceite trava a linha do turno
+(`SELECT ... FOR UPDATE`), o segundo espera o primeiro e já lê o turno lotado.
 
 **P: A senha é segura?**
 R: BCrypt, sempre — no cadastro, na massa de demonstração e no login, que não
-aceita outro formato. As contas antigas do Railway, gravadas em texto puro
+aceita outro formato. As contas antigas de produção, gravadas em texto puro
 antes disso, foram convertidas pela migração V9. O token é JWT assinado
 (HS256), com o segredo vindo de variável de ambiente.
+
+**P: E o fuso horário?**
+R: O sistema tem um fuso só, o de Curitiba. O app manda a data do turno como
+hora local, o banco guarda `timestamp` sem fuso e o código usa
+`LocalDateTime` — nada é convertido no caminho, então o que precisa estar certo
+é o "agora" do servidor. O container da hospedagem roda em UTC, 3 horas à
+frente: a regra das 2 h de antecedência virava 5 h, o turno expirava 3 h antes
+e, na DRE, o que acontecia depois das 21h caía no dia seguinte. A correção é o
+servidor nascer no fuso de quem usa (`MotoshiftApplication.main`, variável
+`MOTOSHIFT_FUSO`, padrão `America/Sao_Paulo`), e a suíte de testes roda nesse
+mesmo fuso, inclusive no CI. Um fuso só porque loja e entregador estão na
+mesma cidade — o check-in exige 500 m do ponto — e o Brasil não tem horário de
+verão desde 2019. Para atender outro estado **no lugar** de Curitiba, basta
+trocar a variável; para atender **dois fusos ao mesmo tempo**, as datas
+passariam a ser instantes (`timestamptz`), o app mandaria o deslocamento, cada
+loja teria o seu fuso e os cortes de dia e de mês da DRE seriam calculados no
+fuso de quem consulta.
+
+**P: O servidor demora no primeiro acesso. Por quê?**
+R: É o plano gratuito da hospedagem: sem requisição por 15 minutos, o serviço
+é desligado, e a primeira chamada espera o boot — cerca de 3 minutos. Tratamos
+dos dois lados. Um monitor chama `GET /api/status` a cada 10 minutos, o que
+mantém o servidor de pé. E o app, ao abrir, pergunta o mesmo status: se a
+resposta demora, ele avisa "Acordando o servidor…", desliga o botão Entrar e
+insiste a cada 5 segundos por até 4 minutos, em vez de deixar o primeiro login
+falhar por tempo esgotado. A rota não consulta o banco e não tem limite de
+requisições.
 
 **P: E o bloqueio de login do RF01?**
 R: Cinco erros bloqueiam a conta por 15 minutos, e o contador fica em duas
@@ -203,6 +311,18 @@ redeploy, vale igual em todas as instâncias e só existe para conta que existe.
 O custo conhecido é que quem sabe seu e-mail pode te deixar 15 minutos fora;
 mitigar isso pede captcha ou segundo fator, que estão fora do escopo.
 
+**P: "Claudia@Teste.com" e "claudia@teste.com" são a mesma conta?**
+R: São. E-mail não diferencia maiúsculas, mas a comparação do banco é exata:
+dava para criar as duas contas, e quem se cadastrou em minúsculas não entrava
+quando o teclado do celular punha a primeira letra em maiúscula. O e-mail agora
+é normalizado (sem espaço nas pontas, em minúsculas) em três lugares, do mais
+externo ao mais interno: na entrada da requisição (`LoginRequest` /
+`RegistroRequest`, antes da validação — um espaço na ponta derrubava o `@Email`
+com 400), na entidade (`Usuario.setEmail`, que vale para qualquer caminho que
+grave um usuário) e no banco (índice único em `lower(email)`, V23). A migração
+confere antes se já existem contas que só diferem pela caixa e, se existirem,
+**falha dizendo quais** — escolher qual conta fica não é decisão de migração.
+
 **P: Por que as tabelas não tinham chave estrangeira?**
 R: Não têm mais essa lacuna: a V11 criou as 16 FKs com `ON DELETE RESTRICT`.
 As entidades continuam com `Long` em vez de `@ManyToOne` porque o app nunca
@@ -210,10 +330,12 @@ navega por objeto — integridade é do banco, navegação seria custo sem uso.
 
 **P: O que é o score?**
 R: Reputação do **entregador** (0 a 5) — o lojista não tem score. Começa em
-5.0 e cada cancelamento tardio (<1h) tira 0.5; nenhum outro evento o muda, e
-ninguém o grava à mão (nem a massa de demonstração, que cancela pelo próprio
-`TurnoService`). Enquanto o entregador não tem histórico — nenhum turno
-concluído nem cancelado —, a API devolve o score **nulo** e o app diz "Novo na
+5.0 e cada **desistência em cima da hora** (o entregador sai da vaga a menos de
+1h do início) tira 0.5; nenhum outro evento o muda — nem o turno que a loja
+cancela, nem a falta sem check-in —, e ninguém o grava à mão (nem a massa de
+demonstração, que desiste pelo próprio `TurnoService`). Enquanto o entregador
+não tem histórico — nenhum turno concluído, cancelado ou de que tenha desistido
+—, a API devolve o score **nulo** e o app diz "Novo na
 plataforma": 5.0 ali seria o ponto de partida da conta apresentado como
 reputação conquistada. A **avaliação** é outra coisa: a média das notas que a
 pessoa recebeu, recalculada por `AvaliacaoService` a cada avaliação e nula
@@ -224,10 +346,10 @@ exigiria uma tabela de eventos de score.
 
 **P: Os números da demonstração foram escritos à mão?**
 R: Não. A massa passa pelos serviços de verdade: a recarga pelo
-`CobrancaService`, o aceite, a finalização e o cancelamento pelo
+`CobrancaService`, o aceite, a finalização, a desistência e o cancelamento pelo
 `TurnoService`, a avaliação pelo `AvaliacaoService` e a nota pelo
 `NotaFiscalService`, a pedido do lojista. Por isso o score do Thiago é 4,5 —
-ele cancelou um turno a menos de 1h do início, e a regra tirou 0,5 —, as
+ele desistiu de uma vaga a menos de 1h do início, e a regra tirou 0,5 —, as
 médias são as das notas que cada um recebeu, as notificações são as que o
 código gera hoje, e a massa passa na mesma conferência de consistência do
 ledger que o banco de produção. A única coisa que vai direto ao repositório é
@@ -263,9 +385,10 @@ está em todos — o documento tem a estrutura de um real sem poder passar por
 um. As fontes estão na seção 7 do `FISCAL.md`.
 
 **P: E se a API da IA cair?**
-R: A análise de score continua respondendo os números, só sem o texto
-(`analiseDisponivel: false`). Relatório e sugestão respondem 503, porque ali a
-resposta É o texto. Toda chamada tem timeout de 20s e cache de 15 minutos por
+R: Nada que tem número para mostrar deixa de mostrar. A análise de score
+continua respondendo os números, só sem o texto (`analiseDisponivel: false`), e
+o relatório também: os números vêm apurados do extrato e da DRE, e `analise`
+vem nulo. Só a sugestão de turnos responde 503, porque ali a resposta É o texto. Toda chamada tem timeout de 20s e cache de 15 minutos por
 pergunta — sem isso, cada F5 na tela era uma chamada paga.
 
 **P: Como a API sabe qual banco usar?**
@@ -279,12 +402,64 @@ não uma por turno. O app ainda pede a lista completa — a API é que já não
 depende disso.
 
 **P: O que está fora do escopo (trabalhos futuros)?**
-R: Rastreamento em tempo real, redefinição de senha por e-mail, rascunho de
-turno, tabela de eventos de score e lock distribuído para os jobs agendados
-(hoje a saída é ligar os jobs em uma instância só). O check-in, que estava
-aqui, entrou nesta revisão (seção 11).
+R: Rastreamento em tempo real, envio de e-mail por um provedor de verdade
+(a recuperação de senha existe, mas o e-mail é simulado: o código sai no log
+do servidor), revogação de sessão ao trocar a senha, rascunho de turno,
+tabela de eventos de score e lock distribuído para os jobs agendados (hoje a
+saída é ligar os jobs em uma instância só). O check-in, que estava aqui,
+entrou nesta revisão (seção 11).
 
 ---
+
+**P: Por que a DRE é em regime de caixa, e não de competência?**
+R: Por três motivos. Coerência: o informe anual já conta o rendimento pelo dia
+em que foi creditado, e duas telas não podem dizer que o mesmo mês rendeu
+valores diferentes. Público: MEI e pessoa física pensam em "quando paguei", não
+em "a que mês pertence". E simplicidade: competência exige provisão — contas a
+pagar e a receber, estorno de provisão —, que é um sistema contábil, não uma
+demonstração simplificada. Vale o `criadoEm` do lançamento concluído e a `data`
+do custo informado, e nada entra antes de acontecer.
+
+**P: Por que o custo que o usuário informa não passa pelo ledger?**
+R: Porque o ledger registra só dinheiro que a plataforma movimentou, e as três
+invariantes dependem disso: "carteira = extrato" vale porque cada linha do
+extrato tem um movimento de saldo do outro lado. A gasolina que o entregador
+pagou no posto, a plataforma não viu passar — ouviu falar. Se esse número
+digitado entrasse no extrato, as invariantes dependeriam da memória de alguém.
+Por isso é outra tabela (`lancamentos_gerenciais`), outro serviço, sem o
+`LedgerService`, e a DRE junta os dois só na leitura. Há um teste que confere:
+criar, editar e excluir um lançamento desses não muda saldo nenhum.
+
+**P: Como o app sabe o custo do entregador?**
+R: Não sabe — ele informa. Combustível, manutenção, DAS e contas fixas são
+lançados na tela de resultado; conta fixa é lançada uma vez, como recorrente, e
+vale todo mês. Para o combustível há uma calculadora (km ÷ consumo × preço do
+litro). E a tela é honesta sobre o limite: sem nada informado, ela avisa que o
+resultado só conhece o que passou pela plataforma — e a IA do relatório recebe
+a mesma instrução.
+
+**P: O seguro subiu este mês. Editar o lançamento não muda os meses passados?**
+R: Mudaria, porque conta fixa é uma regra mensal, e não uma linha por mês. Por
+isso o app pergunta ao salvar: "aplicar a partir deste mês" ou "corrigir todos
+os meses". Na primeira, o backend encerra a regra antiga no último dia do mês
+anterior e cria uma nova com o valor novo, na mesma transação — julho continua
+valendo R$ 70 e outubro passa a valer R$ 100. Há um teste com a DRE de um
+período que atravessa a troca.
+
+**P: Por que o login não pergunta mais se sou lojista ou motoboy?**
+R: Porque a pergunta não tinha efeito: o perfil é o da conta, e o backend
+sempre o leu do e-mail. Entrar como "lojista" com o e-mail de um entregador
+abria o painel do entregador. A escolha saiu do login e continua no cadastro,
+que é onde ela vale. O `LoginRequest` ainda aceita o campo `tipo`, sem usar,
+para o app antigo não levar erro.
+
+**P: O que é ponto de equilíbrio aqui?**
+R: Quantos turnos o entregador precisa fazer no período para pagar as despesas
+fixas: despesas fixas ÷ margem de contribuição média por turno, arredondado
+para cima. A margem de contribuição é o que sobra de cada turno depois das
+deduções e dos custos variáveis (combustível e manutenção). Se essa margem for
+zero ou negativa, não há ponto de equilíbrio — cada turno a mais aumenta o
+prejuízo —, e o número vem nulo, com o motivo, em vez de um número absurdo.
 
 ### Glossário rápido
 - **Turno:** bloco de tempo que o lojista publica e o motoboy reserva.
@@ -330,8 +505,9 @@ disso, a tela diz que o aparelho não respondeu e oferece tentar de novo.
   qualquer um não muda nada nem avisa de novo.
 - **Status.** O primeiro check-in leva o turno de ACEITO a EM_ANDAMENTO — o
   estado que o enum esperava. Em andamento, o turno **não vence** (o job só
-  olha turno aberto) e **não se cancela**: cancelar devolveria a reserva
-  inteira com alguém trabalhando; a saída é finalizar. O job de vencimento,
+  olha turno aberto) e **não se cancela** — nem o entregador que fez check-in
+  desiste da vaga: cancelar devolveria a reserva inteira com alguém
+  trabalhando; a saída é finalizar. O job de vencimento,
   ao fechar um turno multi-vaga no início, o leva direto a EM_ANDAMENTO se
   alguém já chegou.
 - **Pontualidade.** % de check-ins até 10 min após o início, nos últimos 90
@@ -376,6 +552,40 @@ preenche; quem publica é o lojista, pelo caminho de sempre.
   `baixarArquivo`, o mesmo da planilha.
 - **Onde.** `AbrirRota`, `CalendarioIcs`, `AtalhosDoTurno`.
 
+### Turno esquecido se finaliza sozinho
+
+- **O buraco.** Finalizar transfere dinheiro, e por isso é decisão de quem
+  estava lá — o job só **cobrava** a finalização por notificação. Mas cobrar
+  não fecha nada: se as duas partes esquecessem o turno, a reserva ficava
+  bloqueada na carteira do lojista para sempre e o entregador que trabalhou
+  não recebia.
+- **Regra.** Passadas `motoshift.finalizacao.automatica-horas` (padrão 12) do
+  **fim** do turno, o job o fecha. Com check-in: finaliza pelo mesmo caminho do
+  botão (`TurnoService.pagarQuemTrabalhou`) — paga quem chegou, marca `faltou`
+  quem não chegou, devolve a sobra. Sem nenhum check-in: as inscrições viram
+  `faltou`, a reserva volta inteira (motivo `sem_checkin`) e o turno vai para
+  `expirado`. As duas partes são avisadas com `criarUnica`.
+- **Por que um método próprio (`finalizarPeloSistema`) e não um "usuário
+  sistema".** O que o job precisa pular é só o `exigirParticipante`, que
+  responde "esta pessoa pode mexer neste turno?" — e não há pessoa. Inventar
+  uma conta de sistema para passar pela trava deixaria um id mágico no banco e
+  um caminho para alguém se passar por ele; o método interno não é alcançável
+  por rota nenhuma.
+- **Uma transação por turno.** Numa só, um turno que não fechasse desfaria o
+  fechamento de todos os outros a cada 5 minutos.
+- **Onde.** `TurnoExpiracaoService.finalizarTurnosEsquecidos` (a regra) e
+  `TurnoExpiracaoJobs` (o agendamento); `FinalizacaoAutomaticaTest` cobre com
+  check-in, sem nenhum check-in e dentro do prazo.
+
+**P: E se a instância com os jobs cair?**
+R: Nada se perde: o job procura "turnos com fim + prazo no passado", não
+"turnos que venceram desde a última volta". Quando a instância volta, fecha o
+que ficou. Com réplicas, só uma roda os jobs (`MOTOSHIFT_JOBS_HABILITADOS=false`
+nas outras) — e essa configuração **derrubava o boot**: o serviço de expiração
+inteiro era condicional aos jobs, e a massa de demonstração depende dele. O
+agendamento saiu para uma classe própria (`TurnoExpiracaoJobs`), e
+`JobsDesligadosTest` sobe o contexto com os jobs desligados.
+
 ### Lembrete de 1 hora
 
 - **Regra.** Job de 5 em 5 min (padrão do vencimento): turno aberto, aceito
@@ -400,21 +610,25 @@ preenche; quem publica é o lojista, pelo caminho de sempre.
 - **Regra.** Calculados na hora a partir do histórico — sem tabela, porque um
   selo guardado envelhece. Entregador: 20 turnos concluídos (o pedido era 25;
   ajustado à massa, em que o entregador mais antigo tem 23); 30 dias sem
-  cancelar (histórico mais velho que 30 dias e nenhum cancelamento DELE no
+  cancelar (histórico mais velho que 30 dias e nenhuma desistência DELE no
   período); nota acima de 4,8 com 10 avaliações ou mais; pontual (90% ou mais
   com 10 check-ins ou mais). Loja: paga gorjeta (3 ou mais em turnos dos
   últimos 90 dias); nota acima de 4,8; contrata toda semana (turno concluído
   em cada uma das últimas 4 semanas).
-- **Quem cancelou.** Cancelar é dos dois lados, e sem saber quem cancelou um
-  cancelamento da loja tiraria o selo do entregador. Por isso a V19 grava
-  `cancelado_por_id` e `cancelado_em` no turno.
+- **Quem cancelou.** O turno só é cancelado pela loja (`cancelado_por_id` e
+  `cancelado_em` no turno, V19), e isso não tira selo de ninguém. O entregador
+  **desiste da vaga**, e a desistência mora na inscrição dele — a V22 pôs
+  `cancelado_por_id` e `cancelado_em` em `turno_inscricoes`, porque desistir não
+  cancela o turno: a vaga reabre e ele segue. É dali que o selo e a análise de
+  score leem. O cancelamento que um entregador fez pela regra antiga foi levado
+  para a inscrição pelo backfill da V22, e continua contando — só contra ele.
 - **Onde.** `Selos` (os limites são constantes no topo), no perfil público
   (`AuthService.buscarPerfilPublico`) e nos painéis; no app,
   `SelosDeReputacao`, com o critério num diálogo ao tocar.
 
 **P: Por que o selo não é guardado?**
-R: Porque ele é uma pergunta sobre o histórico ("cancelou nos últimos 30
-dias?"). Guardado, ficaria verdadeiro depois de deixar de ser.
+R: Porque ele é uma pergunta sobre o histórico ("desistiu de alguma vaga nos
+últimos 30 dias?"). Guardado, ficaria verdadeiro depois de deixar de ser.
 
 ### Favoritos: a loja guarda quem trabalhou bem
 
@@ -466,6 +680,50 @@ R: São duas chamadas: a nota fica, e a tela diz "Avaliação enviada, mas a
 gorjeta não" com o motivo do backend. Nada de dinheiro se move pela metade —
 a gorjeta é uma transação só no `LedgerService`.
 
+### Resultado financeiro: lucro e prejuízo
+
+- **O problema.** O app dizia quanto entrou, não quanto sobrou. "Ganhos", para o
+  entregador, era faturamento bruto — sem combustível, manutenção, DAS e contas
+  fixas. O lojista via o gasto com entregas, não o que elas renderam. Foi o
+  pedido da correção: uma parte contábil mais forte, com lucro e prejuízo.
+- **A regra.** Uma DRE simplificada para cada papel, em regime de caixa
+  (RF13). Entregador: receita bruta (pagamentos + gorjetas) − deduções
+  (retenções + DAS) = receita líquida − custos variáveis (combustível,
+  manutenção) = margem de contribuição − despesas fixas = resultado. Lojista:
+  taxas de entrega cobradas − custo dos entregadores − entregas fora do app =
+  margem da operação − outras despesas = resultado. Reserva e liberação não
+  entram: são o dinheiro do lojista mudando de bolso.
+- **O que o usuário informa não é transação.** Fica em `lancamentos_gerenciais`
+  (V25), não move saldo, não entra no extrato e não gera documento fiscal. A
+  categoria diz o papel e o grupo da DRE — não há coluna "tipo". Conta fixa é
+  recorrente: uma regra mensal (dia 31 vira 28 em fevereiro), e não uma linha
+  gravada por mês.
+- **Onde.** `DreService` (as duas demonstrações e os indicadores),
+  `LancamentoGerencialService`, `Recorrencia` (função pura), `DreController` e
+  `LancamentoGerencialController` em `/api/financeiro`. No app,
+  `views/resultado/`: a faixa diz a situação por extenso ("Prejuízo de R$
+  220,55 no período"), a tabela mostra a origem de cada linha (extrato ou
+  informado por você) e o PDF do relatório ganhou a seção "Demonstração do
+  resultado".
+- **Ajustes da revisão de 07/10 (SCRUM-49).** A data do pagamento vai até hoje
+  — lançamento com data futura era salvo e sumia da lista. Editar um
+  recorrente pergunta se a mudança vale **a partir deste mês** (o passado fica
+  como estava: a regra antiga é encerrada e nasce uma nova) ou em **todos os
+  meses**. "1.500" no campo de valor é mil e quinhentos, e o formulário mostra
+  "= R$ 1.500,00" antes de salvar. A tabela esconde as linhas sem valor, com
+  "Mostrar todas as linhas"; indicador negativo vira "Prejuízo por hora". E os
+  dois painéis ganharam o cartão "Resultado do mês".
+- **Como é testado.** `DreServiceTest` (lucro, prejuízo, equilíbrio, período
+  vazio, reserva fora, gorjeta nos dois lados, ponto de equilíbrio nulo),
+  `RecorrenciaTest`, `LancamentoGerencialHttpTest` (404 para o de outro
+  usuário, categoria do papel errado, 401 sem token) e
+  `LancamentosGerenciaisForaDoLedgerTest` — criar, editar e excluir não mexem
+  em saldo nem nas invariantes.
+- **Na demonstração.** `motoboy@teste.com` (Carlos) e `claudia@teste.com`: o
+  mês passado fecha com lucro e o retrasado com prejuízo — o Carlos por uma
+  manutenção de R$ 420, a Cláudia por uma promoção de frete grátis. O detalhe
+  está em `docs/financeiro/RESULTADO.md`.
+
 ### A massa conta tudo isso
 
 - **Pelos serviços de verdade.** Chegada e saída pelo `CheckinService`
@@ -478,7 +736,9 @@ a gorjeta é uma transação só no `LedgerService`.
   Lucas ~73%, Thiago ~30%); um turno em andamento com check-in; gorjetas da
   Cláudia e duas do Fernando; favoritos de três lojas; meta do Ricardo e do
   Carlos (Lucas e Thiago veem o convite); selos em uns perfis e em outros não;
-  lembrete de 1 hora e avisos de chegada e de favorito ainda não lidos.
+  lembrete de 1 hora e avisos de chegada e de favorito ainda não lidos. E o
+  resultado: o Carlos e a Cláudia com um mês de lucro e um de prejuízo, pelos
+  custos e receitas que informaram (`LancamentoGerencialService`).
 - **Continua fechando.** `MassaDemonstracaoTest.massaFechaNasInvariantes`
   passa a massa pela `verificarConsistencia()`, agora com gorjetas no meio;
   `novidadesNaMassa` confere cada item acima; `ResetDaMassaPostgresTest`

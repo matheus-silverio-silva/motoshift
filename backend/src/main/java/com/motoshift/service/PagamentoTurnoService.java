@@ -14,13 +14,12 @@ import com.motoshift.service.ledger.Movimento;
 import com.motoshift.service.ledger.Movimento.MotivoLiberacao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -48,10 +47,13 @@ import java.util.UUID;
  * compromisso foi assumido na publicacao.
  *
  * <p><b>Quem pode finalizar continua sendo qualquer um dos dois participantes</b>
- * ({@link TurnoAcesso#exigirParticipante}) — e isso deixou de ser um risco.
- * Antes, quem finalizava disparava uma cobranca; hoje, finalizar so move
- * dinheiro que o lojista mesmo comprometeu ao publicar, e nem o valor nem o
- * destinatario dependem de quem clicou.
+ * ({@link TurnoAcesso#exigirParticipante}). Finalizar so move dinheiro que o
+ * lojista mesmo comprometeu ao publicar, e nem o valor nem o destinatario
+ * dependem de quem clicou — dependem de <b>quem fez check-in</b>. Era esse o
+ * furo: finalizar pagava toda inscricao aceita, e o entregador aceitava um
+ * turno de amanha, tocava "Finalizar" e recebia na hora. Agora so a inscricao
+ * com check-in e paga ({@link #fecharInscricoes}); a aceita sem check-in vira
+ * FALTOU e a parte dela volta ao lojista junto com a das vagas vazias.
  *
  * <p>Todo o movimento de saldo sai daqui pelo {@link LedgerService}; este
  * servico decide O QUE mover e o ledger cuida de COMO.
@@ -114,10 +116,12 @@ public class PagamentoTurnoService {
     /**
      * Liquida o turno: paga cada entregador que trabalhou e devolve o resto.
      *
-     * <p>Para cada inscricao finalizada, uma transferencia com os dois lados
+     * <p>Para cada inscricao finalizada (a que tem check-in — ver
+     * {@link #fecharInscricoes}), uma transferencia com os dois lados
      * (pagamento_enviado para o lojista, pagamento_recebido para o entregador,
-     * mesmo operacaoId). O que sobrou da reserva — vagas que ninguem preencheu —
-     * volta ao disponivel do lojista como liberacao_reserva.
+     * mesmo operacaoId). O que sobrou da reserva — vagas que ninguem preencheu
+     * e a parte de quem aceitou e nao fez check-in — volta ao disponivel do
+     * lojista como liberacao_reserva, num lancamento so.
      *
      * <p>A sobra e calculada pelo que foi REALMENTE reservado, lido do proprio
      * extrato, e nao recalculada a partir de vagas x valor. Se o turno foi
@@ -126,9 +130,12 @@ public class PagamentoTurnoService {
      *
      * <p>Repetir esta chamada nao move dinheiro de novo: cada perna tem chave
      * deterministica e o ledger reencontra o que ja existe.
+     *
+     * @param faltas quantas inscricoes ficaram em FALTOU — so muda o texto da
+     *               sobra no extrato; o valor sai da conta reservado - pago
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void liquidar(Turno turno, List<TurnoInscricao> inscricoesFinalizadas) {
+    public void liquidar(Turno turno, List<TurnoInscricao> inscricoesFinalizadas, int faltas) {
         BigDecimal reservado = garantirReserva(turno);
         BigDecimal valorPorEntregador = turno.getValorEstimado() == null
                 ? BigDecimal.ZERO : turno.getValorEstimado();
@@ -165,7 +172,8 @@ public class PagamentoTurnoService {
         BigDecimal sobra = reservado.subtract(pago);
         if (sobra.signum() > 0) {
             ledger.aplicar(Movimento.liberacaoDeReserva(turno.getLojistId(), sobra, turno.getId(),
-                    "Vagas não preenchidas: " + turno.getTitulo(), MotivoLiberacao.SOBRA));
+                    descricaoDaSobra(turno, inscricoesFinalizadas.size(), faltas),
+                    MotivoLiberacao.SOBRA));
         } else if (sobra.signum() < 0) {
             // Pagar mais do que foi reservado nao e um caso de negocio; se
             // acontecer, e defeito. O ledger ja barraria no bloqueado negativo —
@@ -213,10 +221,11 @@ public class PagamentoTurnoService {
     /**
      * Devolve a reserva inteira ao disponivel do lojista.
      *
-     * <p>Turno cancelado ou expirado nao gera pagamento nenhum, entao nada fica
-     * bloqueado. Sem multa: a penalidade do cancelamento tardio e de score
-     * (RF07) e continua onde estava — inventar uma multa financeira aqui seria
-     * criar regra de negocio no meio de uma refatoracao.
+     * <p>Turno cancelado, expirado ou encerrado sem check-in nao gera pagamento
+     * nenhum, entao nada fica bloqueado. Sem multa: a unica penalidade e a de
+     * score, de quem desiste da vaga em cima da hora (RF07) — inventar uma
+     * multa financeira aqui seria criar regra de negocio no meio de uma
+     * refatoracao.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void liberarReserva(Turno turno, MotivoLiberacao motivo) {
@@ -269,7 +278,23 @@ public class PagamentoTurnoService {
             case CANCELAMENTO -> "Turno cancelado: " + turno.getTitulo();
             case EXPIRACAO -> "Turno expirou sem entregador: " + turno.getTitulo();
             case SOBRA -> "Vagas não preenchidas: " + turno.getTitulo();
+            case SEM_CHECKIN -> "Turno encerrado sem check-in: " + turno.getTitulo();
         };
+    }
+
+    /**
+     * O texto da sobra no extrato do lojista: vaga que ninguem preencheu,
+     * entregador que aceitou e nao fez check-in, ou os dois.
+     *
+     * <p>O valor e um so (reservado - pago) e a chave tambem; o texto existe
+     * para o lojista entender por que o dinheiro voltou.
+     */
+    private static String descricaoDaSobra(Turno turno, int pagas, int faltas) {
+        boolean vagasVazias = turno.getVagas() - pagas - faltas > 0;
+        if (faltas <= 0) return "Vagas não preenchidas: " + turno.getTitulo();
+        if (vagasVazias) return "Vagas não preenchidas e faltas: " + turno.getTitulo();
+        return (faltas == 1 ? "Entregador sem check-in: " : "Entregadores sem check-in: ")
+                + turno.getTitulo();
     }
 
     /**
@@ -285,49 +310,48 @@ public class PagamentoTurnoService {
     }
 
     /**
-     * Inscricoes ativas de um turno, promovidas a FINALIZADO.
+     * Fecha as inscricoes ativas de um turno: quem fez check-in vai a
+     * FINALIZADO e sera pago; quem aceitou e nao apareceu vai a FALTOU.
      *
      * <p>Fica aqui, e nao no {@link TurnoService}, porque a lista que muda de
      * status e exatamente a lista que vai ser paga — separar as duas coisas
      * abriria espaco para elas discordarem.
+     *
+     * <p>FALTOU nao recebe e nao e penalizado no score: a penalidade da RF07 e
+     * de quem cancela em cima da hora, e por enquanto faltar so custa o turno.
+     * O {@code pagamentoStatus} do faltoso fica nulo — nao ha pagamento
+     * pendente nem pago, porque nao ha pagamento.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public List<TurnoInscricao> finalizarInscricoes(Turno turno) {
-        List<TurnoInscricao> ativas =
-                inscricaoRepo.findByTurnoIdAndStatus(turno.getId(), StatusInscricao.ACEITO);
-        for (TurnoInscricao ins : ativas) {
-            ins.setStatus(StatusInscricao.FINALIZADO);
-            ins.setPagamentoStatus(StatusPagamento.PENDENTE);
+    public Fechamento fecharInscricoes(Turno turno) {
+        List<TurnoInscricao> presentes = new ArrayList<>();
+        List<TurnoInscricao> faltosos = new ArrayList<>();
+        for (TurnoInscricao ins :
+                inscricaoRepo.findByTurnoIdAndStatus(turno.getId(), StatusInscricao.ACEITO)) {
+            if (ins.getCheckinEm() != null) {
+                ins.setStatus(StatusInscricao.FINALIZADO);
+                ins.setPagamentoStatus(StatusPagamento.PENDENTE);
+                presentes.add(ins);
+            } else {
+                ins.setStatus(StatusInscricao.FALTOU);
+                faltosos.add(ins);
+            }
             inscricaoRepo.save(ins);
         }
-        return ativas;
+        return new Fechamento(presentes, faltosos);
     }
 
     /**
-     * Turno de antes do sistema de vagas: ha entregador no turno e nenhuma
-     * inscricao para ele.
+     * O resultado de {@link #fecharInscricoes}.
      *
-     * <p>A V5 fez o backfill e este caso deveria estar vazio. Se aparecer, a
-     * inscricao e criada na hora — porque a alternativa e deixar alguem que
-     * trabalhou sem receber, e porque toda a liquidacao e chaveada pela
-     * inscricao. O WARN registra a linha que o backfill nao alcancou.
+     * @param presentes fizeram check-in — FINALIZADO, a pagar
+     * @param faltosos  aceitaram e nao fizeram check-in — FALTOU, sem pagamento
      */
-    @Transactional(propagation = Propagation.MANDATORY)
-    public TurnoInscricao inscricaoDeCompatibilidade(Turno turno) {
-        if (turno.getMotoboyId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Turno sem motoboy atribuído.");
-        }
-        return inscricaoRepo.findByTurnoIdAndMotoboyId(turno.getId(), turno.getMotoboyId())
-                .orElseGet(() -> {
-                    log.warn("[pagamento] turno {} sem inscricao para o motoboy {}; "
-                            + "a V5 nao cobriu esta linha e a inscricao esta sendo criada agora",
-                            turno.getId(), turno.getMotoboyId());
-                    TurnoInscricao ins = new TurnoInscricao();
-                    ins.setTurnoId(turno.getId());
-                    ins.setMotoboyId(turno.getMotoboyId());
-                    ins.setStatus(StatusInscricao.FINALIZADO);
-                    ins.setPagamentoStatus(StatusPagamento.PENDENTE);
-                    return inscricaoRepo.save(ins);
-                });
-    }
+    public record Fechamento(List<TurnoInscricao> presentes, List<TurnoInscricao> faltosos) {}
+
+    // inscricaoDeCompatibilidade saiu daqui. Ela criava, na hora de finalizar,
+    // a inscricao de um turno aceito antes do sistema de vagas (o que a V5 nao
+    // tivesse alcancado), para "quem trabalhou" nao ficar sem receber. Com a
+    // finalizacao exigindo check-in — que mora na inscricao —, um turno sem
+    // inscricao nao tem como ser finalizado, e o caminho ficou inalcancavel.
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/turno.dart';
 import '../theme/app_theme.dart';
+import '../utils/resumo_acessivel.dart';
 import 'mapa_raio.dart';
 
 /// O mapa de um turno: onde ele começa e até onde o entregador roda.
@@ -41,6 +42,12 @@ class MapaTurno extends StatelessWidget {
       raioKm: mostrarRaio ? turno.raioEntregaKm : null,
       height: altura,
       rodape: rodape,
+      // "Mapa do turno: ponto de partida em Rua X. Raio de entrega de 5 km."
+      descricao: [
+        'Mapa do turno: ponto de partida em $rodape.',
+        if (mostrarRaio && turno.raioEntregaKm > 0)
+          'Raio de entrega de ${kmFalados(turno.raioEntregaKm)}.',
+      ].join(' '),
     );
   }
 }

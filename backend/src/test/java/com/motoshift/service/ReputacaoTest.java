@@ -86,27 +86,51 @@ class ReputacaoTest {
     }
 
     @Test
-    @DisplayName("cancelar a menos de 1h do início tira 0,5 — pela regra, no serviço")
-    void cancelamentoTardio_penaliza() {
+    @DisplayName("desistir da vaga a menos de 1h do início tira 0,5 — pela regra, no serviço")
+    void desistenciaEmCimaDaHora_penaliza() {
         cenario.recarregar(lojista, "200.00");
         Turno t = cenario.publicar(lojista, "90.00", 1);
         cenario.inscrever(t, entregador);
-        // O turno começa daqui a 30 minutos: cancelar agora é tardio.
+        // O turno começa daqui a 30 minutos: desistir agora é em cima da hora.
         Turno emCimaDaHora = turnoRepo.findById(t.getId()).orElseThrow();
         LocalDateTime inicio = LocalDateTime.now().plusMinutes(30).truncatedTo(ChronoUnit.MINUTES);
         emCimaDaHora.setDataInicio(inicio);
         emCimaDaHora.setDataFim(inicio.plusHours(4));
         turnoRepo.save(emCimaDaHora);
 
-        turnos.cancelar(t.getId(), entregador);
+        turnos.desistir(t.getId(), entregador);
 
         Usuario depois = usuarioRepo.findById(entregador).orElseThrow();
         assertThat(depois.getScore()).isEqualTo(4.5);
+        // Sem nenhum turno concluído, e o turno nem foi cancelado: quem dá o
+        // histórico é a própria desistência — o 4,5 precisa aparecer.
+        assertThat(reputacao.temHistorico(entregador)).isTrue();
         assertThat(reputacao.scoreVisivel(depois)).isEqualTo(4.5);
-        // V19: o turno guarda quem cancelou — o selo "30 dias sem cancelar"
-        // conta só o que o entregador cancelou.
+        // V22: é a inscrição que guarda quem saiu e quando — o turno segue.
+        Turno doTurno = turnoRepo.findById(t.getId()).orElseThrow();
+        assertThat(doTurno.getCanceladoPorId()).isNull();
+        assertThat(doTurno.getStatus()).isNotEqualTo(com.motoshift.entity.StatusTurno.CANCELADO);
+    }
+
+    @Test
+    @DisplayName("a loja cancelar em cima da hora não custa nada ao entregador")
+    void cancelamentoDaLoja_naoPenaliza() {
+        cenario.recarregar(lojista, "200.00");
+        Turno t = cenario.publicar(lojista, "90.00", 1);
+        cenario.inscrever(t, entregador);
+        Turno emCimaDaHora = turnoRepo.findById(t.getId()).orElseThrow();
+        LocalDateTime inicio = LocalDateTime.now().plusMinutes(30).truncatedTo(ChronoUnit.MINUTES);
+        emCimaDaHora.setDataInicio(inicio);
+        emCimaDaHora.setDataFim(inicio.plusHours(4));
+        turnoRepo.save(emCimaDaHora);
+
+        turnos.cancelar(t.getId(), lojista);
+
+        assertThat(usuarioRepo.findById(entregador).orElseThrow().getScore())
+                .isEqualTo(Reputacao.SCORE_INICIAL);
+        // V19: o turno guarda quem cancelou — a loja.
         Turno cancelado = turnoRepo.findById(t.getId()).orElseThrow();
-        assertThat(cancelado.getCanceladoPorId()).isEqualTo(entregador);
+        assertThat(cancelado.getCanceladoPorId()).isEqualTo(lojista);
         assertThat(cancelado.getCanceladoEm()).isNotNull();
     }
 

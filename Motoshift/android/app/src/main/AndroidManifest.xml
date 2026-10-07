@@ -1,9 +1,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Sem INTERNET no manifest principal o app de release nao fala com a API:
+         a permissao so existia em debug/ e profile/, que o Flutter cria para o
+         hot reload. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- geolocator: "perto de mim" na lista de turnos e a trava de distancia do
+         check-in. FINE para a distancia em metros; COARSE e o que o Android 12+
+         entrega quando a pessoa escolhe "localizacao aproximada". -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- usesCleartextTraffic saiu daqui e foi para o manifest de debug/: o app
+         de release so fala HTTPS. -->
     <application
-        android:label="moto_shift"
+        android:label="MotoShift"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true">
+        android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
             android:exported="true"

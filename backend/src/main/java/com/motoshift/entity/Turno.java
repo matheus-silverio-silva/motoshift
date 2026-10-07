@@ -74,9 +74,11 @@ public class Turno {
     // Preenchido pelo job de vencimento quando o turno passa a EXPIRADO (SCRUM-19).
     private LocalDateTime expiradoEm;
 
-    // Quem cancelou e quando (V19). Os dois lados podem cancelar, e o selo
-    // "30 dias sem cancelar" do entregador só pode contar o que ELE cancelou.
-    // Nulos no turno não cancelado e no cancelado antes da V19.
+    // Quem cancelou o TURNO e quando (V19). Hoje é sempre o lojista: só ele
+    // cancela o turno inteiro. Em turno cancelado antes da V22 pode ser um
+    // entregador, da época em que os dois lados cancelavam. A saída de um
+    // entregador (desistência) não cancela o turno e mora na inscrição —
+    // TurnoInscricao.canceladoPorId. Nulos no turno não cancelado.
     private Long canceladoPorId;
     private LocalDateTime canceladoEm;
 

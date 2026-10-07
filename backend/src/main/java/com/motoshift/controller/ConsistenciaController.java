@@ -16,18 +16,29 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Conferencia das invariantes do ledger — so em desenvolvimento.
+ * Conferencia das invariantes do ledger — em qualquer perfil que nao seja o
+ * de producao.
  *
- * <p>{@code @Profile("dev")} nao e excesso de zelo: a conferencia varre todas as
- * carteiras e todos os lancamentos, entao e trabalho O(banco inteiro) atras de
- * uma URL. Util para o desenvolvedor, para a massa de demonstracao e para a
- * banca ver o numero fechando ao vivo; nada disso justifica existir em
- * producao. Em producao esta classe nem e instanciada.
+ * <p>Ficar de fora da producao nao e excesso de zelo: a conferencia varre
+ * todas as carteiras e todos os lancamentos, entao e trabalho O(banco inteiro)
+ * atras de uma URL. Util para o desenvolvedor, para a massa de demonstracao e
+ * para a banca ver o numero fechando ao vivo; nada disso justifica existir em
+ * producao. Com o perfil {@code prod} esta classe nem e instanciada.
+ *
+ * <p><b>{@code @Profile("!prod")}, e nao {@code @Profile("dev")}.</b> Era
+ * "dev", e nada no projeto ativa um perfil com esse nome: o desenvolvimento
+ * roda sem perfil nenhum (o {@code RODAR.bat} e o {@code mvnw spring-boot:run}
+ * sobem so com o application.properties). A rota respondia 404 justamente
+ * onde devia existir. "Tudo menos producao" e a mesma regra do
+ * {@link com.motoshift.config.DataInitializer}, que semeia a massa: onde ha
+ * massa de demonstracao, ha como conferi-la.
+ *
+ * <p>Continua exigindo login, como toda rota fora de {@code /api/auth}.
  */
 @RestController
 @RequestMapping("/api/dev/ledger")
-@Profile("dev")
-@Tag(name = "Ledger (dev)", description = "Conferência das invariantes financeiras — apenas no perfil dev")
+@Profile("!prod")
+@Tag(name = "Ledger (dev)", description = "Conferência das invariantes financeiras — fora do perfil prod")
 public class ConsistenciaController {
 
     private final ConsistenciaService consistencia;

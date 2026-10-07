@@ -65,11 +65,15 @@ class TurnoAtivoCard extends StatelessWidget {
   const TurnoAtivoCard({
     required this.turno,
     required this.onConfirmarConclusao,
+    this.agora,
     super.key,
   });
 
   final Turno turno;
   final VoidCallback onConfirmarConclusao;
+
+  /// O "agora" dos testes — ver [formatarProximoData].
+  final DateTime? agora;
 
   @override
   Widget build(BuildContext context) {
@@ -116,6 +120,19 @@ class TurnoAtivoCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
+          // O check-in abre 30 min antes do início, e finalizar só vale depois
+          // dele: nesse intervalo o turno já está "em andamento" e o backend
+          // ainda recusaria. A hora diz quando o botão volta.
+          if (!turno.podeSerFinalizado(agora: agora))
+            Text(
+              'Dá para confirmar a conclusão depois das '
+              '${turno.dataInicio.hour.toString().padLeft(2, '0')}:'
+              '${turno.dataInicio.minute.toString().padLeft(2, '0')}, '
+              'com o check-in feito.',
+              key: const Key('conclusao-indisponivel'),
+              style: tsJakarta(11.5, FontWeight.w500, color: AppColors.muted),
+            )
+          else
           Row(
             children: [
               Expanded(

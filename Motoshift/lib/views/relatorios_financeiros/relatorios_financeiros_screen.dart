@@ -6,7 +6,9 @@ import '../../models/extrato_filtro.dart';
 import '../../models/resumo_financeiro.dart';
 import '../../models/transacao.dart';
 import '../../models/usuario.dart';
+import '../../models/dre.dart';
 import '../../routes/app_routes.dart';
+import '../../routes/nav_config.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/relatorio_pdf.dart';
@@ -18,6 +20,7 @@ import '../../widgets/adaptive_scaffold.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/desktop/content_grid.dart';
 import '../../widgets/desktop/panel_card.dart';
+import '../../widgets/seletor_de_periodo.dart';
 
 /// Relatórios financeiros: resumo do período, fluxo de caixa e exportação.
 ///
@@ -117,6 +120,8 @@ class _RelatoriosFinanceirosScreenState
       final resumo = _resumo ?? await carteira.buscarResumo(dataInicio: de, dataFim: ate);
       final lancamentos = await carteira.exportarExtratoLista(filtro: filtro);
       if (!mounted) return;
+      final dre = await _dreParaOPdf(de, ate);
+      if (!mounted) return;
       final usuario = context.read<AuthService>().usuario;
       final bytes = await RelatorioPdf.relatorio(
         titular: TitularDoPdf(nome: usuario?.nome ?? '', papel: _papel),
@@ -125,6 +130,7 @@ class _RelatoriosFinanceirosScreenState
         resumo: resumo,
         fluxo: _fluxo,
         lancamentos: lancamentos,
+        dre: dre,
         geradoEm: _hoje,
       );
       if (!mounted) return;
@@ -138,6 +144,20 @@ class _RelatoriosFinanceirosScreenState
       }
     } finally {
       if (mounted) setState(() => _exportando = false);
+    }
+  }
+
+  /// A DRE do mesmo período, para a seção "Demonstração do resultado" do
+  /// PDF. Se não vier, o relatório sai sem a seção: é um complemento, e não
+  /// pode impedir a exportação do que a tela já mostrou.
+  Future<Dre?> _dreParaOPdf(DateTime de, DateTime ate) async {
+    try {
+      return await context
+          .read<ApiService>()
+          .financeiro
+          .buscarDre(dataInicio: de, dataFim: ate);
+    } on ApiException {
+      return null;
     }
   }
 
@@ -163,6 +183,8 @@ class _RelatoriosFinanceirosScreenState
           const SizedBox(height: 16),
           if (_erro != null) _caixaDeErro(_erro!) else ...[
             _cartoesDeResumo(),
+            const SizedBox(height: 12),
+            _cartaoDoResultado(),
             const SizedBox(height: 16),
             _painelDeFluxo(),
             const SizedBox(height: 16),
@@ -190,6 +212,7 @@ class _RelatoriosFinanceirosScreenState
           ),
         ),
         GridCol(span: 12, child: _cartoesDeResumo()),
+        GridCol(span: 12, child: _cartaoDoResultado()),
         GridCol(span: 7, child: _painelDeFluxo()),
         GridCol(span: 5, child: _painelPorTipo()),
       ],
@@ -197,21 +220,59 @@ class _RelatoriosFinanceirosScreenState
   }
 
   Widget _seletorDePeriodo() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final a in AtalhoDePeriodo.values)
-          ChoiceChip(
-            key: Key('relatorio-periodo-${a.name}'),
-            label: Text(a.label),
-            selected: _periodo == a,
-            onSelected: (_) {
-              setState(() => _periodo = a);
-              _carregar();
-            },
+    return SeletorDePeriodo(
+      prefixoDaChave: 'relatorio-periodo',
+      selecionado: _periodo,
+      onSelecionar: (a) {
+        setState(() => _periodo = a);
+        _carregar();
+      },
+    );
+  }
+
+  /// O atalho para a pergunta que esta tela não responde. Aqui está o que
+  /// passou pela carteira; "tive lucro?" depende dos custos que a pessoa
+  /// informa, e mora na tela de resultado (RF13).
+  Widget _cartaoDoResultado() {
+    return Material(
+      color: AppColors.tealSoft,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        key: const Key('relatorio-ver-resultado'),
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => NavConfig.irParaSecao(context, AppRoutes.resultado),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              const Icon(Icons.trending_up_rounded,
+                  size: 22, color: AppColors.tealDeep),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Ver resultado (lucro/prejuízo)',
+                        style: tsJakarta(13, FontWeight.w800,
+                            color: AppColors.tealDeep)),
+                    const SizedBox(height: 2),
+                    Text(
+                      _souLojista
+                          ? 'O que as entregas renderam, descontado o que custaram'
+                          : 'O que sobrou depois de combustível, manutenção e contas',
+                      style: tsJakarta(11.5, FontWeight.w500,
+                          color: AppColors.tealDeep),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  size: 20, color: AppColors.tealDeep),
+            ],
           ),
-      ],
+        ),
+      ),
     );
   }
 

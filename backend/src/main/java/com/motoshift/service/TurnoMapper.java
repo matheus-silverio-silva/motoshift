@@ -11,9 +11,11 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Turno (entidade) para TurnoResponse (o que o app recebe).
@@ -34,7 +36,8 @@ public class TurnoMapper {
 
     /**
      * Um turno. Preenche {@code vagasPreenchidas} com a contagem de inscricoes
-     * ativas (status ACEITO), para que a resposta exponha a ocupacao real.
+     * ativas (status ACEITO), para que a resposta exponha a ocupacao real, e
+     * {@code algumCheckin} — o que o app usa para saber se finalizar valeria.
      */
     public TurnoResponse toResponse(Turno t) {
         return toResponse(t, null, null);
@@ -46,7 +49,8 @@ public class TurnoMapper {
      */
     public TurnoResponse toResponse(Turno t, Double origemLat, Double origemLng) {
         long ativas = inscricaoRepo.countByTurnoIdAndStatus(t.getId(), StatusInscricao.ACEITO);
-        return montar(t, ativas, origemLat, origemLng);
+        boolean checkin = inscricaoRepo.existsByTurnoIdAndCheckinEmIsNotNull(t.getId());
+        return montar(t, ativas, checkin, origemLat, origemLng);
     }
 
     /**
@@ -57,8 +61,10 @@ public class TurnoMapper {
      */
     public List<TurnoResponse> toResponses(List<Turno> turnos, Double origemLat, Double origemLng) {
         Map<Long, Long> ativas = contarAtivas(turnos);
+        Set<Long> comCheckin = comCheckin(turnos);
         return turnos.stream()
-                .map(t -> montar(t, ativas.getOrDefault(t.getId(), 0L), origemLat, origemLng))
+                .map(t -> montar(t, ativas.getOrDefault(t.getId(), 0L),
+                        comCheckin.contains(t.getId()), origemLat, origemLng))
                 .toList();
     }
 
@@ -82,9 +88,18 @@ public class TurnoMapper {
         return porTurno;
     }
 
-    private static TurnoResponse montar(Turno t, long ativas, Double origemLat, Double origemLng) {
+    /** Os turnos da lista em que alguem ja fez check-in, numa consulta so. */
+    private Set<Long> comCheckin(List<Turno> turnos) {
+        List<Long> ids = turnos.stream().map(Turno::getId).filter(Objects::nonNull).toList();
+        if (ids.isEmpty()) return Set.of();
+        return new HashSet<>(inscricaoRepo.turnosComCheckin(ids));
+    }
+
+    private static TurnoResponse montar(Turno t, long ativas, boolean algumCheckin,
+                                        Double origemLat, Double origemLng) {
         TurnoResponse r = TurnoResponse.from(t);
         r.setVagasPreenchidas((int) ativas);
+        r.setAlgumCheckin(algumCheckin);
         r.setDistanciaKm(GeoUtils.arredondar1(
                 GeoUtils.distanciaKm(origemLat, origemLng, t.getLatitude(), t.getLongitude())));
         return r;

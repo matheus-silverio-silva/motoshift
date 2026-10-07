@@ -47,6 +47,24 @@ class _TurnosLojistaListaScreenState
     }
   }
 
+  /// Recarrega a lista, tenha ela o que tiver — o "puxar para atualizar" do
+  /// celular e o botão Atualizar do desktop.
+  ///
+  /// O [_carregar] da abertura só busca quando a lista está vazia. Com a tela
+  /// aberta, o que muda é justamente o que já está nela: um entregador aceita,
+  /// faz check-in, desiste da vaga — e a loja não via sem sair e voltar.
+  Future<void> _atualizar() async {
+    final id = context.read<AuthService>().usuario?.id;
+    if (id == null) return;
+    await context.read<TurnoProvider>().carregarTurnosLojista(id);
+    // O painel de detalhe do desktop guarda os inscritos e a presença do
+    // turno aberto: a chave nova o faz buscá-los de novo.
+    if (mounted) setState(() => _versaoDoDetalhe++);
+  }
+
+  /// Sobe a cada [_atualizar] — ver o painel de detalhe em [_buildDesktop].
+  int _versaoDoDetalhe = 0;
+
   // O _onNav desta tela saiu: era um dos sete switches identicos de barra
   // inferior. Ver NavConfig — a tela agora informa so a secao em que esta.
 
@@ -179,6 +197,7 @@ class _TurnosLojistaListaScreenState
         onTap: () => _abrirEVoltar(AppRoutes.publicarTurno),
       ),
       desktopBody: _buildDesktop(),
+      onAtualizar: _atualizar,
       body: Consumer<TurnoProvider>(
         builder: (context, provider, _) {
           final filtrados = _turnosFiltrados(provider.turnosLojista);
@@ -187,6 +206,9 @@ class _TurnosLojistaListaScreenState
             children: [
               Expanded(
                 child: ListView(
+                  // Sempre rolável: com poucos turnos a lista é curta, e o
+                  // gesto de puxar para atualizar nem começaria.
+                  physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
                   children: [
                     _buildFiltros(),
@@ -301,7 +323,10 @@ class _TurnosLojistaListaScreenState
                       'andamento e o entregador designado.',
                 )
               : TurnoLojistaConteudo(
-                  key: ValueKey(selecionado.id),
+                  // A versão entra na chave: depois de "Atualizar", o painel
+                  // nasce de novo e busca os inscritos e a presença outra vez
+                  // — é onde aparece o "Chegou às 14:03".
+                  key: ValueKey('${selecionado.id}-$_versaoDoDetalhe'),
                   turno: selecionado,
                   desktop: true,
                   onMudou: () {

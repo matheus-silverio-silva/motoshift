@@ -12,6 +12,13 @@ class AppColors {
   static const Color teal       = Color(0xFF0E8B8C);
   static const Color tealBright = Color(0xFF16B5B0);
   static const Color tealDeep   = Color(0xFF0A4D52);
+
+  /// O verde-agua para TEXTO pequeno sobre fundo claro, e para fundo de texto
+  /// branco pequeno. O [teal] da marca da 4,1:1 contra o branco — abaixo dos
+  /// 4,5:1 que o WCAG AA pede para texto comum; este, um tom mais fechado, da
+  /// 5,3:1. O [teal] continua sendo a cor da marca em preenchimentos, icones
+  /// e texto grande.
+  static const Color tealTexto  = Color(0xFF0B7879);
   static const Color ink        = Color(0xFF062E33);
 
   static const Color surface  = Color(0xFFFFFFFF);
@@ -21,6 +28,13 @@ class AppColors {
 
   static const Color text  = Color(0xFF0F2C30);
   static const Color muted = Color(0xFF6B8487);
+
+  /// O cinza de apoio para texto PEQUENO sobre branco (as legendas de 11 px do
+  /// login e do cadastro). O [muted] dá 4,0:1 no papel e menos que isso
+  /// desenhado, porque letra pequena é quase toda borda suavizada; este dá
+  /// 7,4:1. Vai junto com peso 600: medido na tela, é o par que passa dos
+  /// 4,5:1 — em peso 400 nem este tom chega lá.
+  static const Color mutedTexto = Color(0xFF3F5A5E);
 
   static const Color amber     = Color(0xFFF6A623);
   static const Color amberSoft = Color(0xFFFFF1D6);

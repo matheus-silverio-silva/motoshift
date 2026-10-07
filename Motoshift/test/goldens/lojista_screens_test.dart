@@ -31,7 +31,7 @@ void main() {
       // Fixture ancorado na mesma data do golden. Depende do `hoje` que a
       // tela repassa para proximos(): sem ele, a lista inteira cai no
       // passado e "Proximos turnos" vira estado vazio.
-      apiFake: FakeApiDatasFixas(),
+      apiFake: FakeApiDatasFixas(tipoUsuario: TipoUsuario.lojista),
       tipoUsuario: TipoUsuario.lojista,
     );
     await expectLater(

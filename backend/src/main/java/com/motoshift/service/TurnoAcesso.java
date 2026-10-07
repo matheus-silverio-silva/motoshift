@@ -1,6 +1,5 @@
 package com.motoshift.service;
 
-import com.motoshift.entity.StatusInscricao;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.TurnoInscricao;
 import com.motoshift.repository.TurnoInscricaoRepository;
@@ -38,13 +37,28 @@ public class TurnoAcesso {
                         HttpStatus.NOT_FOUND, "Turno não encontrado"));
     }
 
-    /** Lojista + todos os entregadores nao cancelados do turno. */
+    /**
+     * O turno, com a linha travada até o fim da transação — para aceitar e
+     * desistir, que contam as inscrições e gravam em seguida. Ver
+     * {@link TurnoRepository#buscarTravandoAsVagas}.
+     *
+     * <p>Tem de ser a PRIMEIRA leitura do turno na transação: uma entidade já
+     * carregada volta do cache do Hibernate como estava, e a trava protegeria
+     * um estado velho.
+     */
+    public Turno carregarTravandoAsVagas(Long turnoId) {
+        return turnoRepo.buscarTravandoAsVagas(turnoId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Turno não encontrado"));
+    }
+
+    /** Lojista + os entregadores que estao (ou estiveram, pagos) no turno — cancelado e falta nao. */
     public List<Long> participantes(Turno turno) {
         LinkedHashSet<Long> ids = new LinkedHashSet<>();
         if (turno.getLojistId() != null) ids.add(turno.getLojistId());
         if (turno.getMotoboyId() != null) ids.add(turno.getMotoboyId());
         for (TurnoInscricao ins : inscricaoRepo.findByTurnoId(turno.getId())) {
-            if (ins.getStatus() != StatusInscricao.CANCELADO) ids.add(ins.getMotoboyId());
+            if (ins.getStatus().valeNoTurno()) ids.add(ins.getMotoboyId());
         }
         return new ArrayList<>(ids);
     }

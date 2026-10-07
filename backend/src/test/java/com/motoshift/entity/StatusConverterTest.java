@@ -111,6 +111,7 @@ class StatusConverterTest {
 
         assertThat(StatusInscricao.ACEITO.getValor()).isEqualTo("aceito");
         assertThat(StatusInscricao.FINALIZADO.getValor()).isEqualTo("finalizado");
+        assertThat(StatusInscricao.FALTOU.getValor()).isEqualTo("faltou");
         assertThat(StatusInscricao.CANCELADO.getValor()).isEqualTo("cancelado");
 
         assertThat(StatusPagamento.PENDENTE.getValor()).isEqualTo("pendente");

@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:latlong2/latlong.dart';
 import '../theme/app_theme.dart';
+import '../utils/resumo_acessivel.dart';
 
 /// Ponto plotado no mapa além do centro — um turno, uma loja, um entregador.
 @immutable
@@ -15,6 +16,7 @@ class MapaPonto {
     this.icone = Icons.storefront_rounded,
     this.cor = AppColors.amber,
     this.onTap,
+    this.descricao,
   });
 
   final LatLng posicao;
@@ -24,6 +26,11 @@ class MapaPonto {
   final IconData icone;
   final Color cor;
   final VoidCallback? onTap;
+
+  /// O que o leitor de tela diz do pino ("Pizzaria do Bairro, R$ 90"). Nulo,
+  /// vale o [rotulo]. Só importa quando o pino é clicável: os demais entram
+  /// na contagem do resumo do mapa.
+  final String? descricao;
 }
 
 /// Mapa do app: um centro, um círculo de raio opcional e os pontos ao redor.
@@ -54,6 +61,7 @@ class MapaRaio extends StatefulWidget {
     this.interativo = false,
     this.onTapMapa,
     this.rodape,
+    this.descricao,
     super.key,
   });
 
@@ -76,6 +84,10 @@ class MapaRaio extends StatefulWidget {
 
   /// Etiqueta no canto inferior esquerdo (região, endereço).
   final String? rodape;
+
+  /// O que o leitor de tela diz no lugar do mapa. Nulo, a frase é montada com
+  /// o que o mapa desenha: o [rodape], o raio e quantos pinos há.
+  final String? descricao;
 
   @override
   State<MapaRaio> createState() => _MapaRaioState();
@@ -188,19 +200,37 @@ class _MapaRaioState extends State<MapaRaio> {
   Widget build(BuildContext context) {
     final interativo = widget.interativo || widget.onTapMapa != null;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: SizedBox(
-        height: widget.height,
-        child: Stack(
-          children: [
-            Positioned.fill(child: _buildMapa(interativo)),
-            if (_semTiles) Positioned.fill(child: _buildTilesIndisponiveis()),
-            if (widget.rodape != null && !_semTiles)
-              Positioned(bottom: 10, left: 10, child: _buildRodape()),
-            if (!_semTiles)
-              const Positioned(bottom: 3, right: 6, child: _Atribuicao()),
-          ],
+    // O mapa é imagem: tiles, um círculo e pinos. O leitor de tela passava
+    // por ele sem dizer nada — ou lia só "© OpenStreetMap". A descrição diz o
+    // que está desenhado. Os pinos clicáveis e o "Tentar novamente" continuam
+    // na árvore, cada um com o próprio nome: por isso `explicitChildNodes`, e
+    // não `excludeSemantics`.
+    final descricao = widget.descricao ??
+        resumoDoMapa(
+          local: widget.rodape,
+          raioKm: widget.raioKm,
+          pontos: widget.pontos.length,
+        );
+
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      image: true,
+      label: descricao,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: SizedBox(
+          height: widget.height,
+          child: Stack(
+            children: [
+              Positioned.fill(child: _buildMapa(interativo)),
+              if (_semTiles) Positioned.fill(child: _buildTilesIndisponiveis()),
+              if (widget.rodape != null && !_semTiles)
+                Positioned(bottom: 10, left: 10, child: _buildRodape()),
+              if (!_semTiles)
+                const Positioned(bottom: 3, right: 6, child: _Atribuicao()),
+            ],
+          ),
         ),
       ),
     );
@@ -332,27 +362,30 @@ class _MapaRaioState extends State<MapaRaio> {
   }
 
   Widget _buildRodape() {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 220),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppColors.ink.withOpacity(0.75),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.location_on_rounded, size: 11, color: Colors.white),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              widget.rodape!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: tsJakarta(10, FontWeight.w700, color: Colors.white),
+    // Já está na descrição do mapa; sem isto o endereço seria lido duas vezes.
+    return ExcludeSemantics(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 220),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.ink.withOpacity(0.75),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.location_on_rounded, size: 11, color: Colors.white),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                widget.rodape!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: tsJakarta(10, FontWeight.w700, color: Colors.white),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -439,11 +472,22 @@ class _PinoPonto extends StatelessWidget {
       ],
     );
 
-    if (ponto.onTap == null) return pino;
-    return GestureDetector(
+    // Pino que não responde a toque é só desenho: já entrou na contagem da
+    // descrição do mapa.
+    if (ponto.onTap == null) return ExcludeSemantics(child: pino);
+    // O `onTap` vai também no Semantics: o `excludeSemantics`, que tira o
+    // rótulo curto da árvore, levaria junto o toque do GestureDetector.
+    return Semantics(
+      container: true,
+      button: true,
+      label: ponto.descricao ?? ponto.rotulo ?? 'Ponto no mapa',
       onTap: ponto.onTap,
-      behavior: HitTestBehavior.opaque,
-      child: pino,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: ponto.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: pino,
+      ),
     );
   }
 }

@@ -13,10 +13,16 @@ class AppTopbar extends StatelessWidget {
     this.onNotificationsTap,
     this.avatarInitials,
     this.onBack,
+    this.onRefresh,
     super.key,
   });
 
   static const double height = 72;
+
+  /// "Atualizar" — o equivalente, no desktop, de puxar a lista para baixo no
+  /// celular: não há gesto de puxar com mouse. Nulo = a tela não tem o que
+  /// recarregar, e o botão não é montado.
+  final Future<void> Function()? onRefresh;
 
   final String title;
   final String? subtitle;
@@ -84,6 +90,10 @@ class AppTopbar extends StatelessWidget {
             primaryAction!,
             const SizedBox(width: 12),
           ],
+          if (onRefresh != null) ...[
+            _BotaoAtualizar(onRefresh: onRefresh!),
+            const SizedBox(width: 12),
+          ],
           _NotificationBell(
             count: notificationCount,
             onTap: onNotificationsTap,
@@ -120,6 +130,7 @@ class _TopbarIconButton extends StatelessWidget {
     this.onTap,
     this.tooltip,
     this.overlay,
+    super.key,
   });
 
   final IconData icon;
@@ -156,6 +167,57 @@ class _TopbarIconButton extends StatelessWidget {
     );
 
     return tooltip == null ? botao : Tooltip(message: tooltip!, child: botao);
+  }
+}
+
+/// O "Atualizar" da topbar. Enquanto a tela recarrega, o ícone dá lugar a um
+/// indicador e o botão não aceita outro toque — o mesmo retorno que o
+/// indicador de puxar dá no celular.
+class _BotaoAtualizar extends StatefulWidget {
+  const _BotaoAtualizar({required this.onRefresh});
+
+  final Future<void> Function() onRefresh;
+
+  @override
+  State<_BotaoAtualizar> createState() => _BotaoAtualizarState();
+}
+
+class _BotaoAtualizarState extends State<_BotaoAtualizar> {
+  bool _atualizando = false;
+
+  Future<void> _atualizar() async {
+    if (_atualizando) return;
+    setState(() => _atualizando = true);
+    try {
+      await widget.onRefresh();
+    } finally {
+      if (mounted) setState(() => _atualizando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _TopbarIconButton(
+      key: const Key('topbar-atualizar'),
+      icon: Icons.refresh_rounded,
+      tooltip: _atualizando ? 'Atualizando…' : 'Atualizar',
+      onTap: _atualizando ? null : _atualizar,
+      overlay: !_atualizando
+          ? null
+          : const Positioned.fill(
+              child: ColoredBox(
+                color: AppColors.surface2,
+                child: Center(
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: AppColors.teal),
+                  ),
+                ),
+              ),
+            ),
+    );
   }
 }
 

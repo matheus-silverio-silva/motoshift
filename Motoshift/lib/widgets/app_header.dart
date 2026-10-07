@@ -130,8 +130,11 @@ class AppHeader extends StatelessWidget {
             children: [
               Text(
                 _greeting ?? '',
+                // Quase branco: o verde-claro de antes (BFE5E3) dava 3,7:1
+                // sobre o gradiente do cabecalho, abaixo dos 4,5:1 do texto
+                // pequeno. A hierarquia com o nome fica por conta do tamanho.
                 style: tsJakarta(11, FontWeight.w600,
-                    color: const Color(0xFFBFE5E3)),
+                    color: const Color(0xFFEAFFFD)),
               ),
               const SizedBox(height: 2),
               Text(
@@ -164,6 +167,7 @@ class _MenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
+      container: true,
       button: true,
       label: 'Abrir menu',
       child: GestureDetector(
@@ -202,52 +206,69 @@ class _HeaderSino extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    // O rótulo diz o que o botão é e o que há nele. Sem o Semantics, o leitor
+    // de tela lia só o número do selo — "4, botão" — ou nada.
+    final rotulo = switch (quantidade) {
+      0 => 'Notificações',
+      1 => 'Notificações, 1 não lida',
+      _ => 'Notificações, $quantidade não lidas',
+    };
+    // `excludeSemantics` tira da árvore o número do selo — e, junto, o toque
+    // do GestureDetector. Por isso o `onTap` é repetido aqui: sem ele o botão
+    // teria nome e não teria ação para o leitor de tela.
+    return Semantics(
+      container: true,
+      button: true,
+      label: rotulo,
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 44,
-        height: 44,
-        child: Stack(
-          children: [
-            Center(
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: const Color(0x29FFFFFF),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: const Color(0x38FFFFFF), width: 1.5),
-                ),
-                child: const Icon(Icons.notifications_outlined,
-                    size: 19, color: Color(0xFFEAFFFD)),
-              ),
-            ),
-            if (quantidade > 0)
-              Positioned(
-                top: 2,
-                right: 2,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Stack(
+            children: [
+              Center(
                 child: Container(
-                  constraints:
-                      const BoxConstraints(minWidth: 16, minHeight: 16),
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
-                    color: AppColors.amber,
-                    borderRadius: BorderRadius.circular(999),
+                    color: const Color(0x29FFFFFF),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                        color: AppColors.tealDeep, width: 2),
+                        color: const Color(0x38FFFFFF), width: 1.5),
                   ),
-                  child: Center(
-                    child: Text(
-                      quantidade > 9 ? '9+' : '$quantidade',
-                      style: tsJakarta(9.5, FontWeight.w800,
-                          color: AppColors.onTertiary),
+                  child: const Icon(Icons.notifications_outlined,
+                      size: 19, color: Color(0xFFEAFFFD)),
+                ),
+              ),
+              if (quantidade > 0)
+                Positioned(
+                  top: 2,
+                  right: 2,
+                  child: Container(
+                    constraints:
+                        const BoxConstraints(minWidth: 16, minHeight: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.amber,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                          color: AppColors.tealDeep, width: 2),
+                    ),
+                    child: Center(
+                      child: Text(
+                        quantidade > 9 ? '9+' : '$quantidade',
+                        style: tsJakarta(9.5, FontWeight.w800,
+                            color: AppColors.onTertiary),
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -263,24 +284,32 @@ class _BackButton extends StatelessWidget {
     // Mesmo padrão do sino aqui do lado: o quadrado visível continua com 34,
     // mas a área que responde ao toque tem os 44 do mínimo. Sem o `opaque` o
     // espaço em volta do Container não recebe o toque.
-    return GestureDetector(
-      onTap: onTap ?? () => Navigator.of(context).pop(),
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 44,
-        height: 44,
-        child: Center(
-          child: Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: const Color(0x24FFFFFF),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: const Icon(
-              Icons.chevron_left_rounded,
-              color: Color(0xFFFFFFFF),
-              size: 22,
+    //
+    // O Semantics dá nome ao botão: era um ícone clicável sem rótulo, que o
+    // leitor de tela anunciava como "botão" e mais nada.
+    return Semantics(
+      container: true,
+      button: true,
+      label: 'Voltar',
+      child: GestureDetector(
+        onTap: onTap ?? () => Navigator.of(context).pop(),
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
+            child: Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: const Color(0x24FFFFFF),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: const Icon(
+                Icons.chevron_left_rounded,
+                color: Color(0xFFFFFFFF),
+                size: 22,
+              ),
             ),
           ),
         ),

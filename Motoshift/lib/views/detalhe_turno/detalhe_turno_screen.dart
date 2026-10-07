@@ -4,6 +4,7 @@ import '../../models/turno.dart';
 import '../../presentation/providers/turno_selecionado_provider.dart';
 import '../../routes/app_routes.dart';
 import '../../routes/nav_config.dart';
+import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/breakpoints.dart';
@@ -27,6 +28,37 @@ class DetalheTurnoScreen extends StatefulWidget {
 class _DetalheTurnoScreenState extends State<DetalheTurnoScreen> {
   bool _redirecionando = false;
 
+  /// O turno como o backend o devolveu no último "puxar para atualizar". A
+  /// rota entrega o turno de quando a lista foi carregada, e ele envelhece
+  /// com a tela aberta: outra pessoa aceita a vaga, a loja cancela, chega a
+  /// hora de fazer check-in.
+  Turno? _atualizado;
+
+  /// Sobe a cada atualização: o conteúdo nasce de novo e busca outra vez o
+  /// que guarda — a presença (check-in e check-out) do turno.
+  int _versao = 0;
+
+  Future<void> _atualizar(Turno turno) async {
+    final id = turno.id;
+    if (id == null) return;
+    try {
+      final novo = await context.read<ApiService>().turnos.buscarTurno(id);
+      if (!mounted) return;
+      setState(() {
+        _atualizado = novo;
+        _versao++;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.statusCode == 0
+            ? 'Sem conexão — não foi possível atualizar o turno.'
+            : e.message),
+        backgroundColor: AppColors.error,
+      ));
+    }
+  }
+
   void _redirecionarParaLista(Turno? turno) {
     if (_redirecionando) return;
     _redirecionando = true;
@@ -41,7 +73,8 @@ class _DetalheTurnoScreenState extends State<DetalheTurnoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final turno = ModalRoute.of(context)?.settings.arguments as Turno?;
+    final turno =
+        _atualizado ?? ModalRoute.of(context)?.settings.arguments as Turno?;
 
     if (context.isDesktop) {
       _redirecionarParaLista(turno);
@@ -73,9 +106,16 @@ class _DetalheTurnoScreenState extends State<DetalheTurnoScreen> {
                         context, context.read<AuthService>().usuario?.tipo),
               ),
             )
-          : DetalheTurnoConteudo(
-              turno: turno,
-              onMudou: () => Navigator.pop(context, true),
+          // Puxar para baixo busca o turno de novo no backend.
+          : RefreshIndicator(
+              key: const Key('puxar-para-atualizar'),
+              color: AppColors.teal,
+              onRefresh: () => _atualizar(turno),
+              child: DetalheTurnoConteudo(
+                key: ValueKey(_versao),
+                turno: turno,
+                onMudou: () => Navigator.pop(context, true),
+              ),
             ),
     );
   }

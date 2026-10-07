@@ -85,7 +85,7 @@ void main() {
             tela: DashboardLojistScreen(agora: dataAncoraGolden),
             tipo: DashboardLojistScreen,
             usuario: TipoUsuario.lojista,
-            apiFake: FakeApiDatasFixas(),
+            apiFake: FakeApiDatasFixas(tipoUsuario: TipoUsuario.lojista),
             golden: 'dashboard_lojista_screen');
       });
 

@@ -37,4 +37,22 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     @Modifying
     @Query("update Usuario u set u.tentativasLogin = 0, u.bloqueadoAte = null where u.id = :id")
     int liberarLogin(@Param("id") Long id);
+
+    // ── Senha (SCRUM-32) ──────────────────────────────────────────────────
+    //
+    // UPDATE direto pelo mesmo motivo de cima: gravar a entidade inteira
+    // levaria junto o que a pessoa estivesse editando no perfil na mesma hora.
+
+    /** Troca a senha de quem está logado. Não mexe no contador de login. */
+    @Transactional
+    @Modifying
+    @Query("update Usuario u set u.senha = :hash where u.id = :id")
+    int trocarSenha(@Param("id") Long id, @Param("hash") String hash);
+
+    /** Redefine pela recuperação — e destrava o login, que o dono provou ser dele. */
+    @Transactional
+    @Modifying
+    @Query("update Usuario u set u.senha = :hash, u.tentativasLogin = 0, u.bloqueadoAte = null "
+         + "where u.id = :id")
+    int redefinirSenha(@Param("id") Long id, @Param("hash") String hash);
 }

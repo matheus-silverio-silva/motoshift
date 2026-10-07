@@ -179,6 +179,20 @@
                     </compilerArgs>
                 </configuration>
             </plugin>
+            <!-- A suite roda no fuso de producao (SCRUM-48). O sistema tem um
+                 fuso so, o de Curitiba, e as regras comparam datas do turno
+                 com LocalDateTime.now(): um teste que passasse em UTC e
+                 falhasse em Brasilia (ou o contrario) seria um defeito que so
+                 aparece no deploy. Fica aqui, e nao numa variavel do workflow,
+                 para o CI (que roda em UTC) e a maquina de quem desenvolve
+                 herdarem a mesma coisa. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>-Duser.timezone=America/Sao_Paulo</argLine>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>

@@ -46,6 +46,8 @@ class TurnoResponseJsonTest {
         // dupla confirmação ainda existia em algum lugar. Ela não existe mais.
         // lojaQueJaTeChamou entrou com a V18 (favoritos): chave nova, aditiva —
         // o app antigo a ignora, e o novo lê false quando ela não vem.
+        // algumCheckin entrou com a regra "finalizar só com check-in": também
+        // aditiva, e é o que o app usa para só oferecer "Finalizar" quando vale.
         assertThat(saida).isEqualTo(
                 "{\"id\":42,\"lojistId\":7,\"motoboyId\":9,\"titulo\":\"Turno Tarde\","
                 + "\"descricao\":\"Entregas na regiao\",\"regiao\":\"Agua Verde\","
@@ -53,7 +55,7 @@ class TurnoResponseJsonTest {
                 + "\"valorEstimado\":120.00,\"raioEntregaKm\":8.0,\"latitude\":-25.4284,"
                 + "\"longitude\":-49.2733,\"endereco\":\"Rua Teste, 100\",\"distanciaKm\":null,"
                 + "\"lojaQueJaTeChamou\":false,\"expiradoEm\":null,\"vagas\":2,\"vagasPreenchidas\":0,"
-                + "\"status\":\"aceito\",\"pagamentoStatus\":\"pendente\","
+                + "\"algumCheckin\":false,\"status\":\"aceito\",\"pagamentoStatus\":\"pendente\","
                 + "\"criadoEm\":null,\"atualizadoEm\":null}");
     }
 

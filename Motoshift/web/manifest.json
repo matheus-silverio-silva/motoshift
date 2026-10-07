@@ -1,11 +1,12 @@
 {
-    "name": "moto_shift",
-    "short_name": "moto_shift",
+    "name": "MotoShift",
+    "short_name": "MotoShift",
+    "lang": "pt-BR",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F2F6F5",
+    "theme_color": "#0E8B8C",
+    "description": "Turnos agendados para motoboys autônomos e pequenos lojistas: a loja publica o turno, o entregador aceita e recebe ao final.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

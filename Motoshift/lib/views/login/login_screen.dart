@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
@@ -6,6 +7,8 @@ import '../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/validators.dart';
+import '../../widgets/faixa_do_servidor.dart';
+import '../../widgets/olho_da_senha.dart';
 import '../recuperar_senha/recuperar_senha_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -19,8 +22,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _senhaCtrl = TextEditingController();
-  TipoUsuario _tipo = TipoUsuario.lojista;
   bool _senhaVisivel = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pergunta já se o servidor está acordado (SCRUM-48): no plano gratuito
+    // ele dorme, e é melhor a tela avisar agora do que o primeiro "Entrar"
+    // falhar por tempo esgotado.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<AuthService>().servidor.aguardar();
+    });
+  }
 
   @override
   void dispose() {
@@ -30,11 +43,22 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _entrar() async {
-    if (!_formKey.currentState!.validate()) return;
     final auth = context.read<AuthService>();
-    final ok = await auth.login(_emailCtrl.text.trim(), _senhaCtrl.text, _tipo);
+    // O Enter chega aqui também (onFieldSubmitted), e não passa pelo botão —
+    // que é quem se desligava durante o envio.
+    if (auth.carregando) return;
+    // Idem para o servidor acordando: o botão está desligado, o Enter não.
+    if (auth.servidor.acordando) return;
+    if (!_formKey.currentState!.validate()) return;
+    // O backend já ignora maiúsculas e espaços no e-mail; mandar normalizado
+    // deixa a sessão guardada no aparelho na mesma forma.
+    final ok = await auth.login(
+        Validators.normalizarEmail(_emailCtrl.text), _senhaCtrl.text);
     if (!mounted) return;
     if (ok) {
+      // Diz ao sistema que o formulário foi enviado: é o que faz o gerenciador
+      // de senhas do aparelho ou do navegador oferecer "salvar senha".
+      TextInput.finishAutofillContext();
       final route = auth.usuario?.tipo == TipoUsuario.motoboy
           ? AppRoutes.dashboardMotoboy
           : AppRoutes.dashboardLojista;
@@ -75,6 +99,12 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+
+  Widget _buildEntrar(AuthService auth) => _BotaoEntrar(
+        enviando: auth.carregando,
+        aguardandoServidor: auth.servidor.acordando,
+        onTap: _entrar,
+      );
 
   Widget _buildTop() {
     return Padding(
@@ -140,58 +170,69 @@ class _LoginScreenState extends State<LoginScreen> {
               style: tsBricolage(16, FontWeight.w800, color: AppColors.ink)),
           const SizedBox(height: 3),
           Text('Entre para acessar seus turnos',
-              style: tsJakarta(11, FontWeight.w400, color: AppColors.muted)),
+              style: tsJakarta(11, FontWeight.w600, color: AppColors.mutedTexto)),
           const SizedBox(height: 15),
-          // Segmented control
-          _SegmentControl(
-            value: _tipo,
-            onChanged: (t) => setState(() => _tipo = t),
-          ),
-          const SizedBox(height: 4),
-          Form(
+          // Não há mais "Sou Lojista / Sou Motoboy" aqui (SCRUM-49): o perfil
+          // é o da conta, e o backend nunca usou a escolha — entrar como
+          // "lojista" com o e-mail de um entregador abria o painel do
+          // entregador. No cadastro a escolha continua, e lá ela vale.
+          //
+          // AutofillGroup: e-mail e senha são um formulário só para o
+          // gerenciador de senhas — ele preenche os dois de uma vez e, no
+          // sucesso (finishAutofillContext), oferece salvar.
+          AutofillGroup(
+            child: Form(
             key: _formKey,
             child: Column(
               children: [
                 // E-mail
                 _InputRow(
+                  key: const Key('login-email'),
                   icon: Icons.mail_outline_rounded,
                   hint: 'E-mail',
                   value: _emailCtrl.text,
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
+                  // "Próximo" leva o foco para a senha.
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [
+                    AutofillHints.email,
+                    AutofillHints.username,
+                  ],
                   validator: Validators.email,
                 ),
                 const SizedBox(height: 9),
                 // Senha
                 _InputRow(
+                  key: const Key('login-senha'),
                   icon: Icons.lock_outline_rounded,
                   hint: '••••••••',
                   value: _senhaCtrl.text,
                   controller: _senhaCtrl,
                   obscure: !_senhaVisivel,
-                  suffixIcon: GestureDetector(
+                  // Último campo: Enter (web, teclado físico) e "Concluir"
+                  // (celular) entram, sem precisar alcançar o botão.
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _entrar(),
+                  autofillHints: const [AutofillHints.password],
+                  suffixIcon: OlhoDaSenha(
+                    visivel: _senhaVisivel,
                     onTap: () =>
                         setState(() => _senhaVisivel = !_senhaVisivel),
-                    child: Icon(
-                      _senhaVisivel
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      size: 16,
-                      color: AppColors.muted,
-                    ),
                   ),
                   validator: (v) =>
                       v == null || v.isEmpty ? 'Informe a senha' : null,
                 ),
               ],
             ),
+            ),
           ),
           const SizedBox(height: 2),
           Align(
             alignment: Alignment.centerRight,
             child: GestureDetector(
-              // Leva junto o e-mail digitado: e o identificador da conta no
-              // backend, e e o que a tela de recuperacao pede para copiar.
+              // Leva junto o e-mail digitado: e para ele que o codigo de
+              // recuperacao vai, e a tela ja abre com o campo preenchido.
               onTap: () => Navigator.pushNamed(
                 context,
                 AppRoutes.esqueceuSenha,
@@ -199,51 +240,20 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               child: Text('Esqueci minha senha',
                   style: tsJakarta(10.5, FontWeight.w700,
-                      color: AppColors.teal)),
+                      color: AppColors.tealTexto)),
             ),
           ),
           const SizedBox(height: 14),
+          // Servidor acordando (ou sem resposta): a faixa aparece aqui, logo
+          // acima do botão que ela explica.
+          FaixaDoServidor(
+            servidor: auth.servidor,
+            aoTentarDeNovo: auth.servidor.aguardar,
+          ),
           // Botão entrar
-          GestureDetector(
-            onTap: auth.carregando ? null : _entrar,
-            child: Container(
-              width: double.infinity,
-              height: 46,
-              decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0xCC0E8B8C),
-                    blurRadius: 22,
-                    spreadRadius: -10,
-                    offset: Offset(0, 12),
-                  ),
-                ],
-              ),
-              child: Center(
-                child: auth.carregando
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2.5,
-                        ),
-                      )
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('Entrar',
-                              style: tsJakarta(13.5, FontWeight.w700,
-                                  color: const Color(0xFFFFFFFF))),
-                          const SizedBox(width: 6),
-                          const Icon(Icons.arrow_forward_rounded,
-                              color: Color(0xFFFFFFFF), size: 15),
-                        ],
-                      ),
-              ),
-            ),
+          ListenableBuilder(
+            listenable: auth.servidor,
+            builder: (context, _) => _buildEntrar(auth),
           ),
           const SizedBox(height: 16),
           Center(
@@ -271,75 +281,94 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// ── Segmented control ─────────────────────────────────────────────────────────
-class _SegmentControl extends StatelessWidget {
-  const _SegmentControl({required this.value, required this.onChanged});
-  final TipoUsuario value;
-  final ValueChanged<TipoUsuario> onChanged;
+// ── Botão entrar ──────────────────────────────────────────────────────────────
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.surface2,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          _Seg(
-            label: 'Sou Lojista',
-            active: value == TipoUsuario.lojista,
-            onTap: () => onChanged(TipoUsuario.lojista),
-          ),
-          _Seg(
-            label: 'Sou Motoboy',
-            active: value == TipoUsuario.motoboy,
-            onTap: () => onChanged(TipoUsuario.motoboy),
-          ),
-        ],
-      ),
-    );
-  }
-}
+/// O botão principal do login. Enquanto o servidor acorda ele diz "Aguardando
+/// o servidor" e não aceita toque: entrar agora só gastaria os 20 segundos da
+/// requisição para terminar em "Sem conexão".
+class _BotaoEntrar extends StatelessWidget {
+  const _BotaoEntrar({
+    required this.enviando,
+    required this.aguardandoServidor,
+    required this.onTap,
+  });
 
-class _Seg extends StatelessWidget {
-  const _Seg(
-      {required this.label, required this.active, required this.onTap});
-  final String label;
-  final bool active;
+  final bool enviando;
+  final bool aguardandoServidor;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 8),
+    final botao = GestureDetector(
+      onTap: enviando || aguardandoServidor ? null : onTap,
+      child: Opacity(
+        opacity: aguardandoServidor ? 0.6 : 1,
+        child: Container(
+          width: double.infinity,
+          height: 46,
           decoration: BoxDecoration(
-            color: active ? AppColors.teal : Colors.transparent,
-            borderRadius: BorderRadius.circular(9),
-            boxShadow: active
-                ? const [
-                    BoxShadow(
-                      color: Color(0xB30E8B8C),
-                      blurRadius: 14,
-                      offset: Offset(0, 6),
-                    )
-                  ]
-                : null,
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0xCC0E8B8C),
+                blurRadius: 22,
+                spreadRadius: -10,
+                offset: Offset(0, 12),
+              ),
+            ],
           ),
-          child: Center(
-            child: Text(
-              label,
-              style: tsJakarta(11, FontWeight.w700,
-                  color: active ? const Color(0xFFFFFFFF) : AppColors.muted),
-            ),
-          ),
+          child: Center(child: _conteudo()),
         ),
       ),
+    );
+    if (!aguardandoServidor) return botao;
+    // O botão desligado, dito por inteiro: o que é, por que não responde e
+    // quando volta.
+    return Semantics(
+      container: true,
+      button: true,
+      enabled: false,
+      label: 'Aguardando o servidor. O botão Entrar volta quando ele responder.',
+      excludeSemantics: true,
+      child: botao,
+    );
+  }
+
+  Widget _conteudo() {
+    if (enviando) {
+      return const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(
+          color: Colors.white,
+          strokeWidth: 2.5,
+        ),
+      );
+    }
+    if (aguardandoServidor) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.hourglass_top_rounded,
+              color: Color(0xFFFFFFFF), size: 15),
+          const SizedBox(width: 6),
+          Text('Aguardando o servidor',
+              style: tsJakarta(14, FontWeight.w700,
+                  color: const Color(0xFFFFFFFF))),
+        ],
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('Entrar',
+            style: tsJakarta(14, FontWeight.w700,
+                color: const Color(0xFFFFFFFF))),
+        const SizedBox(width: 6),
+        const Icon(Icons.arrow_forward_rounded,
+            color: Color(0xFFFFFFFF), size: 15),
+      ],
     );
   }
 }
@@ -355,6 +384,10 @@ class _InputRow extends StatelessWidget {
     this.obscure = false,
     this.suffixIcon,
     this.validator,
+    this.textInputAction,
+    this.onSubmitted,
+    this.autofillHints,
+    super.key,
   });
 
   final IconData icon;
@@ -365,6 +398,9 @@ class _InputRow extends StatelessWidget {
   final bool obscure;
   final Widget? suffixIcon;
   final String? Function(String?)? validator;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+  final Iterable<String>? autofillHints;
 
   @override
   Widget build(BuildContext context) {
@@ -385,6 +421,9 @@ class _InputRow extends StatelessWidget {
               keyboardType: keyboardType,
               obscureText: obscure,
               validator: validator,
+              textInputAction: textInputAction,
+              onFieldSubmitted: onSubmitted,
+              autofillHints: autofillHints,
               style: tsJakarta(12.5, FontWeight.w500, color: AppColors.text),
               decoration: InputDecoration(
                 hintText: hint,

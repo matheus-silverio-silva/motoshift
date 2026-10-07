@@ -41,6 +41,7 @@ class AppRoutes {
   /// Documento fiscal SIMULADO de um lançamento — NFS-e ou comprovante.
   static const String documentoFiscal   = '/documento';
   static const String relatorioFinanceiro = '/relatorio-financeiro';
+  static const String resultado         = '/resultado';           // DRE (RF13)
 
   // ── Sub-páginas (alcançadas de dentro de outra tela) ─────────────────────
   //
@@ -57,4 +58,5 @@ class AppRoutes {
   static const String minhasAvaliacoes  = '/minhas-avaliacoes';
   static const String historicoTurnos   = '/historico-turnos';
   static const String esqueceuSenha     = '/esqueceu-senha';
+  static const String alterarSenha      = '/alterar-senha';
 }

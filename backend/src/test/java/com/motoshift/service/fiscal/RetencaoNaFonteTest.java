@@ -127,7 +127,7 @@ class RetencaoNaFonteTest {
         Turno turno = cenario.turnoPago(lojista, "100.00", entregador);
         List<TurnoInscricao> inscricoes = inscricaoRepo.findByTurnoId(turno.getId());
 
-        pagamentos.liquidar(turno, inscricoes);
+        pagamentos.liquidar(turno, inscricoes, 0);
 
         assertThat(transacaoRepo.findByTurnoId(turno.getId()))
                 .filteredOn(t -> t.getTipo() == TipoTransacao.RETENCAO_ISS)

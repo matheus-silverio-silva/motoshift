@@ -3,7 +3,12 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # Estágio 1 — Build do Flutter web
 # ──────────────────────────────────────────────────────────────────────────────
-FROM ghcr.io/cirruslabs/flutter:stable AS build
+# Versao FIXA do Flutter, a mesma do CI (.github/workflows/ci.yml) e a mesma
+# com que os goldens foram gravados. Com `:stable` a imagem era a do dia do
+# deploy: o mesmo commit gerava um app diferente conforme a data do build, e
+# um stable novo podia quebrar a publicacao sem ninguem ter mexido no codigo.
+# Subir esta versao e uma mudanca de proposito, feita junto com a do CI.
+FROM ghcr.io/cirruslabs/flutter:3.41.5 AS build
 
 # URL base da API, injetada em build-time.
 # No Railway, defina a variável de ambiente API_URL no serviço — ela é repassada
@@ -13,9 +18,13 @@ ARG API_URL=""
 
 WORKDIR /app
 
-# Resolve dependências primeiro (camada cacheável enquanto o pubspec não muda).
-COPY pubspec.yaml ./
-RUN flutter pub get
+# Resolve dependências primeiro (camada cacheável enquanto o pubspec e o lock
+# não mudam). O pubspec.lock vai junto: é ele que diz QUAIS versões — sem ele o
+# `pub get` escolheria as mais novas que o pubspec.yaml aceita. O
+# `--enforce-lockfile` faz o build falhar se o lock não bater com o pubspec, em
+# vez de resolver de novo em silêncio.
+COPY pubspec.yaml pubspec.lock ./
+RUN flutter pub get --enforce-lockfile
 
 # Copia o restante do código e gera o build de produção.
 COPY . .

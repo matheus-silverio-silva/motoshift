@@ -14,6 +14,7 @@ import 'filtros_turnos_sheet.dart';
 import 'turnos_cards.dart';
 import 'turnos_conteudo_desktop.dart';
 import '../../services/localizacao_service.dart';
+import '../../utils/resumo_acessivel.dart';
 import '../../widgets/mapa_raio.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/breakpoints.dart';
@@ -116,8 +117,12 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
     final id = auth.usuario?.id;
     if (id == null) return;
 
-    provider.carregarMeusTurnos(id);
-    _carregarDisponiveis();
+    // Esperadas juntas: o método só termina com as duas listas na tela — é o
+    // que segura o indicador de "puxar para atualizar" e o do botão Atualizar.
+    await Future.wait([
+      provider.carregarMeusTurnos(id),
+      _carregarDisponiveis(),
+    ]);
   }
 
   Future<void> _carregarDisponiveis() async {
@@ -423,6 +428,13 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
                 ? 'R\$ ${t.valorEstimado.toStringAsFixed(0)}'
                 : 'R\$ ${t.valorEstimado.toStringAsFixed(0)} · ${t.distanciaCurta}',
             icone: Icons.storefront_rounded,
+            // O rótulo do pino é só o valor; quem ouve precisa saber DE QUAL
+            // turno é o botão.
+            descricao: [
+              'Turno ${t.titulo}',
+              reaisFalados(t.valorEstimado),
+              if (t.distanciaCurta != null) 'a ${t.distanciaCurta}',
+            ].join(', '),
             onTap: () => _abrirDetalhe(t),
           ),
     ];
@@ -474,11 +486,18 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         name: nome,
         avatarInitials: initials,
       ),
+      // Puxar para baixo (celular) ou "Atualizar" na topbar (desktop): os
+      // turnos disponíveis mudam enquanto a tela está aberta — outro
+      // entregador aceita, uma loja publica.
+      onAtualizar: _atualizar,
       body: Consumer<TurnoProvider>(
         builder: (context, provider, _) {
           _talvezFocarAceitos(provider);
           return ListView(
             controller: _scroll,
+            // Sempre rolável: sem turno nenhum a lista é curta, e o gesto de
+            // puxar para atualizar nem começaria.
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
             children: [
               _buildControleRaio(provider.turnosDisponiveis),
@@ -526,9 +545,20 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
         hasFilters: _hasFilters,
         onAceito: _carregar,
         erroDaBusca: _erroDaBusca != null ? _buildErroDaBusca() : null,
+        versaoDoDetalhe: _versaoDoDetalhe,
       ),
     );
   }
+
+  /// O "puxar para atualizar" do celular e o botão Atualizar do desktop.
+  Future<void> _atualizar() async {
+    await _carregar();
+    // O painel de detalhe do desktop guarda a presença (check-in e
+    // check-out) do turno aberto: a versão nova o faz buscá-la de novo.
+    if (mounted) setState(() => _versaoDoDetalhe++);
+  }
+
+  int _versaoDoDetalhe = 0;
 
   // ── Desktop — subtítulo da topbar ─────────────────────────────────────────
 
@@ -740,6 +770,7 @@ class _MeusTurnosScreenState extends State<MeusTurnosScreen> {
                 arguments: ativo),
             child: TurnoAtivoCard(
               turno: ativo,
+              agora: widget.agora,
               onConfirmarConclusao: () => _finalizar(ativo, provider),
             ),
           ),

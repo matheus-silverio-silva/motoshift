@@ -113,9 +113,11 @@ public class MigracoesPostgresTest {
         flyway(url, null).migrate();
 
         try (Connection c = conectar(url); Statement s = c.createStatement()) {
-            // As 18 da V11, as 2 de favoritos (V18) e a de quem cancelou (V19).
+            // As 18 da V11, as 2 de favoritos (V18), a de quem cancelou o turno
+            // (V19), a de quem cancelou a inscricao (V22), a do codigo de
+            // recuperacao de senha (V24) e as 2 dos lancamentos gerenciais (V25).
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f'"))
-                    .isEqualTo(21);
+                    .isEqualTo(25);
             assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated"))
                     .isZero();
         }
@@ -408,7 +410,291 @@ public class MigracoesPostgresTest {
         }
     }
 
+    @Test
+    @DisplayName("V21: o status da inscricao ganha dominio no banco, e 'faltou' faz parte dele")
+    void v21_inscricaoFaltou() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v21");
+        flyway(url, "20").migrate();
+
+        long inscricao;
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("loja-v21@teste.com", "x"));
+            s.execute(inserirUsuario("entregador-v21@teste.com", "x"));
+            long lojista = contar(s, "SELECT id FROM usuarios WHERE email = 'loja-v21@teste.com'");
+            long entregador = contar(s, "SELECT id FROM usuarios WHERE email = 'entregador-v21@teste.com'");
+            s.execute("INSERT INTO turnos (lojist_id, titulo, data_inicio, data_fim, valor_estimado, "
+                    + "status, criado_em) VALUES (" + lojista + ", 'Turno V21', "
+                    + "'2026-03-10 18:00', '2026-03-10 22:00', 120, 'aceito', now())");
+            long turno = contar(s, "SELECT id FROM turnos WHERE titulo = 'Turno V21'");
+            // A inscricao de antes da V21: o CHECK precisa aceita-la como esta.
+            s.execute("INSERT INTO turno_inscricoes (turno_id, motoboy_id, status, criado_em) "
+                    + "VALUES (" + turno + ", " + entregador + ", 'aceito', now())");
+            inscricao = contar(s, "SELECT id FROM turno_inscricoes WHERE turno_id = " + turno);
+        }
+
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            assertThat(validada(s, "ck_inscricao_status")).isTrue();
+
+            // O status novo entra; o que o enum nao conhece, nao.
+            s.execute("UPDATE turno_inscricoes SET status = 'faltou' WHERE id = " + inscricao);
+            assertThat(contar(s, "SELECT count(*) FROM turno_inscricoes WHERE status = 'faltou'"))
+                    .isEqualTo(1);
+            assertThatThrownBy(() -> s.execute(
+                    "UPDATE turno_inscricoes SET status = 'sumiu' WHERE id = " + inscricao))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_inscricao_status");
+        }
+    }
+
+    @Test
+    @DisplayName("V22: a inscricao guarda quem a cancelou, e o cancelamento antigo do entregador continua contando so contra ele")
+    void v22_desistenciaNaInscricao() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v22");
+        flyway(url, "21").migrate();
+
+        long quemCancelou;
+        long colega;
+        long turno;
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("loja-v22@teste.com", "x"));
+            s.execute(inserirUsuario("cancelou-v22@teste.com", "x"));
+            s.execute(inserirUsuario("colega-v22@teste.com", "x"));
+            long lojista = contar(s, "SELECT id FROM usuarios WHERE email = 'loja-v22@teste.com'");
+            quemCancelou = contar(s, "SELECT id FROM usuarios WHERE email = 'cancelou-v22@teste.com'");
+            colega = contar(s, "SELECT id FROM usuarios WHERE email = 'colega-v22@teste.com'");
+
+            // Como a regra antiga deixava: um entregador cancelou o turno de
+            // duas vagas, o turno caiu inteiro e as duas inscricoes foram junto.
+            s.execute("INSERT INTO turnos (lojist_id, motoboy_id, titulo, data_inicio, data_fim, "
+                    + "valor_estimado, vagas, status, cancelado_por_id, cancelado_em, criado_em) VALUES ("
+                    + lojista + ", " + quemCancelou + ", 'Turno V22', '2026-09-10 18:00', "
+                    + "'2026-09-10 22:00', 120, 2, 'cancelado', " + quemCancelou
+                    + ", '2026-09-10 17:40', now())");
+            turno = contar(s, "SELECT id FROM turnos WHERE titulo = 'Turno V22'");
+            s.execute("INSERT INTO turno_inscricoes (turno_id, motoboy_id, status, criado_em) VALUES "
+                    + "(" + turno + ", " + quemCancelou + ", 'cancelado', now()), "
+                    + "(" + turno + ", " + colega + ", 'cancelado', now())");
+        }
+
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            assertThat(validada(s, "fk_inscricao_cancelado_por")).isTrue();
+            assertThat(contar(s, "SELECT count(*) FROM pg_indexes "
+                    + "WHERE indexname = 'ix_inscricao_cancelado_por'")).isEqualTo(1);
+
+            // Backfill: as duas inscricoes dizem QUEM cancelou — e nenhuma
+            // acusa o colega, que so estava no turno.
+            assertThat(contar(s, "SELECT count(*) FROM turno_inscricoes WHERE turno_id = " + turno
+                    + " AND cancelado_por_id = " + quemCancelou
+                    + " AND cancelado_em = TIMESTAMP '2026-09-10 17:40'")).isEqualTo(2);
+            // A desistencia, como o selo e o score a leem: a propria inscricao,
+            // cancelada pelo proprio entregador.
+            assertThat(contar(s, "SELECT count(*) FROM turno_inscricoes "
+                    + "WHERE motoboy_id = cancelado_por_id AND motoboy_id = " + quemCancelou)).isEqualTo(1);
+            assertThat(contar(s, "SELECT count(*) FROM turno_inscricoes "
+                    + "WHERE motoboy_id = cancelado_por_id AND motoboy_id = " + colega)).isZero();
+
+            // Quem cancelou tem de existir.
+            assertThatThrownBy(() -> s.execute(
+                    "UPDATE turno_inscricoes SET cancelado_por_id = 99999999 WHERE turno_id = " + turno))
+                    .isInstanceOf(SQLException.class)
+                    .extracting(e -> ((SQLException) e).getSQLState())
+                    .isEqualTo("23503");
+        }
+    }
+
+    @Test
+    @DisplayName("V23: os e-mails ficam em minusculas e o banco recusa a mesma caixa de correio em outra caixa")
+    void v23_emailSemMaiusculas() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v23");
+        flyway(url, "22").migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("Claudia@Teste.com", "x"));
+            s.execute(inserirUsuario("  fernando@teste.COM ", "x"));
+            s.execute(inserirUsuario("ana@teste.com", "x"));
+        }
+
+        MigrateResult resultado = flyway(url, null).migrate();
+        assertThat(resultado.success).isTrue();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            assertThat(contar(s, "SELECT count(*) FROM usuarios WHERE email IN "
+                    + "('claudia@teste.com', 'fernando@teste.com', 'ana@teste.com')")).isEqualTo(3);
+            assertThat(contar(s, "SELECT count(*) FROM usuarios WHERE email <> lower(trim(email))"))
+                    .isZero();
+            assertThat(contar(s, "SELECT count(*) FROM pg_indexes WHERE indexname = "
+                    + "'uk_usuario_email_lower' AND indexdef LIKE 'CREATE UNIQUE INDEX%'")).isEqualTo(1);
+
+            // Mesmo por fora do backend, a segunda conta nao entra.
+            assertThatThrownBy(() -> s.execute(inserirUsuario("CLAUDIA@teste.com", "x")))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("uk_usuario_email_lower");
+        }
+    }
+
+    @Test
+    @DisplayName("V23: duas contas que so diferem pela caixa derrubam a migracao com os e-mails na mensagem — e nada e alterado")
+    void v23_colisaoFalhaEmVezDeEscolher() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v23_colisao");
+        flyway(url, "22").migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("maria@x.com", "x"));
+            s.execute(inserirUsuario("MARIA@x.com", "x"));
+            s.execute(inserirUsuario("Sozinho@x.com", "x"));
+        }
+
+        assertThatThrownBy(() -> flyway(url, null).migrate())
+                .hasMessageContaining("maria@x.com (2 contas)")
+                .hasMessageContaining("nao escolhe qual conta fica");
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            // A migracao e uma transacao: o UPDATE nao chegou a rodar, e a
+            // versao aplicada continua sendo a anterior.
+            assertThat(contar(s, "SELECT count(*) FROM usuarios WHERE email = 'Sozinho@x.com'"))
+                    .isEqualTo(1);
+            assertThat(contar(s, "SELECT max(version::int) FROM flyway_schema_history WHERE success"))
+                    .isEqualTo(22);
+        }
+    }
+
+    @Test
+    @DisplayName("V24: o codigo de recuperacao de senha some junto com a conta, e o contador nao fica negativo")
+    void v24_codigosDeRecuperacaoDeSenha() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v24");
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("esqueceu-v24@teste.com", "x"));
+            s.execute(inserirUsuario("lembra-v24@teste.com", "x"));
+            long esqueceu = contar(s, "SELECT id FROM usuarios WHERE email = 'esqueceu-v24@teste.com'");
+            long lembra = contar(s, "SELECT id FROM usuarios WHERE email = 'lembra-v24@teste.com'");
+
+            s.execute(inserirCodigo(esqueceu, 0));
+            s.execute(inserirCodigo(lembra, 0));
+
+            // O contador so anda para a frente.
+            assertThatThrownBy(() -> s.execute(inserirCodigo(esqueceu, -1)))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_codigo_recuperacao_tentativas");
+
+            // Codigo de conta que nao existe nao entra.
+            assertThatThrownBy(() -> s.execute(inserirCodigo(999_999, 0)))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("fk_codigo_recuperacao_usuario");
+            assertThat(validada(s, "fk_codigo_recuperacao_usuario")).isTrue();
+
+            // A unica FK do schema que apaga em cascata: a credencial de 15
+            // minutos nao impede apagar a conta — e nao sobra orfa.
+            s.execute("DELETE FROM usuarios WHERE id = " + esqueceu);
+            assertThat(contar(s, "SELECT count(*) FROM codigos_recuperacao_senha WHERE usuario_id = "
+                    + esqueceu)).isZero();
+            assertThat(contar(s, "SELECT count(*) FROM codigos_recuperacao_senha WHERE usuario_id = "
+                    + lembra)).isEqualTo(1);
+            assertThat(contar(s, "SELECT count(*) FROM pg_constraint WHERE contype = 'f' "
+                    + "AND confdeltype = 'c'")).isEqualTo(1);
+        }
+    }
+
+    @Test
+    @DisplayName("V25: o lancamento gerencial so aceita categoria do dominio, valor e km positivos, e recorrencia coerente")
+    void v25_lancamentosGerenciais() throws SQLException {
+        String url = PostgresDeTeste.bancoNovo("mig_v25");
+        flyway(url, null).migrate();
+
+        try (Connection c = conectar(url); Statement s = c.createStatement()) {
+            s.execute(inserirUsuario("custos-v25@teste.com", "x"));
+            long usuario = contar(s, "SELECT id FROM usuarios WHERE email = 'custos-v25@teste.com'");
+            s.execute("INSERT INTO turnos (lojist_id, titulo, data_inicio, data_fim, valor_estimado, "
+                    + "status, criado_em) VALUES (" + usuario + ", 'Turno V25', '2026-09-10 18:00', "
+                    + "'2026-09-10 22:00', 120, 'finalizado', now())");
+            long turno = contar(s, "SELECT id FROM turnos WHERE titulo = 'Turno V25'");
+
+            // As dez categorias do enum entram; o avulso, o recorrente sem fim e
+            // o recorrente com fim tambem.
+            for (String categoria : new String[] {
+                    "combustivel", "manutencao", "das_mei", "celular_internet", "seguro",
+                    "parcela_ou_aluguel_veiculo", "outra_despesa_entregador",
+                    "taxa_de_entrega_cobrada", "entrega_fora_do_app", "outra_despesa_entrega"}) {
+                s.execute(inserirLancamento(usuario, categoria, "10.00", "false", "NULL", "NULL", "NULL"));
+            }
+            s.execute(inserirLancamento(usuario, "combustivel", "7.50", "false", "NULL",
+                    String.valueOf(turno), "42.0"));
+            s.execute(inserirLancamento(usuario, "seguro", "32.00", "true", "NULL", "NULL", "NULL"));
+            s.execute(inserirLancamento(usuario, "seguro", "32.00", "true", "'2027-01-15'", "NULL", "NULL"));
+            assertThat(contar(s, "SELECT count(*) FROM lancamentos_gerenciais")).isEqualTo(13);
+            // `recorrente` tem default: quem nao informa grava um avulso.
+            s.execute("INSERT INTO lancamentos_gerenciais (usuario_id, categoria, valor, data, "
+                    + "criado_em, atualizado_em) VALUES (" + usuario + ", 'seguro', 1, '2026-09-15', now(), now())");
+            assertThat(contar(s, "SELECT count(*) FROM lancamentos_gerenciais WHERE NOT recorrente"))
+                    .isEqualTo(12);
+
+            // Categoria fora do dominio.
+            assertThatThrownBy(() -> s.execute(
+                    inserirLancamento(usuario, "pedagio", "10.00", "false", "NULL", "NULL", "NULL")))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_lancamento_gerencial_categoria");
+            // Valor zero ou negativo: o sinal e do grupo, nunca do valor.
+            for (String valor : new String[] {"0", "-10.00"}) {
+                assertThatThrownBy(() -> s.execute(
+                        inserirLancamento(usuario, "combustivel", valor, "false", "NULL", "NULL", "NULL")))
+                        .isInstanceOf(SQLException.class)
+                        .hasMessageContaining("ck_lancamento_gerencial_valor");
+            }
+            assertThatThrownBy(() -> s.execute(
+                    inserirLancamento(usuario, "combustivel", "10.00", "false", "NULL", "NULL", "0")))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_lancamento_gerencial_km");
+            // "Ate quando" sem recorrencia, e recorrencia que termina antes de comecar.
+            assertThatThrownBy(() -> s.execute(
+                    inserirLancamento(usuario, "seguro", "32.00", "false", "'2027-01-15'", "NULL", "NULL")))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_lancamento_gerencial_recorrencia");
+            assertThatThrownBy(() -> s.execute(
+                    inserirLancamento(usuario, "seguro", "32.00", "true", "'2026-09-14'", "NULL", "NULL")))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("ck_lancamento_gerencial_recorrencia");
+
+            // As duas FKs, validadas e RESTRICT: nem o turno nem a conta saem
+            // de baixo de um lancamento.
+            assertThat(validada(s, "fk_lancamento_gerencial_usuario")).isTrue();
+            assertThat(validada(s, "fk_lancamento_gerencial_turno")).isTrue();
+            assertThatThrownBy(() -> s.execute(
+                    inserirLancamento(usuario, "combustivel", "10.00", "false", "NULL", "999999", "NULL")))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("fk_lancamento_gerencial_turno");
+            assertThatThrownBy(() -> s.execute("DELETE FROM turnos WHERE id = " + turno))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("fk_lancamento_gerencial_turno");
+            assertThatThrownBy(() -> s.execute("DELETE FROM usuarios WHERE id = " + usuario))
+                    .isInstanceOf(SQLException.class);
+
+            assertThat(contar(s, "SELECT count(*) FROM pg_indexes WHERE indexname = "
+                    + "'ix_lancamento_gerencial_usuario_data'")).isEqualTo(1);
+        }
+    }
+
     // ── Apoio ──────────────────────────────────────────────────────────────
+
+    /** Um lancamento gerencial de 15/09/2026; os tres ultimos parametros ja vem em SQL. */
+    static String inserirLancamento(long usuario, String categoria, String valor, String recorrente,
+                                    String ate, String turno, String km) {
+        return "INSERT INTO lancamentos_gerenciais (usuario_id, categoria, valor, data, recorrente, "
+                + "recorrente_ate, turno_id, km, criado_em, atualizado_em) VALUES (" + usuario + ", '"
+                + categoria + "', " + valor + ", '2026-09-15', " + recorrente + ", " + ate + ", "
+                + turno + ", " + km + ", now(), now())";
+    }
+
+    static String inserirCodigo(long usuario, int tentativas) {
+        return "INSERT INTO codigos_recuperacao_senha "
+                + "(usuario_id, codigo_hash, criado_em, expira_em, tentativas) VALUES ("
+                + usuario + ", '$2a$10$hashdeteste', now(), now() + interval '15 minutes', "
+                + tentativas + ")";
+    }
 
     /** INSERT valido ATE a V11 — antes de a coluna natureza existir. */
     static String inserirTransacao(long usuario, Integer turno, String tipo, String status, String chave) {
@@ -471,7 +757,7 @@ public class MigracoesPostgresTest {
      * um número só.
      */
     public static String ultimaVersao() {
-        return "20";
+        return "25";
     }
 
     static Connection conectar(String url) throws SQLException {

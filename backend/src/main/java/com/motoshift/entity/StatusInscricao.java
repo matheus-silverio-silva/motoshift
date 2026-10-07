@@ -6,19 +6,27 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Estados da inscrição de um entregador num turno.
  *
- * É um subconjunto de {@link StatusTurno} — a inscrição nasce aceita, e daí só
- * termina ou é cancelada; ela nunca fica "aberta" (quem está aberto é o turno,
- * enquanto houver vaga) nem "expirada". São enums separados de propósito: um
- * único enum compartilhado deixaria o compilador aceitar
+ * Não é o {@link StatusTurno} com outro nome — a inscrição nasce aceita, e daí
+ * só termina: paga ({@link #FINALIZADO}), em falta ({@link #FALTOU}) ou
+ * cancelada. Ela nunca fica "aberta" (quem está aberto é o turno, enquanto
+ * houver vaga) nem "expirada". São enums separados de propósito: um único enum
+ * compartilhado deixaria o compilador aceitar
  * {@code inscricao.setStatus(ABERTO)}, que não significa nada.
  *
  * Mesma mecânica de valor minúsculo do {@link StatusTurno}: converter para o
- * banco, {@code @JsonValue} para a API, {@code name()} nunca.
+ * banco, {@code @JsonValue} para a API, {@code name()} nunca. O domínio também
+ * está no banco, no CHECK {@code ck_inscricao_status} da V21.
  */
 public enum StatusInscricao {
 
     ACEITO("aceito"),
+    /** Fez check-in e foi pago na finalização. */
     FINALIZADO("finalizado"),
+    /**
+     * Aceitou e não fez check-in: o turno foi finalizado sem ele. Não recebe —
+     * a parte dele volta ao lojista como sobra — e não perde score (V21).
+     */
+    FALTOU("faltou"),
     CANCELADO("cancelado");
 
     private final String valor;
@@ -30,6 +38,15 @@ public enum StatusInscricao {
     @JsonValue
     public String getValor() {
         return valor;
+    }
+
+    /**
+     * Está no turno (ACEITO) ou esteve e foi pago (FINALIZADO). Quem cancelou
+     * e quem faltou não participam dele: não avaliam, não são avaliados e não
+     * têm pagamento a documentar.
+     */
+    public boolean valeNoTurno() {
+        return this == ACEITO || this == FINALIZADO;
     }
 
     @JsonCreator

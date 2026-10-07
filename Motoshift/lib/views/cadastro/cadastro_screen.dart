@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../models/usuario.dart';
@@ -6,6 +7,7 @@ import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/validators.dart';
 import '../../widgets/app_buttons.dart';
+import '../../widgets/olho_da_senha.dart';
 
 class CadastroScreen extends StatefulWidget {
   const CadastroScreen({super.key});
@@ -44,12 +46,15 @@ class _CadastroScreenState extends State<CadastroScreen> {
 
   // ── Lógica preservada do original ────────────────────────────────────────────
   Future<void> _cadastrar() async {
-    if (!_formKey.currentState!.validate()) return;
     final auth = context.read<AuthService>();
+    // O Enter do último campo chega aqui sem passar pelo botão, que é quem
+    // se desligava durante o envio.
+    if (auth.carregando) return;
+    if (!_formKey.currentState!.validate()) return;
 
     final usuario = Usuario(
       nome: _nomeCtrl.text.trim(),
-      email: _emailCtrl.text.trim(),
+      email: Validators.normalizarEmail(_emailCtrl.text),
       telefone: _telefoneCtrl.text.trim(),
       tipo: _tipo,
       documentoFederal: _documentoCtrl.text.trim(),
@@ -59,6 +64,9 @@ class _CadastroScreenState extends State<CadastroScreen> {
     if (!mounted) return;
 
     if (ok) {
+      // Formulário enviado: o gerenciador de senhas pode oferecer salvar a
+      // conta nova.
+      TextInput.finishAutofillContext();
       final route = _tipo == TipoUsuario.motoboy
           ? '/dashboard-motoboy'
           : '/dashboard-lojista';
@@ -166,89 +174,102 @@ class _CadastroScreenState extends State<CadastroScreen> {
           const SizedBox(height: 3),
           Text('Preencha os dados para começar.',
               style:
-                  tsJakarta(11, FontWeight.w400, color: AppColors.muted)),
+                  tsJakarta(11, FontWeight.w600, color: AppColors.mutedTexto)),
           const SizedBox(height: 15),
           _SegmentControl(
             value: _tipo,
             onChanged: (t) => setState(() => _tipo = t),
           ),
           const SizedBox(height: 12),
-          Form(
+          // AutofillGroup: os campos são um formulário só para o gerenciador
+          // de senhas e para o preenchimento automático do aparelho.
+          AutofillGroup(
+            child: Form(
             key: _formKey,
             child: Column(
               children: [
                 _InputRow(
+                  key: const Key('cadastro-nome'),
                   icon: Icons.person_outline_rounded,
                   hint: 'Nome completo',
                   controller: _nomeCtrl,
+                  keyboardType: TextInputType.name,
+                  autofillHints: const [AutofillHints.name],
                   validator: Validators.nome,
                 ),
                 const SizedBox(height: 9),
                 _InputRow(
+                  key: const Key('cadastro-email'),
                   icon: Icons.mail_outline_rounded,
                   hint: 'E-mail',
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
+                  autofillHints: const [
+                    AutofillHints.email,
+                    AutofillHints.username,
+                  ],
                   validator: Validators.email,
                 ),
                 const SizedBox(height: 9),
                 _InputRow(
+                  key: const Key('cadastro-telefone'),
                   icon: Icons.phone_outlined,
                   hint: '(11) 99999-9999',
                   controller: _telefoneCtrl,
                   keyboardType: TextInputType.phone,
+                  autofillHints: const [AutofillHints.telephoneNumber],
                   validator: Validators.telefone,
                 ),
                 const SizedBox(height: 9),
                 _InputRow(
+                  key: const Key('cadastro-senha'),
                   icon: Icons.lock_outline_rounded,
                   hint: 'Senha',
                   controller: _senhaCtrl,
                   obscure: !_senhaVisivel,
-                  suffixIcon: GestureDetector(
+                  // newPassword: o gerenciador sugere uma senha forte, em vez
+                  // de tentar preencher uma que já existe.
+                  autofillHints: const [AutofillHints.newPassword],
+                  suffixIcon: OlhoDaSenha(
+                    visivel: _senhaVisivel,
                     onTap: () =>
                         setState(() => _senhaVisivel = !_senhaVisivel),
-                    child: Icon(
-                      _senhaVisivel
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      size: 16,
-                      color: AppColors.muted,
-                    ),
                   ),
                   validator: Validators.senha,
                 ),
                 const SizedBox(height: 9),
                 _InputRow(
+                  key: const Key('cadastro-confirmar-senha'),
                   icon: Icons.lock_outline_rounded,
                   hint: 'Confirmar senha',
                   controller: _confirmarSenhaCtrl,
                   obscure: !_confirmarSenhaVisivel,
-                  suffixIcon: GestureDetector(
+                  autofillHints: const [AutofillHints.newPassword],
+                  suffixIcon: OlhoDaSenha(
+                    visivel: _confirmarSenhaVisivel,
                     onTap: () => setState(() =>
                         _confirmarSenhaVisivel = !_confirmarSenhaVisivel),
-                    child: Icon(
-                      _confirmarSenhaVisivel
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      size: 16,
-                      color: AppColors.muted,
-                    ),
                   ),
                   validator: (v) =>
                       Validators.confirmarSenha(v, _senhaCtrl.text),
                 ),
                 const SizedBox(height: 9),
                 _InputRow(
+                  key: const Key('cadastro-documento'),
                   icon: Icons.badge_outlined,
                   hint: _tipo == TipoUsuario.lojista
                       ? 'CNPJ (00.000.000/0000-00)'
                       : 'CNH (11 dígitos)',
                   controller: _documentoCtrl,
                   keyboardType: TextInputType.number,
+                  // Último campo: Enter (web) e "Concluir" (celular) criam a
+                  // conta. Os anteriores levam o foco ao próximo.
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _cadastrar(),
                   validator: _validarDocumento,
                 ),
               ],
+            ),
             ),
           ),
           const SizedBox(height: 16),
@@ -332,7 +353,7 @@ class _Seg extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: active ? AppColors.teal : Colors.transparent,
+            color: active ? AppColors.tealTexto : Colors.transparent,
             borderRadius: BorderRadius.circular(9),
             boxShadow: active
                 ? const [
@@ -349,7 +370,7 @@ class _Seg extends StatelessWidget {
               label,
               style: tsJakarta(11, FontWeight.w700,
                   color:
-                      active ? const Color(0xFFFFFFFF) : AppColors.muted),
+                      active ? const Color(0xFFFFFFFF) : AppColors.tealDeep),
             ),
           ),
         ),
@@ -368,6 +389,11 @@ class _InputRow extends StatelessWidget {
     this.obscure = false,
     this.suffixIcon,
     this.validator,
+    // "Próximo" por padrão: só o último campo do formulário é "Concluir".
+    this.textInputAction = TextInputAction.next,
+    this.onSubmitted,
+    this.autofillHints,
+    super.key,
   });
 
   final IconData icon;
@@ -377,6 +403,9 @@ class _InputRow extends StatelessWidget {
   final bool obscure;
   final Widget? suffixIcon;
   final String? Function(String?)? validator;
+  final TextInputAction textInputAction;
+  final ValueChanged<String>? onSubmitted;
+  final Iterable<String>? autofillHints;
 
   @override
   Widget build(BuildContext context) {
@@ -397,6 +426,9 @@ class _InputRow extends StatelessWidget {
               keyboardType: keyboardType,
               obscureText: obscure,
               validator: validator,
+              textInputAction: textInputAction,
+              onFieldSubmitted: onSubmitted,
+              autofillHints: autofillHints,
               style:
                   tsJakarta(12.5, FontWeight.w500, color: AppColors.text),
               decoration: InputDecoration(

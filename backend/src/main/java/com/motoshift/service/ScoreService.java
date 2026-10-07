@@ -3,6 +3,8 @@ package com.motoshift.service;
 import com.motoshift.entity.StatusTurno;
 import com.motoshift.entity.Turno;
 import com.motoshift.entity.Usuario;
+import com.motoshift.repository.Desistencia;
+import com.motoshift.repository.TurnoInscricaoRepository;
 import com.motoshift.repository.TurnoRepository;
 import com.motoshift.repository.UsuarioRepository;
 import org.slf4j.Logger;
@@ -14,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -30,6 +33,12 @@ import java.util.stream.Collectors;
  * classificacao e o prompt. Sao regras de negocio do MotoShift, e a primeira
  * pergunta de quem revisa e "onde ficam as regras de score?": a resposta agora
  * e um arquivo, e nao um endpoint.
+ *
+ * <p><b>O "cancelamento" do entregador e a desistencia.</b> Desde a V22 ele nao
+ * cancela turno: desiste da vaga, e a desistencia mora na inscricao
+ * ({@link Desistencia}). O turno que a LOJA cancelou nao e evento dele e nao
+ * aparece aqui. Os rotulos de evento que o app desenha ("cancelado",
+ * "cancelado_tardio") continuam os mesmos.
  */
 @Service
 public class ScoreService {
@@ -38,22 +47,25 @@ public class ScoreService {
 
     private static final int JANELA_DIAS = 30;
 
-    /** Penalidade por cancelar com menos de 1h de antecedencia (RF07). */
+    /** Penalidade por desistir da vaga com menos de 1h de antecedencia (RF07). */
     private static final double PENALIDADE_CANCELAMENTO_TARDIO = Reputacao.PENALIDADE_CANCELAMENTO_TARDIO;
 
     private static final DateTimeFormatter DIA_MES_ANO =
             DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final TurnoRepository turnoRepo;
+    private final TurnoInscricaoRepository inscricaoRepo;
     private final UsuarioRepository usuarioRepo;
     private final AnthropicService anthropic;
     private final Reputacao reputacao;
 
     public ScoreService(TurnoRepository turnoRepo,
+                        TurnoInscricaoRepository inscricaoRepo,
                         UsuarioRepository usuarioRepo,
                         AnthropicService anthropic,
                         Reputacao reputacao) {
         this.turnoRepo = turnoRepo;
+        this.inscricaoRepo = inscricaoRepo;
         this.usuarioRepo = usuarioRepo;
         this.anthropic = anthropic;
         this.reputacao = reputacao;
@@ -80,13 +92,13 @@ public class ScoreService {
         LocalDateTime inicio30d = LocalDateTime.now().minusDays(JANELA_DIAS);
 
         List<Turno> todosTurnos = turnoRepo.findByMotoboyId(motoboyId);
+        List<Desistencia> desistencias = inscricaoRepo.desistenciasDe(motoboyId);
 
-        // Cancelamentos tardios na janela: cancelou com menos de 1h de
-        // antecedencia, que e o unico evento que mexe no score hoje.
-        List<Turno> canceladosTardios30d = todosTurnos.stream()
-                .filter(t -> t.getStatus() == StatusTurno.CANCELADO)
-                .filter(t -> dentroDaJanela(t, inicio30d))
-                .filter(this::cancelamentoTardio)
+        // Desistencias em cima da hora na janela: saiu da vaga com menos de 1h
+        // de antecedencia, que e o unico evento que mexe no score hoje.
+        List<Desistencia> canceladosTardios30d = desistencias.stream()
+                .filter(d -> dentroDaJanela(d.inicioDoTurno(), inicio30d))
+                .filter(ScoreService::tardia)
                 .collect(Collectors.toList());
 
         // ESTIMATIVA, nao medicao: nao existe historico de score no banco, entao
@@ -103,12 +115,11 @@ public class ScoreService {
 
         long finalizados30d = todosTurnos.stream()
                 .filter(t -> t.getStatus() == StatusTurno.FINALIZADO)
-                .filter(t -> dentroDaJanela(t, inicio30d))
+                .filter(t -> dentroDaJanela(t.getDataInicio(), inicio30d))
                 .count();
 
-        long cancelados30d = todosTurnos.stream()
-                .filter(t -> t.getStatus() == StatusTurno.CANCELADO)
-                .filter(t -> dentroDaJanela(t, inicio30d))
+        long cancelados30d = desistencias.stream()
+                .filter(d -> dentroDaJanela(d.inicioDoTurno(), inicio30d))
                 .count();
 
         // O endpoint inteiro caia com 503 quando a IA falhava — mesmo com todas
@@ -138,7 +149,7 @@ public class ScoreService {
         result.put("analise", analise);
         result.put("analiseDisponivel", analise != null);
         result.put("ultimaAtualizacao", LocalDate.now().format(DIA_MES_ANO));
-        result.put("eventos", ultimosEventos(todosTurnos));
+        result.put("eventos", ultimosEventos(todosTurnos, desistencias));
         result.put("novoNaPlataforma", false);
         return result;
     }
@@ -156,14 +167,13 @@ public class ScoreService {
         return result;
     }
 
-    private boolean dentroDaJanela(Turno t, LocalDateTime inicio) {
-        return t.getDataInicio() != null && !t.getDataInicio().isBefore(inicio);
+    private static boolean dentroDaJanela(LocalDateTime inicioDoTurno, LocalDateTime inicio) {
+        return inicioDoTurno != null && !inicioDoTurno.isBefore(inicio);
     }
 
-    private boolean cancelamentoTardio(Turno t) {
-        return t.getAtualizadoEm() != null
-                && t.getDataInicio() != null
-                && t.getAtualizadoEm().isAfter(t.getDataInicio().minusHours(1));
+    /** Desistiu em cima da hora — a mesma pergunta que o TurnoService faz para penalizar. */
+    private static boolean tardia(Desistencia d) {
+        return Reputacao.emCimaDaHora(d.canceladoEm(), d.inicioDoTurno());
     }
 
     private String classificar(double score) {
@@ -173,28 +183,38 @@ public class ScoreService {
         return "Baixo";
     }
 
-    /** Ultimos 10 eventos (finalizados + cancelados), do mais recente ao mais antigo. */
-    private List<Map<String, Object>> ultimosEventos(List<Turno> todosTurnos) {
-        return todosTurnos.stream()
-                .filter(t -> t.getStatus() == StatusTurno.FINALIZADO || t.getStatus() == StatusTurno.CANCELADO)
-                .filter(t -> t.getDataInicio() != null)
-                .sorted(Comparator.comparing(Turno::getDataInicio).reversed())
-                .limit(10)
-                .map(t -> {
-                    boolean tardio = t.getStatus() == StatusTurno.CANCELADO && cancelamentoTardio(t);
-                    // Rotulo de evento que o app desenha, nao o status da
-                    // entidade: "cancelado_tardio" nao existe como estado. Os
-                    // outros dois saem do proprio enum para nao virarem duas
-                    // verdades sobre a mesma palavra.
-                    String tipo = t.getStatus() == StatusTurno.FINALIZADO
-                            ? StatusTurno.FINALIZADO.getValor()
-                            : (tardio ? "cancelado_tardio" : StatusTurno.CANCELADO.getValor());
+    /** Um evento da lista, antes de virar o mapa que a tela recebe. */
+    private record Evento(String tipo, String titulo, LocalDateTime inicioDoTurno, double impacto) {}
 
+    /** Ultimos 10 eventos (turnos concluidos + desistencias), do mais recente ao mais antigo. */
+    private List<Map<String, Object>> ultimosEventos(List<Turno> todosTurnos,
+                                                    List<Desistencia> desistencias) {
+        List<Evento> eventos = new ArrayList<>();
+        for (Turno t : todosTurnos) {
+            if (t.getStatus() != StatusTurno.FINALIZADO || t.getDataInicio() == null) continue;
+            eventos.add(new Evento(StatusTurno.FINALIZADO.getValor(), t.getTitulo(),
+                    t.getDataInicio(), 0.0));
+        }
+        for (Desistencia d : desistencias) {
+            if (d.inicioDoTurno() == null) continue;
+            boolean tardio = tardia(d);
+            // Rotulo de evento que o app desenha, nao o status da entidade:
+            // "cancelado_tardio" nao existe como estado. O outro sai do proprio
+            // enum para nao virarem duas verdades sobre a mesma palavra.
+            eventos.add(new Evento(
+                    tardio ? "cancelado_tardio" : StatusTurno.CANCELADO.getValor(),
+                    d.titulo(), d.inicioDoTurno(),
+                    tardio ? -PENALIDADE_CANCELAMENTO_TARDIO : 0.0));
+        }
+        return eventos.stream()
+                .sorted(Comparator.comparing(Evento::inicioDoTurno).reversed())
+                .limit(10)
+                .map(e -> {
                     Map<String, Object> ev = new HashMap<>();
-                    ev.put("tipo", tipo);
-                    ev.put("titulo", t.getTitulo());
-                    ev.put("data", t.getDataInicio().format(DIA_MES_ANO));
-                    ev.put("impacto", tardio ? -PENALIDADE_CANCELAMENTO_TARDIO : 0.0);
+                    ev.put("tipo", e.tipo());
+                    ev.put("titulo", e.titulo());
+                    ev.put("data", e.inicioDoTurno().format(DIA_MES_ANO));
+                    ev.put("impacto", e.impacto());
                     return ev;
                 })
                 .collect(Collectors.toList());
@@ -211,11 +231,12 @@ public class ScoreService {
                 "- Variação: %+.1f%n" +
                 "- Classificação atual: %s%n" +
                 "- Turnos concluídos nos últimos 30 dias: %d%n" +
-                "- Turnos cancelados nos últimos 30 dias: %d%n" +
-                "- Cancelamentos tardios (< 1h de antecedência, penalizam -0.5 cada): %d%n%n" +
+                "- Vagas de que desistiu nos últimos 30 dias: %d%n" +
+                "- Desistências em cima da hora (< 1h de antecedência, penalizam -0.5 cada): %d%n%n" +
                 "Regras de score do MotoShift:%n" +
                 "- Score inicial: 5.0%n" +
-                "- Cancelamento com menos de 1h de antecedência: -0.5%n" +
+                "- Desistir da vaga com menos de 1h de antecedência: -0.5%n" +
+                "- Turno cancelado pela loja ou falta sem check-in: sem impacto no score%n" +
                 "- Concluir turnos: sem impacto direto no score%n%n" +
                 "Forneça uma análise do score deste motoboy. Inclua:%n" +
                 "1. Interpretação do score atual em 1-2 frases%n" +

@@ -16,10 +16,13 @@ import java.util.List;
  * A reputação (score) do entregador: a regra e o que se mostra dela.
  *
  * <p><b>A regra (RF07).</b> Todo entregador começa em {@link #SCORE_INICIAL}
- * e perde {@link #PENALIDADE_CANCELAMENTO_TARDIO} a cada turno cancelado a
- * menos de 1h do início ({@code TurnoService.cancelar}), sem descer de zero.
- * O valor mora em {@code usuarios.score} e só a regra o altera — nem a massa
- * de demonstração o grava à mão.
+ * e perde {@link #PENALIDADE_CANCELAMENTO_TARDIO} a cada vaga de que desiste a
+ * menos de {@link #FOLGA_SEM_PENALIDADE} do início
+ * ({@code TurnoService.desistir}), sem descer de zero. Só a desistência DELE
+ * conta: o turno que a loja cancela não custa nada a ninguém, e faltar (não
+ * fazer check-in) por enquanto também não. O valor mora em
+ * {@code usuarios.score} e só a regra o altera — nem a massa de demonstração
+ * o grava à mão.
  *
  * <p><b>O que se mostra.</b> Score é do entregador, e de mais ninguém: o
  * lojista não tem reputação a zelar por cancelamento, e o 5,0 fixo que ele
@@ -35,8 +38,21 @@ public class Reputacao {
     /** Onde todo entregador começa. */
     public static final double SCORE_INICIAL = 5.0;
 
-    /** Quanto custa cancelar com menos de 1h de antecedência (RF07). */
+    /** Quanto custa desistir da vaga em cima da hora (RF07). */
     public static final double PENALIDADE_CANCELAMENTO_TARDIO = 0.5;
+
+    /** Com esta antecedência ou mais, desistir não custa nada. */
+    public static final Duration FOLGA_SEM_PENALIDADE = Duration.ofHours(1);
+
+    /**
+     * A desistência feita em {@code quando} é "em cima da hora"? É a pergunta
+     * da penalidade e a da análise de score — escrita uma vez só, para as duas
+     * não discordarem sobre o mesmo evento.
+     */
+    public static boolean emCimaDaHora(LocalDateTime quando, LocalDateTime inicioDoTurno) {
+        return quando != null && inicioDoTurno != null
+                && quando.isAfter(inicioDoTurno.minus(FOLGA_SEM_PENALIDADE));
+    }
 
     private final TurnoRepository turnoRepo;
     private final TurnoInscricaoRepository inscricaoRepo;
@@ -57,13 +73,16 @@ public class Reputacao {
     }
 
     /**
-     * Já trabalhou (turno concluído, inclusive em vaga extra) ou já cancelou —
-     * os dois eventos que a reputação mede.
+     * Já trabalhou (turno concluído, inclusive em vaga extra), já teve turno
+     * cancelado ou já desistiu de uma vaga — os eventos que a reputação mede.
+     * A desistência entra por conta própria: quem desiste deixa de ser o
+     * entregador do turno, e o turno nem é cancelado.
      */
     public boolean temHistorico(Long motoboyId) {
         return turnoRepo.existsByMotoboyIdAndStatusIn(motoboyId,
                         List.of(StatusTurno.FINALIZADO, StatusTurno.CANCELADO))
-                || inscricaoRepo.existsByMotoboyIdAndStatus(motoboyId, StatusInscricao.FINALIZADO);
+                || inscricaoRepo.existsByMotoboyIdAndStatus(motoboyId, StatusInscricao.FINALIZADO)
+                || inscricaoRepo.existsByMotoboyIdAndCanceladoPorId(motoboyId, motoboyId);
     }
 
     // ── Pontualidade ────────────────────────────────────────────────────────
@@ -107,7 +126,7 @@ public class Reputacao {
         public static final Pontualidade SEM_HISTORICO = new Pontualidade(null, 0);
     }
 
-    /** O score depois de um cancelamento tardio. */
+    /** O score depois de uma desistência em cima da hora. */
     public static double penalizar(Double atual) {
         double base = atual == null ? SCORE_INICIAL : atual;
         return Math.max(0.0, base - PENALIDADE_CANCELAMENTO_TARDIO);

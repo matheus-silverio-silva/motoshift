@@ -65,7 +65,7 @@ terceira invariante, na seção 6.
 |---|---|---|
 | **Recarga** | O lojista abre uma cobrança Pix e a paga. O valor entra no disponível. | `POST /api/carteira/recargas` + `/confirmar` |
 | **Reserva** | Publicar um turno move `valorEstimado × vagas` do disponível para o bloqueado. | `POST /api/turnos` |
-| **Liquidação** | Finalizar transfere, por entregador, do bloqueado do lojista para o disponível do entregador. A sobra das vagas vazias volta. | `PUT /api/turnos/{id}/finalizar` |
+| **Liquidação** | Finalizar transfere, por entregador **que fez check-in**, do bloqueado do lojista para o disponível do entregador. A sobra — vagas vazias e a parte de quem aceitou e não fez check-in — volta. Só vale depois do início do turno e com pelo menos um check-in. | `PUT /api/turnos/{id}/finalizar` |
 | **Saque** | O entregador (ou o lojista) envia o disponível para a chave Pix. | `POST /api/carteira/saques` |
 
 ---
@@ -121,13 +121,17 @@ sequenceDiagram
     C->>S: finalizar(id, usuarioId)
     Note over S: abre a transação
     S->>S: exigirParticipante
-    S->>P: finalizarInscricoes(turno)
-    loop cada inscrição finalizada
+    alt turno ainda não começou, ou ninguém fez check-in
+        S-->>Q: 409 com o motivo — nada é movido
+    end
+    S->>P: fecharInscricoes(turno)
+    Note over P: com check-in → FINALIZADO (a pagar)<br/>aceita sem check-in → FALTOU (sem pagamento)
+    loop cada inscrição com check-in
         P->>LG: transferir(pagamento_enviado, pagamento_recebido)
         LG->>DB: INSERT 2 transacoes (mesmo operacao_id)
         LG->>DB: UPDATE carteiras (lojista bloqueado −v, entregador disponível +v)
     end
-    alt sobrou reserva de vaga vazia
+    alt sobrou reserva (vaga vazia ou falta)
         P->>LG: aplicar(Movimento.liberacaoDeReserva SOBRA)
         LG->>DB: INSERT transacoes + UPDATE carteira do lojista
     end
@@ -141,33 +145,55 @@ sequenceDiagram
 > nenhum**: só move o dinheiro que o lojista já separou ao publicar, e nem o
 > valor nem o destinatário dependem de quem clicou.
 
+> **Mas finalizar só paga quem trabalhou.** Ser participante bastava, e era um
+> furo: o entregador aceitava um turno de amanhã, tocava "Finalizar" e recebia
+> na hora, porque a liquidação pagava **toda** inscrição aceita. Duas travas
+> fecham isso (`TurnoService.finalizar`): o turno precisa ter começado
+> (`agora >= dataInicio`) e alguém precisa ter feito check-in — fora disso, 409
+> com mensagem acionável ("finalize depois das 18:00" / "cancele-o para
+> devolver a reserva"). E na liquidação só a inscrição **com check-in** recebe;
+> a aceita sem check-in passa a `faltou` (V21) e a parte dela volta ao lojista
+> na mesma `liberacao_reserva` de motivo `sobra` das vagas vazias. Quem faltou
+> não perde score: a penalidade da RF07 continua sendo só a de quem sai em cima
+> da hora.
+
 ### 3.3 Cancelar
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Q as Lojista ou entregador
+    actor Q as Lojista (dono do turno)
     participant S as TurnoService
     participant P as PagamentoTurnoService
     participant LG as LedgerService
 
     Q->>S: PUT /api/turnos/{id}/cancelar
-    Note over S: abre a transação
-    alt cancelamento com menos de 1h do início
-        S->>S: score do entregador −0,5 (RF07)
-    end
-    S->>S: inscrições ativas → CANCELADO
+    Note over S: abre a transação — só o lojista dono (403 para os demais)
+    S->>S: inscrições ativas → CANCELADO (cancelado_por = a loja)
     S->>P: liberarReserva(turno, CANCELAMENTO)
     P->>LG: aplicar(liberacao_reserva, valor integral)
     Note over LG: bloqueado −v, disponível +v
     S->>S: turno → CANCELADO
-    Note over S: commit
+    Note over S: commit — nenhum score é tocado
     S-->>Q: 200 turno cancelado
 ```
 
-**Sem multa financeira.** A penalidade do cancelamento tardio é de score, e
-continua sendo a única — inventar uma multa seria criar regra de negócio no meio
-de uma refatoração.
+**Cancelar é da loja, e não penaliza ninguém.** Era um botão só para os dois
+lados, e a penalidade do cancelamento tardio caía no primeiro inscrito fosse
+quem fosse que tivesse cancelado: a loja cancelava a 20 minutos do início e o
+entregador perdia 0,5 de score. **Sem multa financeira**, como sempre: a reserva
+volta inteira.
+
+**O entregador não cancela: desiste da vaga** (`PUT /api/turnos/{id}/desistir`).
+A desistência **não move dinheiro nenhum** — a reserva continua bloqueada,
+porque a vaga existe, só ficou sem dono. Ela cancela a inscrição de quem saiu
+(`cancelado_por_id` e `cancelado_em` na própria inscrição, V22), reabre a vaga
+(turno lotado que ainda não começou volta a `aberto`), passa o posto de
+"principal" ao próximo inscrito ativo e avisa a loja. A menos de 1 h do início
+custa 0,5 de score — a quem desistiu, e só a ele. O que acontece com o dinheiro
+dessa vaga se decide depois, pelos caminhos de sempre: outro entregador a
+aceita e é pago na finalização; ninguém aceita e ela volta como sobra; ou o
+turno fica sem ninguém e expira, devolvendo a reserva inteira.
 
 ### 3.4 Expirar (job)
 
@@ -190,6 +216,53 @@ sequenceDiagram
         end
     end
 ```
+
+### 3.5 Finalizar sozinho o turno esquecido (job)
+
+Finalizar é decisão de quem estava lá, e por isso o job primeiro **cobra**
+(`turno_pendente_finalizacao`). Mas só cobrar deixava um buraco: bastava as duas
+partes esquecerem o turno para o dinheiro ficar reservado na carteira do lojista
+para sempre, e o entregador que trabalhou, sem receber. Passadas
+`motoshift.finalizacao.automatica-horas` (padrão **12**) do **fim** do turno, o
+job fecha sozinho.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant J as TurnoExpiracaoService
+    participant S as TurnoService
+    participant P as PagamentoTurnoService
+    participant LG as LedgerService
+
+    Note over J: a cada 5 min, turnos ACEITOS/EM ANDAMENTO com fim + prazo no passado
+    loop cada turno esquecido — uma transação por turno
+        J->>S: finalizarPeloSistema(turno)
+        alt alguém fez check-in
+            S->>P: fecharInscricoes + liquidar (o mesmo de "Finalizar")
+            P->>LG: pagamento_enviado / pagamento_recebido + sobra
+            S->>S: turno → FINALIZADO, pagamento PAGO
+        else ninguém fez check-in
+            S->>P: fecharInscricoes (todas → FALTOU)
+            S->>P: liberarReserva(turno, SEM_CHECKIN)
+            P->>LG: aplicar(liberacao_reserva, valor integral)
+            S->>S: turno → EXPIRADO
+        end
+        Note over S: as duas partes são avisadas com criarUnica
+    end
+```
+
+- **As regras de pagamento são as de "Finalizar"**, pelo mesmo código
+  (`TurnoService.pagarQuemTrabalhou`): só recebe quem fez check-in, quem aceitou
+  e não chegou vira `faltou`, a sobra volta. O que o job pula é só o
+  `exigirParticipante` — não há pessoa pedindo, e o método não é alcançável por
+  rota nenhuma.
+- **Sem nenhum check-in não há quem pagar**: a reserva volta inteira, num
+  lançamento com motivo próprio (`liberacao:turno:{id}:sem_checkin`), e o turno
+  vai para `expirado` — venceu sem acontecer.
+- **Uma transação por turno.** Numa só, um turno que não fechasse (a carteira
+  disputada naquele instante) desfaria o fechamento de todos os outros, a cada 5
+  minutos. O que falha vai para o log e é tentado de novo na volta seguinte; as
+  chaves de idempotência garantem que nada é pago duas vezes.
 
 ---
 
@@ -248,7 +321,8 @@ a mesma que está codificada em `service/ledger/Movimento.java`, em um lugar só
 | `retencao_iss` | débito | −v | 0 | **−v** | — | `liquidacao:inscricao:{id}:retencao-iss` |
 | `retencao_irrf` | débito | −v | 0 | **−v** | — | `liquidacao:inscricao:{id}:retencao-irrf` |
 
-`{motivo}` ∈ `cancelamento` | `expiracao` | `sobra`.
+`{motivo}` ∈ `cancelamento` | `expiracao` | `sobra` | `sem_checkin` (o turno
+esquecido que a finalização automática encerrou sem ninguém ter chegado).
 
 ### Natureza não é a aritmética do saldo
 
@@ -329,8 +403,11 @@ com saldo disponível, e a mensagem diz quanto há.
 ## 6. As três invariantes
 
 Conferidas por `ConsistenciaService.verificarConsistencia()` e por
-`GET /api/dev/ledger/consistencia` (apenas no perfil `dev` — é trabalho
-O(banco inteiro), não rota de produção).
+`GET /api/dev/ledger/consistencia` (autenticado, e em qualquer perfil que não
+seja o `prod` — é trabalho O(banco inteiro), não rota de produção; com o perfil
+`prod` o controller nem é instanciado). É a rota para mostrar o ledger fechando
+ao vivo: suba com o `RODAR.bat`, entre com uma conta da massa e chame-a com o
+token — responde 200 com `"consistente": true` e os totais.
 
 ### (a) Nenhum saldo negativo
 
@@ -371,6 +448,23 @@ dos deltas dos lançamentos **concluídos** dele.
 > nascem juntos, numa transferência só (`GorjetaService`), então `bonus` e
 > `bonus_enviado` se anulam no conjunto. Um `bonus` sem par — bônus da
 > plataforma, que nenhum fluxo emite — continuaria contando como entrada.
+
+### O que não faz parte deste ciclo: lançamentos gerenciais
+
+Para calcular lucro e prejuízo (RF13), o usuário informa custos e receitas que
+aconteceram **fora** da plataforma — combustível, manutenção, DAS, a taxa de
+entrega que a loja cobrou do cliente. Eles ficam na tabela
+`lancamentos_gerenciais` (V25) e **não fazem parte do ciclo do dinheiro**: não
+são lançamentos do extrato, não movem saldo, não geram documento fiscal e não
+entram em nenhuma das três invariantes acima. O `LancamentoGerencialService`
+não tem o `LedgerService` entre as dependências, e o
+`LancamentosGerenciaisForaDoLedgerTest` confere que criar, editar e excluir um
+deles deixa saldos, extrato e conferência exatamente como estavam.
+
+O motivo é o que sustenta as invariantes: o ledger registra só dinheiro que a
+plataforma movimentou. Um número que alguém digitou não tem movimento de saldo
+do outro lado. Quem junta os dois — só na leitura — é a DRE; ver
+[`RESULTADO.md`](RESULTADO.md).
 
 ---
 
@@ -471,6 +565,7 @@ debita é o ledger.
 | Extrato, resumo, fluxo, CSV | `service/ExtratoService.java` |
 | Que documento cada lançamento gera | `service/fiscal/TipoDocumento.java` — ver [`FISCAL.md`](FISCAL.md) |
 | Retenção na fonte e alíquotas | `service/fiscal/CalculoTributario.java` |
+| Lucro e prejuízo (DRE) e os custos informados à mão | `service/DreService.java`, `service/LancamentoGerencialService.java` — ver [`RESULTADO.md`](RESULTADO.md) |
 | Schema | `db/migration/V12__ledger_financeiro.sql`, `V13__remove_dupla_confirmacao.sql`, `V14__fiscal_por_lancamento.sql` |
 
 ### Testes que sustentam este documento
@@ -485,3 +580,4 @@ debita é o ledger.
 | Cada filtro do extrato, isolado e combinado | `ExtratoServiceTest` |
 | Retenção: bruto no extrato, líquido na nota | `service/fiscal/RetencaoNaFonteTest` |
 | A massa de demonstração fecha nas invariantes | `MassaDemonstracaoTest` |
+| Lançamento gerencial não mexe em saldo nem nas invariantes | `LancamentosGerenciaisForaDoLedgerTest` |

@@ -26,6 +26,7 @@ import 'views/detalhe_turno/detalhe_turno_screen.dart';
 import 'views/turno_lojista/turno_lojista_screen.dart';
 import 'views/turnos_lojista_lista/turnos_lojista_lista_screen.dart';
 import 'views/dados_pessoais/dados_pessoais_screen.dart';
+import 'views/alterar_senha/alterar_senha_screen.dart';
 import 'views/cnh_veiculo/cnh_veiculo_screen.dart';
 import 'views/minhas_avaliacoes/minhas_avaliacoes_screen.dart';
 import 'views/historico_turnos/historico_turnos_screen.dart';
@@ -38,6 +39,7 @@ import 'views/extrato/extrato_screen.dart';
 import 'views/extrato/lancamento_detalhe_screen.dart';
 import 'views/recarga/recarga_screen.dart';
 import 'views/relatorios_financeiros/relatorios_financeiros_screen.dart';
+import 'views/resultado/resultado_screen.dart';
 import 'views/recuperar_senha/recuperar_senha_screen.dart';
 import 'widgets/auth_guard.dart';
 import 'models/usuario.dart';
@@ -71,10 +73,15 @@ class MotoShiftApp extends StatelessWidget {
           create: (_) => TurnoSelecionadoProvider(),
         ),
 
-        // Notificações (RF09) — lista e badge do sino
-        ChangeNotifierProxyProvider<ApiService, NotificacaoProvider>(
+        // Notificações (RF09) — lista e badge do sino. Depende também da
+        // sessão: com alguém logado o provider busca a contagem a cada 45 s,
+        // e para no logout (ver NotificacaoProvider.acompanharSessao).
+        ChangeNotifierProxyProvider2<ApiService, AuthService,
+            NotificacaoProvider>(
           create: (ctx) => NotificacaoProvider(ctx.read<ApiService>()),
-          update: (_, api, prev) => prev ?? NotificacaoProvider(api),
+          update: (_, api, auth, prev) =>
+              (prev ?? NotificacaoProvider(api))
+                ..acompanharSessao(auth.usuario?.id),
         ),
 
         // O que falta depois do turno — avaliação e nota fiscal. Fonte única
@@ -92,7 +99,9 @@ class MotoShiftApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'Moto Shift',
+        // O nome do app para o sistema — no web, é o que fica na aba depois que
+        // o Flutter sobe (sobrescreve o <title> do index.html).
+        title: 'MotoShift',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         locale: const Locale('pt', 'BR'),
@@ -213,11 +222,15 @@ Map<String, WidgetBuilder> rotasDoApp() => {
             (_) => const AuthGuard(child: DocumentoFiscalScreen()),
         AppRoutes.relatorioFinanceiro:
             (_) => const AuthGuard(child: RelatoriosFinanceirosScreen()),
+        // Resultado (RF13): uma tela para os dois papéis — o backend monta a
+        // DRE de quem está logado.
+        AppRoutes.resultado: (_) => const AuthGuard(child: ResultadoScreen()),
 
         // ── Perfil — sub-páginas (qualquer autenticado) ───────────────────
         AppRoutes.perfilPublico:    (_) => const AuthGuard(child: PerfilPublicoScreen()),
         AppRoutes.dadosPessoais:    (_) => const AuthGuard(child: DadosPessoaisScreen()),
         AppRoutes.cnhVeiculo:       (_) => const AuthGuard(child: CnhVeiculoScreen()),
+        AppRoutes.alterarSenha:     (_) => const AuthGuard(child: AlterarSenhaScreen()),
         AppRoutes.minhasAvaliacoes: (_) => const AuthGuard(child: MinhasAvaliacoesScreen()),
         AppRoutes.historicoTurnos:  (_) => const AuthGuard(child: HistoricoTurnosScreen()),
 

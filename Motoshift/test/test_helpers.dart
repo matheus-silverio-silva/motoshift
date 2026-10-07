@@ -15,12 +15,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 
 import 'package:moto_shift/models/carteira.dart';
 import 'package:moto_shift/models/cobranca.dart';
 import 'package:moto_shift/models/danfse.dart';
+import 'package:moto_shift/models/dre.dart';
+import 'package:moto_shift/models/lancamento_gerencial.dart';
 import 'package:moto_shift/models/documento_fiscal.dart';
 import 'package:moto_shift/models/extrato_filtro.dart';
 import 'package:moto_shift/models/informe_anual.dart';
@@ -45,7 +48,9 @@ import 'package:moto_shift/services/api/nota_fiscal_api.dart';
 import 'package:moto_shift/services/api/avaliacao_api.dart';
 import 'package:moto_shift/services/api/carteira_api.dart';
 import 'package:moto_shift/services/api/dashboard_api.dart';
+import 'package:moto_shift/services/api/financeiro_api.dart';
 import 'package:moto_shift/services/api/notificacao_api.dart';
+import 'package:moto_shift/services/api/status_api.dart';
 import 'package:moto_shift/services/api/turno_api.dart';
 import 'package:moto_shift/services/api/usuario_api.dart';
 import 'package:moto_shift/services/api_service.dart';
@@ -60,15 +65,21 @@ import 'package:moto_shift/utils/baixar_arquivo.dart';
 
 /// Chame em setUpAll() de cada test file.
 ///
-/// - Bloqueia HTTP (tiles OSM, mas deixa fontes Google passar)
-/// - Pré-registra uma fonte TTF do sistema com os nomes que o tema usa
-///   (Bricolage Grotesque + Plus Jakarta Sans) para evitar Ahem quadradão
-///   no golden caso o download de fonte falhe / esteja offline.
+/// - Bloqueia todo HTTP (tiles OSM, fontes): a suíte não depende de rede
+/// - Registra as fontes do tema (Bricolage Grotesque + Plus Jakarta Sans) a
+///   partir dos arquivos embarcados em assets/fonts — os goldens mostram a
+///   fonte que o usuário vê, e não a do sistema de quem rodou o teste.
+/// - Registra a fonte dos ícones (MaterialIcons): sem ela todo ícone é um
+///   quadrado no golden, e trocar um ícone por outro não muda a foto.
 Future<void> setupGoldenTests() async {
   TestWidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_BR');
   HttpOverrides.global = _SelectiveHttpOverrides();
-  await _registerFallbackFonts();
+  // Como no main.dart: fonte só dos assets. Um peso que o app passe a usar
+  // sem embarcar o arquivo aparece aqui como erro, em vez de ser baixado.
+  GoogleFonts.config.allowRuntimeFetching = false;
+  await _registrarFontesDoTema();
+  await _registrarFontesDeIcones();
 
   // Mock dos canais nativos usados em testes:
   // - path_provider: google_fonts salva fontes no diretório de suporte
@@ -89,15 +100,18 @@ Future<void> setupGoldenTests() async {
     },
   );
 
-  // Silencia avisos residuais — overflow ocorre só em teste por causa das
-  // métricas diferentes da fonte fallback (Roboto vs Bricolage/Jakarta).
+  // Silencia avisos residuais de teste (tiles do mapa, timers).
+  //
+  // "RenderFlex overflowed" NÃO está mais nesta lista. Estava porque os
+  // testes desenhavam com a fonte do sistema, de métricas diferentes das do
+  // app, e todo estouro era tratado como artefato de teste. Com as fontes do
+  // tema embarcadas, um estouro aqui é o estouro que o usuário vê no celular
+  // — o primeiro que apareceu foi a linha do extrato, 16 px além da tela.
   FlutterError.onError = (FlutterErrorDetails details) {
     final msg = details.exceptionAsString();
     if (msg.contains('google_fonts') ||
         msg.contains('Failed to load font') ||
         msg.contains('tile.openstreetmap') ||
-        msg.contains('RenderFlex overflowed') ||
-        msg.contains('A RenderFlex overflowed') ||
         msg.contains('Timer is still pending') ||
         msg.contains('timersPending')) {
       return;
@@ -223,6 +237,9 @@ List<Turno> fakeMeusTurnos({DateTime? ancora}) {
       valorEstimado: 120,
       raioEntregaKm: 8,
       status: StatusTurno.emAndamento,
+      // Em andamento quer dizer que alguém fez check-in — é o que o backend
+      // manda, e o que deixa "Confirmar conclusão" aparecer.
+      algumCheckin: true,
     ),
     Turno(
       id: 202,
@@ -764,6 +781,24 @@ Map<String, dynamic> fakeAgendaSemanal() => {
 class FakeAuthApi extends AuthApi {
   FakeAuthApi() : super(ApiClient());
 
+  // Senha (SCRUM-32): por padrão tudo dá certo, sem rede. O teste que quer
+  // ver o erro sobrescreve.
+  @override
+  Future<void> trocarSenha({
+    required String senhaAtual,
+    required String senhaNova,
+  }) async {}
+
+  @override
+  Future<void> esqueciSenha(String email) async {}
+
+  @override
+  Future<void> redefinirSenha({
+    required String email,
+    required String codigo,
+    required String senhaNova,
+  }) async {}
+
   @override
   Future<Usuario> buscarUsuario(int id) async => fakeMotoboy();
 
@@ -1264,8 +1299,16 @@ class FakeUsuarioApi extends UsuarioApi {
 class FakeApiService extends ApiService {
   /// [tipoUsuario] é o papel da conta logada — o fake da carteira devolve o
   /// resumo daquele papel, como o backend faz.
-  FakeApiService({TipoUsuario tipoUsuario = TipoUsuario.motoboy})
-      : _carteira = FakeCarteiraApi(papel: tipoUsuario);
+  FakeApiService({
+    TipoUsuario tipoUsuario = TipoUsuario.motoboy,
+    bool resultadoComPrejuizo = false,
+  })  : _carteira = FakeCarteiraApi(papel: tipoUsuario),
+        _financeiro = FakeFinanceiroApi(
+            papel: tipoUsuario, comPrejuizo: resultadoComPrejuizo);
+
+  @override
+  FinanceiroApi get financeiro => _financeiro;
+  final FinanceiroApi _financeiro;
 
   @override
   AuthApi get auth => _auth;
@@ -1306,6 +1349,428 @@ class FakeApiService extends ApiService {
   @override
   FavoritoApi get favoritos => _favoritos;
   final FavoritoApi _favoritos = FakeFavoritoApi();
+
+  @override
+  StatusApi get status => statusFalso;
+
+  /// O `/api/status` desta API. Por padrão o servidor está no ar; o teste da
+  /// espera o põe para dormir com `statusFalso.dormindo = true`.
+  final FakeStatusApi statusFalso = FakeStatusApi();
+}
+
+/// O `/api/status` dos testes (SCRUM-48).
+///
+/// Responde na hora, sem rede: para todas as telas o servidor está no ar, e
+/// a faixa "Acordando o servidor…" nunca aparece. Com [dormindo], nenhuma
+/// pergunta é respondida até [acordar] — o servidor do plano gratuito depois
+/// de 15 minutos parado.
+class FakeStatusApi extends StatusApi {
+  FakeStatusApi({this.dormindo = false}) : super(ApiClient());
+
+  bool dormindo;
+
+  /// Quantas vezes o app perguntou.
+  int perguntas = 0;
+
+  final List<Completer<bool>> _semResposta = [];
+
+  @override
+  Future<bool> noAr() {
+    perguntas++;
+    if (!dormindo) return Future.value(true);
+    final pergunta = Completer<bool>();
+    _semResposta.add(pergunta);
+    return pergunta.future;
+  }
+
+  /// O servidor acordou: as perguntas que estavam no ar são respondidas, e as
+  /// próximas também.
+  void acordar() {
+    dormindo = false;
+    for (final pergunta in _semResposta) {
+      pergunta.complete(true);
+    }
+    _semResposta.clear();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Resultado (RF13): a DRE e os lançamentos gerenciais, ancorados em
+// [dataAncoraGolden] (agosto de 2026). Os números são os do Carlos e da
+// Cláudia da massa de demonstração, arredondados.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A DRE do entregador em agosto: com [comPrejuizo], entra a manutenção de
+/// R$ 420 — o mês em que a moto custou mais do que rendeu.
+Dre fakeDreEntregador({bool comPrejuizo = false}) {
+  final manutencao = comPrejuizo ? 420.0 : 0.0;
+  final resultado = 111.95 - manutencao;
+  LinhaDre manual(String chave, String rotulo, double valor) => LinhaDre(
+      chave: chave, rotulo: rotulo, valor: valor, origem: OrigemDaLinha.manual, subtrai: true);
+  LinhaDre subtotal(String chave, String rotulo, double valor) =>
+      LinhaDre(chave: chave, rotulo: rotulo, valor: valor, tipo: TipoDeLinhaDre.subtotal);
+
+  return Dre(
+    papel: TipoUsuario.motoboy,
+    dataInicio: DateTime(2026, 8, 1),
+    dataFim: DateTime(2026, 8, 19),
+    linhas: [
+      const LinhaDre(
+          chave: 'pagamentos_recebidos',
+          rotulo: 'Pagamentos de turnos',
+          valor: 380,
+          origem: OrigemDaLinha.extrato),
+      const LinhaDre(
+          chave: 'gorjetas_recebidas',
+          rotulo: 'Gorjetas',
+          valor: 10,
+          origem: OrigemDaLinha.extrato),
+      subtotal('receita_bruta', 'Receita bruta', 390),
+      const LinhaDre(
+          chave: 'retencoes_na_fonte',
+          rotulo: 'Retenções na fonte (ISS e IRRF)',
+          valor: 0,
+          origem: OrigemDaLinha.extrato,
+          subtrai: true),
+      manual('das_mei', 'DAS do MEI', 86.05),
+      subtotal('receita_liquida', 'Receita líquida', 303.95),
+      manual('combustivel', 'Combustível', 30),
+      manual('manutencao', 'Manutenção', manutencao),
+      subtotal('margem_de_contribuicao', 'Margem de contribuição', 273.95 - manutencao),
+      manual('celular_internet', 'Celular e internet', 35),
+      manual('seguro', 'Seguro', 32),
+      manual('parcela_ou_aluguel_veiculo', 'Parcela ou aluguel do veículo', 95),
+      manual('outra_despesa_entregador', 'Outra despesa', 0),
+      LinhaDre(
+          chave: 'resultado',
+          rotulo: 'Resultado do período',
+          valor: resultado,
+          tipo: TipoDeLinhaDre.resultado),
+    ],
+    resultado: resultado,
+    situacao: comPrejuizo ? SituacaoDre.prejuizo : SituacaoDre.lucro,
+    indicadores: {
+      'margemLiquida': comPrejuizo ? -78.99 : 28.71,
+      'turnosPagos': 4,
+      'horasTrabalhadas': 16.0,
+      'lucroPorHora': comPrejuizo ? -19.25 : 7.0,
+      'lucroPorTurno': comPrejuizo ? -77.01 : 27.99,
+      'kmInformados': 168.0,
+      'custoPorKm': comPrejuizo ? 2.68 : 0.18,
+      'margemDeContribuicaoPorTurno': comPrejuizo ? -36.51 : 68.49,
+      'pontoDeEquilibrioTurnos': comPrejuizo ? null : 3,
+      'pontoDeEquilibrioMotivo':
+          comPrejuizo ? 'a margem por turno não cobre os custos variáveis' : null,
+    },
+    anterior: DreAnterior(
+      dataInicio: DateTime(2026, 7, 13),
+      dataFim: DateTime(2026, 7, 31),
+      resultado: comPrejuizo ? 97.0 : -205.55,
+      situacao: comPrejuizo ? SituacaoDre.lucro : SituacaoDre.prejuizo,
+    ),
+    variacaoResultado: comPrejuizo ? resultado - 97.0 : resultado + 205.55,
+    lancamentosManuais: comPrejuizo ? 9 : 8,
+  );
+}
+
+/// A DRE da operação de entrega da loja em agosto: as taxas cobradas cobrem
+/// os entregadores.
+Dre fakeDreLojista() {
+  return Dre(
+    papel: TipoUsuario.lojista,
+    dataInicio: DateTime(2026, 8, 1),
+    dataFim: DateTime(2026, 8, 19),
+    linhas: const [
+      LinhaDre(
+          chave: 'receita_de_entregas',
+          rotulo: 'Receita de entregas (taxas cobradas)',
+          valor: 832,
+          origem: OrigemDaLinha.manual),
+      LinhaDre(
+          chave: 'custo_dos_entregadores',
+          rotulo: 'Pagamentos e gorjetas a entregadores',
+          valor: 530,
+          origem: OrigemDaLinha.extrato,
+          subtrai: true),
+      LinhaDre(
+          chave: 'entrega_fora_do_app',
+          rotulo: 'Entrega fora do app',
+          valor: 45,
+          origem: OrigemDaLinha.manual,
+          subtrai: true),
+      LinhaDre(
+          chave: 'margem_da_operacao',
+          rotulo: 'Margem da operação',
+          valor: 257,
+          tipo: TipoDeLinhaDre.subtotal),
+      LinhaDre(
+          chave: 'outra_despesa_entrega',
+          rotulo: 'Outra despesa de entrega',
+          valor: 60,
+          origem: OrigemDaLinha.manual,
+          subtrai: true),
+      LinhaDre(
+          chave: 'resultado',
+          rotulo: 'Resultado da operação de entrega',
+          valor: 197,
+          tipo: TipoDeLinhaDre.resultado),
+    ],
+    resultado: 197,
+    situacao: SituacaoDre.lucro,
+    indicadores: const {
+      'custoSobreReceita': 69.11,
+      'turnosFinalizados': 4,
+      'custoMedioPorTurno': 132.5,
+      'resultadoPorTurno': 49.25,
+      'gorjetasDadas': 10.0,
+    },
+    anterior: DreAnterior(
+      dataInicio: DateTime(2026, 7, 13),
+      dataFim: DateTime(2026, 7, 31),
+      resultado: -290,
+      situacao: SituacaoDre.prejuizo,
+    ),
+    variacaoResultado: 487,
+    lancamentosManuais: 6,
+  );
+}
+
+/// Os doze meses de 2026: movimento de abril a agosto, um mês de prejuízo.
+List<MesDre> fakeMesesDaDre({bool lojista = false, bool agostoComPrejuizo = false}) {
+  const rotulos = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  // (receita, custos) de abril a agosto.
+  final movimento = lojista
+      ? const {4: (832.0, 590.0), 5: (1040.0, 700.0), 6: (832.0, 560.0), 7: (240.0, 530.0), 8: (832.0, 635.0)}
+      : {
+          4: (380.0, 278.05),
+          5: (475.0, 285.55),
+          6: (385.0, 323.05),
+          7: (380.0, 698.05),
+          8: (390.0, agostoComPrejuizo ? 698.05 : 278.05),
+        };
+  return [
+    for (var m = 1; m <= 12; m++)
+      MesDre(
+        mes: m,
+        rotulo: rotulos[m - 1],
+        receita: movimento[m]?.$1 ?? 0,
+        custos: movimento[m]?.$2 ?? 0,
+        resultado: (movimento[m]?.$1 ?? 0) - (movimento[m]?.$2 ?? 0),
+      ),
+  ];
+}
+
+List<CategoriaDeLancamento> fakeCategoriasDeLancamento(TipoUsuario papel) {
+  CategoriaDeLancamento c(String valor, String rotulo, String grupo, String rotuloDoGrupo,
+          {bool soma = false}) =>
+      CategoriaDeLancamento(
+          valor: valor, rotulo: rotulo, grupo: grupo, rotuloDoGrupo: rotuloDoGrupo, soma: soma);
+  return papel == TipoUsuario.lojista
+      ? [
+          c('taxa_de_entrega_cobrada', 'Taxa de entrega cobrada', 'receita', 'Receita', soma: true),
+          c('entrega_fora_do_app', 'Entrega fora do app', 'custo_entrega', 'Custo de entrega'),
+          c('outra_despesa_entrega', 'Outra despesa de entrega', 'despesa_operacional',
+              'Outras despesas'),
+        ]
+      : [
+          c('combustivel', 'Combustível', 'custo_variavel', 'Custos variáveis'),
+          c('manutencao', 'Manutenção', 'custo_variavel', 'Custos variáveis'),
+          c('das_mei', 'DAS do MEI', 'deducao', 'Deduções'),
+          c('celular_internet', 'Celular e internet', 'despesa_fixa', 'Despesas fixas'),
+          c('seguro', 'Seguro', 'despesa_fixa', 'Despesas fixas'),
+          c('parcela_ou_aluguel_veiculo', 'Parcela ou aluguel do veículo', 'despesa_fixa',
+              'Despesas fixas'),
+          c('outra_despesa_entregador', 'Outra despesa', 'despesa_fixa', 'Despesas fixas'),
+        ];
+}
+
+List<LancamentoGerencial> fakeLancamentosGerenciais(TipoUsuario papel, {bool comPrejuizo = false}) {
+  if (papel == TipoUsuario.lojista) {
+    return [
+      LancamentoGerencial(
+          id: 31,
+          categoria: 'taxa_de_entrega_cobrada',
+          rotuloDaCategoria: 'Taxa de entrega cobrada',
+          soma: true,
+          valor: 208,
+          data: DateTime(2026, 8, 15),
+          turnoId: 7,
+          descricao: 'Taxas de entrega cobradas na noite',
+          ocorrenciasNoPeriodo: 1,
+          valorNoPeriodo: 208),
+      LancamentoGerencial(
+          id: 32,
+          categoria: 'entrega_fora_do_app',
+          rotuloDaCategoria: 'Entrega fora do app',
+          valor: 45,
+          data: DateTime(2026, 8, 14),
+          descricao: 'Motoboy avulso numa noite de chuva',
+          ocorrenciasNoPeriodo: 1,
+          valorNoPeriodo: 45),
+      LancamentoGerencial(
+          id: 33,
+          categoria: 'outra_despesa_entrega',
+          rotuloDaCategoria: 'Outra despesa de entrega',
+          valor: 60,
+          data: DateTime(2026, 8, 3),
+          descricao: 'Embalagens térmicas e mochila reserva',
+          ocorrenciasNoPeriodo: 1,
+          valorNoPeriodo: 60),
+    ];
+  }
+  return [
+    if (comPrejuizo)
+      LancamentoGerencial(
+          id: 25,
+          categoria: 'manutencao',
+          rotuloDaCategoria: 'Manutenção',
+          valor: 420,
+          data: DateTime(2026, 8, 12),
+          descricao: 'Troca da relação, do pneu traseiro e das pastilhas',
+          ocorrenciasNoPeriodo: 1,
+          valorNoPeriodo: 420),
+    LancamentoGerencial(
+        id: 21,
+        categoria: 'combustivel',
+        rotuloDaCategoria: 'Combustível',
+        valor: 7.5,
+        data: DateTime(2026, 8, 12),
+        turnoId: 4,
+        km: 42,
+        descricao: 'Gasolina do turno',
+        ocorrenciasNoPeriodo: 1,
+        valorNoPeriodo: 7.5),
+    LancamentoGerencial(
+        id: 22,
+        categoria: 'das_mei',
+        rotuloDaCategoria: 'DAS do MEI',
+        valor: 86.05,
+        data: DateTime(2026, 8, 10),
+        descricao: 'DAS do MEI de 07/2026',
+        ocorrenciasNoPeriodo: 1,
+        valorNoPeriodo: 86.05),
+    LancamentoGerencial(
+        id: 23,
+        categoria: 'parcela_ou_aluguel_veiculo',
+        rotuloDaCategoria: 'Parcela ou aluguel do veículo',
+        valor: 95,
+        data: DateTime(2026, 4, 5),
+        recorrente: true,
+        descricao: 'Parcela do consórcio da moto',
+        ocorrenciasNoPeriodo: 1,
+        valorNoPeriodo: 95),
+    LancamentoGerencial(
+        id: 24,
+        categoria: 'seguro',
+        rotuloDaCategoria: 'Seguro',
+        valor: 32,
+        data: DateTime(2026, 4, 15),
+        recorrente: true,
+        descricao: 'Seguro contra roubo (rateio da associação)',
+        ocorrenciasNoPeriodo: 1,
+        valorNoPeriodo: 32),
+  ];
+}
+
+/// O backend do resultado, sem rede: devolve as fixtures acima e anota o que
+/// a tela pediu e mandou.
+class FakeFinanceiroApi extends FinanceiroApi {
+  FakeFinanceiroApi({
+    this.papel = TipoUsuario.motoboy,
+    this.comPrejuizo = false,
+    this.semLancamentos = false,
+    this.erroAoSalvar,
+    this.erroNaDre,
+  }) : super(ApiClient());
+
+  final TipoUsuario papel;
+  final bool comPrejuizo;
+
+  /// A conta de quem ainda não informou nada: DRE só com o extrato.
+  final bool semLancamentos;
+  final ApiException? erroAoSalvar;
+
+  /// A DRE fora do ar — para o painel, que tem de continuar de pé sem ela.
+  final ApiException? erroNaDre;
+
+  /// Os períodos pedidos, na ordem.
+  final List<(DateTime?, DateTime?)> periodosPedidos = [];
+  final List<int?> anosPedidos = [];
+  final List<LancamentoGerencial> criados = [];
+  final List<(int, LancamentoGerencial)> atualizados = [];
+
+  /// O `aplicarAPartirDe` de cada edição, na ordem: nulo quando a edição
+  /// corrige o histórico inteiro.
+  final List<DateTime?> alcancesDasEdicoes = [];
+  final List<int> excluidos = [];
+
+  @override
+  Future<Dre> buscarDre({DateTime? dataInicio, DateTime? dataFim}) async {
+    if (erroNaDre != null) throw erroNaDre!;
+    periodosPedidos.add((dataInicio, dataFim));
+    final base = papel == TipoUsuario.lojista
+        ? fakeDreLojista()
+        : fakeDreEntregador(comPrejuizo: comPrejuizo);
+    return Dre(
+      papel: base.papel,
+      // A tela mostra o período que pediu.
+      dataInicio: dataInicio ?? base.dataInicio,
+      dataFim: dataFim ?? base.dataFim,
+      linhas: base.linhas,
+      resultado: base.resultado,
+      situacao: base.situacao,
+      indicadores: base.indicadores,
+      anterior: base.anterior,
+      variacaoResultado: base.variacaoResultado,
+      lancamentosManuais: semLancamentos ? 0 : base.lancamentosManuais,
+    );
+  }
+
+  @override
+  Future<List<MesDre>> buscarDreMensal({int? ano}) async {
+    anosPedidos.add(ano);
+    if (ano != null && ano != 2026) return fakeMesesDaDre().map(_zerado).toList();
+    return fakeMesesDaDre(
+        lojista: papel == TipoUsuario.lojista, agostoComPrejuizo: comPrejuizo);
+  }
+
+  static MesDre _zerado(MesDre m) =>
+      MesDre(mes: m.mes, rotulo: m.rotulo, receita: 0, custos: 0, resultado: 0);
+
+  @override
+  Future<List<CategoriaDeLancamento>> buscarCategorias() async =>
+      fakeCategoriasDeLancamento(papel);
+
+  @override
+  Future<List<LancamentoGerencial>> listarLancamentos({
+    DateTime? dataInicio,
+    DateTime? dataFim,
+  }) async =>
+      semLancamentos ? const [] : fakeLancamentosGerenciais(papel, comPrejuizo: comPrejuizo);
+
+  @override
+  Future<LancamentoGerencial> criarLancamento(LancamentoGerencial l) async {
+    if (erroAoSalvar != null) throw erroAoSalvar!;
+    criados.add(l);
+    return l;
+  }
+
+  @override
+  Future<LancamentoGerencial> atualizarLancamento(
+    int id,
+    LancamentoGerencial l, {
+    DateTime? aplicarAPartirDe,
+  }) async {
+    if (erroAoSalvar != null) throw erroAoSalvar!;
+    atualizados.add((id, l));
+    alcancesDasEdicoes.add(aplicarAPartirDe);
+    return l;
+  }
+
+  @override
+  Future<void> excluirLancamento(int id) async {
+    excluidos.add(id);
+  }
 }
 
 /// Turnos encerrados com data ABSOLUTA, para as telas de histórico.
@@ -1401,6 +1866,10 @@ class FakeTurnoApiDatasFixas extends FakeTurnoApi {
 }
 
 class FakeApiDatasFixas extends FakeApiService {
+  /// [tipoUsuario] escolhe a carteira e a DRE do papel, como no
+  /// [FakeApiService]: o painel da loja mostra o resultado da loja.
+  FakeApiDatasFixas({super.tipoUsuario});
+
   @override
   TurnoApi get turnos => _turnosDatasFixas;
   final TurnoApi _turnosDatasFixas = FakeTurnoApiDatasFixas();
@@ -1517,66 +1986,98 @@ class _BlankPage extends StatelessWidget {
       const Scaffold(body: SizedBox.shrink());
 }
 
-/// Procura uma fonte TTF do sistema e registra com os nomes que o app usa.
-/// Tenta caminhos comuns em Windows/Mac/Linux. Se não achar, o teste continua
-/// usando Ahem (caixas quadradas) — sem crash.
-Future<void> _registerFallbackFonts() async {
-  const candidatos = [
-    r'C:\Windows\Fonts\segoeui.ttf',
-    r'C:\Windows\Fonts\arial.ttf',
-    r'C:\Windows\Fonts\calibri.ttf',
-    '/Library/Fonts/Arial.ttf',
-    '/System/Library/Fonts/Helvetica.ttc',
-    '/System/Library/Fonts/Supplemental/Arial.ttf',
-    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-    '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
-  ];
+/// Registra as fontes do tema a partir dos arquivos EMBARCADOS (assets/fonts),
+/// com os nomes de família que o google_fonts usa.
+///
+/// Antes isto registrava uma fonte do sistema (Segoe UI no Windows, Arial,
+/// DejaVu...) com os nomes da Bricolage e da Jakarta: os goldens não mostravam
+/// a cara do app, e mudavam de máquina para máquina. Com as fontes no
+/// repositório, o teste desenha o que o usuário vê.
+///
+/// Por que registrar à mão, se o google_fonts acharia os arquivos nos assets:
+/// ele carrega a fonte de forma assíncrona na primeira vez em que o estilo é
+/// pedido, e dentro de um testWidgets essa E/S não termina antes do frame que
+/// o golden fotografa. Aqui (setUpAll, fora do relógio falso) ela já chega
+/// carregada.
+///
+/// O google_fonts gera fontFamily no formato `FamiliaSemEspaco_variante`:
+/// "regular" para o peso 400 e o número para os demais ("700"). Os pesos que o
+/// app não embarca (100 a 300, 900) caem no vizinho mais próximo, como o motor
+/// de texto faria.
+Future<void> _registrarFontesDoTema() async {
+  const arquivoDoPeso = {
+    '100': 'Regular',
+    '200': 'Regular',
+    '300': 'Regular',
+    'regular': 'Regular',
+    '400': 'Regular',
+    '500': 'Medium',
+    '600': 'SemiBold',
+    '700': 'Bold',
+    '800': 'ExtraBold',
+    '900': 'ExtraBold',
+  };
 
-  File? fonte;
-  for (final p in candidatos) {
-    final f = File(p);
-    if (f.existsSync()) {
-      fonte = f;
-      break;
-    }
-  }
-  if (fonte == null) {
-    // ignore: avoid_print
-    print('[golden-fonts] nenhuma fonte do sistema encontrada — Ahem ativo');
-    return;
-  }
-  // ignore: avoid_print
-  print('[golden-fonts] usando ${fonte.path}');
+  final cache = <String, ByteData>{};
+  ByteData bytesDe(String familia, String peso) => cache.putIfAbsent(
+      '$familia-$peso',
+      () => ByteData.sublistView(
+          File('assets/fonts/$familia-$peso.ttf').readAsBytesSync()));
 
-  final bytes = await fonte.readAsBytes();
+  int total = 0;
+  for (final familia in const ['BricolageGrotesque', 'PlusJakartaSans']) {
+    // O nome puro da família é o fontFamilyFallback dos estilos gerados.
+    final nomes = <String, String>{familia: 'Regular'};
+    arquivoDoPeso.forEach((variante, peso) => nomes['${familia}_$variante'] = peso);
 
-  // google_fonts gera fontFamily no formato "FamiliaSemEspaco_<peso>".
-  // Pesos: "regular" (== 400), "100", "200", "300", "500", "600", "700", "800", "900",
-  // sufixos "i" para italic. Também há fontFamilyFallback = ["FamiliaSemEspaco"].
-  // Pré-registramos todos os nomes que podem aparecer nos TextStyle gerados.
-  final families = <String>['BricolageGrotesque', 'PlusJakartaSans'];
-  final variants = <String>[
-    'regular',
-    '100', '200', '300', '400', '500', '600', '700', '800', '900',
-    '100i', '200i', '300i', '400i', '500i', '600i', '700i', '800i', '900i',
-  ];
-
-  int count = 0;
-  for (final fam in families) {
-    final names = <String>{fam, ...variants.map((v) => '${fam}_$v')};
-    for (final name in names) {
-      final loader = FontLoader(name)
-        ..addFont(Future.value(ByteData.sublistView(bytes)));
-      await loader.load();
-      count++;
+    for (final entrada in nomes.entries) {
+      final carregador = FontLoader(entrada.key)
+        ..addFont(Future.value(bytesDe(familia, entrada.value)));
+      await carregador.load();
+      total++;
     }
   }
   // ignore: avoid_print
-  print('[golden-fonts] registradas $count variações');
+  print('[golden-fonts] fontes do tema (assets/fonts): $total variações');
+}
+
+/// Registra as fontes de ícones do app: a MaterialIcons e o que mais o
+/// FontManifest do build declarar.
+///
+/// O flutter_test não carrega fonte nenhuma, e as de ícone não são exceção:
+/// todo ícone saía como um quadrado do tamanho dele. O golden conferia que
+/// "há um ícone ali", e não qual — trocar a seta pela lixeira passava sem
+/// ninguém ver (SCRUM-49).
+///
+/// Lê o FontManifest.json em vez de apontar o arquivo: é a mesma lista que o
+/// app carrega ao abrir, então uma fonte de ícones nova (um pacote, a
+/// CupertinoIcons) entra aqui sozinha. Se a MaterialIcons não estiver nele, a
+/// suíte para — melhor do que voltar aos quadrados em silêncio.
+Future<void> _registrarFontesDeIcones() async {
+  final manifesto =
+      json.decode(await rootBundle.loadString('FontManifest.json')) as List<dynamic>;
+
+  final familias = <String>[];
+  for (final entrada in manifesto.cast<Map<String, dynamic>>()) {
+    final familia = entrada['family'] as String;
+    final carregador = FontLoader(familia);
+    for (final fonte in (entrada['fonts'] as List<dynamic>).cast<Map<String, dynamic>>()) {
+      carregador.addFont(rootBundle.load(fonte['asset'] as String));
+    }
+    await carregador.load();
+    familias.add(familia);
+  }
+  if (!familias.contains('MaterialIcons')) {
+    throw StateError(
+        'A fonte MaterialIcons não está no FontManifest.json (famílias: $familias). '
+        'O pubspec.yaml precisa de "uses-material-design: true".');
+  }
+  // ignore: avoid_print
+  print('[golden-fonts] fontes de ícones (FontManifest): ${familias.join(', ')}');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HttpOverrides seletivo: deixa fontes Google passar, bloqueia tiles OSM
+// HttpOverrides: nenhuma requisição sai da suíte (tiles OSM, fontes, nada)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SelectiveHttpOverrides extends HttpOverrides {
@@ -1589,12 +2090,10 @@ class _SelectiveHttpClient implements HttpClient {
   _SelectiveHttpClient(this._real);
   final HttpClient _real;
 
-  bool _allow(Uri url) {
-    final host = url.host;
-    return host.contains('gstatic.com') ||
-        host.contains('googleapis.com') ||
-        host.contains('fonts.google.com');
-  }
+  /// Nada passa. As fontes do Google passavam — a suíte baixava fonte da
+  /// internet no meio dos testes —, e não precisam mais: estão embarcadas em
+  /// assets/fonts. Teste que depende de rede passa ou falha conforme o Wi-Fi.
+  bool _allow(Uri url) => false;
 
   @override
   Future<HttpClientRequest> getUrl(Uri url) => _allow(url)

@@ -138,7 +138,8 @@ public record Movimento(
     }
 
     /**
-     * Volta do bloqueado para o disponivel: turno cancelado, expirado, ou vaga
+     * Volta do bloqueado para o disponivel: turno cancelado, expirado, encerrado
+     * sem check-in pela finalizacao automatica, ou vaga
      * que ninguem preencheu.
      *
      * O motivo entra na chave porque um mesmo turno pode liberar por mais de
@@ -275,7 +276,12 @@ public record Movimento(
         CANCELAMENTO("cancelamento"),
         EXPIRACAO("expiracao"),
         /** Vagas que ninguem preencheu, devolvidas quando o turno e finalizado. */
-        SOBRA("sobra");
+        SOBRA("sobra"),
+        /**
+         * O turno terminou, ninguem fez check-in e o prazo da finalizacao
+         * automatica venceu: nao ha quem pagar, e a reserva volta inteira.
+         */
+        SEM_CHECKIN("sem_checkin");
 
         private final String chave;
 

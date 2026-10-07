@@ -91,10 +91,13 @@ public class Selos {
         // também está "sem cancelar", e o selo não diria nada.
         LocalDateTime inicioDaJanela = agora.minusDays(DIAS_SEM_CANCELAR);
         LocalDateTime primeiro = inscricaoRepo.primeiroTurnoConcluido(id);
+        // "Cancelar", para o entregador, é desistir da vaga — e a desistência
+        // mora na inscrição (V22). O turno que a LOJA cancelou fica com o id
+        // dela e não tira o selo de ninguém.
         if (primeiro != null && !primeiro.isAfter(inicioDaJanela)
-                && !turnoRepo.existsByCanceladoPorIdAndCanceladoEmAfter(id, inicioDaJanela)) {
+                && !inscricaoRepo.existsByCanceladoPorIdAndCanceladoEmAfter(id, inicioDaJanela)) {
             selos.add(new Selo("sem_cancelar", DIAS_SEM_CANCELAR + " dias sem cancelar",
-                    "Nenhum turno cancelado por ele nos últimos " + DIAS_SEM_CANCELAR
+                    "Não desistiu de nenhuma vaga nos últimos " + DIAS_SEM_CANCELAR
                             + " dias, com turnos concluídos há mais tempo que isso."));
         }
 

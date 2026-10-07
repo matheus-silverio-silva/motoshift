@@ -61,6 +61,15 @@ class SegurancaDaApiTest {
     }
 
     @Test
+    @DisplayName("fora de producao o Swagger continua publico: so sai das rotas abertas quando e desligado (SCRUM-36)")
+    void swaggerPublicoForaDeProducao() throws Exception {
+        mvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
+        // O atalho redireciona para a interface; o que importa e nao ser 401.
+        mvc.perform(get("/swagger-ui.html")).andExpect(status().is3xxRedirection());
+        mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
+    }
+
+    @Test
     @DisplayName("token invalido nao vira sessao anonima — responde 401")
     void tokenInvalido_401() throws Exception {
         mvc.perform(get("/api/carteira/1")

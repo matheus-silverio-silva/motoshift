@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../routes/nav_config.dart';
 import '../services/auth_service.dart';
+import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
 import 'app_bottom_nav.dart';
 import 'app_nav_drawer.dart';
@@ -47,8 +48,21 @@ class AdaptiveScaffold extends StatelessWidget {
     this.desktopOnNotificationsTap,
     this.desktopShowBack,
     this.desktopOnBack,
+    this.onAtualizar,
     super.key,
   });
+
+  /// Recarrega os dados da tela.
+  ///
+  /// A tela declara uma coisa só — como se recarrega — e o scaffold escolhe o
+  /// gesto de cada tamanho: no celular e no tablet, **puxar para baixo**
+  /// ([RefreshIndicator] em volta do [body]); no desktop, o botão
+  /// **Atualizar** da topbar, porque com mouse não há o que puxar.
+  ///
+  /// Para o gesto funcionar com a lista curta, o rolável do [body] precisa de
+  /// `AlwaysScrollableScrollPhysics` — sem conteúdo para rolar, uma lista
+  /// comum nem começa o arrasto.
+  final Future<void> Function()? onAtualizar;
 
   // ── API do AppScaffold (mobile/tablet) ────────────────────────────────────
   final Widget header;
@@ -90,6 +104,7 @@ class AdaptiveScaffold extends StatelessWidget {
         selectedRoute: rotaDaSecao,
         showBack: desktopShowBack,
         onBack: desktopOnBack,
+        onRefresh: onAtualizar,
       );
     }
 
@@ -105,7 +120,14 @@ class AdaptiveScaffold extends StatelessWidget {
 
     return AppScaffold(
       header: header,
-      body: body,
+      body: onAtualizar == null
+          ? body
+          : RefreshIndicator(
+              key: const Key('puxar-para-atualizar'),
+              color: AppColors.teal,
+              onRefresh: onAtualizar!,
+              child: body,
+            ),
       floatingActionButton: floatingActionButton,
       bottomNav: temBarra ? AppBottomNav(rotaAtual: secao) : null,
       drawer: secao == null ? null : AppNavDrawer(rotaDaSecao: secao),

@@ -38,6 +38,10 @@ class Turno {
 
   final int vagas;             // total de vagas de entregador no turno
   final int vagasPreenchidas;  // quantas já foram aceitas
+
+  /// Alguém já fez check-in neste turno. Com o início, é o que diz se o
+  /// backend aceitaria "Finalizar" — ver [podeSerFinalizado].
+  final bool algumCheckin;
   final StatusTurno status;
   final PagamentoStatus pagamentoStatus;
   // lojistaConfirmouEm e motoboyConfirmouEm sairam do modelo.
@@ -77,6 +81,7 @@ class Turno {
     this.endereco,
     this.vagas = 1,
     this.vagasPreenchidas = 0,
+    this.algumCheckin = false,
     this.status = StatusTurno.aberto,
     this.pagamentoStatus = PagamentoStatus.naoAplicavel,
     this.distanciaPercorridaKm,
@@ -104,6 +109,7 @@ class Turno {
       endereco: json['endereco'] as String?,
       vagas: (json['vagas'] as num?)?.toInt() ?? 1,
       vagasPreenchidas: (json['vagasPreenchidas'] as num?)?.toInt() ?? 0,
+      algumCheckin: json['algumCheckin'] as bool? ?? false,
       status: _parseStatus(json['status'] as String),
       pagamentoStatus: _parsePagamento(json['pagamentoStatus'] as String?),
       distanciaPercorridaKm: json['distanciaPercorridaKm'] != null
@@ -158,6 +164,18 @@ class Turno {
 
   /// Turno que comporta mais de um entregador.
   bool get multiVaga => vagas > 1;
+
+  /// O turno já começou? É a primeira das duas condições de finalizar.
+  bool comecou({DateTime? agora}) => !(agora ?? clock.now()).isBefore(dataInicio);
+
+  /// O backend aceitaria finalizar este turno agora?
+  ///
+  /// A regra de `TurnoService.finalizar`, e não uma aproximação: o turno ainda
+  /// está em jogo, o horário de início passou e alguém fez check-in. Antes o
+  /// botão aparecia em qualquer turno aceito — o entregador finalizava o turno
+  /// de amanhã e recebia na hora.
+  bool podeSerFinalizado({DateTime? agora}) =>
+      status.ativo && algumCheckin && comecou(agora: agora);
 
   /// "a 2,3 km" — a distância que o BACKEND mediu entre o entregador e o
   /// turno. Só existe na busca com posição; o app nunca a recalcula, para o

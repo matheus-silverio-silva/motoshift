@@ -148,6 +148,39 @@ class TurnoControllerTest {
     }
 
     @Test
+    @DisplayName("cancelar e so do lojista: o entregador chamando /cancelar leva 403 e o service nem e chamado")
+    void cancelar_soLojista() throws Exception {
+        mvc.perform(put("/api/turnos/5/cancelar")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(9L, "motoboy")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("acesso_negado"));
+        verify(service, never()).cancelar(any(), any());
+
+        when(service.cancelar(5L, 2L)).thenReturn(new TurnoResponse());
+        mvc.perform(put("/api/turnos/5/cancelar")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(2L, "lojista")))
+                .andExpect(status().isOk());
+        verify(service).cancelar(5L, 2L);
+    }
+
+    @Test
+    @DisplayName("desistir e so do entregador, e o id de quem desiste sai do token")
+    void desistir_soEntregador() throws Exception {
+        mvc.perform(put("/api/turnos/5/desistir")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(2L, "lojista")))
+                .andExpect(status().isForbidden());
+        verify(service, never()).desistir(any(), any());
+
+        when(service.desistir(5L, 9L)).thenReturn(new TurnoResponse());
+        mvc.perform(put("/api/turnos/5/desistir")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(9L, "motoboy"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motoboyId\": 1}"))   // tentativa de desistir pelo colega
+                .andExpect(status().isOk());
+        verify(service).desistir(5L, 9L);
+    }
+
+    @Test
     @DisplayName("erro de validacao responde no contrato {codigo, mensagem, campo}")
     void criar_semTitulo_devolveContratoDeErro() throws Exception {
         // Sem titulo: o @NotNull do TurnoRequest reprova antes de chegar ao service.

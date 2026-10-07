@@ -47,13 +47,16 @@ class _AgendaScreenState extends State<AgendaScreen> {
         .addPostFrameCallback((_) => _carregarMensal());
   }
 
-  Future<void> _carregarMensal() async {
+  /// [silencioso] é o "puxar para atualizar": o calendário fica na tela
+  /// enquanto a agenda recarrega (quem mostra que algo acontece é o próprio
+  /// indicador do gesto), em vez de dar lugar ao círculo de carregando.
+  Future<void> _carregarMensal({bool silencioso = false}) async {
     final auth = context.read<AuthService>();
     final api = context.read<ApiService>();
     final id = auth.usuario?.id;
     if (id == null) return;
 
-    setState(() => _carregando = true);
+    if (!silencioso) setState(() => _carregando = true);
     try {
       final data = await api.agenda.buscarAgendaMensal(
           id, _mesAtual.month, _mesAtual.year);
@@ -129,12 +132,17 @@ class _AgendaScreenState extends State<AgendaScreen> {
             )
           : null,
       desktopBody: _buildDesktop(),
+      // Puxar para baixo (celular) ou "Atualizar" na topbar (desktop).
+      onAtualizar: () => _carregarMensal(silencioso: true),
       body: _carregando
           ? const Center(
               child: CircularProgressIndicator(
                   strokeWidth: 2, color: AppColors.teal),
             )
           : ListView(
+              // Sempre rolável: num mês sem turnos a lista é curta, e o gesto
+              // de puxar para atualizar nem começaria.
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
               children: [
                 CalendarMonth(

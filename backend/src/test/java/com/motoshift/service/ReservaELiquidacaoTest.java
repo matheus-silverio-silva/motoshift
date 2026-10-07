@@ -134,6 +134,7 @@ class ReservaELiquidacaoTest {
         Turno t = publicar("120.00", 3);
         inscrever(t, entregador);
         inscrever(t, outroEntregador);
+        trabalhar(t, entregador, outroEntregador);
 
         turnos.finalizar(t.getId(), lojista.getId());
 
@@ -160,6 +161,7 @@ class ReservaELiquidacaoTest {
         recarregar(lojista, "500.00");
         Turno t = publicar("120.00", 1);
         inscrever(t, entregador);
+        trabalhar(t, entregador);
 
         turnos.finalizar(t.getId(), lojista.getId());
 
@@ -176,6 +178,7 @@ class ReservaELiquidacaoTest {
         recarregar(lojista, "500.00");
         Turno t = publicar("120.00", 1);
         inscrever(t, entregador);
+        trabalhar(t, entregador);
 
         turnos.finalizar(t.getId(), entregador.getId());
 
@@ -189,12 +192,13 @@ class ReservaELiquidacaoTest {
         recarregar(lojista, "500.00");
         Turno t = publicar("120.00", 1);
         TurnoInscricao ins = inscrever(t, entregador);
+        trabalhar(t, entregador);
 
         turnos.finalizar(t.getId(), lojista.getId());
 
         // A segunda chamada pela API é barrada pelo status do turno; aqui se
         // força a liquidação de novo, que é o caminho que um retry percorreria.
-        pagamentos.liquidar(recarregarTurno(t), List.of(ins));
+        pagamentos.liquidar(recarregarTurno(t), List.of(ins), 0);
 
         assertThat(carteira(entregador).getSaldoDisponivel()).isEqualByComparingTo("120.00");
         assertThat(contarPorTipo(transacaoRepo.findByTurnoId(t.getId()),
@@ -207,12 +211,124 @@ class ReservaELiquidacaoTest {
         recarregar(lojista, "500.00");
         Turno t = publicar("120.00", 1);
         inscrever(t, entregador);
+        trabalhar(t, entregador);
 
         turnos.finalizar(t.getId(), lojista.getId());
 
         assertThat(recarregarTurno(t).getPagamentoStatus()).isEqualTo(StatusPagamento.PAGO);
         assertThat(inscricaoRepo.findByTurnoIdAndMotoboyId(t.getId(), entregador.getId())
                 .orElseThrow().getPagamentoStatus()).isEqualTo(StatusPagamento.PAGO);
+    }
+
+    // -- Finalizar só paga quem trabalhou (SCRUM-25) -------------------------
+
+    @Test
+    @DisplayName("finalizar antes do início é recusado com 409 dizendo a partir de quando, e ninguém recebe")
+    void finalizar_antesDoInicio_409() {
+        recarregar(lojista, "500.00");
+        Turno t = publicar("120.00", 1);
+        TurnoInscricao ins = inscrever(t, entregador);
+        // Com check-in e tudo: o que barra aqui é só a hora. O check-in abre
+        // 30 min antes do início, então "chegou" e "começou" não são a mesma
+        // coisa — e era finalizando turno aceito para amanhã que se recebia
+        // sem trabalhar.
+        ins.setCheckinEm(LocalDateTime.now());
+        inscricaoRepo.save(ins);
+
+        assertThatExceptionOfType(ResponseStatusException.class)
+                .isThrownBy(() -> turnos.finalizar(t.getId(), entregador.getId()))
+                .satisfies(e -> {
+                    assertThat(e.getStatusCode().value()).isEqualTo(409);
+                    assertThat(e.getReason())
+                            .contains("ainda não começou")
+                            .contains(t.getDataInicio().format(
+                                    java.time.format.DateTimeFormatter.ofPattern("HH:mm")));
+                });
+
+        assertThat(recarregarTurno(t).getStatus()).isEqualTo(StatusTurno.ABERTO);
+        assertThat(carteiraRepo.findByUsuarioId(entregador.getId())
+                .map(Carteira::getSaldoDisponivel).orElse(BigDecimal.ZERO))
+                .isEqualByComparingTo("0.00");
+        assertThat(carteira(lojista).getSaldoBloqueado()).isEqualByComparingTo("120.00");
+    }
+
+    @Test
+    @DisplayName("finalizar sem nenhum check-in é recusado com 409 e manda cancelar para devolver a reserva")
+    void finalizar_semCheckin_409() {
+        recarregar(lojista, "500.00");
+        Turno t = publicar("120.00", 1);
+        inscrever(t, entregador);
+        comecar(t);
+
+        assertThatExceptionOfType(ResponseStatusException.class)
+                .isThrownBy(() -> turnos.finalizar(t.getId(), lojista.getId()))
+                .satisfies(e -> {
+                    assertThat(e.getStatusCode().value()).isEqualTo(409);
+                    assertThat(e.getReason())
+                            .contains("Ninguém fez check-in")
+                            .contains("cancele-o");
+                });
+
+        // Nada andou: a inscrição continua aceita e a reserva, bloqueada.
+        assertThat(inscricaoRepo.findByTurnoIdAndMotoboyId(t.getId(), entregador.getId())
+                .orElseThrow().getStatus()).isEqualTo(StatusInscricao.ACEITO);
+        assertThat(carteira(lojista).getSaldoBloqueado()).isEqualByComparingTo("120.00");
+
+        // E a saída que a mensagem aponta funciona: cancelar devolve tudo.
+        turnos.cancelar(t.getId(), lojista.getId());
+        assertThat(carteira(lojista).getSaldoDisponivel()).isEqualByComparingTo("500.00");
+        assertThat(carteira(lojista).getSaldoBloqueado()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    @DisplayName("2 vagas, 1 check-in: quem chegou recebe, quem não chegou fica FALTOU e a parte dele volta ao lojista")
+    void finalizar_umCheckinEmDuasVagas_pagaUmEDevolveOOutro() {
+        recarregar(lojista, "1000.00");
+        Turno t = publicar("120.00", 2);
+        // O faltoso aceitou primeiro: é o "principal" do turno.
+        inscrever(t, outroEntregador);
+        inscrever(t, entregador);
+        trabalhar(t, entregador);
+
+        turnos.finalizar(t.getId(), lojista.getId());
+
+        // Quem trabalhou recebeu; quem faltou não tem um centavo.
+        assertThat(carteira(entregador).getSaldoDisponivel()).isEqualByComparingTo("120.00");
+        assertThat(carteiraRepo.findByUsuarioId(outroEntregador.getId())
+                .map(Carteira::getSaldoDisponivel).orElse(BigDecimal.ZERO))
+                .isEqualByComparingTo("0.00");
+
+        TurnoInscricao paga = inscricaoRepo
+                .findByTurnoIdAndMotoboyId(t.getId(), entregador.getId()).orElseThrow();
+        TurnoInscricao falta = inscricaoRepo
+                .findByTurnoIdAndMotoboyId(t.getId(), outroEntregador.getId()).orElseThrow();
+        assertThat(paga.getStatus()).isEqualTo(StatusInscricao.FINALIZADO);
+        assertThat(paga.getPagamentoStatus()).isEqualTo(StatusPagamento.PAGO);
+        assertThat(falta.getStatus()).isEqualTo(StatusInscricao.FALTOU);
+        assertThat(falta.getPagamentoStatus()).isNull();
+
+        // A sobra voltou pelo mesmo caminho das vagas vazias: 240 reservados,
+        // 120 pagos, 120 de volta — e nada preso.
+        Carteira c = carteira(lojista);
+        assertThat(c.getSaldoBloqueado()).isEqualByComparingTo("0.00");
+        assertThat(c.getSaldoDisponivel()).isEqualByComparingTo("880.00");
+        Transacao sobra = lancamento("liberacao:turno:" + t.getId() + ":sobra");
+        assertThat(sobra.getTipo()).isEqualTo(TipoTransacao.LIBERACAO_RESERVA);
+        assertThat(sobra.getValor()).isEqualByComparingTo("120.00");
+        assertThat(sobra.getDescricao()).contains("sem check-in");
+
+        List<Transacao> doTurno = transacaoRepo.findByTurnoId(t.getId());
+        assertThat(contarPorTipo(doTurno, TipoTransacao.PAGAMENTO_RECEBIDO)).isEqualTo(1);
+        assertThat(contarPorTipo(doTurno, TipoTransacao.PAGAMENTO_ENVIADO)).isEqualTo(1);
+
+        // O turno finalizado passa a ser de quem trabalhou.
+        assertThat(recarregarTurno(t).getMotoboyId()).isEqualTo(entregador.getId());
+
+        // Sem penalidade de score para a falta (decisão desta fase).
+        assertThat(usuarioRepo.findById(outroEntregador.getId()).orElseThrow().getScore())
+                .isEqualTo(Reputacao.SCORE_INICIAL);
+
+        conferirOCenario();
     }
 
     // -- Cancelar e expirar --------------------------------------------------
@@ -279,6 +395,7 @@ class ReservaELiquidacaoTest {
         t.setStatus(StatusTurno.ACEITO);
         t = turnoRepo.save(t);
         inscrever(t, entregador);
+        trabalhar(t, entregador);
 
         turnos.finalizar(t.getId(), lojista.getId());
 
@@ -352,6 +469,30 @@ class ReservaELiquidacaoTest {
             turnoRepo.save(t);
         }
         return ins;
+    }
+
+    /** O horário de início passou — mas ninguém, por isto só, fez check-in. */
+    private void comecar(Turno t) {
+        Turno atual = recarregarTurno(t);
+        LocalDateTime inicio = LocalDateTime.now().minusMinutes(1);
+        atual.setDataInicio(inicio);
+        atual.setDataFim(inicio.plusHours(4));
+        turnoRepo.save(atual);
+    }
+
+    /**
+     * O turno começou e estes entregadores fizeram check-in — as duas coisas
+     * que finalizar exige. Direto no repositório: a janela e a distância do
+     * check-in têm o CheckinServiceTest; aqui o assunto é o dinheiro.
+     */
+    private void trabalhar(Turno t, Usuario... quem) {
+        comecar(t);
+        for (Usuario u : quem) {
+            TurnoInscricao ins = inscricaoRepo
+                    .findByTurnoIdAndMotoboyId(t.getId(), u.getId()).orElseThrow();
+            ins.setCheckinEm(recarregarTurno(t).getDataInicio());
+            inscricaoRepo.save(ins);
+        }
     }
 
     private Turno recarregarTurno(Turno t) {

@@ -180,17 +180,19 @@ public class TurnoController {
 
     @Operation(summary = "Finalizar turno",
             description = "Encerra o turno e LIQUIDA o pagamento na mesma transação: para cada "
-                    + "entregador que trabalhou, o valor sai do saldo bloqueado do lojista e "
-                    + "entra no disponível do entregador. O que foi reservado para vagas não "
-                    + "preenchidas volta ao disponível do lojista. Qualquer um dos dois "
-                    + "participantes pode finalizar — o dinheiro já estava reservado desde a "
-                    + "publicação, então finalizar só transfere o que o lojista comprometeu. "
-                    + "Repetir a chamada não paga duas vezes (RF06).")
+                    + "entregador que FEZ CHECK-IN, o valor sai do saldo bloqueado do lojista e "
+                    + "entra no disponível do entregador. Quem aceitou e não fez check-in fica "
+                    + "como 'faltou', sem pagamento; a parte dele e a das vagas não preenchidas "
+                    + "voltam ao disponível do lojista. Só vale depois do início do turno e com "
+                    + "pelo menos um check-in. Qualquer um dos dois participantes pode finalizar "
+                    + "— o dinheiro já estava reservado desde a publicação. Repetir a chamada "
+                    + "não paga duas vezes (RF06).")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Turno finalizado e pagamentos liquidados"),
         @ApiResponse(responseCode = "403", description = "Usuário não participa do turno"),
         @ApiResponse(responseCode = "404", description = "Turno não encontrado"),
-        @ApiResponse(responseCode = "409", description = "Turno já encerrado")
+        @ApiResponse(responseCode = "409", description = "Turno já encerrado, ainda não começou "
+                + "(a mensagem diz a partir de quando) ou sem nenhum check-in")
     })
     @PutMapping("/{id}/finalizar")
     public TurnoResponse finalizar(@PathVariable Long id,
@@ -198,19 +200,43 @@ public class TurnoController {
         return retentativa.executar("finalizar turno", () -> service.finalizar(id, atual.id()));
     }
 
-    @Operation(summary = "Cancelar turno",
-            description = "Cancela o turno e devolve a reserva inteira ao saldo disponível do "
-                    + "lojista. Penaliza o score do motoboy se < 1h antes do início; não há "
-                    + "multa financeira (RF07).")
+    @Operation(summary = "Cancelar turno (lojista)",
+            description = "Só o lojista que publicou. Cancela o turno inteiro e devolve a reserva "
+                    + "ao saldo disponível dele. Não penaliza nenhum entregador e não há multa "
+                    + "financeira. Recusado depois do check-in: turno que começou se finaliza. "
+                    + "O entregador sai da vaga dele por PUT /{id}/desistir (RF07).")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Turno cancelado e reserva liberada"),
+        @ApiResponse(responseCode = "403", description = "Não é o lojista dono do turno"),
         @ApiResponse(responseCode = "404", description = "Turno não encontrado"),
-        @ApiResponse(responseCode = "409", description = "Turno já encerrado")
+        @ApiResponse(responseCode = "409", description = "Turno já encerrado, ou já começou")
     })
     @PutMapping("/{id}/cancelar")
     public TurnoResponse cancelar(@PathVariable Long id,
                                   @AuthenticationPrincipal UsuarioAutenticado atual) {
+        // Era dos dois lados, e a penalidade caía no entregador mesmo quando
+        // quem cancelava era a loja. O entregador tem a rota dele logo abaixo.
+        atual.exigirTipo("lojista");
         return retentativa.executar("cancelar turno", () -> service.cancelar(id, atual.id()));
+    }
+
+    @Operation(summary = "Desistir da vaga (entregador)",
+            description = "Só o entregador inscrito, e só da vaga dele: cancela a inscrição, reabre "
+                    + "a vaga (turno lotado que ainda não começou volta a 'aberto') e mantém a "
+                    + "reserva do lojista bloqueada. A menos de 1h do início, tira 0,5 do score "
+                    + "de quem desistiu — e só dele. O lojista é avisado. Recusado depois do "
+                    + "check-in (RF07).")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Vaga liberada"),
+        @ApiResponse(responseCode = "403", description = "Não é entregador com vaga neste turno"),
+        @ApiResponse(responseCode = "404", description = "Turno não encontrado"),
+        @ApiResponse(responseCode = "409", description = "Turno já encerrado, ou check-in já feito")
+    })
+    @PutMapping("/{id}/desistir")
+    public TurnoResponse desistir(@PathVariable Long id,
+                                  @AuthenticationPrincipal UsuarioAutenticado atual) {
+        atual.exigirTipo("motoboy");
+        return service.desistir(id, atual.id());
     }
 
     @Operation(summary = "Check-in do entregador (\"Cheguei\")",

@@ -67,14 +67,63 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # Gera os ícones de Android (inclusive o adaptativo), iOS e web a partir de
+  # assets/icon/ — ver a seção flutter_launcher_icons no fim deste arquivo.
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
 
-  # Fonte do PDF. As fontes padrão do PDF (Helvetica e cia.) só cobrem
-  # Latin-1: "—" e aspas curvas saem quebrados. A Roboto (Apache-2.0, veio do
-  # próprio SDK do Flutter) vai embutida para o documento sair igual na tela,
-  # no arquivo e nos testes, sem depender de baixar fonte na hora.
   assets:
+    # Fonte do PDF. As fontes padrão do PDF (Helvetica e cia.) só cobrem
+    # Latin-1: "—" e aspas curvas saem quebrados. A Roboto (Apache-2.0, veio do
+    # próprio SDK do Flutter) vai embutida para o documento sair igual na tela,
+    # no arquivo e nos testes, sem depender de baixar fonte na hora.
     - assets/fonts/pdf/Roboto-Regular.ttf
     - assets/fonts/pdf/Roboto-Bold.ttf
+
+    # As fontes do tema, embarcadas. O google_fonts baixava cada peso de
+    # fonts.gstatic.com na primeira vez em que ele aparecia na tela: sem
+    # internet o app abria na fonte do sistema, e com internet o texto
+    # "piscava" ao trocar de fonte. Com os arquivos aqui o pacote os usa
+    # direto — ele procura nos assets um arquivo chamado
+    # <Familia>-<Peso>.ttf antes de pensar em rede —, e o main.dart desliga a
+    # busca em tempo de execução (GoogleFonts.config.allowRuntimeFetching).
+    #
+    # São exatamente os arquivos que o pacote baixaria (mesmo hash). Só os
+    # pesos que o app usa: 400 a 800. Usar um peso novo exige pôr o arquivo
+    # dele aqui. Licença SIL OFL 1.1, ao lado: assets/fonts/OFL-*.txt.
+    - assets/fonts/BricolageGrotesque-Regular.ttf
+    - assets/fonts/BricolageGrotesque-Medium.ttf
+    - assets/fonts/BricolageGrotesque-SemiBold.ttf
+    - assets/fonts/BricolageGrotesque-Bold.ttf
+    - assets/fonts/BricolageGrotesque-ExtraBold.ttf
+    - assets/fonts/PlusJakartaSans-Regular.ttf
+    - assets/fonts/PlusJakartaSans-Medium.ttf
+    - assets/fonts/PlusJakartaSans-SemiBold.ttf
+    - assets/fonts/PlusJakartaSans-Bold.ttf
+    - assets/fonts/PlusJakartaSans-ExtraBold.ttf
+
+# Ícone do app. A fonte é assets/icon/icon.png, desenhada por
+# tool/gerar_icone_test.dart com as cores do tema; os ícones de cada plataforma
+# saem dela com:
+#
+#   dart run flutter_launcher_icons
+#
+# (os arquivos gerados estão versionados — o build não precisa rodar isto).
+flutter_launcher_icons:
+  image_path: "assets/icon/icon.png"
+  android: true
+  min_sdk_android: 21
+  # Ícone adaptativo (Android 8+): o sistema recorta a forma; a marca vai no
+  # primeiro plano, dentro da zona segura, sobre o verde-água do tema.
+  adaptive_icon_background: "#0E8B8C"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+  ios: true
+  # A App Store recusa ícone com canal alfa.
+  remove_alpha_ios: true
+  web:
+    generate: true
+    image_path: "assets/icon/icon.png"
+    background_color: "#F2F6F5"
+    theme_color: "#0E8B8C"
