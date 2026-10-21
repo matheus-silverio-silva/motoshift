@@ -28,7 +28,7 @@ dependencies:
   # que os golden tests possam fixar a data com `withClock` e provar que a
   # renderização não depende do relógio da máquina. Em runtime é idêntico:
   # sem `withClock` ativo, `clock.now()` devolve `DateTime.now()`.
-  clock: ^1.1.1
+  clock: ^1.1.3
 
   # Fontes do tema (Bricolage Grotesque + Plus Jakarta Sans)
   google_fonts: ^6.2.1
@@ -41,22 +41,22 @@ dependencies:
   fl_chart: ^0.68.0
 
   # Mapa
-  flutter_map: ^6.1.0
-  latlong2: ^0.9.0
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
   # Provedor de tiles que cancela o download do tile que saiu da tela — é o
   # que o próprio flutter_map recomenda no web, onde sem ele cada movimento do
   # mapa deixava requisições penduradas (e o console repetia a dica dezenas de
   # vezes). A 2.x é a linha do flutter_map 6; a 3.x exige o 7. Traz o dio como
   # dependência transitiva.
-  flutter_map_cancellable_tile_provider: ^2.0.0
+  flutter_map_cancellable_tile_provider: ^3.1.1
 
   # Localização — filtro de turnos por raio (tela 18)
   geolocator: ^13.0.2
   # Documentos fiscais SIMULADOS — PDF e impressão. Os dois funcionam no
   # Flutter web: printing abre o diálogo de impressão do navegador e baixa o
   # arquivo. Ver docs/financeiro/FISCAL.md.
-  pdf: ^3.12.0
-  printing: ^5.14.3
+  pdf: ^3.13.1
+  printing: ^5.15.1
   # QR Code do DANFSe (NT 008/2026), na tela e no PDF. Já vinha com o `pdf`;
   # declarado porque a tela o importa direto.
   barcode: ^2.2.9
